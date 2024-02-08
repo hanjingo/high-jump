@@ -41,7 +41,11 @@ add_subdirectory(cpu)
 
 add_subdirectory(defer)
 
+add_subdirectory(des)
+
 add_subdirectory(endian)
+
+add_subdirectory(env)
 
 add_subdirectory(file)
 
@@ -50,6 +54,8 @@ add_subdirectory(fork)
 add_subdirectory(hex)
 
 add_subdirectory(http)
+
+add_subdirectory(ini)
 
 add_subdirectory(init)
 

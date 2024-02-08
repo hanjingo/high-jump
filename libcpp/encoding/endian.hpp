@@ -59,7 +59,7 @@ public:
         return (((int64_t) htonl(n)) << 32) + (htonl(n >> 32));
     }
 };
-static libcpp::big_endian be;
+static libcpp::big_endian big;
 
 class little_endian
 {
@@ -103,7 +103,7 @@ public:
         return (((int64_t) ntohl(n)) << 32) + (htonl(n >> 32));
     }
 };
-static libcpp::little_endian le;
+static libcpp::little_endian little;
 
 }
 

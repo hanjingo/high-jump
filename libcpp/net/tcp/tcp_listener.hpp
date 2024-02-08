@@ -1,5 +1,5 @@
-#ifndef TCP_ACCEPTOR_HPP
-#define TCP_ACCEPTOR_HPP
+#ifndef TCP_LISTENER_HPP
+#define TCP_LISTENER_HPP
 
 #include <chrono>
 #include <iostream>
@@ -12,7 +12,7 @@
 namespace libcpp
 {
 
-class tcp_acceptor
+class tcp_listener
 {
 public:
     using signal_t          = int;
@@ -36,11 +36,11 @@ public:
     using signal_handler_t  = std::function<void(const err_t&, signal_t)>;
 
 public:
-    tcp_acceptor()
+    tcp_listener()
         : sigs_{io_}
     {
     }
-    virtual ~tcp_acceptor()
+    virtual ~tcp_listener()
     {
         close();
     }

@@ -86,7 +86,7 @@ Please feel free to use this project, as there are no restrictions or legal risk
 ## 3rd Party
 
 - Boost: https://www.boost.org
-- rapidjson: https://github.com/Tencent/rapidjson
+- jsoncpp: https://github.com/open-source-parsers/jsoncpp
 - pugixml: https://github.com/zeux/pugixml
 - libzmq: https://github.com/zeromq/libzmq
 - zmqpp: https://github.com/zeromq/zmqpp

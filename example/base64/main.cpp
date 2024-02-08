@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include <libcpp/encoding/base64.hpp>
+#include <libcpp/crypto/base64.hpp>
 
 int main(int argc, char* argv[])
 {

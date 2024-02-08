@@ -6,8 +6,8 @@ int main(int argc, char* argv[])
     std::thread t1([]() {
         char buf[1024] = {0};
         std::cout << "start sync listening..." << std::endl;
-        libcpp::tcp_acceptor acceptor{};
-        auto sess = acceptor.accept(10086);
+        libcpp::tcp_listener listener{};
+        auto sess = listener.accept(10086);
         if (sess == nullptr) {
             std::cout << "srv accept session fail" << std::endl;
             return;
@@ -48,8 +48,8 @@ int main(int argc, char* argv[])
 
     std::thread t3([]() {
         std::cout << "start async listening..." << std::endl;
-        libcpp::tcp_acceptor acceptor{};
-        acceptor.async_accept(10087, [](const libcpp::tcp_acceptor::err_t & err, libcpp::tcp_session * sess) {
+        libcpp::tcp_listener listener{};
+        listener.async_accept(10087, [](const libcpp::tcp_listener::err_t & err, libcpp::tcp_session * sess) {
             char buf[1024] = {0};
             if (err.failed()) {
                 std::cout << "srv async accept session fail" << std::endl;
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
             }
             std::cout << "srv async accept session success" << std::endl;
 
-            sess->async_recv(buf, 1024, [&](const libcpp::tcp_acceptor::err_t & err, std::size_t sz) {
+            sess->async_recv(buf, 1024, [&](const libcpp::tcp_listener::err_t & err, std::size_t sz) {
                 if (err.failed()) {
                     std::cout << "srv async recv fail" << std::endl;
                     return;

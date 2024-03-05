@@ -94,10 +94,10 @@ private:
 
 #define MUX(key, cmd, ...) \
     libcpp::init_ _mux_cat(__mux_init__, __COUNTER__)( \
-        [&](){ libcpp::multiplexer<std::string>::instance()->reg<void(*)(__VA_ARGS__)>(std::string(#key), [](__VA_ARGS__){ cmd }); } \
+        [](){ libcpp::multiplexer<decltype(key)>::instance()->reg<void(*)(__VA_ARGS__)>(key, [](__VA_ARGS__){ cmd }); } \
     ); \
 
 #define ON(key, ...) \
-    libcpp::multiplexer<std::string>::instance()->on<void>(std::string(#key), ##__VA_ARGS__); \
+    libcpp::multiplexer<decltype(key)>::instance()->on<void>(key, ##__VA_ARGS__); \
 
 #endif

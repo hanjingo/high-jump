@@ -4,17 +4,18 @@
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include <atomic>
+#include <mutex>
 #include <string>
 
 #include <spdlog/spdlog.h>
+#include <spdlog/async.h>
+#include <spdlog/sinks/stdout_sinks.h>
+#include <spdlog/sinks/rotating_file_sink.h>
 
 namespace libcpp
 {
 
-enum log_sink : uint32_t {
-    log_sink_console = 1,
-    log_sink_file    = 1 << 1,
-};
+class logger;
 
 enum log_lvl {
     log_lvl_trace = 0,
@@ -25,56 +26,43 @@ enum log_lvl {
     log_lvl_critial,
 };
 
-enum log_mode {
-    log_mode_sync,
-    log_mode_async
-};
-
-struct log_config {
-    std::string id       = "";
-    log_mode mode        = log_mode_sync;
-    int sink             = log_sink_console;
-
-    // file
-    std::string file_path  = "logs/libcpp.log";
-    uint64_t max_file_size = 2 * 1024 * 1024; // 2MB
-    uint64_t max_file_num  = 200000;          // 2MB * 200000 ~= 400GB
-
-    // async
-    uint64_t queue_size = 102400;
-    uint64_t thread_num = 1;
-};
-
-class logger;
-static std::shared_ptr<libcpp::logger> log_inst;
+static std::mutex log_mu;
+static std::shared_ptr<libcpp::logger> log_inst = 
+    std::make_shared<libcpp::logger>(spdlog::default_logger());
 
 class logger
 {
+public:
+    using sink_ptr_t = spdlog::sink_ptr;
+    using base_logger_ptr_t = std::shared_ptr<spdlog::logger>;
+
 public:
     logger() = delete;
     logger(const logger&) = delete;
     logger& operator=(const logger&) = delete;
 
-    logger(const libcpp::log_config& cfg)
+    logger(base_logger_ptr_t base) : base_{base} {}
+
+    logger(const std::string& id, 
+           const bool async = false, 
+           const uint64_t queue_size = 102400, 
+           const uint64_t thread_num = 1)
     {
-        if (cfg.mode == libcpp::log_mode_async) {
-            spdlog::set_async_mode(cfg.queue_size);
+        std::vector<sink_ptr_t> sinks{};
+
+        if (async)
+        {
+            spdlog::init_thread_pool(queue_size, thread_num);
+
+            base_ = std::make_shared<spdlog::async_logger>(id, sinks.begin(), sinks.end(),
+                spdlog::thread_pool(), spdlog::async_overflow_policy::overrun_oldest);
+        }
+        else
+        {
+            base_ = std::make_shared<spdlog::logger>(id, sinks.begin(), sinks.end());
         }
 
-        std::vector<spdlog::sink_ptr> sinks{};
-
-        if (cfg.sink & libcpp::log_sink_console) {
-            sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
-        }
-
-        if (cfg.sink & libcpp::log_sink_file) {
-            sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-                                cfg.file_path, cfg.max_file_size, cfg.max_file_num));
-        }
-
-        if (cfg.mode == libcpp::log_mode_sync) {
-            base_ = std::make_shared<spdlog::logger>(cfg.id, sinks.begin(), sinks.end());
-        }
+        base_->set_level(spdlog::level::level_enum(log_lvl_trace));
     }
 
     ~logger()
@@ -88,9 +76,30 @@ public:
         return log_inst;
     }
 
-    static void set_default_logger(std::shared_ptr<libcpp::logger> inst)
+    static void set_default(std::shared_ptr<libcpp::logger>&& inst)
     {
-        log_inst = inst;
+        std::lock_guard<std::mutex> lock(log_mu);
+        log_inst = std::move(inst);
+    }
+
+    static sink_ptr_t create_sink()
+    {
+        return std::make_shared<spdlog::sinks::stdout_sink_mt>();
+    }
+
+    static sink_ptr_t create_sink(const std::string& filename,
+                                  const std::size_t max_size,
+                                  const std::size_t max_files,
+                                  const bool rotate_on_open = false)
+    {
+        return std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+            filename, max_size, max_files, rotate_on_open);
+    }
+
+    inline void add_sink(const sink_ptr_t&& sink)
+    {
+        std::lock_guard<std::mutex> lock(log_mu);
+        base_->sinks().push_back(std::move(sink));
     }
 
     inline void set_level(libcpp::log_lvl lvl)
@@ -98,6 +107,12 @@ public:
         base_->set_level(spdlog::level::level_enum(lvl));
     }
 
+    inline log_lvl get_level()
+    {
+        return static_cast<log_lvl>(base_->level());
+    }
+
+    // see also: https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
     inline void set_pattern(const char* patterm)
     {
         base_->set_pattern(patterm);
@@ -106,6 +121,11 @@ public:
     inline void flush()
     {
         base_->flush();
+    }
+
+    inline void flush_on(const log_lvl lvl)
+    {
+        base_->flush_on(spdlog::level::level_enum(lvl));
     }
 
 public:
@@ -146,7 +166,7 @@ public:
     }
 
 private:
-    std::shared_ptr<spdlog::logger> base_;
+    base_logger_ptr_t base_;
 };
 
 }
@@ -168,5 +188,8 @@ private:
 
 #define LOG_CRITICAL(...) \
     libcpp::logger::instance()->critical(__VA_ARGS__)
+
+#define LOG_FLUSH() \
+    libcpp::logger::instance()->flush();
 
 #endif

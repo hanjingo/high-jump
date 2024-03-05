@@ -1,37 +1,44 @@
 #include <iostream>
+
 #include <libcpp/log/log.hpp>
 
 int main(int argc, char* argv[])
 {
-    libcpp::log_config cfg;
-    cfg.sink = libcpp::log_sink_console | libcpp::log_sink_file;
-
-    auto lg = std::make_shared<libcpp::logger>(cfg);
-    libcpp::logger::set_default_logger(lg);
-    lg->set_level(libcpp::log_lvl_debug);
-
-    // see also: https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
-    lg->set_pattern("%Y-%m-%d %H:%M:%S.%e[%-8l][%@] %v");
-
+    // do logging by default logger
     LOG_TRACE("LOG_TRACE {}", "hello");
-    libcpp::logger::instance()->trace("trace {}", "hello");
-
-    LOG_DEBUG("LOG_DEBUG {0:d} 0x{0:x} {0:o} {0:b}", 10);
-    libcpp::logger::instance()->debug("debug");
-
+    LOG_DEBUG("LOG_DEBUG d{0:d} 0x{0:x} o{0:o} b{0:b}", 10);
     LOG_INFO("LOG_INFO {0:03.2f}", 123.45);
-    libcpp::logger::instance()->info("info {0:03.2f}", 123.45);
-
     LOG_WARN("LOG_WARN {1} {0}", "hello", "world");
-    libcpp::logger::instance()->warn("warn");
-
     LOG_ERROR("LOG_ERROR");
-    libcpp::logger::instance()->error("error");
-
     LOG_CRITICAL("LOG_CRITICAL");
-    libcpp::logger::instance()->critical("critical");
+    LOG_FLUSH();
 
-    libcpp::logger::instance()->flush();
+    // do sync logging by user defined logger
+    auto lg1 = std::make_shared<libcpp::logger>("lg1");
+    lg1->add_sink(libcpp::logger::create_sink());
+    lg1->add_sink(libcpp::logger::create_sink("logs/libcpp.log", 2 * 1024 * 1024, 200000));
+    lg1->set_pattern("%Y-%m-%d %H:%M:%S.%e [%-8l] %v");
+    libcpp::logger::set_default(std::move(lg1));
+    LOG_TRACE("LOG_TRACE {}", "hello");
+    LOG_DEBUG("LOG_DEBUG d{0:d} 0x{0:x} o{0:o} b{0:b}", 10);
+    LOG_INFO("LOG_INFO {0:03.2f}", 123.45);
+    LOG_WARN("LOG_WARN {1} {0}", "hello", "world");
+    LOG_ERROR("LOG_ERROR");
+    LOG_CRITICAL("LOG_CRITICAL");
+    LOG_FLUSH();
+
+    // do async logging by user defined logger
+    auto lg2 = std::make_shared<libcpp::logger>("lg2", true);
+    lg2->add_sink(libcpp::logger::create_sink());
+    lg2->add_sink(libcpp::logger::create_sink("logs/libcpp.log", 2 * 1024 * 1024, 200000));
+    libcpp::logger::set_default(std::move(lg2));
+    LOG_TRACE("LOG_TRACE {}", "hello");
+    LOG_DEBUG("LOG_DEBUG d{0:d} 0x{0:x} o{0:o} b{0:b}", 10);
+    LOG_INFO("LOG_INFO {0:03.2f}", 123.45);
+    LOG_WARN("LOG_WARN {1} {0}", "hello", "world");
+    LOG_ERROR("LOG_ERROR");
+    LOG_CRITICAL("LOG_CRITICAL");
+    LOG_FLUSH();
 
     std::cin.get();
     return 0;

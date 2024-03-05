@@ -22,20 +22,15 @@ float OnFatal(std::string name)
     return f;
 }
 
-void OnWarn()
-{
-    std::cout << "on error code WARN" << std::endl;
-}
-
-MUX(1, {
+MUX(100, {
     std::cout << "on 1" << std::endl;
 })
 
-MUX(OnHello, {
+MUX(std::string("hello"), {
     std::cout << "on hello" << std::endl;
 })
 
-MUX(OnWorld, {
+MUX(std::string("world"), {
     num++;
     std::cout << "on world with num = " << num << std::endl;
 }, int& num)
@@ -43,50 +38,49 @@ MUX(OnWorld, {
 int main(int argc, char* argv[])
 {
     // ------------------by macro-------------------------------
-    ON(1)
-    ON(OnHello)
+    ON(100)
+    ON(std::string("hello"))
     int iret = 0;
-    ON(OnWorld, iret);
-
-    auto ptr = &OnOk;
+    ON(std::string("world"), iret);
+    std::cout << "iret = " << iret << std::endl;
 
     // ------------------by object-------------------------------
     std::cout << std::endl;
     libcpp::multiplexer<std::string> hm;
-    hm.reg("OK", OnOk);
-    hm.on("OK");
+    hm.reg(std::string("OK"), OnOk);
+    hm.on(std::string("OK"));
 
-    hm.reg("FAIL", &OnFail);
-    int iret2 = hm.on<int>("FAIL");
+    hm.reg(std::string("FAIL"), &OnFail);
+    int iret2 = hm.on<int>(std::string("FAIL"));
     std::cout << "iret2 = " << iret2 << std::endl;
 
-    hm.reg("FATAL", &OnFatal);
-    float fret2 = hm.on<float>("FATAL", std::string("hello")); 
+    hm.reg(std::string("FATAL"), &OnFatal);
+    float fret2 = hm.on<float>(std::string("FATAL"), std::string("hello")); 
     std::cout << "fret2 = " << fret2 << std::endl;
 
-    hm.reg<void(*)()>("CRITAL", []() {
+    hm.reg<void(*)()>(std::string("CRITAL"), []() {
         std::cout << "on error code CRITAL" << std::endl;
     });
-    hm.on("CRITAL");
+    hm.on(std::string("CRITAL"));
 
 
     // ------------------by singleton-------------------------------
     std::cout << std::endl;
-    libcpp::multiplexer<std::string>::instance()->reg("OK", OnOk);
-    libcpp::multiplexer<std::string>::instance()->on("OK");
+    libcpp::multiplexer<int>::instance()->reg(1, OnOk);
+    libcpp::multiplexer<int>::instance()->on(1);
 
-    libcpp::multiplexer<std::string>::instance()->reg("FAIL", &OnFail);
-    int iret1 = libcpp::multiplexer<std::string>::instance()->on<int>("FAIL");
+    libcpp::multiplexer<int>::instance()->reg(2, &OnFail);
+    int iret1 = libcpp::multiplexer<int>::instance()->on<int>(2);
     std::cout << "iret1 = " << iret1 << std::endl;
 
-    libcpp::multiplexer<std::string>::instance()->reg("FATAL", &OnFatal);
-    float fret1 = libcpp::multiplexer<std::string>::instance()->on<float>("FATAL", std::string("hello"));
+    libcpp::multiplexer<int>::instance()->reg(3, &OnFatal);
+    float fret1 = libcpp::multiplexer<int>::instance()->on<float>(3, std::string("hello"));
     std::cout << "fret1 = " << fret1 << std::endl;
 
-    libcpp::multiplexer<std::string>::instance()->reg<void(*)()>("CRITAL", []() {
+    libcpp::multiplexer<int>::instance()->reg<void(*)()>(4, []() {
         std::cout << "on error code CRITAL" << std::endl;
     });
-    libcpp::multiplexer<std::string>::instance()->on("CRITAL");
+    libcpp::multiplexer<int>::instance()->on(4);
 
 
     std::cin.get();

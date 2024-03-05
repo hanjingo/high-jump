@@ -25,19 +25,21 @@ add_subdirectory(base64)
 
 add_subdirectory(bits)
 
-#add_subdirectory(bt)
+# add_subdirectory(bt)
 
 add_subdirectory(bytes)
 
-#add_subdirectory(cbind)
+# add_subdirectory(cbind)
 
 add_subdirectory(chan)
 
 add_subdirectory(coroutine)
 
+add_subdirectory(counter)
+
 add_subdirectory(cpu)
 
-#add_subdirectory(crash)
+# add_subdirectory(crash)
 
 add_subdirectory(defer)
 
@@ -46,6 +48,10 @@ add_subdirectory(des)
 add_subdirectory(endian)
 
 add_subdirectory(env)
+
+add_subdirectory(error)
+
+add_subdirectory(exception)
 
 add_subdirectory(file)
 
@@ -71,7 +77,7 @@ add_subdirectory(md5)
 
 add_subdirectory(mux)
 
-#add_subdirectory(mysql)
+# add_subdirectory(mysql)
 
 add_subdirectory(once)
 
@@ -85,7 +91,7 @@ add_subdirectory(process)
 
 add_subdirectory(random)
 
-add_subdirectory(redis)
+# add_subdirectory(redis)
 
 add_subdirectory(reflect)
 
@@ -115,7 +121,7 @@ add_subdirectory(timer)
 
 add_subdirectory(udp)
 
-#add_subdirectory(unit_test)
+add_subdirectory(unit_test)
 
 add_subdirectory(uuid)
 

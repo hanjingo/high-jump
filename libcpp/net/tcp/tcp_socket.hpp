@@ -1,6 +1,7 @@
-#ifndef TCP_SESSION_HPP
-#define TCP_SESSION_HPP
+#ifndef TCP_SOCKET_HPP
+#define TCP_SOCKET_HPP
 
+#include <thread>
 #include <chrono>
 #include <iostream>
 #include <functional>
@@ -11,7 +12,7 @@
 namespace libcpp
 {
 
-class tcp_session
+class tcp_socket
 {
 public:
     using signal_t          = int;
@@ -37,24 +38,24 @@ public:
     using opt_recv_buf_sz   = boost::asio::ip::tcp::socket::receive_buffer_size;
     using opt_reuse_addr    = boost::asio::ip::tcp::socket::reuse_address;
 
-    using conn_handler_t    = std::function<void(const err_t&, tcp_session*)>;
+    using conn_handler_t    = std::function<void(const err_t&, tcp_socket*)>;
     using send_handler_t    = std::function<void(const err_t&, std::size_t)>;
     using recv_handler_t    = std::function<void(const err_t&, std::size_t)>;
     using signal_handler_t  = std::function<void(const err_t&, signal_t)>;
 
 public:
-    tcp_session()
+    tcp_socket()
         : tm_{io_},
           sigs_{io_}
     {
     }
-    explicit tcp_session(sock_t* sock)
+    explicit tcp_socket(sock_t* sock)
         : tm_{io_},
           sigs_{io_},
           sock_{sock}
     {
     }
-    virtual ~tcp_session()
+    virtual ~tcp_socket()
     {
         close();
     }
@@ -84,8 +85,8 @@ public:
     }
 
     bool connect(const char* ip,
-                 uint16_t port,
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
+                 const uint16_t port,
+                 const std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
                  int retry_times = 1)
     {
         endpoint_t ep{address_t::from_string(ip), port};

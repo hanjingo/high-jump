@@ -26,7 +26,11 @@ public:
         return itr->second;
     }
 
-    tcp_conn* connect(const unsigned char* ip, const std::uint16_t port, Key id)
+    tcp_conn* connect(const unsigned char* ip, 
+                      const std::uint16_t port, 
+                      Key id, 
+                      const std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
+                      int retry_times = 1)
     {
         tcp_conn* conn = new tcp_conn();
         if (!conn.connect(ip, port))

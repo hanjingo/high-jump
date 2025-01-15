@@ -15,6 +15,23 @@ namespace libcpp
 class md5
 {
 public:
+    explicit md5(bool upper_case) : _upper_case{upper_case} {};
+    virtual ~md5() {};
+
+    template<typename T>
+    static inline friend std::ostream& operator<<(std::ostream& out, const T& src) 
+    { 
+        out << md5::calc(src);
+        return out;
+    }
+
+    template<tyepname T>
+    static inline friend std::istream& operator>>(std::istream& in, T& dst) 
+    { 
+        md5::calc(in, dst);
+        return in;
+    }
+
     static std::string calc(const std::string& src, bool to_upper_case = false)
     {
         unsigned char hash[MD5_DIGEST_LENGTH];
@@ -34,7 +51,38 @@ public:
         }
 
         return ss.str();
-    }
+    };
+
+    static std::string calc(const std::string& src)
+    {
+        std::string hash;
+        hash.resize(16);
+        MD5(reinterpret_cast<const unsigned char *>(&src[0]), 
+            src.size(), 
+            reinterpret_cast<unsigned char *>(&hash[0]));
+
+        return hash;
+    };
+
+    static void calc(std::istream &in, std::string& out)
+    {
+        MD5_CTX ctx;
+        MD5_Init(&ctx);
+        std::streamsize sz;
+        std::vector<char> buffer(buf_sz);
+        while ((sz = in.read(&buffer[0], buf_sz).gcount()) > 0)
+            MD5_Update(&ctx, buffer.data(), sz);
+
+        out.resize(128 / 8);
+        MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &context);
+    };
+
+    static size_t buf_sz = 128 * 1024;
+    static md5 LE{true};
+    static md5 BE{true};
+
+private:
+    bool _upper_case;
 };
 
 }

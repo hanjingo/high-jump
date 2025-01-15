@@ -12,6 +12,14 @@
 #include <spdlog/sinks/stdout_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 
+#ifndef LOG_QUEUE_SIZE
+#define LOG_QUEUE_SIZE 102400
+#endif
+
+#ifndef LOG_THREAD_NUM
+#define LOG_THREAD_NUM 1
+#endif
+
 namespace libcpp
 {
 
@@ -45,8 +53,8 @@ public:
 
     logger(const std::string& id, 
            const bool async = false, 
-           const uint64_t queue_size = 102400, 
-           const uint64_t thread_num = 1)
+           const uint64_t queue_size = LOG_QUEUE_SIZE, 
+           const uint64_t thread_num = LOG_THREAD_NUM)
     {
         std::vector<sink_ptr_t> sinks{};
 
@@ -54,7 +62,10 @@ public:
         {
             spdlog::init_thread_pool(queue_size, thread_num);
 
-            base_ = std::make_shared<spdlog::async_logger>(id, sinks.begin(), sinks.end(),
+            base_ = std::make_shared<spdlog::async_logger>(
+                id, 
+                sinks.begin(), 
+                sinks.end(),
                 spdlog::thread_pool(), spdlog::async_overflow_policy::overrun_oldest);
         }
         else

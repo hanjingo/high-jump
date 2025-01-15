@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #else
-#pragma warning unknown OS, some function will be diaabled
+#pragma warning unknown OS, some function will be disabled
 #endif
 
 // See Also: https://caiorss.github.io/C-Cpp-Notes/Preprocessor_and_Macros.html

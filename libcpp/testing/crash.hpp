@@ -57,16 +57,16 @@ class crash_handler
 {
 public:
     crash_handler()
-        : dump_cb_{default_dump_callback}
+        : _dump_cb{default_dump_callback}
     {
     }
     crash_handler(const char* path)
-        : dump_cb_{default_dump_callback}
+        : _dump_cb{default_dump_callback}
     {
         set_local_path(path);
     }
     crash_handler(const char* path, const dump_callback_t cb)
-        : dump_cb_{cb}
+        : _dump_cb{cb}
     {
         set_local_path(path);
     }
@@ -76,7 +76,7 @@ public:
 
     void set_dump_callback(const dump_callback_t cb)
     {
-        dump_cb_ = cb;
+        _dump_cb = cb;
     }
 
     void set_local_path(const std::string& path)
@@ -86,31 +86,31 @@ public:
 
     void set_local_path(const char* path)
     {
-        if (handler_ != nullptr)
+        if (_handler != nullptr)
         {
-            delete handler_;
+            delete _handler;
         }
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(WIN64) || defined(_WIN64) || defined(__WIN64__)
         std::wstring abs_path;
-        handler_ = new google_breakpad::ExceptionHandler(abs_path, 
+        _handler = new google_breakpad::ExceptionHandler(abs_path, 
                                                          nullptr,                      // FilterCallback
-                                                         dump_cb_, 
+                                                         _dump_cb, 
                                                          nullptr,                      // context
-                                                         google_breakpad::ExceptionHandler::HANDLER_ALL);
+                                                         google_breakpad::ExceptionHandler::_handlerALL);
 #elif __APPLE__
         std::string abs_path;
-        handler_ = new google_breakpad::ExceptionHandler(abs_path,
+        _handler = new google_breakpad::ExceptionHandler(abs_path,
                                                          nullptr, // FilterCallback
-                                                         dump_cb_, 
+                                                         _dump_cb, 
                                                          nullptr, // context
                                                          true, 
                                                          nullptr);
 #else
         std::string abs_path;
-        handler_ = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(abs_path),
+        _handler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(abs_path),
                                                          0, // FilterCallback
-                                                         dump_cb_,
+                                                         _dump_cb,
                                                          0, // context
                                                          true,
                                                          -1);
@@ -125,8 +125,8 @@ public:
     }
 
 private:
-    google_breakpad::ExceptionHandler* handler_ = nullptr;
-    dump_callback_t dump_cb_;
+    google_breakpad::ExceptionHandler* _handler = nullptr;
+    dump_callback_t _dump_cb;
 };
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(WIN64) || defined(_WIN64) || defined(__WIN64__)

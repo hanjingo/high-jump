@@ -8,7 +8,7 @@ namespace libcpp
 
 class can_proto : public message
 {
-
+    // TODO
 };
 
 }

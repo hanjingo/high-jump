@@ -4,7 +4,7 @@
 #include <vector>
 
 #include <libcpp/net/tcp/tcp_chan.hpp>
-#include <libcpp/net/tcp/tcp_socket.hpp>
+#include <libcpp/net/tcp/tcp_session.hpp>
 #include <libcpp/net/proto/message.hpp>
 
 namespace libcpp
@@ -104,7 +104,7 @@ public:
     }
 
 private:
-    tcp_socket sock_;
+    tcp_session sock_;
     void* handlers_[event_end];
 
     std::atomic<bool> w_closed_{true};

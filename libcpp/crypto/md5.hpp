@@ -25,7 +25,7 @@ public:
         return out;
     }
 
-    template<tyepname T>
+    template<typename T>
     static inline friend std::istream& operator>>(std::istream& in, T& dst) 
     { 
         md5::calc(in, dst);
@@ -77,9 +77,9 @@ public:
         MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &context);
     };
 
-    static size_t buf_sz = 128 * 1024;
-    static md5 LE{true};
-    static md5 BE{true};
+    static const size_t buf_sz = 128 * 1024;
+    static libcpp::md5 LE{true};
+    static libcpp::md5 BE{true};
 
 private:
     bool _upper_case;

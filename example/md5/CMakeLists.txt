@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(md5)
 
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL)
 
+if (OpenSSL_FOUND)
 include_directories(${CMAKE_SOURCE_DIR})
 
 add_executable(${PROJECT_NAME} 
@@ -11,3 +12,8 @@ add_executable(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} OpenSSL::SSL)
+
+else()
+message("!!! openssl not found, skip build example/md5")
+
+endif()

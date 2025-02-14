@@ -7,6 +7,8 @@
 
 #include <libcpp/io/ring_buffer.hpp>
 
+#include <libcpp/io/rpc.hpp>
+
 #include <libcpp/io/task.hpp>
 
 #endif

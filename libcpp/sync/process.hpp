@@ -52,25 +52,6 @@ public:
     using exit_code_t = int;
     using event_filter_t = std::function<bool(event_t, void*)>;
 
-    static const event_filter_t default_process_event_filter = [](event_t ev, void* arg) -> bool
-    {
-        libcpp::process* proc = static_cast<process*>(arg);
-        switch (ev) 
-        {
-        case event_quit:
-        {
-            proc->quit();
-            break;
-        }
-        case event_terminate:
-        {
-            proc->terminate();
-            break;
-        }
-        default: break;
-        }
-    };
-
 public:
     process(const event_filter_t fn) : _fn{fn}
     {
@@ -89,9 +70,26 @@ public:
         notify(event_destroy, this);
     };
 
-    static libcpp::process* create_process(const char* exe)
+    static libcpp::process* create_process(
+        const char* exe, 
+        libcpp::process::event_filter_t filter = [](libcpp::process::event_t ev, void* arg) -> bool {
+            libcpp::process* proc = static_cast<libcpp::process*>(arg);
+            switch (ev) 
+            {
+            case libcpp::process::event_quit:
+            {
+                proc->quit();
+                break;
+            }
+            case libcpp::process::event_terminate:
+            {
+                proc->terminate();
+                break;
+            }
+            default: break;
+        }})
     {
-        libcpp::process proc{default_process_event_filter};
+        libcpp::process proc{filter};
         return &proc;
     };
 

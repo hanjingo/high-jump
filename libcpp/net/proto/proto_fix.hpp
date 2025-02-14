@@ -24,9 +24,9 @@ public:
 
 #pragma pack(push,1)
     struct head {
-        uint8_t  start_flag     = 0xAA; // 起始标志
-        uint16_t len            = 0;    // 帧总长度
-        uint8_t  ctl            = 0;    // 控制字
+        uint8_t  start_flag     = 0xAA;
+        uint16_t len            = 0;
+        uint8_t  ctl            = 0;
     };
 
     struct data {
@@ -49,23 +49,23 @@ public:
 
     }
 
-    virtual std::size_t encode(unsigned char* buf, std::size_t len)
+    virtual std::size_t encode(unsigned char* buf, const std::size_t len)
     {
 
     }
 
-    virtual bool decode(const unsigned char* buf, std::size_t len)
+    virtual bool decode(const unsigned char* buf, const std::size_t len)
     {
 
     }
 
 public:
-    int copy_from(fix_proto& src)
+    int copy_from(const fix_proto& src)
     {
 
     }
 
-    int move_from(fix_proto& src)
+    int move_from(const fix_proto& src)
     {
 
     }

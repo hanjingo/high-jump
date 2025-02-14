@@ -7,17 +7,17 @@ int main(int argc, char* argv[])
         char buf[1024] = {0};
         std::cout << "start sync listening..." << std::endl;
         libcpp::tcp_listener listener{};
-        auto sock = listener.accept(10086);
-        if (sock == nullptr) {
+        auto sess = listener.accept(10086);
+        if (sess == nullptr) {
             std::cout << "srv accept connion fail" << std::endl;
             return;
         }
         std::cout << "srv accept connion success" << std::endl;
 
-        auto len  = sock->recv(buf, 1024);
+        auto len  = sess->recv(buf, 1024);
         std::cout << "srv recv<< " << std::string(buf, 1024) << std::endl;
 
-        len = sock->send(std::string("world").c_str(), 6);
+        len = sess->send(std::string("world").c_str(), 6);
         std::cout << "srv send>> world" << std::endl;
     });
     t1.detach();
@@ -27,18 +27,18 @@ int main(int argc, char* argv[])
     std::thread t2([]() {
         char buf[1024] = {0};
         std::cout << "start sync connect..." << std::endl;
-        libcpp::tcp_socket sock{};
-        if (!sock.connect("127.0.0.1", 10086)) {
+        libcpp::tcp_session sess{};
+        if (!sess.connect("127.0.0.1", 10086)) {
             std::cout << "connect 127.0.0.1:10086 fail" << std::endl;
             return;
         }
         std::cout << "connect 127.0.0.1:10086 success" << std::endl;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        auto len = sock.send(std::string("hello").c_str(), 6);
+        auto len = sess.send(std::string("hello").c_str(), 6);
         std::cout << "cli send hello" << std::endl;
 
-        len = sock.recv(buf, 1024);
+        len = sess.recv(buf, 1024);
         std::cout << "cli recv " << std::string(buf, len) << std::endl;
     });
     t2.detach();
@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     std::thread t3([]() {
         std::cout << "start async listening..." << std::endl;
         libcpp::tcp_listener listener{};
-        listener.async_accept(10087, [](const libcpp::tcp_listener::err_t & err, libcpp::tcp_socket * sock) {
+        listener.async_accept(10087, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_session* sess) {
             char buf[1024] = {0};
             if (err.failed()) {
                 std::cout << "srv async accept connion fail" << std::endl;
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
             }
             std::cout << "srv async accept connion success" << std::endl;
 
-            sock->async_recv(buf, 1024, [&](const libcpp::tcp_listener::err_t & err, std::size_t sz) {
+            sess->async_recv(buf, 1024, [&](const libcpp::tcp_listener::err_t & err, std::size_t sz) {
                 if (err.failed()) {
                     std::cout << "srv async recv fail" << std::endl;
                     return;
@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
             });
 
 
-            // len = sock->send(std::string("world").c_str(), 6);
+            // len = sess->send(std::string("world").c_str(), 6);
             // std::cout << "srv send>> world" << std::endl;
         });
     });
@@ -78,8 +78,8 @@ int main(int argc, char* argv[])
     std::thread t4([]() {
         char buf[1024] = {0};
         std::cout << "start async connect..." << std::endl;
-        libcpp::tcp_socket sock{};
-        sock.async_connect("127.0.0.1", 10087, [](const libcpp::tcp_socket::err_t & err, libcpp::tcp_socket * sock) {
+        libcpp::tcp_session sess{};
+        sess.async_connect("127.0.0.1", 10087, [](const libcpp::tcp_session::err_t & err, libcpp::tcp_session * sess) {
             std::cout << "fuck" << std::endl;
             if (!err.failed()) {
                 std::cout << "async connect 127.0.0.1:10087 fail" << std::endl;
@@ -87,8 +87,8 @@ int main(int argc, char* argv[])
             }
             std::cout << "async connect 127.0.0.1:10087 success" << std::endl;
 
-            sock->async_send(std::string("hello").c_str(), 6,
-            [](const libcpp::tcp_socket::err_t & err, std::size_t sz) {
+            sess->async_send(std::string("hello").c_str(), 6,
+            [](const libcpp::tcp_session::err_t & err, std::size_t sz) {
                 if (err.failed()) {
                     std::cout << "cli send fail" << std::endl;
                     return;
@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
             });
         });
 
-        // len = sock.recv(buf, 1024);
+        // len = sess.recv(buf, 1024);
         // std::cout << "cli recv " << std::string(buf, len) << std::endl;
     });
     t4.detach();

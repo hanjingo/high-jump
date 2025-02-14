@@ -14,26 +14,29 @@ template<typename Key = std::uint64_t>
 class tcp_client
 {
 public:
+    typedef void(*pub_cb)();
+
+public:
     tcp_client() {}
     ~tcp_client() {}
 
     inline tcp_conn* get(Key id)
     {
-        auto itr = conns_.find(target);
+        auto itr = conns_.find(id);
         if (itr != conns_.end())
             return nullptr;
 
         return itr->second;
     }
 
-    tcp_conn* connect(const unsigned char* ip, 
-                      const std::uint16_t port, 
+    tcp_conn* connect(const char* ip, 
+                      const std::uint16_t port,
                       Key id, 
                       const std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
                       int retry_times = 1)
     {
         tcp_conn* conn = new tcp_conn();
-        if (!conn.connect(ip, port))
+        if (!conn->connect(ip, port))
         {
             delete conn;
             conn = nullptr;
@@ -46,16 +49,16 @@ public:
 
     void disconnect(Key id)
     {
-        auto itr = conns_.find(target);
+        auto itr = conns_.find(id);
         if (itr != conns_.end())
             return;
 
         itr->second->disconnect();
     }
 
-    bool send(message* msg, const Key target, const bool block = true)
+    bool send(message* msg, const Key id, const bool block = true)
     {
-        auto itr = conns_.find(target);
+        auto itr = conns_.find(id);
         if (itr != conns_.end())
             return false;
 
@@ -63,9 +66,9 @@ public:
         return true;
     }
 
-    bool recv(message* msg, const Key target, const bool block = true)
+    bool recv(message* msg, const Key id, const bool block = true)
     {
-        auto itr = conns_.find(target);
+        auto itr = conns_.find(id);
         if (itr != conns_.end())
             return false;
 
@@ -94,7 +97,7 @@ public:
     {
         auto itr = conns_.find(target);
         if (itr != conns_.end())
-            return false;
+            return;
 
         itr->second->send(req, true);
         itr->second->recv(resp, true);
@@ -113,18 +116,18 @@ public:
         if (itr != topics_.end())
             return;
 
-        for (auto conn = itr->second->begin(); conn != itr->second->end(); conn++)
-            conn->send(msg, block);
+        for (auto conn = itr->second.begin(); conn != itr->second.end(); ++conn)
+            (*conn)->send(msg, block);
     }
 
-    bool sub(const std::string& topic, const tcp_conn* conn)
+    bool sub(const std::string& topic, tcp_conn* conn)
     {
         if (topic == "" || topic == "*")
         {
             return false;
         }
 
-        topics_[topic]->insert(conn);
+        topics_[topic].insert(conn);
         return true;
     }
 
@@ -149,13 +152,13 @@ public:
             if (itr1 == topics_.end())
                 return;
 
-            itr1->remove(itr->second);
+            itr1->second.erase(itr->second);
             return;
         }
 
         for (auto itr1 = topics_.begin(); itr1 != topics_.end(); itr1++)
         {
-            itr1->remove(itr->second);
+            itr1->second.erase(itr->second);
         }
     }
 

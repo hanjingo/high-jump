@@ -19,119 +19,121 @@ if (NOT LIBRARY_OUTPUT_PATH)
     set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 endif()
 
-# add_subdirectory(any)
+add_subdirectory(any)
 
-# # add_subdirectory(base64)
+add_subdirectory(base64)
 
-# add_subdirectory(bits)
+add_subdirectory(bits)
 
-# # add_subdirectory(bt)
+# add_subdirectory(bt)
 
-# add_subdirectory(bytes)
+add_subdirectory(bytes)
 
-# # add_subdirectory(cbind)
+# add_subdirectory(cbind)
 
 # add_subdirectory(chan)
 
-# add_subdirectory(coroutine)
+add_subdirectory(coroutine)
 
-# add_subdirectory(counter)
+add_subdirectory(counter)
 
-# add_subdirectory(cpu)
+add_subdirectory(cpu)
 
-# # add_subdirectory(crash)
+# add_subdirectory(crash)
 
-# add_subdirectory(defer)
+add_subdirectory(defer)
 
-# add_subdirectory(des)
+add_subdirectory(des)
 
-# add_subdirectory(endian)
+add_subdirectory(endian)
 
-# add_subdirectory(env)
+add_subdirectory(env)
 
-# add_subdirectory(error)
+add_subdirectory(error)
 
-# add_subdirectory(exception)
+add_subdirectory(exception)
 
-# add_subdirectory(file)
+add_subdirectory(file)
 
-# add_subdirectory(fork)
+add_subdirectory(fork)
 
-# add_subdirectory(hex)
+add_subdirectory(hex)
 
-# add_subdirectory(http)
+add_subdirectory(http)
 
-# add_subdirectory(ini)
+add_subdirectory(ini)
 
-# add_subdirectory(init)
+add_subdirectory(init)
 
 # add_subdirectory(ipc)
 
-# add_subdirectory(json)
+add_subdirectory(json)
 
-# add_subdirectory(log)
+add_subdirectory(log)
 
-# add_subdirectory(matrix)
+add_subdirectory(matrix)
 
-# # add_subdirectory(md5)
+# add_subdirectory(md5)
 
-# add_subdirectory(mux)
+add_subdirectory(mux)
 
-# # add_subdirectory(mysql)
+# add_subdirectory(mysql)
 
-# add_subdirectory(once)
+add_subdirectory(once)
 
-# add_subdirectory(optional)
+add_subdirectory(optional)
 
-# add_subdirectory(os)
+add_subdirectory(os)
 
 # add_subdirectory(parallel)
 
-# add_subdirectory(process)
+add_subdirectory(process)
 
-# add_subdirectory(random)
+add_subdirectory(random)
 
-# # add_subdirectory(redis)
+# add_subdirectory(redis)
 
-# add_subdirectory(reflect)
+add_subdirectory(reflect)
 
-# add_subdirectory(ring_buf)
+add_subdirectory(ring_buf)
 
-# add_subdirectory(safe_vector)
+add_subdirectory(safe_vector)
 
 add_subdirectory(sha256)
 
-# add_subdirectory(signal)
+add_subdirectory(signal)
 
-# add_subdirectory(single)
+add_subdirectory(single)
 
-# add_subdirectory(single_no_boost)
+add_subdirectory(single_no_boost)
 
 # add_subdirectory(sqlite)
 
-# add_subdirectory(strings)
+add_subdirectory(strings)
 
-# add_subdirectory(task)
+add_subdirectory(task)
 
-# # add_subdirectory(tcp)
+add_subdirectory(tcp)
 
-# # add_subdirectory(tcp_socket)
+add_subdirectory(tcp_cs)
 
-# add_subdirectory(thread)
+add_subdirectory(tcp_socket)
 
-# add_subdirectory(time)
+add_subdirectory(thread)
 
-# add_subdirectory(timer)
+add_subdirectory(time)
 
-# # add_subdirectory(udp)
+add_subdirectory(timer)
+
+add_subdirectory(udp)
 
 # add_subdirectory(unit_test)
 
-# add_subdirectory(uuid)
+add_subdirectory(uuid)
 
-# add_subdirectory(variant)
+add_subdirectory(variant)
 
-# add_subdirectory(vector2d)
+add_subdirectory(vector2d)
 
 # add_subdirectory(xml)
 

@@ -11,7 +11,6 @@ int main(int argc, char* argv[])
     while (true)
     {
         std::cout << libcpp::sha256::encode(std::cin.getline(buf, sz)) << std::endl;
-        std::cin.
     }
 
     return 0;

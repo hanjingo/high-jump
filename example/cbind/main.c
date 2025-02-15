@@ -1,9 +1,16 @@
 #include <stdio.h>
 
+#include <libcpp/binding/c/any.h>
 #include <libcpp/binding/c/bits.h>
 #include <libcpp/binding/c/bytes.h>
 #include <libcpp/binding/c/endian.h>
+#include <libcpp/binding/c/filepath.h>
 #include <libcpp/binding/c/hex.h>
+
+void any()
+{
+    printf("any C API example >>>>>>>>>>>>>>\n");
+}
 
 void bits()
 {
@@ -61,11 +68,18 @@ void endian()
 
     printf("libcpp_convert_big_endian_short(0x1234) = 0x%x\n", libcpp_convert_big_endian_short(0x1234));
     printf("libcpp_convert_big_endian(0x12345678) = 0x%x\n", libcpp_convert_big_endian(0x12345678));
-    printf("libcpp_convert_big_endian_long(0x12345678) = 0x%lx\n", libcpp_convert_big_endian_long(0x12345678));
+    // printf("libcpp_convert_big_endian_long(0x12345678) = 0x%lx\n", libcpp_convert_big_endian_long(0x12345678));
 
     printf("libcpp_convert_little_endian_short(0x1234) = 0x%x\n", libcpp_convert_little_endian_short(0x1234));
     printf("libcpp_convert_little_endian(0x12345678) = 0x%x\n", libcpp_convert_little_endian(0x12345678));
-    printf("libcpp_convert_little_endian_long(0x12345678) = 0x%lx\n", libcpp_convert_little_endian_long(0x12345678));
+    // printf("libcpp_convert_little_endian_long(0x12345678) = 0x%lx\n", libcpp_convert_little_endian_long(0x12345678));
+
+    printf("\n");
+}
+
+void filepath()
+{
+    printf("filepath C API example >>>>>>>>>>>>>>\n");
 
     printf("\n");
 }
@@ -88,6 +102,8 @@ int main(int argc, char* argv[])
     bytes();
 
     endian();
+
+    filepath();
 
     hex();
 

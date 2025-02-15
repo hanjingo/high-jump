@@ -37,7 +37,8 @@ int main(int argc, char* argv[])
         libcpp::tcp_client<int> cli{};
         cli.connect("192.168.0.1", 10086, 1);
 
-        cli.sub("hello");
+        std::string topic("hello");
+        // cli.sub(topic);
     });
     t3.detach();
 
@@ -49,8 +50,9 @@ int main(int argc, char* argv[])
         libcpp::tcp_client<std::string> cli{};
         cli.connect("192.168.0.1", 10086, "conn1");
 
-        tcp_msg msg; 
-        cli.pub("hello", msg);
+        // tcp_msg msg; 
+        // std::string topic("hello");
+        // cli.pub(topic, msg);
     });
     t4.detach();
 

@@ -20,10 +20,10 @@ int main(int argc, char* argv[])
     std::cout << "boost::endian::big_tonative(int(0x01020304)) = 0x"
               << std::hex << boost::endian::big_to_native(int(0x01020304)) << std::endl;
 
-    std::cout << "big<<int(0x01020304) = 0x" << std::hex << (libcpp::big << int(0x01020304)) << std::endl;
-    std::cout << "little<<int(0x01020304) = 0x" << (libcpp::little << int(0x01020304)) << std::endl;
+    std::cout << "BE<<int(0x01020304) = 0x" << std::hex << (libcpp::BE << int(0x01020304)) << std::endl;
+    std::cout << "LE<<int(0x01020304) = 0x" << (libcpp::LE << int(0x01020304)) << std::endl;
 
-    std::cout << "little<<int(0x0A01) = 0x" << (libcpp::little << int(0x0A01)) << std::endl;
+    std::cout << "LE<<int(0x0A01) = 0x" << (libcpp::LE << int(0x0A01)) << std::endl;
 
     std::cin.get();
     return 0;

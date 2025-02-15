@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.19.2)
 
-# cmake -DBUILD_LIB=ON -DBUILD_EXAMPLE=ON ..
+# cmake -DBUILD_EXAMPLE=ON ..
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -31,7 +31,7 @@ add_subdirectory(bytes)
 
 # add_subdirectory(cbind)
 
-# add_subdirectory(chan)
+add_subdirectory(chan)
 
 add_subdirectory(coroutine)
 
@@ -65,7 +65,7 @@ add_subdirectory(ini)
 
 add_subdirectory(init)
 
-# add_subdirectory(ipc)
+add_subdirectory(ipc)
 
 add_subdirectory(json)
 
@@ -73,11 +73,9 @@ add_subdirectory(log)
 
 add_subdirectory(matrix)
 
-# add_subdirectory(md5)
+add_subdirectory(md5)
 
 add_subdirectory(mux)
-
-# add_subdirectory(mysql)
 
 add_subdirectory(once)
 
@@ -85,19 +83,15 @@ add_subdirectory(optional)
 
 add_subdirectory(os)
 
-# add_subdirectory(parallel)
-
 add_subdirectory(process)
 
 add_subdirectory(random)
 
-# add_subdirectory(redis)
+add_subdirectory(redis)
 
 add_subdirectory(reflect)
 
 add_subdirectory(ring_buf)
-
-add_subdirectory(safe_vector)
 
 add_subdirectory(sha256)
 
@@ -127,7 +121,7 @@ add_subdirectory(timer)
 
 add_subdirectory(udp)
 
-# add_subdirectory(unit_test)
+add_subdirectory(unit_test)
 
 add_subdirectory(uuid)
 
@@ -135,6 +129,4 @@ add_subdirectory(variant)
 
 add_subdirectory(vector2d)
 
-# add_subdirectory(xml)
-
-# add_subdirectory(zmq)
+add_subdirectory(xml)

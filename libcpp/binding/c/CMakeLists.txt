@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(libcpp)
 
-find_package(pugixml REQUIRED)
+find_package(Boost REQUIRED)
+# find_package(pugixml REQUIRED)
+find_package(concurrentqueue REQUIRED)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -22,7 +24,9 @@ if (NOT LIBRARY_OUTPUT_PATH)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${PUGIXML_INCLUDE_DIR})
+include_directories(${Boost_INCLUDE_DIRS})
+# include_directories(${PUGIXML_INCLUDE_DIR})
+include_directories(/usr/local/include)
 include_directories(${CMAKE_SOURCE_DIR}/libcpp/binding/c)
 
 aux_source_directory(./src SRC)
@@ -30,4 +34,7 @@ aux_source_directory(./src SRC)
 add_library(${SHARED_NAME} SHARED ${SRC})
 add_library(${STATIC_NAME} STATIC ${SRC})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE pugixml)
+# target_link_libraries(${PROJECT_NAME} PRIVATE pugixml)
+target_link_libraries(${PROJECT_NAME} 
+    pthread
+    ${Boost_LIBRARIES})

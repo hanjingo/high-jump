@@ -47,9 +47,9 @@ cpp library framework implementationed by c++11.
 cmake .. -DBUILD_LIB=ON
 ```
 
-| option    | default | description                   |
-| --------- | ------- | ----------------------------- |
-| BUILD_LIB | ON      | build the library if turn on. |
+| option    | default | description                     |
+| --------- | ------- | ------------------------------- |
+| BUILD_LIB | ON      | build the library if turned on. |
 
 ### Build Examples
 
@@ -57,9 +57,9 @@ cmake .. -DBUILD_LIB=ON
 cmake .. -DBUILD_EXAMPLE=ON
 ```
 
-| option        | default | description                           |
-| ------------- | ------- | ------------------------------------- |
-| BUILD_EXAMPLE | ON      | build the example project if turn on. |
+| option        | default | description                             |
+| ------------- | ------- | --------------------------------------- |
+| BUILD_EXAMPLE | ON      | build the example project if turned on. |
 
 ### Build test
 
@@ -67,9 +67,9 @@ cmake .. -DBUILD_EXAMPLE=ON
 cmake .. -DBUILD_TEST=ON
 ```
 
-| option     | default | description                   |
-| ---------- | ------- | ----------------------------- |
-| BUILD_TEST | ON      | test this project if turn on. |
+| option     | default | description                     |
+| ---------- | ------- | ------------------------------- |
+| BUILD_TEST | ON      | test this project if turned on. |
 
 ---
 

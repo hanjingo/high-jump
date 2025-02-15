@@ -176,7 +176,8 @@ private:
         if (conn == nullptr || conns_.find(id) != conns_.end())
             return false;
 
-        conns_.insert(id, conn);
+        conns_[id] = conn;
+        //conns_.insert(id, conn);
         return true;
     }
 

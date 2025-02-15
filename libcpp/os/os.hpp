@@ -7,8 +7,6 @@
 
 #include <libcpp/os/env.hpp>
 
-#include <libcpp/os/gpu.hpp>
-
 #include <libcpp/os/signal.hpp>
 
 #endif

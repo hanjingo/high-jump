@@ -6,6 +6,10 @@
 #include <signal.h>
 #include <functional>
 
+#ifdef NSIG
+#define _NSIG NSIG
+#endif
+
 namespace libcpp
 {
 static std::once_flag _sig_once;

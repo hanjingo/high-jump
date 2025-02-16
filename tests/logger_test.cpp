@@ -1,62 +1,76 @@
 #include <gtest/gtest.h>
 #include <libcpp/log/logger.hpp>
 
-TEST(logger, Instance)
+TEST(logger, instance)
+{
+    ASSERT_EQ(libcpp::logger::instance() != nullptr, true);
+}
+
+TEST(logger, set_default)
 {
 
 }
 
-TEST(logger, SetDefaultLogger)
+TEST(logger, creat_sink)
+{
+}
+
+TEST(logger, add_sink)
 {
 
 }
 
-TEST(logger, GetBase)
+TEST(logger, set_level)
 {
 
 }
 
-TEST(logger, SetLevel)
+TEST(logger, get_level)
 {
 
 }
 
-TEST(logger, SetPattern)
+TEST(logger, set_pattern)
 {
 
 }
 
-TEST(logger, Flush)
+TEST(logger, flush)
 {
 
 }
 
-TEST(logger, Trace)
+TEST(logger, flush_on)
 {
 
 }
 
-TEST(logger, Debug)
+TEST(logger, trace)
 {
 
 }
 
-TEST(logger, Info)
+TEST(logger, debug)
 {
 
 }
 
-TEST(logger, Warn)
+TEST(logger, info)
 {
 
 }
 
-TEST(logger, Error)
+TEST(logger, warn)
 {
 
 }
 
-TEST(logger, Critical)
+TEST(logger, error)
+{
+
+}
+
+TEST(logger, critical)
 {
 
 }

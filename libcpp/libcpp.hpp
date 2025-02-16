@@ -9,6 +9,8 @@
 
 #include <libcpp/encoding/encoding.hpp>
 
+#include <libcpp/hardware/hardware.hpp>
+
 #include <libcpp/io/io.hpp>
 
 #include <libcpp/log/log.hpp>

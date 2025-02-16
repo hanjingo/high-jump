@@ -11,6 +11,10 @@
 #include <unistd.h>
 #endif
 
+#ifdef NSIG
+#define _NSIG NSIG
+#endif
+
 namespace libcpp
 {
 
@@ -46,7 +50,15 @@ public:
         // Implement It
     };
 
+    #if defined(_WIN32)
+    static inline long gettid() { return static_cast<long>(::GetCurrentThreadId()); };
+    #elif __linux__
     static inline long gettid() { return static_cast<long>(syscall(SYS_gettid)); };
+    #elif __APPLE__
+    static inline long gettid() { pthread_t pt = pthread_self(); return static_cast<long>((pt == nullptr ? -1 : pt->__sig)); };
+    #else
+    // TODO
+    #endif
 
     static inline int getpid() { return ::getpid(); };
 
@@ -64,8 +76,10 @@ public:
 
     static void daemon()
     {
-
+        // TODO
     };
+
+    static inline int sig_raise(const int sig_no) { return raise(sig_no); };
 
     static sig_info* sig_reg(const int sig_no, sig_action_t&& act, bool repeat = false)
     {

@@ -9,7 +9,7 @@ namespace libcpp
 {
 
 template <class T>
-using optional = std::optional<T>
+using optional = std::optional<T>;
 
 }
 

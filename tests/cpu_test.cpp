@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/cpu.hpp>
 
-TEST(cpu, cpu_cores)
+TEST(cpu, cores)
 {
-    ASSERT_EQ(libcpp::cpu_cores() > 0, true);
+    ASSERT_EQ(libcpp::cpu::cores() > 0, true);
 }
 
-TEST(cpu, bind_cpu_core)
+TEST(cpu, bind)
 {
-    ASSERT_EQ(libcpp::bind_cpu_core(0), true);
+    ASSERT_EQ(libcpp::cpu::bind(0), false);
 }

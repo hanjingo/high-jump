@@ -38,32 +38,44 @@ TEST(bytes, int_to_bytes)
 
 TEST(bytes, bytes_to_long)
 {
-
+    unsigned char buf[4] = {0x0F, 0x00, 0x00, 0x00};
+    ASSERT_EQ(libcpp::bytes_to_long(buf, true), 0x0F000000);
+    ASSERT_EQ(libcpp::bytes_to_long(buf, false), 0x0F);
 }
 
 TEST(bytes, long_to_bytes)
 {
-
+    unsigned char buf[4] = {0x0};
+    ASSERT_EQ(libcpp::long_to_bytes(int(0x1), buf, true)[3], 0x1);
+    ASSERT_EQ(libcpp::long_to_bytes(int(0x1), buf, false)[0], 0x1);
 }
 
 TEST(bytes, bytes_to_long_long)
 {
-
+    unsigned char buf[8] = {0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    ASSERT_EQ(libcpp::bytes_to_long_long(buf, true), 0x0F00000000000000);
+    ASSERT_EQ(libcpp::bytes_to_long_long(buf, false), 0x0F);
 }
 
 TEST(bytes, long_long_to_bytes)
 {
-
+    unsigned char buf[8] = {0x0};
+    ASSERT_EQ(libcpp::long_long_to_bytes(int(0x1), buf, true)[7], 0x1);
+    ASSERT_EQ(libcpp::long_long_to_bytes(int(0x1), buf, false)[0], 0x1);
 }
 
 TEST(bytes, bytes_to_short)
 {
-
+    unsigned char buf[2] = {0x0F, 0x00};
+    ASSERT_EQ(libcpp::bytes_to_short(buf, true), 0x0F00);
+    ASSERT_EQ(libcpp::bytes_to_short(buf, false), 0x0F);
 }
 
 TEST(bytes, short_to_bytes)
 {
-
+    unsigned char buf[2] = {0x0};
+    ASSERT_EQ(libcpp::short_to_bytes(int(0x1), buf, true)[1], 0x1);
+    ASSERT_EQ(libcpp::short_to_bytes(int(0x1), buf, false)[0], 0x1);
 }
 
 TEST(bytes, bytes_to_double)

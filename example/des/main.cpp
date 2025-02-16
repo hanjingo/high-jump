@@ -4,6 +4,8 @@
 
 int main(int argc, char* argv[])
 {
+    std::cout << libcpp::des::ecb::encrypt("1234", "1") << std::endl;
+
     std::cout << "des::ecb_decrypt(des::ecb_encrypt(\"1234\", \"1\"), \"1\") = " 
               << libcpp::des::ecb::decrypt(libcpp::des::ecb::encrypt("1234", "1"), "1") << std::endl;
 

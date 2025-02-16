@@ -33,11 +33,13 @@ public:
         return boost::filesystem::relative(boost::filesystem::path(path),
                                            boost::filesystem::path(base)).string();
     }
-
-    static std::string join(const std::vector<std::string>& args)
+    
+    template<typename... Types>
+    static std::string join(Types&& ... args)
     {
+        std::vector<std::string> v{std::forward<Types>(args)...};
         auto path = boost::filesystem::path("");
-        for (auto itr = args.begin(); itr != args.end(); itr++) {
+        for (auto itr = v.begin(); itr != v.end(); itr++) {
             path /= boost::filesystem::path(*itr);
         }
 

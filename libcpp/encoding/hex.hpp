@@ -28,17 +28,17 @@ public:
     }
 
     template<typename T>
-    static std::string to_str(const T& t)
+    static std::string to_str(const T& t, bool upper_case = true)
     {
         std::ostringstream ss;
-        ss << std::hex << t;
+        ss << (upper_case ? std::uppercase : std::nouppercase) << std::hex << t;
         return ss.str();
     }
 
     template<typename T>
-    static char* to_str(const T& t, char* buf)
+    static char* to_str(const T& t, char* buf, bool upper_case = true)
     {
-        auto str = libcpp::hex::to_str(t);
+        auto str = libcpp::hex::to_str(t, upper_case);
         memcpy(buf, str.c_str(), str.length());
         return buf;
     }

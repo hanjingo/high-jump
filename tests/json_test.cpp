@@ -1,17 +1,17 @@
 #include <gtest/gtest.h>
 #include <libcpp/encoding/json.hpp>
 
-TEST(json, ToString)
+TEST(json, to_string)
 {
 
 }
 
-TEST(json, MakeObject)
+TEST(json, make_object)
 {
 
 }
 
-TEST(json, MakeArray)
+TEST(json, make_array)
 {
 
 }

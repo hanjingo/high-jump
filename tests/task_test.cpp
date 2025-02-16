@@ -1,62 +1,62 @@
 #include <gtest/gtest.h>
 #include <libcpp/io/task.hpp>
 
-TEST(task, Create)
+TEST(task, create)
 {
 
 }
 
-TEST(task, Then)
+TEST(task, then)
 {
 
 }
 
-TEST(task, SkipNext)
+TEST(task, skip_next)
 {
 
 }
 
-TEST(task, SkipAll)
+TEST(task, skip_all)
 {
 
 }
 
-TEST(task, Pause)
+TEST(task, pause)
 {
 
 }
 
-TEST(task, Resume)
+TEST(task, resume)
 {
 
 }
 
-TEST(task, Stop)
+TEST(task, stop)
 {
 
 }
 
-TEST(task, Run)
+TEST(task, run)
 {
 
 }
 
-TEST(task, RunOne)
+TEST(task, run_one)
 {
 
 }
 
-TEST(task, RunFor)
+TEST(task, run_for)
 {
 
 }
 
-TEST(task, AsyncRun)
+TEST(task, async_run)
 {
 
 }
 
-TEST(task, Size)
+TEST(task, size)
 {
 
 }

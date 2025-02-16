@@ -3,12 +3,16 @@
 
 #include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 
+#ifndef CHAN_CAPA
+#define CHAN_CAPA 6
+#endif
+
 namespace libcpp
 {
 
 template<typename T>
 struct chan {
-    chan(std::size_t capa = 6 * moodycamel::BlockingConcurrentQueue<T>::BLOCK_SIZE) : q_{capa} {};
+    chan(std::size_t capa = CHAN_CAPA * moodycamel::BlockingConcurrentQueue<T>::BLOCK_SIZE) : q_{capa} {};
     ~chan() {};
 
     inline chan& operator>>(T& t)
@@ -21,6 +25,16 @@ struct chan {
     {
         q_.enqueue(t);
         return *this;
+    }
+
+    inline void wait_dequeue(T& t)
+    {
+        q_.wait_dequeue(t);
+    }
+
+    inline bool enqueue(const T& t)
+    {
+        return q_.enqueue(t);
     }
 
 private:

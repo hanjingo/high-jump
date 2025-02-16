@@ -57,6 +57,8 @@ std::function<void(int)> sigcatch(int sig, const std::function<void(int)>&& cb, 
 
 static inline int last_signal() { return _sig_last; }
 
+static inline int sig_raise(const int sig_no) { return raise(sig_no); };
+
 }
 
 #endif

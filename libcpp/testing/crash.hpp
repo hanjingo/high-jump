@@ -6,7 +6,7 @@
 #include <iostream>
 #include <functional>
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(WIN64) || defined(_WIN64) || defined(__WIN64__)
+#if defined(WIN32)
 #include <windows.h>
 #include <client/windows/handler/exception_handler.h>
 #elif __APPLE__
@@ -18,7 +18,7 @@
 namespace libcpp
 {
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(WIN64) || defined(_WIN64) || defined(__WIN64__)
+#if defined(WIN32)
 typedef bool(*dump_callback_t)(const wchar_t*, 
                                const wchar_t*, 
                                void*, 
@@ -91,7 +91,7 @@ public:
             delete _handler;
         }
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(WIN64) || defined(_WIN64) || defined(__WIN64__)
+#if defined(WIN32)
         std::wstring abs_path;
         _handler = new google_breakpad::ExceptionHandler(abs_path, 
                                                          nullptr,                      // FilterCallback
@@ -129,7 +129,7 @@ private:
     dump_callback_t _dump_cb;
 };
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(WIN64) || defined(_WIN64) || defined(__WIN64__)
+#if defined(WIN32)
 // Reference to: https://www.cnblogs.com/cswuyg/p/3207576.html
 LPTOP_LEVEL_EXCEPTION_FILTER WINAPI temp_set_unhandled_exception_filter( 
     LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter )

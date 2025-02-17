@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <functional>
 
-#ifdef NSIG
+#if defined(NSIG) && !defined(_NSIG)
 #define _NSIG NSIG
 #endif
 

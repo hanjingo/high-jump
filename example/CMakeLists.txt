@@ -39,7 +39,7 @@ add_subdirectory(counter)
 
 add_subdirectory(cpu)
 
-# add_subdirectory(crash)
+add_subdirectory(crash)
 
 add_subdirectory(defer)
 
@@ -65,7 +65,7 @@ add_subdirectory(ini)
 
 add_subdirectory(init)
 
-add_subdirectory(ipc)
+# add_subdirectory(ipc)
 
 add_subdirectory(json)
 
@@ -83,8 +83,6 @@ add_subdirectory(optional)
 
 add_subdirectory(os)
 
-add_subdirectory(process)
-
 add_subdirectory(random)
 
 add_subdirectory(redis)
@@ -101,7 +99,7 @@ add_subdirectory(single)
 
 add_subdirectory(single_no_boost)
 
-# add_subdirectory(sqlite)
+add_subdirectory(sqlite)
 
 add_subdirectory(strings)
 
@@ -121,7 +119,7 @@ add_subdirectory(timer)
 
 add_subdirectory(udp)
 
-add_subdirectory(unit_test)
+# add_subdirectory(unit_test)
 
 add_subdirectory(uuid)
 

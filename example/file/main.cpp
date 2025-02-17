@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
 
     std::cout << "relative(\"/var\", \"/var/tmp/src/\") = " << file_path::relative("/", "/var/tmp/src/") << std::endl;
 
-    std::cout << "join({\"/usr/local\", \"bin\"}) = " << file_path::join({"/usr/local", "bin"}) << std::endl;
+    std::cout << "join({\"/usr/local\", \"bin\"}) = " << file_path::join("/usr/local", "bin") << std::endl;
 
     std::cout << "make_file(\"/var/tmp/hello.txt\") = "
               << file_path::make_file("/var/tmp/hello.txt") << std::endl;

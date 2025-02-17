@@ -109,9 +109,9 @@ public:
 #else
         std::string abs_path;
         _handler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(abs_path),
-                                                         0, // FilterCallback
+                                                         NULL, // FilterCallback
                                                          _dump_cb,
-                                                         0, // context
+                                                         NULL, // context
                                                          true,
                                                          -1);
 #endif

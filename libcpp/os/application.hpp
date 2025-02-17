@@ -4,14 +4,17 @@
 #include <signal.h>
 #include <functional>
 
-#ifdef _WIN32
+#if defined(_WIN32)
 #include <io.h>
 #include <fcntl.h>
+#elif __linux__
+#include <syscall.h>
+#include <unistd.h>
 #else
 #include <unistd.h>
 #endif
 
-#ifdef NSIG
+#if defined(NSIG) && !defined(_NSIG)
 #define _NSIG NSIG
 #endif
 
@@ -112,7 +115,6 @@ private:
 private:
     int    _argc;
     char** _argv;
-
     static sig_info* _sig_map[_NSIG];
 };
 

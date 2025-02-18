@@ -2,7 +2,7 @@
 #define WORLD_HPP
 
 #include <iostream>
-#include <libcpp/util/init.hpp>
+#include <libcpp/sync/init.hpp>
 
 INIT(
     std::cout << "init world.hpp" << std::endl;

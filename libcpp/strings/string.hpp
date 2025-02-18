@@ -1,5 +1,5 @@
-#ifndef STRING_UTIL_HPP
-#define STRING_UTIL_HPP
+#ifndef string_HPP
+#define string_HPP
 
 #include <string>
 #include <regex>
@@ -8,7 +8,7 @@
 namespace libcpp
 {
 
-class string_util
+class string : public std::string
 {
 public:
     static std::vector<std::string> split(const std::string& str, const std::string& regex)

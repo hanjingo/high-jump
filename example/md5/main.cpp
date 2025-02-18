@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include <libcpp/encoding/md5.hpp>
+#include <libcpp/crypto/md5.hpp>
 
 int main(int argc, char* argv[])
 {

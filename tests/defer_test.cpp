@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/util/defer.hpp>
+#include <libcpp/sync/defer.hpp>
 
 static int num = 0;
 

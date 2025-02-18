@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/util/init.hpp>
+#include <libcpp/sync/init.hpp>
 
 static int init_num = 0;
 

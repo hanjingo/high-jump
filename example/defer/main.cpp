@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include <libcpp/util/defer.hpp>
+#include <libcpp/sync/defer.hpp>
 
 using namespace libcpp;
 

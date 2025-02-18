@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 
-#include <libcpp/misc/multiplexer.hpp>
+#include <libcpp/algo/multiplexer.hpp>
 
 void OnOk()
 {

@@ -15,13 +15,20 @@ void handler2(int sig)
 
 TEST(signal, sigcatch)
 {
-    libcpp::sigcatch(SIGABRT, std::bind(handler1, std::placeholders::_1), true);
+    libcpp::_sigcatch(SIGABRT, std::bind(handler1, std::placeholders::_1), true);
 
-    libcpp::sigcatch(SIGILL, std::bind(handler2, std::placeholders::_1), true);
-
-    libcpp::sig_raise(SIGILL);
-    ASSERT_EQ(signal_num, 2);
+    libcpp::sigcatch({SIGILL, SIGTERM}, std::bind(handler2, std::placeholders::_1), true);
 
     libcpp::sig_raise(SIGABRT);
+    ASSERT_EQ(signal_num, 1);
+    libcpp::sig_raise(SIGABRT);
+    ASSERT_EQ(signal_num, 1);
+
+    libcpp::sig_raise(SIGILL);
     ASSERT_EQ(signal_num, 3);
+    libcpp::sig_raise(SIGTERM);
+    ASSERT_EQ(signal_num, 5);
+
+    libcpp::sig_raise(SIGILL, SIGTERM);
+    ASSERT_EQ(signal_num, 5);
 }

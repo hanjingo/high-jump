@@ -17,15 +17,13 @@ int main(int argc, char* argv[])
 {
     // signal(SIGINT, handler1);
 
-    libcpp::sigcatch(SIGABRT, [](int sig){ std::cout << "lambda on sig:" << sig << std::endl; }, true);
+    libcpp::sigcatch({SIGABRT}, [](int sig){ std::cout << "lambda on sig:" << sig << std::endl; }, true);
 
-    libcpp::sigcatch(SIGILL, std::bind(handler2, std::placeholders::_1), 1);
+    libcpp::sigcatch({SIGILL}, std::bind(handler2, std::placeholders::_1), 1);
 
     // raise(SIGINT);
 
-    raise(SIGABRT);
-
-    raise(SIGILL);
+    libcpp::sig_raise(SIGABRT, SIGILL);
 
     std::cout << "last signal = " << libcpp::last_signal << std::endl;
 

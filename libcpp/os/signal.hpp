@@ -16,7 +16,6 @@ namespace libcpp
 {
 using sig_t = int;
 
-static std::once_flag _sig_once;
 static std::mutex _sig_mu;
 static sig_t _sig_last;
 static std::function<void(sig_t)> _sighandler_set[_NSIG];

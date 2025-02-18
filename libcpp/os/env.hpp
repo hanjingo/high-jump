@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <cstring>
 
-#if defined(WIN32) && !defined(__WINDOWS__)
-#define __WINDOWS__
+#if defined(WIN32) && !defined(__windows__)
+#define __windows__
 #endif
 
 // __DATE__:[Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sept, Oct, Nov, Dec] 2 2024

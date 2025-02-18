@@ -1,2 +1,2 @@
 #include <gtest/gtest.h>
-#include <libcpp/util/dll.hpp>
+#include <libcpp/util/dll.h>

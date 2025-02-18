@@ -1,7 +1,7 @@
 #ifndef API_H
 #define API_H
 
-#include <libcpp/util/dll.hpp>
+#include <libcpp/util/dll.h>
 
 // combine export and import macro
 #if defined(LIBCPP_EXPORT)

@@ -4,11 +4,11 @@
 #include <stdlib.h>
 #include <thread>
 
-#if defined(WIN32) && !defined(__WINDOWS__)
-#define __WINDOWS__
+#if defined(WIN32) && !defined(__windows__)
+#define __windows__
 #endif
 
-#if defined(__WINDOWS__)
+#if defined(__windows__)
 #include <windows.h>
 #elif __APPLE__
 #include <sys/param.h>
@@ -43,7 +43,7 @@ class cpu
 public:
     static unsigned int cores()
     {
-    #if defined(__WINDOWS__)
+    #if defined(__windows__)
         SYSTEM_INFO sysinfo;
         GetSystemInfo(&sysinfo);
         return sysinfo.dwNumberOfProcessors;
@@ -73,7 +73,7 @@ public:
 
     static bool bind(const unsigned int core)
     {
-    #if defined(__WINDOWS__)
+    #if defined(__windows__)
         HANDLE hThread = GetCurrentThread();
         DWORD_PTR mask = SetThreadAffinityMask(hThread, (DWORD_PTR)(1LLU << i));
         return (mask != 0);

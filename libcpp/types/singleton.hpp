@@ -1,7 +1,7 @@
 #ifndef SINGLETON_HPP
 #define SINGLETON_HPP
 
-#ifdef BOOST_ENABLE
+#ifdef BOOST_FOUND
 #include <boost/serialization/singleton.hpp>
 namespace libcpp
 {

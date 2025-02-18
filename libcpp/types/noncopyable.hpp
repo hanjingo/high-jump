@@ -1,7 +1,7 @@
 #ifndef NONCOPYABLE_HPP
 #define NONCOPYABLE_HPP
 
-#ifdef BOOST_ENABLE
+#ifdef BOOST_FOUND
 #include <boost/noncopyable.hpp>
 
 namespace libcpp

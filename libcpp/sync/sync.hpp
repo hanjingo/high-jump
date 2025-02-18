@@ -5,6 +5,12 @@
 
 #include <libcpp/sync/coroutine.hpp>
 
+#include <libcpp/sync/counter.hpp>
+
+#include <libcpp/sync/defer.hpp>
+
+#include <libcpp/sync/init.hpp>
+
 #include <libcpp/sync/ipc.hpp>
 
 #include <libcpp/sync/once.hpp>

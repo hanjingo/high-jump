@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/base64.hpp>
+#include <libcpp/crypto/base64.hpp>
 
 TEST(base64, encode)
 {

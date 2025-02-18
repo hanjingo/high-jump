@@ -1,5 +1,5 @@
-#ifndef STRING_UTIL_H
-#define STRING_UTIL_H
+#ifndef string_H
+#define string_H
 
 #include <libcpp/binding/c/api.h>
 

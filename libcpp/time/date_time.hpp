@@ -6,10 +6,40 @@
 #include <iostream>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <libcpp/time/time_define.hpp>
 
 namespace libcpp
 {
+
+static constexpr std::time_t sec    = std::time_t(1);
+static constexpr std::time_t minute = std::time_t(60) * sec;
+static constexpr std::time_t hour   = std::time_t(60) * minute;
+static constexpr std::time_t day    = std::time_t(24) * hour;
+static constexpr std::time_t week   = std::time_t(7) * day;
+
+enum week_day {
+    sunday = 0,
+    monday,
+    tuesday,
+    wednesday,
+    thursday,
+    firday,
+    saturday
+};
+
+enum moon {
+    january = 1,
+    february,
+    march,
+    april,
+    may,
+    june,
+    july,
+    august,
+    september,
+    october,
+    november,
+    december
+};
 
 static const boost::posix_time::ptime NullTime{boost::gregorian::date(boost::gregorian::pos_infin),
            boost::posix_time::time_duration(0, 0, 0)};
@@ -431,6 +461,5 @@ private:
 };
 
 }
-
 
 #endif

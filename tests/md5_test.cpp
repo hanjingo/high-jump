@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/md5.hpp>
+#include <libcpp/crypto/md5.hpp>
 
 TEST(md5, calc)
 {

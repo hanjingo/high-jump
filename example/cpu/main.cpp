@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include <libcpp/os/cpu.hpp>
+#include <libcpp/hardware/cpu.hpp>
 
 int main(int argc, char* argv[])
 {

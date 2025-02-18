@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/os/cpu.hpp>
+#include <libcpp/hardware/cpu.hpp>
 
 TEST(cpu, cores)
 {

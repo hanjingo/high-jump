@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <thread>
 
-#if defined(WIN32)
+#if defined(WIN32) && !defined(__WINDOWS__)
 #define __WINDOWS__
 #endif
 

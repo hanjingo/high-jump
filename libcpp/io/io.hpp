@@ -3,7 +3,7 @@
 
 #include <libcpp/io/filepath.hpp>
 
-#include <libcpp/io/fsize.hpp>
+#include <libcpp/io/file.hpp>
 
 #include <libcpp/io/ring_buffer.hpp>
 

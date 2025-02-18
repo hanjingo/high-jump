@@ -3,13 +3,13 @@
 
 int main(int argc, char* argv[])
 {
-    std::cout << "YEAR = " << YEAR << std::endl;
-    std::cout << "MONTH = " << MONTH << std::endl;
-    std::cout << "DAY = " << DAY << std::endl;
-    std::cout << "HOUR = " << HOUR << std::endl;
-    std::cout << "MINUTE = " << MINUTE << std::endl;
-    std::cout << "SECONDS = " << SECONDS << std::endl;
-    std::cout << "DATE_TIME = " << std::string(DATE_TIME) << std::endl;
+    std::cout << "YEAR = " << COMPILE_YEAR << std::endl;
+    std::cout << "MONTH = " << COMPILE_MONTH << std::endl;
+    std::cout << "DAY = " << COMPILE_DAY << std::endl;
+    std::cout << "HOUR = " << COMPILE_HOUR << std::endl;
+    std::cout << "MINUTE = " << COMPILE_MINUTE << std::endl;
+    std::cout << "SECONDS = " << COMPILE_SECONDS << std::endl;
+    std::cout << "DATE_TIME = " << std::string(COMPILE_TIME) << std::endl;
 
     std::cout << "getenv(\"PATH\") = " << libcpp::getenv("PATH") << std::endl;
     

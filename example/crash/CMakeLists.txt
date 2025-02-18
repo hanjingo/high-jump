@@ -8,7 +8,6 @@ if (NOT Breakpad_INCLUDE_DIR)
     set(Breakpad_INCLUDE_DIR /usr/local/include/breakpad)
 endif()
 include_directories(${Breakpad_INCLUDE_DIR})
-include_directories(/usr/local/include/)
 
 add_executable(${PROJECT_NAME} 
     ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp

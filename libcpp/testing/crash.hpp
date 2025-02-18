@@ -60,31 +60,26 @@ public:
         : _dump_cb{default_dump_callback}
     {
     }
-    crash_handler(const char* path)
+    crash_handler(const char* abs_path)
         : _dump_cb{default_dump_callback}
     {
-        set_local_path(path);
+        set_local_path(abs_path);
     }
-    crash_handler(const char* path, const dump_callback_t cb)
+    crash_handler(const char* abs_path, const dump_callback_t cb)
         : _dump_cb{cb}
     {
-        set_local_path(path);
+        set_local_path(abs_path);
     }
     virtual ~crash_handler()
     {
     }
 
-    void set_dump_callback(const dump_callback_t cb)
-    {
-        _dump_cb = cb;
-    }
+    inline void set_dump_callback(const dump_callback_t cb) { _dump_cb = cb; }
 
-    void set_local_path(const std::string& path)
-    {
-        set_local_path(path.c_str());
-    }
+    inline void set_local_path(const char* abs_path) { set_local_path(std::string(abs_path)); }
 
-    void set_local_path(const char* path)
+    // NOTE: DON NOT SUPPORT RELATIVE PATH
+    void set_local_path(const std::string& abs_path)
     {
         if (_handler != nullptr)
         {
@@ -92,14 +87,14 @@ public:
         }
 
 #if defined(WIN32)
-        std::wstring abs_path;
+        std::wstring wabs_path(std::string(path).length(), L' ');
+        std::copy(abs_path.begin(), abs_path.end(), wabs_path.begin());
         _handler = new google_breakpad::ExceptionHandler(abs_path, 
                                                          nullptr,                      // FilterCallback
                                                          _dump_cb, 
                                                          nullptr,                      // context
                                                          google_breakpad::ExceptionHandler::_handlerALL);
 #elif __APPLE__
-        std::string abs_path;
         _handler = new google_breakpad::ExceptionHandler(abs_path,
                                                          nullptr, // FilterCallback
                                                          _dump_cb, 
@@ -107,13 +102,54 @@ public:
                                                          true, 
                                                          nullptr);
 #else
-        std::string abs_path;
         _handler = new google_breakpad::ExceptionHandler(google_breakpad::MinidumpDescriptor(abs_path),
                                                          NULL, // FilterCallback
                                                          _dump_cb,
                                                          NULL, // context
                                                          true,
                                                          -1);
+#endif
+    }
+
+#if defined(WIN32)
+    // Reference to: https://www.cnblogs.com/cswuyg/p/3207576.html
+    LPTOP_LEVEL_EXCEPTION_FILTER WINAPI temp_set_unhandled_exception_filter( 
+        LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter )
+    {
+        return NULL;
+    }
+#endif
+
+    // Prevent exception handle by other application or crt.
+    bool prevent_set_unhandled_exception_filter()
+    {
+#if defined(WIN32)
+        HMODULE hKernel32 = LoadLibrary(L"kernel32.dll");
+        if (hKernel32 == NULL)
+            return false;
+
+        void *pOrgEntry = (void*)(::GetProcAddress(hKernel32, "SetUnhandledExceptionFilter"));
+        if(pOrgEntry == NULL)
+            return false;
+
+        unsigned char newJump[5];
+        DWORD dwOrgEntryAddr = (DWORD)pOrgEntry;
+        dwOrgEntryAddr += 5; // jump instruction has 5 byte space.
+
+        void *pNewFunc = (void*)(&temp_set_unhandled_exception_filter);
+        DWORD dwNewEntryAddr = (DWORD)pNewFunc;
+        DWORD dwRelativeAddr = dwNewEntryAddr - dwOrgEntryAddr;
+
+        newJump[0] = 0xE9;  // jump
+        memcpy(&newJump[1], &dwRelativeAddr, sizeof(DWORD));
+        SIZE_T bytesWritten;
+        DWORD dwOldFlag, dwTempFlag;
+        ::VirtualProtect(pOrgEntry, 5, PAGE_READWRITE, &dwOldFlag);
+        BOOL bRet = ::WriteProcessMemory(::GetCurrentProcess(), pOrgEntry, newJump, 5, &bytesWritten);
+        ::VirtualProtect(pOrgEntry, 5, dwOldFlag, &dwTempFlag);
+        return bRet;
+#else
+        return true;
 #endif
     }
 
@@ -128,48 +164,6 @@ private:
     google_breakpad::ExceptionHandler* _handler = nullptr;
     dump_callback_t _dump_cb;
 };
-
-#if defined(WIN32)
-// Reference to: https://www.cnblogs.com/cswuyg/p/3207576.html
-LPTOP_LEVEL_EXCEPTION_FILTER WINAPI temp_set_unhandled_exception_filter( 
-    LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter )
-{
-    return NULL;
-}
-
-// Prevent exception handle by other application or crt.
-bool prevent_set_unhandled_exception_filter()
-{
-    HMODULE hKernel32 = LoadLibrary(L"kernel32.dll");
-    if (hKernel32 ==   NULL)
-    {
-        return false;
-    }
-
-    void *pOrgEntry = (void*)(::GetProcAddress(hKernel32, "SetUnhandledExceptionFilter"));
-    if(pOrgEntry == NULL)
-    {
-        return false;
-    }
-
-    unsigned char newJump[5];
-    DWORD dwOrgEntryAddr = (DWORD)pOrgEntry;
-    dwOrgEntryAddr += 5; // jump instruction has 5 byte space.
-
-    void *pNewFunc = (void*)(&temp_set_unhandled_exception_filter);
-    DWORD dwNewEntryAddr = (DWORD)pNewFunc;
-    DWORD dwRelativeAddr = dwNewEntryAddr - dwOrgEntryAddr;
-
-    newJump[0] = 0xE9;  // jump
-    memcpy(&newJump[1], &dwRelativeAddr, sizeof(DWORD));
-    SIZE_T bytesWritten;
-    DWORD dwOldFlag, dwTempFlag;
-    ::VirtualProtect(pOrgEntry, 5, PAGE_READWRITE, &dwOldFlag);
-    BOOL bRet = ::WriteProcessMemory(::GetCurrentProcess(), pOrgEntry, newJump, 5, &bytesWritten);
-    ::VirtualProtect(pOrgEntry, 5, dwOldFlag, &dwTempFlag);
-    return bRet;
-}
-#endif
 
 }
 

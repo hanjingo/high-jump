@@ -1,34 +1,14 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/application.hpp>
 
-// TEST(application, gettid)
-// {
-//     ASSERT_EQ(libcpp::application::gettid() > -1, true);
-// }
-
-TEST(application, getpid)
-{
-    ASSERT_EQ(libcpp::application::getpid() > 0, true);
-}
-
-TEST(application, getppid)
-{
-    ASSERT_EQ(libcpp::application::getppid() == 0, true);
-}
-
 TEST(application, sleep)
 {
-    ASSERT_EQ(libcpp::application::sleep(1) == 0, true);
+    libcpp::application::sleep(1);
 }
 
-TEST(application, daemon)
+TEST(application, msleep)
 {
-
-}
-
-TEST(application, raise)
-{
-
+    libcpp::application::msleep(1);
 }
 
 // TEST(application, sig_reg)

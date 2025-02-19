@@ -1,6 +1,9 @@
 #ifndef APPLICATION_HPP
 #define APPLICATION_HPP
 
+#include <thread>
+#include <chrono>
+
 #include <functional>
 
 #if defined(_WIN32)
@@ -19,20 +22,8 @@ namespace libcpp
 class application
 {
 public:
-    application() : _argc{0}, _argv{NULL} {};
+    application() {};
     virtual ~application();
-
-    virtual bool init(int argc, char* argv[])
-    {
-        _argc = argc;
-        _argv = argv;
-        return true;
-    };
-
-    virtual void run()
-    {
-        // Implement It
-    };
 
     static long gettid() 
     {
@@ -49,23 +40,15 @@ public:
 #endif
     }
 
-    static inline int getpid() { return ::getpid(); };
-
-    static inline int getppid() { return 0; };
-
-    static unsigned int sleep(unsigned int sec)
+    static void sleep(unsigned int sec)
     {
-    #ifdef _MSC_VER
-        Sleep(sec);
-        return 0;
-    #else
-        return ::sleep(sec);
-    #endif
+        std::this_thread::sleep_for(std::chrono::seconds(sec));
     };
 
-private:
-    int    _argc;
-    char** _argv;
+    static void msleep(unsigned long long ms)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    };
 };
 
 }

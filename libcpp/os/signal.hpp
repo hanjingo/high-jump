@@ -69,7 +69,7 @@ static inline int last_signal() { return _sig_last; }
 template <typename... Args>
 static bool sig_raise(Args... args) 
 { 
-    std::initializer_list<sig_t> li{args...};
+    std::initializer_list<sig_t> li{std::forward<Args>(args)...};
     for (sig_t sig : li) {
         if (raise(sig) != sig)
             return false;

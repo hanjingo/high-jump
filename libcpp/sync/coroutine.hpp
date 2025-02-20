@@ -16,6 +16,6 @@ using coroutine = boost::coroutines2::coroutine<T>;
 #define __coroutine_cat(a, b) a##b
 #define _coroutine_cat(a, b) __coroutine_cat(a, b)
 
-#define COROUTINE(cmd) libcpp::coroutine<void>::pull_type __coroutine_cat(__coroutine__, __LINE__)([&](libcpp::coroutine<void>::push_type&) { cmd; })
+#define COROUTINE(cmd) libcpp::coroutine<void>::pull_type __coroutine_cat(__coroutine__, __COUNTER__)([&](libcpp::coroutine<void>::push_type&) { cmd; });
 
 #endif

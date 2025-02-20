@@ -14,13 +14,67 @@
 #pragma warning Unknown dynamic link import/export semantics.
 #endif
 
-// export/import c Style dll
-#ifdef _cplusplus
+// // export/import c style dll
+// #ifdef _cplusplus
+// #define C_STYLE_EXPORT extern "C" DLL_EXPORT
+// #define C_STYLE_IMPORT DLL_IMPORT
+// #else
+// #define C_STYLE_EXPORT DLL_EXPORT
+// #define C_STYLE_IMPORT DLL_IMPORT
+// #endif
+
 #define C_STYLE_EXPORT extern "C" DLL_EXPORT
-#define C_STYLE_IMPORT DLL_IMPORT
+
+
+#if defined(WIN32)
+#include <windows.h>
+#define DLL_RTLD_LAZY         0
+#define DLL_RTLD_NOW          0
+#define DLL_RTLD_BINDING_MASK 0
+#define DLL_RTLD_NOLOAD       0
+#define DLL_RTLD_DEEPBIND     0
+#define DLL_RTLD_GLOBAL       0
+#define DLL_RTLD_LOCAL        0
+#define DLL_RTLD_NODELETE     0
+
 #else
-#define C_STYLE_EXPORT DLL_EXPORT
-#define C_STYLE_IMPORT DLL_IMPORT
+#include <dlfcn.h>
+#define DLL_RTLD_LAZY         RTLD_LAZY
+#define DLL_RTLD_NOW          RTLD_NOW
+#define DLL_RTLD_BINDING_MASK RTLD_BINDING_MASK
+#define DLL_RTLD_NOLOAD       RTLD_NOLOAD
+#define DLL_RTLD_DEEPBIND     RTLD_DEEPBIND
+#define DLL_RTLD_GLOBAL       RTLD_GLOBAL
+#define DLL_RTLD_LOCAL        RTLD_LOCAL
+#define DLL_RTLD_NODELETE     RTLD_NODELETE
 #endif
+
+
+void* dll_open(const char* filename, int flag)
+{
+#if defined(WIN32)
+    return LoadLibrary(filename);
+#else
+    return dlopen(filename, flag);
+#endif
+}
+
+void* dll_get(void* handler, const char* symbol)
+{
+#if defined(WIN32)
+    return GetProcAddress(handler, symbol);
+#else
+    return dlsym(handler, symbol);
+#endif
+}
+
+int dll_close(void* handler)
+{
+#if defined(WIN32)
+    return FreeLibrary(handler);
+#else
+    return dlclose(handler);
+#endif
+}
 
 #endif

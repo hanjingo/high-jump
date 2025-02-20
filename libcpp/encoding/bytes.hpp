@@ -8,13 +8,13 @@ namespace libcpp
 {
     
 template<typename T>
-extern bool bytes_to_bool(const T& bytes)
+bool bytes_to_bool(const T& bytes)
 {
     return (bytes[0] & 0x01) == 1 ? true : false;
 }
 
 template<typename T>
-extern T& bool_to_bytes(const bool b, T& bytes)
+T& bool_to_bytes(const bool b, T& bytes)
 {
     if (b) {
         bytes[0] = (unsigned char)(0x01 & 1);
@@ -25,7 +25,7 @@ extern T& bool_to_bytes(const bool b, T& bytes)
 }
 
 template<typename T>
-extern int bytes_to_int(const T& bytes, bool big_endian = true)
+int bytes_to_int(const T& bytes, bool big_endian = true)
 {
     int n = 0;
     if (big_endian) {
@@ -43,7 +43,7 @@ extern int bytes_to_int(const T& bytes, bool big_endian = true)
 }
 
 template<typename T>
-extern T& int_to_bytes(const int n, T& bytes, bool big_endian = true)
+T& int_to_bytes(const int n, T& bytes, bool big_endian = true)
 {
     if (big_endian) {
         bytes[3] = (unsigned char)(0xFF & n);
@@ -60,7 +60,7 @@ extern T& int_to_bytes(const int n, T& bytes, bool big_endian = true)
 }
 
 template<typename T>
-extern long bytes_to_long(const T& bytes, bool big_endian = true)
+long bytes_to_long(const T& bytes, bool big_endian = true)
 {
     long n = 0;
     if (big_endian) {
@@ -78,7 +78,7 @@ extern long bytes_to_long(const T& bytes, bool big_endian = true)
 }
 
 template<typename T>
-extern T& long_to_bytes(const long n, T& bytes, bool big_endian = true)
+T& long_to_bytes(const long n, T& bytes, bool big_endian = true)
 {
     if (big_endian) {
         bytes[3] = (unsigned char)(0xFF & n);
@@ -96,7 +96,7 @@ extern T& long_to_bytes(const long n, T& bytes, bool big_endian = true)
 }
 
 template<typename T>
-extern long long bytes_to_long_long(const T& bytes, bool big_endian = true)
+long long bytes_to_long_long(const T& bytes, bool big_endian = true)
 {
     long long n = 0;
     if (big_endian) {
@@ -122,7 +122,7 @@ extern long long bytes_to_long_long(const T& bytes, bool big_endian = true)
 }
 
 template<typename T>
-extern T& long_long_to_bytes(const long long n, T& bytes, bool big_endian = true)
+T& long_long_to_bytes(const long long n, T& bytes, bool big_endian = true)
 {
     if (big_endian) {
         bytes[7] = (unsigned char)(0xFF & n);
@@ -147,7 +147,7 @@ extern T& long_long_to_bytes(const long long n, T& bytes, bool big_endian = true
 }
 
 template<typename T>
-extern short bytes_to_short(const T& bytes, bool big_endian = true)
+short bytes_to_short(const T& bytes, bool big_endian = true)
 {
     short n = 0;
     if (big_endian) {
@@ -161,7 +161,7 @@ extern short bytes_to_short(const T& bytes, bool big_endian = true)
 }
 
 template<typename T>
-extern T& short_to_bytes(const short n, T& bytes, bool big_endian = true)
+T& short_to_bytes(const short n, T& bytes, bool big_endian = true)
 {
     if (big_endian) {
         bytes[1] = (unsigned char)(0xFF & n);
@@ -174,13 +174,13 @@ extern T& short_to_bytes(const short n, T& bytes, bool big_endian = true)
 }
 
 template<typename T>
-extern double bytes_to_double(const T& bytes)
+double bytes_to_double(const T& bytes)
 {
     return *((double*)bytes);
 }
 
 template<typename T>
-extern T& double_to_bytes(const double num, T& bytes)
+T& double_to_bytes(const double num, T& bytes)
 {
     int i;
     std::size_t sz = sizeof(double);
@@ -192,13 +192,13 @@ extern T& double_to_bytes(const double num, T& bytes)
 }
 
 template<typename T>
-extern float bytes_to_float(const T& bytes)
+float bytes_to_float(const T& bytes)
 {
     return *((float*)bytes);
 }
 
 template<typename T>
-extern T& float_to_bytes(const float f, T& bytes)
+T& float_to_bytes(const float f, T& bytes)
 {
     int i;
     size_t sz = sizeof(float);
@@ -208,7 +208,7 @@ extern T& float_to_bytes(const float f, T& bytes)
 }
 
 template <typename T>
-extern std::string& bytes_to_string(const T& bytes, const std::size_t sz, std::string& str)
+std::string& bytes_to_string(const T& bytes, const std::size_t sz, std::string& str)
 {
     char buf[sz];
     memcpy(buf, bytes, sz);
@@ -217,7 +217,7 @@ extern std::string& bytes_to_string(const T& bytes, const std::size_t sz, std::s
 }
 
 template <typename T>
-extern std::string bytes_to_string(const T& bytes, const std::size_t sz)
+std::string bytes_to_string(const T& bytes, const std::size_t sz)
 {
     char buf[sz];
     memcpy(buf, bytes, sz);
@@ -225,7 +225,7 @@ extern std::string bytes_to_string(const T& bytes, const std::size_t sz)
 }
 
 template <typename T>
-extern T& string_to_bytes(const std::string& str, T& bytes)
+T& string_to_bytes(const std::string& str, T& bytes)
 {
     memcpy(bytes, str.c_str(), str.size());
     return bytes;

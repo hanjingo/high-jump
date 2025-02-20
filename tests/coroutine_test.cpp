@@ -1,45 +1,94 @@
 #include <gtest/gtest.h>
 #include <libcpp/sync/coroutine.hpp>
 
-void f1(libcpp::coroutine<std::string>::push_type& out)
+// void(*)(void)
+void f1(libcpp::coroutine<void>::push_type& out)
+{
+    ASSERT_EQ(true, true);
+}
+
+// void(*)(std::string)
+void f2(libcpp::coroutine<std::string>::pull_type& in)
+{
+    ASSERT_STREQ(in.get().c_str(), "libcpp");
+    in();
+
+    ASSERT_STREQ(in.get().c_str(), "c++");
+    in();
+
+    ASSERT_STREQ(in.get().c_str(), "");
+}
+
+// std::string(*)(void)
+void f3(libcpp::coroutine<std::string>::push_type& out)
 {
     out("hello");
     out("world");
-    out("c++");
 }
+
+// NOTE: NOT SUPPORT std::string(*)(std::string)
 
 TEST(coroutine, coroutine)
 {
-    libcpp::coroutine<std::string>::pull_type co1(f1);
-    ASSERT_STREQ(co1.get().c_str(), "hello");
-    co1();
+    libcpp::coroutine<void>::pull_type co1(f1);
 
-    ASSERT_STREQ(co1.get().c_str(), "world");
-    co1();
+    libcpp::coroutine<void>::pull_type co1_lambda([](libcpp::coroutine<void>::push_type& out){
+        ASSERT_EQ(true, true);
+        std::cout << "I AM HERE lambda" << std::endl;
+    });
 
-    ASSERT_STREQ(co1.get().c_str(), "c++");
-    co1();
+    COROUTINE(
+        ASSERT_EQ(true, true);
+        std::cout << "I AM HERE COROUTINE" << std::endl;
+    );
 
-    libcpp::coroutine<int>::pull_type co2([](libcpp::coroutine<int>::push_type & out) {
+
+    libcpp::coroutine<std::string>::push_type co2(f2);
+    co2("libcpp");
+    co2("c++");
+
+    libcpp::coroutine<std::string>::push_type co2_lambda([&](libcpp::coroutine<std::string>::pull_type& in){
+        ASSERT_STREQ(in.get().c_str(), "libcpp");
+        in();
+
+        ASSERT_STREQ(in.get().c_str(), "c++");
+        in();
+
+        ASSERT_STREQ(in.get().c_str(), ""); // get() -> std::string()
+    });
+    co2_lambda("libcpp");
+    co2_lambda("c++");
+
+
+    libcpp::coroutine<std::string>::pull_type co3(f3);
+    ASSERT_STREQ(co3.get().c_str(), "hello");
+    co3(); // ["hello", "world"] -> ["world"]
+    ASSERT_STREQ(co3.get().c_str(), "world");
+    co3(); // ["world"] -> []
+    ASSERT_STREQ(co3.get().c_str(), ""); // get() -> std::string()
+
+    libcpp::coroutine<std::string>::pull_type co3_lambda([](libcpp::coroutine<std::string>::push_type & out) {
+        out("hello");
+        out("world");
+    });
+    ASSERT_STREQ(co3_lambda.get().c_str(), "hello");
+    co3_lambda(); // ["hello", "world"] -> ["world"]
+    ASSERT_STREQ(co3_lambda.get().c_str(), "world");
+    co3_lambda(); // ["world"] -> []
+    ASSERT_STREQ(co3_lambda.get().c_str(), ""); // get() -> std::string()
+
+    
+    libcpp::coroutine<int>::pull_type co4_lambda([](libcpp::coroutine<int>::push_type & out) {
         out(1);
         out(2);
         out(3);
     });
-    ASSERT_EQ(co2.get(), 1);
-    co2();
-
-    ASSERT_EQ(co2.get(), 2);
-    co2();
-
-    ASSERT_EQ(co2.get(), 3);
-    co2();
-
-    libcpp::coroutine<int>::push_type co3([](libcpp::coroutine<int>::pull_type & in) {
-        ASSERT_EQ(in.get(), 4);
-        in();
-        ASSERT_EQ(in.get(), 5);
-        in();
-    });
-    co3(4);
-    co3(5);
+    ASSERT_EQ(co4_lambda.get(), 1);
+    co4_lambda(); // [1, 2, 3] -> [2, 3]
+    ASSERT_EQ(co4_lambda.get(), 2);
+    co4_lambda(); // [2, 3] -> [3]
+    ASSERT_EQ(co4_lambda.get(), 3);
+    co4_lambda(); // [3] -> [3]
+    ASSERT_EQ(co4_lambda.get(), 3);
+    ASSERT_EQ(co4_lambda.get(), 3);
 }

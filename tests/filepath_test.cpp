@@ -1,26 +1,31 @@
 #include <gtest/gtest.h>
 #include <libcpp/io/filepath.hpp>
 
-// TEST(file_path, pwd)
-// {
-//     ASSERT_EQ(libcpp::file_path::pwd().empty(), false);
-// }
+TEST(file_path, pwd)
+{
+    ASSERT_EQ(libcpp::file_path::pwd().empty(), false);
+}
 
-// TEST(file_path, parent)
-// {
-//     ASSERT_STREQ(
-//         libcpp::file_path::parent("/usr/local/src").c_str(), 
-//         "/usr/local"
-//     );
-// }
+TEST(file_path, parent)
+{
+    ASSERT_STREQ(
+        libcpp::file_path::parent("/usr/local/src").c_str(), 
+        "/usr/local"
+    );
+}
 
-// TEST(file_path, absolute)
-// {
-//     ASSERT_STREQ(
-//         libcpp::file_path::absolute("/usr/local/src").c_str(), 
-//         "/usr/local/src"
-//     );
-// }
+TEST(file_path, absolute)
+{
+    ASSERT_STREQ(
+        libcpp::file_path::absolute("/usr/local/src").c_str(), 
+        "/usr/local/src"
+    );
+
+    ASSERT_STREQ(
+        libcpp::file_path::absolute("./007.txt").c_str(), 
+        libcpp::file_path::join(libcpp::file_path::pwd(), "./007.txt").c_str()
+    );
+}
 
 // TEST(file_path, relative)
 // {

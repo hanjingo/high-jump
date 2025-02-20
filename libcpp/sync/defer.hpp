@@ -38,7 +38,7 @@ private:
 #define __defer_cat(a, b) a##b
 #define _defer_cat(a, b) __defer_cat(a, b)
 
-#define DEFER(cmd) ::libcpp::defer _defer_cat(__simulate_go_defer__, __LINE__)([&]() { cmd; })
-#define DEFER_CLASS(cmd) ::libcpp::::defer _defer_cat(__simulate_go_defer_class__, __LINE__)([&, this]() { cmd; })
+#define DEFER(cmd) ::libcpp::defer _defer_cat(__simulate_go_defer__, __COUNTER__)([&]() { cmd; });
+#define DEFER_CLASS(cmd) ::libcpp::::defer _defer_cat(__simulate_go_defer_class__, __COUNTER__)([&, this]() { cmd; });
 
 #endif // DEFER_HPP

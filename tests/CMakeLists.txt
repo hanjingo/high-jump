@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(tests)
 
+add_subdirectory(dll_example)
+
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
@@ -52,6 +54,7 @@ endif()
 link_directories(${Breakpad_LIB_DIR})
 
 target_link_libraries(${PROJECT_NAME} 
+    ${CMAKE_DL_LIBS}
     ${GTEST_LIBRARIES} 
     ${Boost_LIBRARIES} 
     # ${SQLite3_LIBRARIES} 

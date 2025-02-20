@@ -50,7 +50,7 @@
 #endif
 
 
-void* dll_open(const char* filename, int flag)
+extern void* dll_open(const char* filename, int flag)
 {
 #if defined(WIN32)
     return LoadLibrary(filename);
@@ -59,7 +59,7 @@ void* dll_open(const char* filename, int flag)
 #endif
 }
 
-void* dll_get(void* handler, const char* symbol)
+extern void* dll_get(void* handler, const char* symbol)
 {
 #if defined(WIN32)
     return GetProcAddress(handler, symbol);
@@ -68,7 +68,7 @@ void* dll_get(void* handler, const char* symbol)
 #endif
 }
 
-int dll_close(void* handler)
+extern int dll_close(void* handler)
 {
 #if defined(WIN32)
     return FreeLibrary(handler);

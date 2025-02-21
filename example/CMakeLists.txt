@@ -21,6 +21,8 @@ endif()
 
 add_subdirectory(any)
 
+add_subdirectory(app)
+
 add_subdirectory(base64)
 
 add_subdirectory(bits)

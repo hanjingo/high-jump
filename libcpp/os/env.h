@@ -1,10 +1,8 @@
-#ifndef ENV_HPP
-#define ENV_HPP
+#ifndef ENV_H
+#define ENV_H
 
 #include <stdlib.h>
 #include <cstring>
-
-#include <boost/program_options.hpp>
 
 #if defined(WIN32) && !defined(__windows__)
 #define __windows__
@@ -49,42 +47,5 @@
 #define COMPILE_TIME _COMPILE_TIME()
 #else
 #endif
-
-
-
-namespace libcpp
-{
-
-class options
-{
-public:
-    template<typename T>
-    void add(const char* key, T default_value, const char* memo = "")
-    {
-        _desc.add_options()(key, boost::program_options::value<T>()->default_value(default_value), memo);
-    }
-
-    template<typename T>
-    T parse(int argc, char* argv[], const char* key)
-    {
-        T ret;
-        try {
-            boost::program_options::variables_map vm;
-            boost::program_options::store(
-                boost::program_options::parse_command_line(argc, argv, _desc), vm);
-            boost::program_options::notify(vm);
-            if (vm.count(key))
-                ret = vm[key].as<T>();
-            return ret;
-        } catch (const std::exception& e) {
-            return ret;
-        }
-    }
-
-private:
-    boost::program_options::options_description _desc;
-};
-
-}
 
 #endif

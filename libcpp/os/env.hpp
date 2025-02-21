@@ -77,7 +77,6 @@ public:
                 ret = vm[key].as<T>();
             return ret;
         } catch (const std::exception& e) {
-            std::cout << "fuck err=" << e.what() << std::endl;
             return ret;
         }
     }

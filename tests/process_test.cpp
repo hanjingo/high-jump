@@ -20,7 +20,7 @@ TEST(process, system)
 {
     libcpp::process::error_code_t ec;
     libcpp::process::system("ping", ec);
-    ASSERT_EQ(ec.value() >= 0, true);
+    ASSERT_EQ(ec.value() == 0, true);
 }
 
 TEST(process, getpid)
@@ -33,7 +33,7 @@ TEST(process, getppid)
     ASSERT_EQ(libcpp::process::getppid() > -1, true);
 }
 
-TEST(process, time_stamp)
+TEST(process, search_path)
 {
-    ASSERT_EQ(libcpp::process::time_stamp() > 0, true);
+    ASSERT_EQ(!boost::process::search_path("/bin/ping", {"/bin"}).empty(), true);
 }

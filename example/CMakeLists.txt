@@ -85,6 +85,8 @@ add_subdirectory(optional)
 
 add_subdirectory(os)
 
+add_subdirectory(process)
+
 add_subdirectory(random)
 
 add_subdirectory(redis)

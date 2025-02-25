@@ -11,7 +11,7 @@
 #else // Warnning
 #define DLL_EXPORT
 #define DLL_IMPORT
-#pragma warning Unknown dynamic link import/export semantics.
+#progma WARNING UNKNOWN DYNAMIC LINK IMPORT/EXPORT SEMANTICS.
 #endif
 
 // // export/import c style dll
@@ -49,6 +49,15 @@
 #define DLL_RTLD_NODELETE     RTLD_NODELETE
 #endif
 
+#if defined(WIN32)
+#define DLL_EXT ".dll"
+#elif __APPLE__
+#define DLL_EXT ".dylib"
+#elif __linux__
+#define DLL_EXT ".so"
+#else
+#pragma WARNING UNKNOWN DYNAMIC LINK LIBRARY FILE EXTENSION.
+#endif
 
 static void* dll_open(const char* filename, int flag)
 {

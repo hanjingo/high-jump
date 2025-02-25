@@ -26,12 +26,12 @@ typedef bool(*dump_callback_t)(const wchar_t*,
                                MDRawAssertionInfo*, 
                                bool);
 
-bool default_dump_callback(const wchar_t* dump_dir,
-                           const wchar_t* minidump_id,
-                           void* context,
-                           EXCEPTION_POINTERS* exinfo,
-                           MDRawAssertionInfo* assertion,
-                           bool succeeded)
+static cbool default_dump_callback(const wchar_t* dump_dir,
+                                   const wchar_t* minidump_id,
+                                   void* context,
+                                   EXCEPTION_POINTERS* exinfo,
+                                   MDRawAssertionInfo* assertion,
+                                   bool succeeded)
 {
     return true;
 }
@@ -39,7 +39,7 @@ bool default_dump_callback(const wchar_t* dump_dir,
 #elif __APPLE__
 typedef bool (*dump_callback_t)(const char *, const char *, void *, bool);
 
-bool default_dump_callback(const char *dump_dir, const char *minidump_id, void *context, bool succeeded)
+static bool default_dump_callback(const char *dump_dir, const char *minidump_id, void *context, bool succeeded)
 {
     return true;
 }
@@ -47,7 +47,7 @@ bool default_dump_callback(const char *dump_dir, const char *minidump_id, void *
 #else
 typedef bool (*dump_callback_t)(const google_breakpad::MinidumpDescriptor&, void*, bool );
 
-bool default_dump_callback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
+static bool default_dump_callback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
 {
     return true;
 }

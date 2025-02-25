@@ -20,6 +20,8 @@ using singleton = boost::serialization::singleton<T>;
 namespace libcpp
 {
 
+namespace internal
+{
 class noncopyable
 {
 protected:
@@ -29,9 +31,10 @@ private:
     noncopyable(const noncopyable&);
     const noncopyable& operator=(const noncopyable&);
 };
+}
 
 template<typename T>
-class singleton_guard : std::unique_lock<std::mutex>, public noncopyable
+class singleton_guard : std::unique_lock<std::mutex>, public internal::noncopyable
 {
 public:
     explicit singleton_guard(T* inst, std::mutex& mt): std::unique_lock<std::mutex>(mt), guard_(inst)
@@ -64,7 +67,7 @@ template<typename T>
 bool singleton_wrapper< T >::b_destroyed_ = false;
 
 template<typename T>
-class singleton_unsafe : public noncopyable
+class singleton_unsafe : public internal::noncopyable
 {
 public:
     static T& get_instance()
@@ -84,7 +87,7 @@ template<typename T>
 T& singleton_unsafe< T >::instance = singleton_unsafe< T >::get_instance();
 
 template<typename T>
-class singleton : public noncopyable
+class singleton : public internal::noncopyable
 {
 public:
     static singleton_guard<T> get_mutable_instance()

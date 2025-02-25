@@ -7,6 +7,8 @@ cmake_minimum_required(VERSION 3.19.2)
 project(tests)
 
 add_subdirectory(dll_example)
+add_subdirectory(child)
+add_subdirectory(daemon)
 
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
@@ -15,6 +17,7 @@ endif()
 
 enable_testing()
 
+find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 find_package(ZeroMQ REQUIRED)
 # find_package(SQLite3 REQUIRED)
@@ -66,6 +69,9 @@ target_link_libraries(${PROJECT_NAME}
     OpenSSL::Crypto
     pugixml
     breakpad_client
+    fmt::fmt
 )
 
 add_test(test ${PROJECT_NAME})
+
+file(COPY cfg.ini DESTINATION ${EXECUTABLE_OUTPUT_PATH})

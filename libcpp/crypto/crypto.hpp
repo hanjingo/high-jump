@@ -5,7 +5,7 @@
 
 #include <libcpp/crypto/des.hpp>
 
-#include <libcpp/encoding/md5.hpp>
+#include <libcpp/crypto/md5.hpp>
 
 #include <libcpp/crypto/sha256.hpp>
 

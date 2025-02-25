@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/util/dll.h>
+#include <libcpp/os/dll.h>
 
 typedef int(*hello)(void);
 typedef int(*world)(void);
@@ -31,4 +31,9 @@ TEST(dll, dll_close)
     int ret = dll_close(example);
     ASSERT_EQ(ret == 0, true);
     ASSERT_EQ(example != NULL, true);
+}
+
+TEST(dll, dll_ext)
+{
+    ASSERT_EQ(!std::string(DLL_EXT).empty(), true);
 }

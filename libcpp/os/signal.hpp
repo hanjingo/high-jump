@@ -39,7 +39,7 @@ static void _on_sig_once(sig_t sig)
     sigignore(sig);
 }
 
-std::function<void(sig_t)> _sigcatch(sig_t sig, const std::function<void(sig_t)>&& cb, const bool one_shoot = false)
+static std::function<void(sig_t)> _sigcatch(sig_t sig, const std::function<void(sig_t)>&& cb, const bool one_shoot = false)
 {
     std::lock_guard<std::mutex> lock(_sig_mu);
     std::function<void(sig_t)> old = _sighandler_set[sig];
@@ -53,7 +53,7 @@ std::function<void(sig_t)> _sigcatch(sig_t sig, const std::function<void(sig_t)>
     return old;
 }
 
-bool sigcatch(
+static bool sigcatch(
     const std::initializer_list<sig_t>& sigs, 
     const std::function<void(sig_t)>& cb, 
     const bool one_shoot = false)

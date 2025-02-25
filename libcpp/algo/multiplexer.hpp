@@ -26,9 +26,8 @@ public:
     template <typename F>
     void reg(const Key& key, F&& fn)
     {
-        if (m_handler_.find(key) != m_handler_.end()) {
+        if (m_handler_.find(key) != m_handler_.end()) 
             throw "key already exist, please remove it before regist";
-        }
 
         m_handler_[key] = (any_t)(std::move(fn));
     }
@@ -36,12 +35,11 @@ public:
     template<typename Ret = void, typename... Types>
     Ret on(const Key& key, Types&& ... args)
     {
-        try {
-            auto itr = m_handler_.find(key);
-            if (itr == m_handler_.end()) {
-                throw "key not found";
-            }
+        auto itr = m_handler_.find(key);
+        if (itr == m_handler_.end()) 
+            throw "key not found";
 
+        try {
             auto fn = (Ret(*)(Types...))(itr->second);
             return fn(std::forward<Types>(args)...);
         } catch (std::exception e) {

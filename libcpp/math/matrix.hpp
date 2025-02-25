@@ -85,34 +85,34 @@ public:
         return !(a == b);
     }
 
-    inline matrix_iterator<decltype<matrix<T>>, T> begin()
+    inline matrix_iterator<matrix<T>, T> begin()
     {
         return find(0, 0);
     }
 
-    inline MatrixRowIterator<T> vbegin()
+    inline matrix_row_iterator<matrix<T>, T> vbegin()
     {
         return vfind(0, 0);
     }
 
-    inline matrix_iterator<T> end()
+    inline matrix_iterator<matrix<T>, T> end()
     {
-        return matrix_iterator<T>(this, row_n_, 0);
+        return matrix_iterator<matrix<T>, T>(this, row_n_, 0);
     }
 
-    inline matrix_vertical_iterator<T> vend()
+    inline matrix_row_iterator<matrix<T>, T> vend()
     {
-        return matrix_vertical_iterator<T>(this, 0, col_n_);
+        return matrix_row_iterator<matrix<T>, T>(this, 0, col_n_);
     }
 
-    inline matrix_iterator<T> find(const int row, const int col)
+    inline matrix_iterator<matrix<T>, T> find(const int row, const int col)
     {
-        return matrix_iterator<T>(this, row, col);
+        return matrix_iterator<matrix<T>, T>(this, row, col);
     }
 
-    inline matrix_vertical_iterator<T> vfind(const int row, const int col)
+    inline matrix_row_iterator<matrix<T>, T> vfind(const int row, const int col)
     {
-        return matrix_vertical_iterator<T>(this, row, col);
+        return matrix_row_iterator<matrix<T>, T>(this, row, col);
     }
 
     inline T& at(const int row, const int col)

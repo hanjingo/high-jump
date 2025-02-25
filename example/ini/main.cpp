@@ -18,8 +18,11 @@ int main(int argc, char* argv[])
 
     libcpp::ini cfg;
     std::cout << "cfg.read_file(\"cfg.ini\")" << cfg.read_file("cfg.ini");
-    // std::cout << "cfg.get_child(\"person\").get<int>(\"age\") = " 
-    //           << ini.get_child("person").get<int>("age") << std::endl;
+    std::cout << "cfg.get_child(\"person\").get<int>(\"age\") = " 
+               << cfg.get_child("person").get<int>("age") << std::endl;
+
+    cfg.get_child("person").put("next_age", 31);
+    cfg.write_file("cfg.ini");
 
     std::cin.get();
     return 0;

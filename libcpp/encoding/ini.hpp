@@ -1,7 +1,7 @@
 #ifndef INI_HPP
 #define INI_HPP
 
-#include <boost/filesystem.hpp>
+#include <unistd.h>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
@@ -26,15 +26,11 @@ public:
 
     bool read_file(const char* filepath)
     {
-        std::cout << "fuck" << std::endl;
-        auto path = boost::filesystem::path(filepath);
-        std::cout << "fuck1" << std::endl;
-        if (!boost::filesystem::exists(path))
+        if (access(filepath, F_OK) == -1)
             return false;
 
-        std::cout << "fuck2 = " << path.string() << std::endl;
         boost::property_tree::ptree tree;
-        boost::property_tree::ini_parser::read_ini(path.string(), tree);
+        boost::property_tree::ini_parser::read_ini(filepath, tree);
         *this = tree;
         return true;
     }

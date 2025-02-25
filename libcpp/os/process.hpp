@@ -18,6 +18,7 @@ using child_t       = boost::process::child;
 using group_t       = boost::process::group;
 using path_t        = boost::filesystem::path;
 
+using pstream_t     = boost::process::pstream;
 using ipstream_t    = boost::process::ipstream;
 using opstream_t    = boost::process::opstream;
 

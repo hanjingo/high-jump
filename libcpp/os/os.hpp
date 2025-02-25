@@ -3,7 +3,11 @@
 
 #include <libcpp/os/application.hpp>
 
-#include <libcpp/os/env.hpp>
+#include <libcpp/os/dll.h>
+
+#include <libcpp/os/env.h>
+
+#include <libcpp/os/process.hpp>
 
 #include <libcpp/os/signal.hpp>
 

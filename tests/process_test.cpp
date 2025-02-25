@@ -1,28 +1,6 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/process.hpp>
 
-// TEST(process, is_running)
-// {
-//     ASSERT_EQ(libcpp::process::is_running(libcpp::process::getpid()), true);
-// }
-
-TEST(process, child)
-{
-    ASSERT_EQ(libcpp::process::child("ping").valid(), true);
-}
-
-TEST(process, spawn)
-{
-    libcpp::process::spawn("ping");
-}
-
-TEST(process, system)
-{
-    libcpp::process::error_code_t ec;
-    libcpp::process::system("ping", ec);
-    ASSERT_EQ(ec.value() == 0, true);
-}
-
 TEST(process, getpid)
 {
     ASSERT_EQ(libcpp::process::getpid() > -1, true);
@@ -33,7 +11,77 @@ TEST(process, getppid)
     ASSERT_EQ(libcpp::process::getppid() > -1, true);
 }
 
-TEST(process, search_path)
+TEST(process, system)
 {
-    ASSERT_EQ(!boost::process::search_path("/bin/ping", {"/bin"}).empty(), true);
+    libcpp::process::error_code_t ec;
+    libcpp::process::pstream_t p;
+    libcpp::process::system("child", libcpp::process::std_out > p, ec);
+    std::string ret;
+    p >> ret;
+    ASSERT_EQ(ec.value() == 0, true);
+    ASSERT_EQ(ret == std::string("hello"), true);
+}
+
+TEST(process, child)
+{
+    libcpp::process::error_code_t ec;
+    libcpp::process::pstream_t p;
+    auto child = libcpp::process::child("child", libcpp::process::std_out > p, ec);
+    std::string ret;
+    p >> ret;
+    child.wait();
+    ASSERT_EQ(ec.value() == 0, true);
+    std::cout << "fuck ret=" << ret << std::endl;
+    ASSERT_EQ(ret == std::string("hello"), true);
+}
+
+TEST(process, spawn)
+{
+    libcpp::process::spawn("child");
+}
+
+TEST(process, daemon)
+{
+}
+
+TEST(process, group)
+{
+}
+
+TEST(process, list)
+{
+    libcpp::process::spawn("child");
+    std::vector<libcpp::process::pid_t> vec;
+    libcpp::process::list(vec);
+    ASSERT_EQ(vec.empty(), false);
+}
+
+TEST(process, kill)
+{
+    libcpp::process::spawn("child");
+    std::vector<libcpp::process::pid_t> vec;
+    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+        if (arg.size() < 2)
+            return false;
+
+        if (arg[0] != "child")
+            return false;
+            
+        return true;
+    });
+    for (auto var : vec) {
+        libcpp::process::kill(var);
+    }
+
+    vec.clear();
+    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+        if (arg.size() < 2)
+            return false;
+
+        if (arg[0] != "child")
+            return false;
+            
+        return true;
+    });
+    ASSERT_EQ(vec.empty(), true);
 }

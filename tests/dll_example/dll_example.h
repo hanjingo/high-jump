@@ -1,7 +1,7 @@
 #ifndef DLL_EXAMPLE_H
 #define DLL_EXAMPLE_H
 
-#include <libcpp/util/dll.h>
+#include <libcpp/os/dll.h>
 
 C_STYLE_EXPORT int hello();
 

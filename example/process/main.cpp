@@ -13,8 +13,8 @@ int main(int argc, char* argv[])
     std::cout << "system(\"child\", err); err = " << err.message() << std::endl;
 
     std::cout << "\nrun child>>" << std::endl;
-    boost::process::pstream p;
-    auto child = boost::process::child("child", boost::process::std_out > p);
+    libcpp::process::pstream_t p;
+    auto child = libcpp::process::child("child", libcpp::process::std_out > p);
     std::string ret;
     p >> ret;
     std::cout << "child(\"child\", libcpp::process::std_out > ret); ret = " << ret << std::endl;

@@ -21,3 +21,9 @@ TEST(string, from_wstring)
 {
     ASSERT_STREQ(libcpp::string::from_wstring(libcpp::string::to_wstring(std::string("hello"))).c_str(), "hello");
 }
+
+TEST(string, fmt)
+{
+    ASSERT_EQ(libcpp::string::fmt("{}-{}", "hello", "world") == std::string("hello-world"), true);
+    ASSERT_EQ(libcpp::string::fmt("{1}-{0}", "hello", "world") == std::string("world-hello"), true);
+}

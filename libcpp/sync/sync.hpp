@@ -15,8 +15,6 @@
 
 #include <libcpp/sync/once.hpp>
 
-#include <libcpp/sync/process.hpp>
-
 #include <libcpp/sync/thread_pool.hpp>
 
 #endif

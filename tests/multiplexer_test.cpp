@@ -1,2 +1,2 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/multiplexer.hpp>
+#include <libcpp/util/multiplexer.hpp>

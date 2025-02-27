@@ -1,7 +1,7 @@
 #ifndef LIBCPP_HPP
 #define LIBCPP_HPP
 
-// #include <libcpp/algo/algo.hpp>
+#include <libcpp/algo/algo.hpp>
 
 #include <libcpp/crypto/crypto.hpp>
 
@@ -20,8 +20,6 @@
 #include <libcpp/net/net.hpp>
 
 #include <libcpp/os/os.hpp>
-
-#include <libcpp/strings/strings.hpp>
 
 #include <libcpp/sync/sync.hpp>
 

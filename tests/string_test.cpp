@@ -1,10 +1,16 @@
 #include <gtest/gtest.h>
-#include <libcpp/strings/string.hpp>
+#include <libcpp/util/string_util.hpp>
 
 TEST(string, split)
 {
     auto arr1 = libcpp::string::split("abc;123;++", ";");
     ASSERT_EQ(arr1.size(), 3);
+
+    auto arr2 = libcpp::string::split("broadcast,database,quote,sentinel", ",");
+    ASSERT_EQ(arr2[0] == "broadcast", true);
+    ASSERT_EQ(arr2[1] == "database", true);
+    ASSERT_EQ(arr2[2] == "quote", true);
+    ASSERT_EQ(arr2[3] == "sentinel", true);
 }
 
 TEST(string, equal)

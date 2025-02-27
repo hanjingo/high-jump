@@ -41,7 +41,10 @@ public:
 
         try {
             auto fn = (Ret(*)(Types...))(itr->second);
-            return fn(std::forward<Types>(args)...);
+            if (!std::is_same<Ret, void>())
+                return fn(std::forward<Types>(args)...);
+
+            fn(std::forward<Types>(args)...);
         } catch (std::exception e) {
             on_exception(e);
         }

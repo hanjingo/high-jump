@@ -1,6 +1,8 @@
 #ifndef ERROR_HPP
 #define ERROR_HPP
 
+#pragma WARNING, IF YOU WANT TO BUILD HIGH PERFORMANCE PROGRAM, DO NOT USE THIS LANGUAGE SUGER (error.hpp)!!!
+
 #include <string>
 #include <iostream>
 #include <system_error>

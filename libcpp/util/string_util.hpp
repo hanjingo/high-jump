@@ -1,5 +1,5 @@
-#ifndef STRING_HPP
-#define STRING_HPP
+#ifndef STRING_UTIL_HPP
+#define STRING_UTIL_HPP
 
 #include <string>
 #include <regex>

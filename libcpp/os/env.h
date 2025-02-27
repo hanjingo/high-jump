@@ -2,11 +2,7 @@
 #define ENV_H
 
 #include <stdlib.h>
-#include <cstring>
-
-#if defined(WIN32) && !defined(__windows__)
-#define __windows__
-#endif
+#include <string.h>
 
 // __DATE__:[Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sept, Oct, Nov, Dec] 2 2024
 // __TIME__:17:37:21
@@ -32,20 +28,23 @@
 
 #define COMPILE_SECONDS ((__TIME__ [6] - '0') * 10 + (__TIME__ [7] - '0'))
 
-#if defined(_MSC_VER) //  MSVC
-#define COMPILE__TIME 
-// TODO
-#elif defined(__GNUC__) //  GCC
+#ifndef COMPILE_TIME_FMT
+#define COMPILE_TIME_FMT "%d-%d-%d %d:%d:%d"
+#endif
+#ifndef COMPILE_TIME_LEN
+#define COMPILE_TIME_LEN 22
+#endif
+#if !defined(_COMPILE_TIME) && !defined(COMPILE_TIME)
 #define _COMPILE_TIME()\
 ({\
-    static char _date_time_buf[17] = {0}; \
-    memset(_date_time_buf, 0, 17); \
-    sprintf(_date_time_buf, "%d-%d-%d %d:%d:%d", COMPILE_YEAR, COMPILE_MONTH, COMPILE_DAY, COMPILE_HOUR, COMPILE_MINUTE, COMPILE_SECONDS); \
+    static char _date_time_buf[COMPILE_TIME_LEN] = {0}; \
+    memset(_date_time_buf, 0, COMPILE_TIME_LEN); \
+    sprintf(_date_time_buf, COMPILE_TIME_FMT, COMPILE_YEAR, COMPILE_MONTH, COMPILE_DAY, COMPILE_HOUR, COMPILE_MINUTE, COMPILE_SECONDS); \
     _date_time_buf; \
 })\
 
 #define COMPILE_TIME _COMPILE_TIME()
-#else
 #endif
+
 
 #endif

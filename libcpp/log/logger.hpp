@@ -25,7 +25,7 @@ namespace libcpp
 
 class logger;
 
-enum log_lvl {
+enum log_lvl : int {
     log_lvl_trace = 0,
     log_lvl_debug,
     log_lvl_info,

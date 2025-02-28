@@ -10,7 +10,7 @@
 namespace libcpp
 {
 
-namespace string
+namespace string_util
 {
 
 static std::vector<std::string> split(const std::string& str, const std::string& regex)

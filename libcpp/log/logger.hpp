@@ -11,6 +11,7 @@
 #include <spdlog/async.h>
 #include <spdlog/sinks/stdout_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/daily_file_sink.h>
 
 #ifndef LOG_QUEUE_SIZE
 #define LOG_QUEUE_SIZE 102400
@@ -51,7 +52,7 @@ public:
 
     logger(base_logger_ptr_t base) : base_{base} {}
 
-    logger(const std::string& id, 
+    logger(const std::string& name, 
            const bool async = false, 
            const uint64_t queue_size = LOG_QUEUE_SIZE, 
            const uint64_t thread_num = LOG_THREAD_NUM)
@@ -63,14 +64,14 @@ public:
             spdlog::init_thread_pool(queue_size, thread_num);
 
             base_ = std::make_shared<spdlog::async_logger>(
-                id, 
+                name, 
                 sinks.begin(), 
                 sinks.end(),
                 spdlog::thread_pool(), spdlog::async_overflow_policy::overrun_oldest);
         }
         else
         {
-            base_ = std::make_shared<spdlog::logger>(id, sinks.begin(), sinks.end());
+            base_ = std::make_shared<spdlog::logger>(name, sinks.begin(), sinks.end());
         }
 
         base_->set_level(spdlog::level::level_enum(log_lvl_trace));
@@ -93,19 +94,31 @@ public:
         log_inst = std::move(inst);
     }
 
-    static sink_ptr_t create_sink()
+    static sink_ptr_t create_stdout_sink()
     {
         return std::make_shared<spdlog::sinks::stdout_sink_mt>();
     }
 
-    static sink_ptr_t create_sink(const std::string& filename,
-                                  const std::size_t max_size,
-                                  const std::size_t max_files,
-                                  const bool rotate_on_open = false)
+    static sink_ptr_t create_rotate_file_sink(const std::string& base_filename,
+                                              const std::size_t max_size,
+                                              const std::size_t max_files,
+                                              const bool rotate_on_open = false)
     {
         return std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            filename, max_size, max_files, rotate_on_open);
+            base_filename, max_size, max_files, rotate_on_open);
     }
+
+    static sink_ptr_t create_daily_file_sink(const std::string& base_filename,
+                                             const int rotation_hour,
+                                             const int rotation_minute,
+                                             const bool truncate = false,
+                                             const uint16_t max_files = 0)
+    {
+        return std::make_shared<spdlog::sinks::daily_file_sink_mt>(
+            base_filename, rotation_hour, rotation_minute, truncate, max_files);
+    }
+
+    inline const std::string& name() { return base_->name(); }
 
     inline void add_sink(const sink_ptr_t&& sink)
     {
@@ -113,12 +126,23 @@ public:
         base_->sinks().push_back(std::move(sink));
     }
 
-    inline void set_level(libcpp::log_lvl lvl)
+    inline void remove_sink(const sink_ptr_t sink) {
+        std::lock_guard<std::mutex> lock(log_mu);
+        base_->sinks().erase(std::remove(base_->sinks().begin(), base_->sinks().end(), sink), base_->sinks().end());
+    }
+
+    inline void clear_sink()
+    {
+        std::lock_guard<std::mutex> lock(log_mu);
+        base_->sinks().clear();
+    }
+    
+    inline void set_level(const libcpp::log_lvl lvl)
     {
         base_->set_level(spdlog::level::level_enum(lvl));
     }
 
-    inline log_lvl get_level()
+    inline const log_lvl get_level()
     {
         return static_cast<log_lvl>(base_->level());
     }

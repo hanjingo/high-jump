@@ -80,7 +80,6 @@ int main(int argc, char* argv[])
         std::cout << "start async connect..." << std::endl;
         libcpp::tcp_session sess{};
         sess.async_connect("127.0.0.1", 10087, [](const libcpp::tcp_session::err_t & err, libcpp::tcp_session * sess) {
-            std::cout << "fuck" << std::endl;
             if (!err.failed()) {
                 std::cout << "async connect 127.0.0.1:10087 fail" << std::endl;
                 return;

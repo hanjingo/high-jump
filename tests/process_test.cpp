@@ -31,7 +31,6 @@ TEST(process, child)
     p >> ret;
     child.wait();
     ASSERT_EQ(ec.value() == 0, true);
-    std::cout << "fuck ret=" << ret << std::endl;
     ASSERT_EQ(ret == std::string("hello"), true);
 }
 

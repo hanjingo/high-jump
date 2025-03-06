@@ -1,6 +1,12 @@
 #include <gtest/gtest.h>
 #include <libcpp/util/string_util.hpp>
 
+TEST(string_util, contains)
+{
+    ASSERT_EQ(libcpp::string_util::contains("hello world", "hello"), true);
+    ASSERT_EQ(libcpp::string_util::contains("hello world", "hello1"), false);
+}
+
 TEST(string_util, split)
 {
     auto arr1 = libcpp::string_util::split("abc;123;++", ";");

@@ -62,6 +62,7 @@ static bool sigcatch(
         std::function<void(sig_t)> copy_cb = cb;
         _sigcatch(sig, std::move(cb), one_shoot);
     }
+    return true;
 }
 
 static inline int last_signal() { return _sig_last; }

@@ -13,6 +13,11 @@ namespace libcpp
 namespace string_util
 {
 
+static bool contains(const std::string& src, const std::string& sub)
+{
+    return src.find(sub) != std::string::npos;
+}
+
 static std::vector<std::string> split(const std::string& str, const std::string& regex)
 {
     std::regex patten(regex);

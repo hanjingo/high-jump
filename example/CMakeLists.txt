@@ -51,8 +51,6 @@ add_subdirectory(endian)
 
 add_subdirectory(env)
 
-add_subdirectory(error)
-
 add_subdirectory(exception)
 
 add_subdirectory(file)

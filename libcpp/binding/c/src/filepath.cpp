@@ -6,5 +6,5 @@ extern "C" {
 
 LIBCPP_API const char* libcpp_file_path_pwd()
 {
-    return libcpp::file_path::pwd().c_str();
+    return libcpp::filepath::pwd().c_str();
 }

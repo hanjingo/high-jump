@@ -1,17 +1,25 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/dll.h>
 
+#if defined(WIN32)
+#define EXT ".dll"
+#elif __APPLE__
+#define EXT ".dylib"
+#elif __linux__
+#define EXT ".so"
+#endif
+
 typedef int(*hello)(void);
 typedef int(*world)(void);
 
 TEST(dll, dll_open)
 {
-    ASSERT_EQ(dll_open("./libdll_example.so", DLL_RTLD_LAZY) != NULL, true);
+    ASSERT_EQ(dll_open(std::string("./libdll_example").append(EXT).c_str(), DLL_RTLD_LAZY) != NULL, true);
 }
 
 TEST(dll, dll_get)
 {
-    void* example = dll_open("./libdll_example.so", DLL_RTLD_LAZY);
+    void* example = dll_open(std::string("./libdll_example").append(EXT).c_str(), DLL_RTLD_LAZY);
     ASSERT_EQ(example != NULL, true);
 
     hello fn1 = (hello)dll_get(example, "hello");
@@ -25,7 +33,7 @@ TEST(dll, dll_get)
 
 TEST(dll, dll_close)
 {
-    void* example = dll_open("./libdll_example.so", DLL_RTLD_LAZY);
+    void* example = dll_open(std::string("./libdll_example").append(EXT).c_str(), DLL_RTLD_LAZY);
     ASSERT_EQ(example != NULL, true);
 
     int ret = dll_close(example);

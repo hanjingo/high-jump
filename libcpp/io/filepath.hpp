@@ -10,7 +10,7 @@
 namespace libcpp
 {
 
-class file_path
+class filepath
 {
 public:
     static std::string pwd()

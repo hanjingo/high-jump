@@ -3,7 +3,7 @@
 
 TEST(cpu, cores)
 {
-    ASSERT_EQ(cpu_cores > 0, true);
+    ASSERT_EQ(cpu_cores() > 0, true);
 }
 
 TEST(cpu, bind)

@@ -7,8 +7,8 @@ cmake_minimum_required(VERSION 3.19.2)
 project(tests)
 
 add_subdirectory(dll_example)
-add_subdirectory(child)
-add_subdirectory(daemon)
+# add_subdirectory(child)
+# add_subdirectory(daemon)
 
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
@@ -42,19 +42,19 @@ include_directories(${Eigen_INCLUDE_DIRS})
 include_directories(${OpenSSL_INCLUDE_DIRS})
 include_directories(${PUGIXML_INCLUDE_DIR})
 
-if (NOT Breakpad_INCLUDE_DIR)
-    set(Breakpad_INCLUDE_DIR /usr/local/include/breakpad)
-endif()
-include_directories(${Breakpad_INCLUDE_DIR})
+# if (NOT Breakpad_INCLUDE_DIR)
+#     set(Breakpad_INCLUDE_DIR /usr/local/include/breakpad)
+# endif()
+# include_directories(${Breakpad_INCLUDE_DIR})
 
 aux_source_directory(. SRC)
 
 add_executable(${PROJECT_NAME} ${SRC})
 
-if (NOT Breakpad_LIB_DIR)
-    set(Breakpad_LIB_DIR /usr/local/lib)
-endif()
-link_directories(${Breakpad_LIB_DIR})
+# if (NOT Breakpad_LIB_DIR)
+#     set(Breakpad_LIB_DIR /usr/local/lib)
+# endif()
+# link_directories(${Breakpad_LIB_DIR})
 
 target_link_libraries(${PROJECT_NAME} 
     ${CMAKE_DL_LIBS}
@@ -68,7 +68,7 @@ target_link_libraries(${PROJECT_NAME}
     OpenSSL::SSL 
     OpenSSL::Crypto
     pugixml
-    breakpad_client
+    # breakpad_client
     fmt::fmt
 )
 

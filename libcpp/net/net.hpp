@@ -7,4 +7,6 @@
 
 #include <libcpp/net/udp.hpp>
 
+#include <libcpp/net/zmq.hpp>
+
 #endif

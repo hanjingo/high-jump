@@ -36,8 +36,6 @@ enum log_lvl : int {
 };
 
 static std::mutex log_mu;
-static std::shared_ptr<libcpp::logger> log_inst = 
-    std::make_shared<libcpp::logger>(spdlog::default_logger());
 
 class logger
 {
@@ -67,7 +65,8 @@ public:
                 name, 
                 sinks.begin(), 
                 sinks.end(),
-                spdlog::thread_pool(), spdlog::async_overflow_policy::overrun_oldest);
+                spdlog::thread_pool(), 
+                spdlog::async_overflow_policy::overrun_oldest);
         }
         else
         {
@@ -83,15 +82,10 @@ public:
         spdlog::drop_all();
     }
 
-    static std::shared_ptr<libcpp::logger> instance()
+    static libcpp::logger* instance()
     {
-        return log_inst;
-    }
-
-    static void set_default(std::shared_ptr<libcpp::logger>&& inst)
-    {
-        std::lock_guard<std::mutex> lock(log_mu);
-        log_inst = std::move(inst);
+        static libcpp::logger inst{spdlog::default_logger()};
+        return &inst;
     }
 
     static sink_ptr_t create_stdout_sink()

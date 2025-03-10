@@ -6,13 +6,6 @@ TEST(logger, instance)
     ASSERT_EQ(libcpp::logger::instance() != nullptr, true);
 }
 
-TEST(logger, set_default)
-{
-    auto lg_new = std::make_shared<libcpp::logger>("lg1");
-    libcpp::logger::set_default(std::move(lg_new));
-    ASSERT_EQ(libcpp::logger::instance()->name() == "lg1", true);
-}
-
 TEST(logger, create_stdout_sink)
 {
     ASSERT_EQ(libcpp::logger::create_stdout_sink() != nullptr, true);

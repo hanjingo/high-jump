@@ -2,6 +2,7 @@
 #define ZMQ_SUBSCRIBER_HPP
 
 #include <zmq.h>
+#include <iostream>
 #include <libcpp/net/zmq/zmq_chan.hpp>
 
 namespace libcpp
@@ -10,7 +11,7 @@ namespace libcpp
 class zmq_subscriber
 {
 public:
-    zmq_subscriber(zmq::ctx_t* ctx)
+    zmq_subscriber(void* ctx)
         : _ctx{ctx}
         , _sock{zmq_socket(ctx, ZMQ_SUB)}
     {
@@ -21,7 +22,7 @@ public:
 		_sock = nullptr;
     }
 
-    inline int set(const int opt, const int value)
+    inline int set_opt(const int opt, const int value)
     {
         return zmq_setsockopt(_sock, opt, &value, sizeof(value));
     }
@@ -38,23 +39,24 @@ public:
 
     inline int sub(const std::string& topic)
     {
-        return zmq_setsockopt(_socket, ZMQ_SUBSCRIBE, topic.c_str(), topic.size());
+        return zmq_setsockopt(_sock, ZMQ_SUBSCRIBE, topic.c_str(), topic.size());
     }
 
-    inline bool recv(const std::string& dst)
+    int recv(std::string& dst, bool dont_block = false)
     {
-        if (zmq_msg_recv(&buf, _sock, ZMQ_NOBLOCK) < 0)
-            return false;
+        int len = zmq_recv(_sock, &_buf, zmq_msg_size(&_buf), (dont_block ? ZMQ_NOBLOCK : 0));
+        if (len < 0)
+            return len;
 
-        dst.reserve(zmq_msg_size(&_buf));
-        string.assign(static_cast<char*>(zmq_msg_data(&_buf)), zmq_msg_size(&_buf));
-        return true;
+        dst.reserve(len);
+        dst.assign(static_cast<char*>(zmq_msg_data(&_buf)), len);
+        return len;
     }
 
 private:
-    zmq::ctx_t*         _ctx;
-    zmq::socket_base_t* _sock;
-    zmq_msg_t           _buf;
+    void*            _ctx;
+    void*            _sock;
+    zmq_msg_t        _buf;
 };
 
 }

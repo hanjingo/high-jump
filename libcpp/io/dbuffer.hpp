@@ -16,32 +16,26 @@ public:
     using copy_fn = std::function<bool(Container& src, Container& dst)>;
 
 public:
-    dbuffer() : _back{&_back_data}, _front{&_front_data} {}
+    dbuffer(copy_fn&& copy = [](Container& src, Container& dst)->bool{ dst = src; return true; })
+        : _back{&_back_data}, _front{&_front_data}, _copy{std::move(copy)} {}
     ~dbuffer() {}
 
-    bool write(
-        Container& value, 
-        copy_fn copy = [](Container& src, Container& dst)->bool{ dst = src; return true; })
+    bool write(Container& value)
     {
-        _mu.lock();
         Container* back = _back.load();
-        if (!copy(value, *back))
+        if (!_copy(value, *back))
         {
-            _mu.unlock();
             return false;
         }
-        _mu.unlock();
 
         swap();
         return true;
     }
 
-    bool read(
-        Container& value,
-        copy_fn copy = [](Container& src, Container& dst)->bool{ dst = src; return true; })
+    bool read(Container& value)
     {
         Container* front = _front.load();
-        return copy(*front, value);
+        return _copy(*front, value);
     }
 
     void swap()
@@ -56,6 +50,7 @@ private:
     Container _front_data;
     std::atomic<Container*> _back;
     std::atomic<Container*> _front;
+    copy_fn _copy;
     std::mutex _mu;
 };
 

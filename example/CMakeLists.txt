@@ -95,6 +95,8 @@ endif()
 
 # add_subdirectory(sha256)
 
+add_subdirectory(shared_mem)
+
 # add_subdirectory(signal)
 
 # add_subdirectory(single)

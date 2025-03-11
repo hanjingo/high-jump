@@ -15,11 +15,14 @@ public:
         : _ctx{ctx}
         , _sock{zmq_socket(ctx, ZMQ_SUB)}
     {
+        zmq_msg_init(&_buf);
     }
     ~zmq_subscriber()
     {
         zmq_close(_sock);
 		_sock = nullptr;
+
+        zmq_msg_close(&_buf);
     }
 
     inline int set_opt(const int opt, const int value)
@@ -39,18 +42,24 @@ public:
 
     inline int sub(const std::string& topic)
     {
-        return zmq_setsockopt(_sock, ZMQ_SUBSCRIBE, topic.c_str(), topic.size());
+        return zmq_setsockopt(_sock, ZMQ_SUBSCRIBE, topic.c_str(), topic.length());
     }
 
-    int recv(std::string& dst, bool dont_block = false)
+    int recv(std::string& dst, int flags = 0)
     {
-        int len = zmq_recv(_sock, &_buf, zmq_msg_size(&_buf), (dont_block ? ZMQ_NOBLOCK : 0));
-        if (len < 0)
-            return len;
+        zmq_msg_init(&_buf);
+        int nbytes = zmq_msg_recv(&_buf, _sock, flags);
+        if (nbytes < 0)
+            return nbytes;
 
-        dst.reserve(len);
-        dst.assign(static_cast<char*>(zmq_msg_data(&_buf)), len);
-        return len;
+        dst.reserve(nbytes);
+        dst.assign(static_cast<char*>(zmq_msg_data(&_buf)), nbytes);
+        return nbytes;
+    }
+
+    inline int recv(zmq_msg_t& data, int flags = 0)
+    {
+        return zmq_msg_recv(&data, _sock, flags);
     }
 
 private:

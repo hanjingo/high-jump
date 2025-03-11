@@ -15,11 +15,14 @@ public:
         , _sock{zmq_socket(ctx, ZMQ_PUB)}
         , _ch{zmq_chan(ctx)}
     {
+        zmq_msg_init(&_buf);
     }
     ~zmq_publisher()
     {
         zmq_close(_sock);
 		_sock = nullptr;
+
+        zmq_msg_close(&_buf);
     }
 
     inline int set_opt(const int opt, const int value)
@@ -37,23 +40,35 @@ public:
         return zmq_connect(_sock, addr.c_str());
     }
 
-    inline int unsafe_pub(const std::string& buf, bool dont_block = false)
+    inline int pub(const std::string& str, const int flags = 0)
     {
-        return zmq_send(_sock, buf.data(), buf.size(), (dont_block ? ZMQ_NOBLOCK : 0));
+        return zmq_send(_sock, str.data(), str.size(), flags);
     }
 
-    int pub(const std::string& buf, bool dont_block = false)
+    inline int pub(zmq_msg_t& data, int flags = 0)
     {
-        _ch << buf;
-        std::string tmp;
-        _ch >> tmp;
-        return zmq_send(_sock, tmp.data(), tmp.size(), (dont_block ? ZMQ_NOBLOCK : 0));
+        return zmq_msg_send(&data, _sock, flags);
+    }
+
+    int safe_pub(const std::string& str, int flags = 0)
+    {
+        _ch << str;
+        _ch >> _buf;
+        return zmq_msg_send(&_buf, _sock, flags);
+    }
+
+    int safe_pub(zmq_msg_t& data, int flags = 0)
+    {
+        _ch << data;
+        _ch >> _buf;
+        return zmq_msg_send(&_buf, _sock, flags);
     }
 
 private:
     void*               _ctx;
     void*               _sock;
     libcpp::zmq_chan    _ch;
+    zmq_msg_t           _buf;
 };
 
 }

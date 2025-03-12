@@ -1,7 +1,9 @@
 #include <iostream>
 #include <thread>
 
-#include <libcpp/sync/shared_memory.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/managed_shared_memory.hpp>
 
 int main(int argc, char* argv[])
 {
@@ -25,7 +27,6 @@ int main(int argc, char* argv[])
     
     std::cout << "mem " << (boost::interprocess::shared_memory_object::remove("mem") ? "remove succ" : "remove fail") << std::endl;
 
-
     // [shared memory] mgr model
     boost::interprocess::shared_memory_object::remove("mgr_mem");
     boost::interprocess::managed_shared_memory mgr_mem(boost::interprocess::open_or_create, 
@@ -44,44 +45,7 @@ int main(int argc, char* argv[])
     for (int i = 0; i < 5; i++, addr++)
         std::cout << "[" << i << "]:" << *(ptr4.first + i) << std::endl;
     boost::interprocess::shared_memory_object::remove("mgr_mem");
-
-
-    // [shared memory] mutex
-    boost::interprocess::managed_shared_memory mgr_mem1(boost::interprocess::open_or_create, 
-                                                        "mgr_mem1", 
-                                                        1024);
-    addr = mgr_mem.find_or_construct<int>("arr1")[5](0);
-    for (int i = 0; i < 5; i++, addr++)
-        *addr = i;
-    boost::interprocess::named_mutex mu(boost::interprocess::open_or_create, "mu");
-    mu.lock();
-    for (int i = 0; i < 5; i++, addr++)
-        *addr = i;
-    ptr4 = mgr_mem.find<int>("arr1");
-    for (int i = 0; i < 5; i++, addr++)
-        std::cout << "[" << i << "]:" << *(ptr4.first + i) << std::endl;
-    mu.unlock();
-    boost::interprocess::shared_memory_object::remove("mgr_mem1");
-
-    boost::interprocess::named_condition cond(boost::interprocess::open_or_create, "cond");
-    boost::interprocess::scoped_lock<boost::interprocess::named_mutex> lock(mu);
-    ptr4 = mgr_mem.find<int>("arr1");
-    while (*ptr4.first < 5) 
-    { 
-        if (*ptr4.first % 2 == 0) 
-        { 
-            std::cout << *ptr4.first << std::endl; 
-            ptr4.first++;
-            cond.notify_all();
-        } 
-        else 
-        { 
-            std::cout << *ptr4.first << std::endl; 
-            ptr4.first++;
-            cond.notify_all(); 
-        } 
-        cond.wait(lock); 
-    }
+    
 
     std::cin.get();
     return 0;

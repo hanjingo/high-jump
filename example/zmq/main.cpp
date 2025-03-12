@@ -74,27 +74,32 @@ void xpub_xsub()
     std::cout << "xpub-xsub example" << std::endl;
 
     std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         std::cout << "xbroker.bind ret=" << xbroker.bind("tcp://*:10088", "tcp://*:10089") << std::endl;;
-        xbroker.poll();
-        std::cout << "xbroker poll end" << std::endl;
+        xbroker.proxy();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::cout << "xbroker proxy end" << std::endl;
     }).detach();
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
     std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
         std::cout << "xpuber bind broker ret = " << xpuber.bind_broker("tcp://localhost:10089") << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         int ret = 0;
         std::string msg{"xhello;001"};
         ret = xpuber.pub(msg);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         std::cout << "xpuber pub with ret = " << ret << ", msg = " << msg << std::endl;
         if (ret < 0) {
             return;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         std::string msg1{"xhello;002"};
         ret = xpuber.pub(msg1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         std::cout << "xpuber pub: with ret = " << ret << ", msg1 = " << msg1 << std::endl;
         if (ret < 0) {
             return;
@@ -103,37 +108,40 @@ void xpub_xsub()
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
 
     std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         std::cout << "xsuber1 connect with ret= " << xsuber1.connect("tcp://localhost:10088") 
             << ", addr = tcp://127.0.0.1:10088" << std::endl;
 
-        std::cout << "xsuber1 sub xhello with ret:" << xsuber1.sub("xhello") << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::cout << "xsuber1 sub xhello with ret:" << xsuber1.sub("xhello") << std::endl;
 
         std::string recv{};
         int ret = 0;
         while (true) 
         {
             ret = xsuber1.recv(recv);
-            std::cout << "xsuber1 recv with ret:" << ret << ", recv:" << recv << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::cout << "xsuber1 recv with ret:" << ret << ", recv:" << recv << std::endl;
         }
     }).detach();
-    std::this_thread::sleep_for(std::chrono::milliseconds(198));
     
+    std::thread([]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(70));
+        std::cout << "xsuber2 connect with ret= " << xsuber2.connect("tcp://localhost:10088") 
+            << ", addr = tcp://127.0.0.1:10088" << std::endl;
 
-    // std::thread([]() {
-    //     xsuber2.connect("tcp://localhost:10088");
-    //     xsuber2.sub("xhello");
-    //     std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(70));
+        std::cout << "xsuber2 sub xhello with ret:" << xsuber2.sub("xhello") << std::endl;
 
-    //     std::string recv{};
-    //     while (true)
-    //     {
-    //         std::cout << "xsuber2 ret:" << xsuber2.recv(recv) << ", recv:" << recv << std::endl;
-    //         std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    //     }
-    // }).detach();
-    // std::cout << "xsuber2 connect: " << "tcp://127.0.0.1:10088" << std::endl;
+        std::string recv{};
+        int ret = 0;
+        while (true) 
+        {
+            ret = xsuber2.recv(recv);
+            std::this_thread::sleep_for(std::chrono::milliseconds(70));
+            std::cout << "xsuber2 recv with ret:" << ret << ", recv:" << recv << std::endl;
+        }
+    }).detach();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     std::cout << "xpub-xsub example end\n" << std::endl;

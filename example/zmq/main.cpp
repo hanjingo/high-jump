@@ -6,6 +6,8 @@
 #include <libcpp/net/zmq/zmq_publisher.hpp>
 #include <libcpp/net/zmq/zmq_subscriber.hpp>
 #include <libcpp/net/zmq/zmq_pubsub_broker.hpp>
+#include <libcpp/net/zmq/zmq_producer.hpp>
+#include <libcpp/net/zmq/zmq_consumer.hpp>
 
 static void* ctx = zmq_ctx_new();
 
@@ -17,6 +19,10 @@ static libcpp::zmq_pubsub_broker xbroker{ctx};
 static libcpp::zmq_publisher xpuber{ctx};
 static libcpp::zmq_subscriber xsuber1{ctx};
 static libcpp::zmq_subscriber xsuber2{ctx};
+
+static libcpp::zmq_producer producer{ctx};
+static libcpp::zmq_consumer consumer1{ctx};
+static libcpp::zmq_consumer consumer2{ctx};
 
 void pub_sub()
 {
@@ -147,11 +153,53 @@ void xpub_xsub()
     std::cout << "xpub-xsub example end\n" << std::endl;
 }
 
+void push_pull()
+{
+    std::cout << "push-pull example" << std::endl;
+
+    std::cout << "producer bind tcp://*:10089 with ret = " 
+        << producer.bind("tcp://*:10089") << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    std::cout << "consumer1 connect: tcp://localhost:10089 with ret = " 
+        << consumer1.connect("tcp://localhost:10089") << std::endl;
+    std::cout << "consumer2 connect: tcp://localhost:10089 with ret = " 
+        << consumer2.connect("tcp://localhost:10089") << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    std::string msg{"hello1"};
+    std::cout << "producer push with ret = " << producer.push(msg) 
+        << ", msg = " << msg << std::endl;
+    std::cout << "producer push with ret = " << producer.push(msg) 
+        << ", msg = " << msg << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    std::string recv{};
+    std::cout << "consumer1 ret:" << consumer1.pull(recv) << ", recv:" << recv << std::endl;
+    std::cout << "consumer2 ret:" << consumer2.pull(recv) << ", recv:" << recv << std::endl;
+    std::cout << std::endl;
+
+    msg = "hello2";
+    std::cout << "producer safe_push with ret = " << producer.safe_push(msg) 
+        << ", msg = " << msg << std::endl;
+    std::cout << "producer safe_push with ret = " << producer.safe_push(msg) 
+        << ", msg = " << msg << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    std::cout << "consumer1 ret:" << consumer1.pull(recv) << ", recv:" << recv << std::endl;
+    std::cout << "consumer2 ret:" << consumer2.pull(recv) << ", recv:" << recv << std::endl;
+    std::cout << std::endl;
+
+    std::cout << "push-pull example end\n" << std::endl;
+}
+
 int main(int argc, char* argv[])
 {
     // pub_sub();
 
-    xpub_xsub();
+    // xpub_xsub();
+
+    push_pull();
 
     std::cin.get();
     return 0;

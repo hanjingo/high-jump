@@ -43,11 +43,13 @@ public:
         ret = zmq_bind(_front, xsub_addr.c_str());
         if (ret != 0)
             return ret;
+
+        return 0;
     }
 
     inline int proxy(void *capture = nullptr)
     {
-        zmq_proxy(_front, _back, capture);
+        return zmq_proxy(_front, _back, capture);
     }
 
 private:

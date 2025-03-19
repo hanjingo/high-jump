@@ -212,7 +212,7 @@ std::string& bytes_to_string(const T& bytes, const std::size_t sz, std::string& 
 {
     char buf[sz];
     memcpy(buf, bytes, sz);
-    str = buf;
+    str.assign(buf, sz);
     return str;
 }
 

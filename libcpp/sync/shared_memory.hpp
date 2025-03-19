@@ -1,11 +1,21 @@
 #ifndef SHARED_MEMORY_HPP
 #define SHARED_MEMORY_HPP
 
-#include <boost/interprocess/mapped_region.hpp>
-#include <boost/interprocess/shared_memory_object.hpp>
-#include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/interprocess/sync/named_mutex.hpp>
-#include <boost/interprocess/sync/named_condition.hpp>
+#include <exception>
+#include <string>
+#include <string.h>
+#include <assert.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#if defined(WIN32)
+
+// TODO
+
+#elif __linux__
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 namespace libcpp
 {
@@ -13,58 +23,103 @@ namespace libcpp
 class shared_memory
 {
 public:
-    using mode_t = boost::interprocess::mode_t;
-    using region_t = boost::interprocess::mapped_region;
+    // param description
+    // flag:
+    //   + O_CREAT
+    //   + O_RDWR
+    //   + O_EXCL
+    shared_memory(const char* name, const std::size_t sz, const int flag = O_CREAT | O_RDWR, const int mod = 0666)
+        : _name{name}, _sz{sz}, _fd{shm_open(name, flag, mod)}
+    {
+        assert(_fd > -1);
 
-public:
-    shared_memory(const char* name, mode_t mod = mode_t::read_write) 
-        : _obj{new boost::interprocess::shared_memory_object(boost::interprocess::open_or_create, name, mod)}
-        , _mu{new boost::interprocess::named_mutex(boost::interprocess::open_or_create, name)}
-    { 
+        truncate(sz);
     }
     ~shared_memory() 
     {
+        int ret = 1;
+        if (_ptr != nullptr)
+            ret = munmap(_ptr, size());
+        _ptr = nullptr;
+        assert(ret > -1);
+
+        ret = shared_memory::remove(_name.c_str());
+        assert(ret > -1);
+
+        if (_fd >= 0)
+            ret = close(_fd);
+        _fd = -1;
+        assert(ret > -1);
     }
 
-    static bool remove(const char* name)
+    static int remove(const char* name)
     {
-        boost::interprocess::shared_memory_object::remove(name);
+        return (strcmp(name, "") ? -1 : shm_unlink(name));
     }
 
     void truncate(const std::size_t sz)
     {
-        _obj->truncate(sz);
+        if (_fd > -1)
+            ftruncate(_fd, sz);
+
+        _sz = sz;
     }
 
     std::size_t size()
     {
-        boost::interprocess::offset_t sz;
-        if (!_obj->get_size(sz))
-            return 0;
-
-        return sz;
+        return _sz;
     }
 
-    region_t map()
+    // param description
+    // offset: suggest n*4096
+    // prot: 
+    //   + PROT_EXEC
+    //   + PROT_READ
+    //   + PROT_WRITE
+    //   + PROT_NONE
+    // flags:
+    //   + MAP_FIXED
+    //   + MAP_SHARED
+    //   + MAP_PRIVATE
+    //   + MAP_DENYWRITE 
+    //   + MAP_EXECUTABLE 
+    //   + MAP_NORESERVE 
+    //   + MAP_LOCKED 
+    //   + MAP_GROWSDOWN 
+    //   + MAP_ANONYMOUS 
+    //   + MAP_ANON (not used)
+    //   + MAP_FILE 
+    //   + MAP_32BIT 
+    //   + MAP_POPULATE 
+    //   + MAP_NONBLOCK 
+    void* map(std::size_t offset = 0, 
+              const int prot = PROT_READ | PROT_WRITE, 
+              const int flag = MAP_SHARED, 
+              void* addr = nullptr)
     {
-        return boost::interprocess::mapped_region(*_obj, _obj->get_mode());
+        _ptr = mmap(addr, size(), prot, flag, _fd, offset);
+        if (_ptr == MAP_FAILED)
+            return nullptr;
+
+        return _ptr;
     }
 
-    void lock()
+    inline void* addr()
     {
-        _mu->lock();
-    }
-
-    void unlock()
-    {
-        _mu->unlock();
+        return _ptr;
     }
 
 private:
-    boost::interprocess::shared_memory_object* _obj;
-    boost::interprocess::named_mutex* _mu;
+    const std::string _name = "";
+    std::size_t       _sz = 0;
+    int               _fd = -1;
+    void*             _ptr = nullptr;
 };
 
 }
+
+#else
+#pragma warning unknown OS, some function will be disabled
+#endif
 
 #endif

@@ -1,23 +1,21 @@
 #include <iostream>
 #include <thread>
 
-// #include <boost/interprocess/mapped_region.hpp>
-// #include <boost/interprocess/shared_memory_object.hpp>
-// #include <boost/interprocess/managed_shared_memory.hpp>
-
 #include <libcpp/sync/shared_memory.hpp>
 
 int main(int argc, char* argv[])
 {
     libcpp::shared_memory::remove("mem");
-    libcpp::shared_memory shm{"mem"};
+    libcpp::shared_memory shm{"mem", 256};
     shm.truncate(1024);
     std::cout << "shm.size() = " << shm.size() << std::endl;
-    auto region = shm.map();
-    int* addr = static_cast<int*>(region.get_address());
-    std::cout << "before *addr = " << *addr << std::endl;
-    *addr = 123;
-    std::cout << "after *addr = " << *addr << std::endl;
+    void* addr = shm.map();
+    std::cout << "addr = " << addr << std::endl;
+    int* ptr = static_cast<int*>(addr);
+    std::cout << "before modify *ptr = " << *ptr << std::endl;
+    *ptr = 123;
+    std::cout << "after modify *ptr = " << *ptr << std::endl;
+    std::cout << "after modify *addr = " << *(static_cast<int*>(addr)) << std::endl;
     
     // // [shared memory] single byte model
     // boost::interprocess::shared_memory_object::remove("mem");

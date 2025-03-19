@@ -133,4 +133,4 @@ add_subdirectory(shared_mem)
 
 # add_subdirectory(xml)
 
-add_subdirectory(zmq)
+# add_subdirectory(zmq)

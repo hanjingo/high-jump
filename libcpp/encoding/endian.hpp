@@ -1,7 +1,7 @@
 #ifndef ENDIAN_HPP
 #define ENDIAN_HPP
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <winsock.h>
 #else
 #include <arpa/inet.h>

@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 
 // TODO
 

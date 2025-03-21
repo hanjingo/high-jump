@@ -18,11 +18,29 @@ static bool contains(const std::string& src, const std::string& sub)
     return src.find(sub) != std::string::npos;
 }
 
+static std::string search(const std::string& src, const std::string& regex)
+{
+    std::smatch match;
+    std::regex_search(src, match, std::regex(regex));
+    return match[1];
+}
+
+static void search(const std::string& src, std::smatch& match, const std::string& regex)
+{
+    std::regex_search(src, match, std::regex(regex));
+}
+
 static std::vector<std::string> split(const std::string& str, const std::string& regex)
 {
     std::regex patten(regex);
     std::sregex_token_iterator first{str.begin(), str.end(), patten, -1}, last;
     return {first, last};
+}
+
+static std::string& replace(const std::string& str, const std::string& from, const std::string& to)
+{
+    str = std::regex_replace(str, std::regex(sub), to);
+    return str;
 }
 
 static bool equal(const char* a, const char* b)

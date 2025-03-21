@@ -26,7 +26,7 @@
 #define C_STYLE_EXPORT extern "C" DLL_EXPORT
 
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <windows.h>
 #define DLL_RTLD_LAZY         0
 #define DLL_RTLD_NOW          0
@@ -49,7 +49,7 @@
 #define DLL_RTLD_NODELETE     RTLD_NODELETE
 #endif
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #define DLL_EXT ".dll"
 #elif __APPLE__
 #define DLL_EXT ".dylib"
@@ -61,7 +61,7 @@
 
 static void* dll_open(const char* filename, int flag)
 {
-#if defined(WIN32)
+#if defined(_WIN32)
     return LoadLibrary(filename);
 #else
     return dlopen(filename, flag);
@@ -70,7 +70,7 @@ static void* dll_open(const char* filename, int flag)
 
 static void* dll_get(void* handler, const char* symbol)
 {
-#if defined(WIN32)
+#if defined(_WIN32)
     return GetProcAddress(handler, symbol);
 #else
     return dlsym(handler, symbol);
@@ -79,7 +79,7 @@ static void* dll_get(void* handler, const char* symbol)
 
 static int dll_close(void* handler)
 {
-#if defined(WIN32)
+#if defined(_WIN32)
     return FreeLibrary(handler);
 #else
     return dlclose(handler);

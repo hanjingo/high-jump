@@ -6,7 +6,7 @@
 #include <iostream>
 #include <functional>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <windows.h>
 #include <client/windows/handler/exception_handler.h>
 #elif __APPLE__
@@ -18,7 +18,7 @@
 namespace libcpp
 {
 
-#if defined(WIN32)
+#if defined(_WIN32)
 typedef bool(*dump_callback_t)(const wchar_t*, 
                                const wchar_t*, 
                                void*, 
@@ -86,7 +86,7 @@ public:
             delete _handler;
         }
 
-#if defined(WIN32)
+#if defined(_WIN32)
         std::wstring wabs_path(std::string(path).length(), L' ');
         std::copy(abs_path.begin(), abs_path.end(), wabs_path.begin());
         _handler = new google_breakpad::ExceptionHandler(abs_path, 
@@ -111,7 +111,7 @@ public:
 #endif
     }
 
-#if defined(WIN32)
+#if defined(_WIN32)
     // Reference to: https://www.cnblogs.com/cswuyg/p/3207576.html
     LPTOP_LEVEL_EXCEPTION_FILTER WINAPI temp_set_unhandled_exception_filter( 
         LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter )
@@ -123,7 +123,7 @@ public:
     // Prevent exception handle by other application or crt.
     bool prevent_set_unhandled_exception_filter()
     {
-#if defined(WIN32)
+#if defined(_WIN32)
         HMODULE hKernel32 = LoadLibrary(L"kernel32.dll");
         if (hKernel32 == NULL)
             return false;

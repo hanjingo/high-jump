@@ -59,3 +59,5 @@
 #else
 #define DEPRECATED(msg)
 #endif
+
+#endif

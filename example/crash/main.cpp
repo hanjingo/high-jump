@@ -3,7 +3,7 @@
 
 #include <libcpp/testing/crash.hpp>
 
-#ifdef _WIN32
+#ifdef __WIN32
 bool dump_callback(const wchar_t* dump_dir,
                    const wchar_t* minidump_id,
                    void* context,
@@ -41,7 +41,7 @@ bool dump_callback(const google_breakpad::MinidumpDescriptor& descriptor, void* 
 int main(int argc, char* argv[])
 {
     
-#ifdef _WIN32
+#ifdef __WIN32
     libcpp::prevent_set_unhandled_exception_filter();
 #endif
 

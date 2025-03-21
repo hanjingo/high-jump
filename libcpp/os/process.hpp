@@ -29,7 +29,7 @@ static constexpr boost::process::detail::std_in_<void> std_in = boost::process::
 static constexpr boost::process::detail::std_out_<1> std_out  = boost::process::std_out;
 static constexpr boost::process::detail::std_out_<2> std_err  = boost::process::std_err;
 
-#if defined(WIN32)
+#if defined(_WIN32)
 static constexpr char cmd_list_pid[] = "tasklist /FO CSV /NH";
 static constexpr char cmd_kill[]     = "taskkill /PID ";
 #else
@@ -94,7 +94,7 @@ static void list(std::vector<pid_t>& result,
         boost::process::child proc(cmd_list_pid, boost::process::std_out > stream);
         while (std::getline(stream, line)) 
         {
-#if defined(WIN32)
+#if defined(_WIN32)
             boost::algorithm::split(vec, line, [](char c) { return c == ','; });
             for (auto itr = vec.begin(); itr != vec.end(); ++itr)
                 boost::erase_all(*itr, "\"");

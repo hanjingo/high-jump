@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <windows.h>
 #elif __APPLE__
 #include <sys/param.h>
@@ -32,7 +32,7 @@
 
 static unsigned int cpu_cores()
 {
-#if defined(WIN32)
+#if defined(_WIN32)
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
     return sysinfo.dwNumberOfProcessors;

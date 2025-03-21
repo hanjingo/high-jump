@@ -7,6 +7,11 @@ TEST(string_util, contains)
     ASSERT_EQ(libcpp::string_util::contains("hello world", "hello1"), false);
 }
 
+TEST(string_util, search)
+{
+    ASSERT_EQ(libcpp::string_util::search("hello w123orld", "v_([a-zA-Z]+)[0-9]") == std::string("123"), true);
+}
+
 TEST(string_util, split)
 {
     auto arr1 = libcpp::string_util::split("abc;123;++", ";");
@@ -17,6 +22,13 @@ TEST(string_util, split)
     ASSERT_EQ(arr2[1] == "database", true);
     ASSERT_EQ(arr2[2] == "quote", true);
     ASSERT_EQ(arr2[3] == "sentinel", true);
+}
+
+TEST(string_util, replace)
+{
+    std::string str = "hello  world";
+    libcpp::string_util::replace(str, " ", "");
+    ASSERT_EQ(str == std::string("helloworld"), true);
 }
 
 TEST(string_util, equal)

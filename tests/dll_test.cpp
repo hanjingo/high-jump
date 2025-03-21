@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/dll.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #define EXT ".dll"
 #elif __APPLE__
 #define EXT ".dylib"

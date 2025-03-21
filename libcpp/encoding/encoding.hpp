@@ -13,6 +13,8 @@
 
 #include <libcpp/encoding/json.hpp>
 
+#include <libcpp/encoding/protobuf.hpp>
+
 #include <libcpp/encoding/xml.hpp>
 
 #endif

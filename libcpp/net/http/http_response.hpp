@@ -3,7 +3,7 @@
 
 #include <httplib.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <Windows.h>
 #endif
 

@@ -22,7 +22,18 @@ static std::string search(const std::string& src, const std::string& regex)
 {
     std::smatch match;
     std::regex_search(src, match, std::regex(regex));
-    return match[1];
+    return match[0];
+}
+
+static std::vector<std::string> search_n(const std::string& src, const std::string& regex)
+{
+    std::regex pattern(regex);
+    std::sregex_iterator begin(src.begin(), src.end(), pattern), end;
+    std::vector<std::string> results;
+    for (auto it = begin; it != end; ++it) 
+        results.push_back(it->str());
+
+    return results;
 }
 
 static void search(const std::string& src, std::smatch& match, const std::string& regex)
@@ -37,9 +48,9 @@ static std::vector<std::string> split(const std::string& str, const std::string&
     return {first, last};
 }
 
-static std::string& replace(const std::string& str, const std::string& from, const std::string& to)
+static std::string& replace(std::string& str, const std::string& from, const std::string& to)
 {
-    str = std::regex_replace(str, std::regex(sub), to);
+    str = std::regex_replace(str, std::regex(from), to);
     return str;
 }
 

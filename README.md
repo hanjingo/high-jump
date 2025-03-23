@@ -93,6 +93,7 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - concurrentqueue: https://github.com/cameron314/concurrentqueue
 - spdlog: https://github.com/gabime/spdlog
 - googletest: https://github.com/google/googletest
+- flatbuffers: https://github.com/google/flatbuffers
 - sqlite3: https://github.com/sqlite/sqlite
 - BehaviorTree.CPP: https://github.com/BehaviorTree/BehaviorTree.CPP
 - cpp-httplib: https://github.com/yhirose/cpp-httplib

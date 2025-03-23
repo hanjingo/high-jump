@@ -9,7 +9,14 @@ TEST(string_util, contains)
 
 TEST(string_util, search)
 {
-    ASSERT_EQ(libcpp::string_util::search("hello w123orld", "v_([a-zA-Z]+)[0-9]") == std::string("123"), true);
+    ASSERT_EQ(libcpp::string_util::search("hello w123orld", R"(\d+)") == std::string("123"), true);
+}
+
+TEST(string_util, search_n)
+{
+    auto ret = libcpp::string_util::search_n("hello w123orld ni456hao", R"(\d+)");
+    ASSERT_EQ(ret[0] == std::string("123"), true);
+    ASSERT_EQ(ret[1] == std::string("456"), true);
 }
 
 TEST(string_util, split)

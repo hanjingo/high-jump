@@ -8,7 +8,7 @@
 
 #include <boost/asio.hpp>
 
-#include <libcpp/net/tcp/tcp_session.hpp>
+#include <libcpp/net/tcp/tcp_socket.hpp>
 
 namespace libcpp
 {
@@ -28,17 +28,12 @@ public:
     using acceptor_t        = boost::asio::ip::tcp::acceptor;
     using endpoint_t        = boost::asio::ip::tcp::endpoint;
 
-    using opt_no_delay      = boost::asio::ip::tcp::no_delay;
-    using opt_send_buf_sz   = boost::asio::ip::tcp::socket::send_buffer_size;
-    using opt_recv_buf_sz   = boost::asio::ip::tcp::socket::receive_buffer_size;
-    using opt_reuse_addr    = boost::asio::ip::tcp::socket::reuse_address;
-
-    using accept_handler_t  = std::function<void(const err_t&, tcp_session*)>;
+    using accept_handler_t  = std::function<void(const err_t&, tcp_socket*)>;
     using signal_handler_t  = std::function<void(const err_t&, signal_t)>;
 
 public:
     tcp_listener()
-        : sigs_{io_}
+        : _sigs{_io}
     {
     }
     virtual ~tcp_listener()
@@ -48,67 +43,67 @@ public:
 
     inline void poll()
     {
-        io_.run();
+        _io.run();
     }
 
     inline void loop_start()
     {
-        io_work_t work{io_};
-        io_.run();
+        io_work_t work{_io};
+        _io.run();
     }
 
     inline void loop_end()
     {
-        io_.stop();
+        _io.stop();
     }
 
     template<typename T>
     inline void set_option(T opt)
     {
-        if (acceptor_ != nullptr && acceptor_->is_open()) {
-            acceptor_->set_option(opt);
+        if (_acceptor != nullptr && _acceptor->is_open()) {
+            _acceptor->set_option(opt);
         }
     }
 
-    tcp_session* accept(uint16_t port)
+    tcp_socket* accept(uint16_t port)
     {
         endpoint_t ep{boost::asio::ip::tcp::v4(), port};
         return accept(ep);
     }
 
-    tcp_session* accept(const char* ip, uint16_t port)
+    tcp_socket* accept(const char* ip, uint16_t port)
     {
         endpoint_t ep{address_t::from_string(ip), port};
         return accept(ep);
     }
 
-    tcp_session* accept(const endpoint_t& ep)
+    tcp_socket* accept(const endpoint_t& ep)
     {
-        if (binded_endpoint_ == ep) {
+        if (_binded_endpoint == ep) {
             return accept();
         }
-        if (acceptor_ != nullptr) {
-            acceptor_->close();
+        if (_acceptor != nullptr) {
+            _acceptor->close();
         }
 
-        acceptor_        = new acceptor_t(io_, ep);
-        binded_endpoint_ = ep;
+        _acceptor        = new acceptor_t(_io, ep);
+        _binded_endpoint = ep;
         return accept();
     }
 
-    tcp_session* accept()
+    tcp_socket* accept()
     {
-        assert(acceptor_ != nullptr);
+        assert(_acceptor != nullptr);
 
         err_t err;
-        auto sock = new sock_t(io_);
-        acceptor_->accept(*sock, err);
+        auto sock = new sock_t(_io);
+        _acceptor->accept(*sock, err);
         if (err.failed()) {
             delete sock;
             return nullptr;
         }
 
-        auto net = new tcp_session(sock);
+        auto net = new tcp_socket(sock);
         net->set_conn_status(true);
         return net;
     }
@@ -127,26 +122,26 @@ public:
 
     void async_accept(endpoint_t ep, accept_handler_t&& fn)
     {
-        if (binded_endpoint_ == ep) {
+        if (_binded_endpoint == ep) {
             async_accept(std::move(fn));
             return;
         }
-        if (acceptor_ != nullptr) {
-            acceptor_->close();
+        if (_acceptor != nullptr) {
+            _acceptor->close();
         }
 
-        acceptor_        = new acceptor_t(io_, ep);
-        binded_endpoint_ = ep;
+        _acceptor        = new acceptor_t(_io, ep);
+        _binded_endpoint = ep;
         async_accept(std::move(fn));
     }
 
     void async_accept(accept_handler_t&& fn)
     {
-        assert(acceptor_ != nullptr);
+        assert(_acceptor != nullptr);
 
-        auto sock = new sock_t(io_);
-        acceptor_->async_accept(*sock, [&](const err_t & err) {
-            auto net = new tcp_session(sock);
+        auto sock = new sock_t(_io);
+        _acceptor->async_accept(*sock, [&](const err_t & err) {
+            auto net = new tcp_socket(sock);
 
             if (!err.failed()) {
                 fn(err, net);
@@ -156,32 +151,32 @@ public:
 
     inline void add_signal(signal_t sig, signal_handler_t&& fn)
     {
-        sigs_.add(sig);
-        sigs_.async_wait(fn);
+        _sigs.add(sig);
+        _sigs.async_wait(fn);
     }
 
     void remove_signal(signal_t sig)
     {
-        sigs_.remove(sig);
+        _sigs.remove(sig);
     }
 
     void close()
     {
-        if (acceptor_ != nullptr) {
-            acceptor_->close();
-            delete acceptor_;
-            acceptor_ = nullptr;
+        if (_acceptor != nullptr) {
+            _acceptor->close();
+            delete _acceptor;
+            _acceptor = nullptr;
         }
 
         loop_end();
     }
 
 private:
-    io_t                 io_;
-    signal_set_t         sigs_;
+    io_t                 _io;
+    signal_set_t         _sigs;
 
-    acceptor_t*          acceptor_ = nullptr;
-    endpoint_t           binded_endpoint_;
+    acceptor_t*          _acceptor = nullptr;
+    endpoint_t           _binded_endpoint;
 };
 
 }

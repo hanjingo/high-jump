@@ -4,8 +4,6 @@
 namespace libcpp
 {
 
-// TODO
-
 }
 
 #endif

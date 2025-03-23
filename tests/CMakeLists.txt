@@ -26,6 +26,7 @@ find_package(httplib REQUIRED)
 # find_package(BehaviorTreeV3 REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(pugixml REQUIRED)
+# find_package(Protobuf REQUIRED)
 find_package(Boost REQUIRED 
     system 
     filesystem 
@@ -41,6 +42,7 @@ include_directories(${ZeroMQ_INCLUDE_DIR})
 include_directories(${Eigen_INCLUDE_DIRS})
 include_directories(${OpenSSL_INCLUDE_DIRS})
 include_directories(${PUGIXML_INCLUDE_DIR})
+# include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 # if (NOT Breakpad_INCLUDE_DIR)
 #     set(Breakpad_INCLUDE_DIR /usr/local/include/breakpad)
@@ -62,6 +64,7 @@ target_link_libraries(${PROJECT_NAME}
     ${Boost_LIBRARIES} 
     # ${SQLite3_LIBRARIES} 
     ${Eigen_LIBRARIES} 
+    # ${PROTOBUF_LIBRARIES}
     pthread
     pugixml
     # BT::behaviortree_cpp_v3

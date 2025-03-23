@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
     std::thread t2([]() {
         char buf[1024] = {0};
         std::cout << "start sync connect..." << std::endl;
-        libcpp::tcp_session sess{};
+        libcpp::tcp_socket sess{};
         if (!sess.connect("127.0.0.1", 10086)) {
             std::cout << "connect 127.0.0.1:10086 fail" << std::endl;
             return;
@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
     std::thread t3([]() {
         std::cout << "start async listening..." << std::endl;
         libcpp::tcp_listener listener{};
-        listener.async_accept(10087, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_session* sess) {
+        listener.async_accept(10087, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sess) {
             char buf[1024] = {0};
             if (err.failed()) {
                 std::cout << "srv async accept connion fail" << std::endl;
@@ -78,8 +78,8 @@ int main(int argc, char* argv[])
     std::thread t4([]() {
         char buf[1024] = {0};
         std::cout << "start async connect..." << std::endl;
-        libcpp::tcp_session sess{};
-        sess.async_connect("127.0.0.1", 10087, [](const libcpp::tcp_session::err_t & err, libcpp::tcp_session * sess) {
+        libcpp::tcp_socket sess{};
+        sess.async_connect("127.0.0.1", 10087, [](const libcpp::tcp_socket::err_t & err, libcpp::tcp_socket * sess) {
             if (!err.failed()) {
                 std::cout << "async connect 127.0.0.1:10087 fail" << std::endl;
                 return;
@@ -87,7 +87,7 @@ int main(int argc, char* argv[])
             std::cout << "async connect 127.0.0.1:10087 success" << std::endl;
 
             sess->async_send(std::string("hello").c_str(), 6,
-            [](const libcpp::tcp_session::err_t & err, std::size_t sz) {
+            [](const libcpp::tcp_socket::err_t & err, std::size_t sz) {
                 if (err.failed()) {
                     std::cout << "cli send fail" << std::endl;
                     return;

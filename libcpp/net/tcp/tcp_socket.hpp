@@ -1,5 +1,5 @@
-#ifndef TCP_SESSION_HPP
-#define TCP_SESSION_HPP
+#ifndef TCP_SOCKET_HPP
+#define TCP_SOCKET_HPP
 
 #include <chrono>
 #include <iostream>
@@ -11,7 +11,7 @@
 namespace libcpp
 {
 
-class tcp_session
+class tcp_socket
 {
 public:
     using signal_t          = int;
@@ -25,67 +25,62 @@ public:
     using const_buffer_t    = boost::asio::const_buffer;
     using multi_buffer_t    = boost::asio::mutable_buffer;
     using streambuf_t       = boost::asio::streambuf;
-    using iostreambuf_t     = boost::asio::streambuf::mutable_buffers_type;
-    using ostreambuf_t      = boost::asio::streambuf::const_buffers_type;
 
     using sock_t            = boost::asio::ip::tcp::socket;
     using endpoint_t        = boost::asio::ip::tcp::endpoint;
-    using timer_t           = boost::asio::deadline_timer;
 
     using opt_no_delay      = boost::asio::ip::tcp::no_delay;
     using opt_send_buf_sz   = boost::asio::ip::tcp::socket::send_buffer_size;
     using opt_recv_buf_sz   = boost::asio::ip::tcp::socket::receive_buffer_size;
     using opt_reuse_addr    = boost::asio::ip::tcp::socket::reuse_address;
 
-    using conn_handler_t    = std::function<void(const err_t&, tcp_session*)>;
+    using conn_handler_t    = std::function<void(const err_t&, tcp_socket*)>;
     using send_handler_t    = std::function<void(const err_t&, std::size_t)>;
     using recv_handler_t    = std::function<void(const err_t&, std::size_t)>;
     using signal_handler_t  = std::function<void(const err_t&, signal_t)>;
 
 public:
-    tcp_session()
-        : tm_{io_},
-          sigs_{io_}
+    tcp_socket()
+        : _sigs{_io}
     {
     }
-    explicit tcp_session(sock_t* sock)
-        : tm_{io_},
-          sigs_{io_},
-          sock_{sock}
+    explicit tcp_socket(sock_t* sock)
+        : _sigs{_io},
+          _sock{sock}
     {
     }
-    virtual ~tcp_session()
+    virtual ~tcp_socket()
     {
         close();
     }
 
     inline void poll()
     {
-        io_.run();
+        _io.run();
     }
 
     inline void loop_start()
     {
-        io_work_t work{io_};
-        io_.run();
+        io_work_t work{_io};
+        _io.run();
     }
 
     inline void loop_end()
     {
-        io_.stop();
+        _io.stop();
     }
 
     template<typename T>
     inline void set_option(T opt)
     {
-        if (sock_ != nullptr && sock_->is_open()) {
-            sock_->set_option(opt);
+        if (_sock != nullptr && _sock->is_open()) {
+            _sock->set_option(opt);
         }
     }
 
     bool connect(const char* ip,
                  uint16_t port,
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
                  int retry_times = 1)
     {
         endpoint_t ep{address_t::from_string(ip), port};
@@ -96,7 +91,7 @@ public:
     // WARNNING: the feature of timeout is not recommended for use in a multi-connection context.
     // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_tcp_client.cpp
     bool connect(endpoint_t ep,
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
                  int retry_times = 1)
     {
         if (is_connected()) {
@@ -106,17 +101,17 @@ public:
             return false;
         }
 
-        sock_ = new sock_t(io_);
+        _sock = new sock_t(_io);
         if (timeout.count() > 0) {
-            sock_->async_connect(ep, [ = ](const err_t & err) {
+            _sock->async_connect(ep, [ = ](const err_t & err) {
                 if (!err.failed()) {
-                    is_connected_.store(true);
+                    _is_connected.store(true);
                 }
             });
 
-            io_.restart();
-            io_.run_for(timeout);
-            if (!io_.stopped() || !is_connected()) {
+            _io.restart();
+            _io.run_for(timeout);
+            if (!_io.stopped() || !is_connected()) {
                 retry_times--;
                 disconnect();
                 return connect(ep, timeout, retry_times);
@@ -126,14 +121,14 @@ public:
         }
 
         err_t err;
-        sock_->connect(ep, err);
+        _sock->connect(ep, err);
         if (err.failed()) {
             retry_times--;
             disconnect();
             return connect(ep, timeout, retry_times);
         }
 
-        is_connected_.store(true);
+        _is_connected.store(true);
         return true;
     }
 
@@ -150,10 +145,10 @@ public:
             return;
         }
 
-        sock_ = new sock_t(io_);
-        sock_->async_connect(ep, [ = ](const err_t & err) {
+        _sock = new sock_t(_io);
+        _sock->async_connect(ep, [ = ](const err_t & err) {
             if (!err.failed()) {
-                is_connected_.store(true);
+                _is_connected.store(true);
             }
 
             fn(err, this);
@@ -166,10 +161,10 @@ public:
             return;
         }
 
-        sock_->close();
-        delete sock_;
-        sock_ = nullptr;
-        is_connected_.store(false);
+        _sock->close();
+        delete _sock;
+        _sock = nullptr;
+        _is_connected.store(false);
     }
 
     size_t send(const const_buffer_t& buf)
@@ -178,7 +173,7 @@ public:
             return 0;
         }
 
-        return sock_->send(buf);
+        return _sock->send(buf);
     }
 
     size_t send(const char* data, size_t len)
@@ -202,7 +197,7 @@ public:
             return;
         }
 
-        sock_->async_send(buf, std::move(fn));
+        _sock->async_send(buf, std::move(fn));
     }
 
     void async_send(const char* data, size_t len, send_handler_t&& fn)
@@ -223,7 +218,7 @@ public:
             return 0;
         }
 
-        return sock_->read_some(buf);
+        return _sock->read_some(buf);
     }
 
     size_t recv(char* data, size_t len)
@@ -244,7 +239,7 @@ public:
             return 0;
         }
 
-        return boost::asio::read(*sock_, buf, boost::asio::transfer_at_least(least));
+        return boost::asio::read(*_sock, buf, boost::asio::transfer_at_least(least));
     }
 
     void async_recv(multi_buffer_t& buf, recv_handler_t&& fn)
@@ -256,7 +251,7 @@ public:
             return;
         }
 
-        sock_->async_read_some(buf, std::move(fn));
+        _sock->async_read_some(buf, std::move(fn));
     }
 
     void async_recv(char* data, size_t len, recv_handler_t&& fn)
@@ -273,24 +268,24 @@ public:
 
     inline void add_signal(signal_t sig, signal_handler_t&& fn)
     {
-        sigs_.add(sig);
-        sigs_.async_wait(fn);
+        _sigs.add(sig);
+        _sigs.async_wait(fn);
     }
 
     void remove_signal(signal_t sig)
     {
-        sigs_.remove(sig);
+        _sigs.remove(sig);
     }
 
     bool set_conn_status(bool is_connected)
     {
-        bool old = is_connected_.load();
-        return is_connected_.compare_exchange_strong(old, is_connected);
+        bool old = _is_connected.load();
+        return _is_connected.compare_exchange_strong(old, is_connected);
     }
 
     bool is_connected()
     {
-        return is_connected_.load();
+        return _is_connected.load();
     }
 
     void close()
@@ -310,7 +305,7 @@ public:
 
         std::size_t nrecvd = 0;
         std::future<void> f = std::async(std::launch::async, [&]() {
-            nrecvd = sock_->read_some(buf);
+            nrecvd = _sock->read_some(buf);
             return;
         });
         f.wait_for(timeout);
@@ -330,12 +325,10 @@ public:
     }
 
 private:
-    io_t                 io_;
-    timer_t              tm_;
-    signal_set_t         sigs_;
-    sock_t*              sock_     = nullptr;
-    std::atomic_bool     is_connected_{false};
-
+    io_t                 _io;
+    signal_set_t         _sigs;
+    sock_t*              _sock     = nullptr;
+    std::atomic_bool     _is_connected{false};
 };
 
 }

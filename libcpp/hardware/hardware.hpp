@@ -3,4 +3,6 @@
 
 #include <libcpp/hardware/cpu.h>
 
+#include <libcpp/hardware/dpdk.h>
+
 #endif

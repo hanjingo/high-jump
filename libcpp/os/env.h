@@ -48,7 +48,7 @@
 
 
 #if (__cplusplus >= 201402L)
-#ifdef(_MSC_VER)
+#if defined(_MSC_VER)
 #define DEPRECATED(msg) __declspec(deprecated(msg))
 #elif defined(__GNUC__)
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))

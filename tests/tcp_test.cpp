@@ -205,11 +205,11 @@ TEST(tcp, tcp_conn_async)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     message1* msg1 = new message1("harry");
-    conn1.send((libcpp::message*)(&msg1), false);
+    conn1.send((libcpp::message*)(&msg1));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     message1* msg2 = new message1();
-    conn1.recv((libcpp::message*)(&msg2), false);
+    conn1.recv((libcpp::message*)(&msg2));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     ASSERT_EQ(conn1.disconnect(), true);

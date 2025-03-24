@@ -10,12 +10,12 @@
 #include <libcpp/net/proto/message.hpp>
 #include <boost/circular_buffer.hpp>
 
-#ifndef TCP_CONN_RCH_SZ
-#define TCP_CONN_RCH_SZ 10
+#ifndef TCP_CONN_RBUF_SZ
+#define TCP_CONN_RBUF_SZ 65535
 #endif
 
-#ifndef TCP_CONN_WCH_SZ
-#define TCP_CONN_WCH_SZ 10
+#ifndef TCP_CONN_WBUF_SZ
+#define TCP_CONN_WBUF_SZ 65535
 #endif
 
 #ifndef MTU
@@ -39,32 +39,29 @@ public:
 public:
     tcp_conn() 
         : _sock{new tcp_socket()}
+        , _conn_cb{std::bind(&tcp_conn::on_conn, this, std::placeholders::_1)}
+        , _send_cb{std::bind(&tcp_conn::on_send, this, std::placeholders::_1, std::placeholders::_2)}
+        , _recv_cb{std::bind(&tcp_conn::on_recv, this, std::placeholders::_1, std::placeholders::_2)}
+        , _disconnect_cb{std::bind(&tcp_conn::on_disconnect, this, std::placeholders::_1)}
     {
-        init();
     }
     tcp_conn(tcp_socket* sock) 
         : _sock{sock}
+        , _conn_cb{std::bind(&tcp_conn::on_conn, this, std::placeholders::_1)}
+        , _send_cb{std::bind(&tcp_conn::on_send, this, std::placeholders::_1, std::placeholders::_2)}
+        , _recv_cb{std::bind(&tcp_conn::on_recv, this, std::placeholders::_1, std::placeholders::_2)}
+        , _disconnect_cb{std::bind(&tcp_conn::on_disconnect, this, std::placeholders::_1)}
     {
-        init();
     }
     ~tcp_conn() 
     {
         close();
     }
 
-    inline void set_conn_cb(conn_handler_t fn) {_conn_cb = fn;}
-    inline void set_send_cb(send_handler_t fn) {_send_cb = fn;}
-    inline void set_recv_cb(recv_handler_t fn) {_recv_cb = fn;}
-    inline void set_disconnect_cb(disconnect_handler_t fn) {_disconnect_cb = fn;}
-    inline tcp_socket* socket() {return _sock;}
-
-    void init()
-    {
-        set_conn_cb(std::bind(this, &tcp_conn::on_conn, std::placeholders::_1));
-        set_send_cb(std::bind(this, &tcp_conn::on_send, std::placeholders::_1, std::placeholders::_2));
-        set_recv_cb(std::bind(this, &tcp_conn::on_recv, std::placeholders::_1, std::placeholders::_2));
-        set_disconnect_cb(std::bind(this, &tcp_conn::on_disconnect, std::placeholders::_1));
-    }
+    inline void set_conn_cb(conn_handler_t&& fn) {_conn_cb = std::move(fn);}
+    inline void set_send_cb(send_handler_t&& fn) {_send_cb = std::move(fn);}
+    inline void set_recv_cb(recv_handler_t&& fn) {_recv_cb = std::move(fn);}
+    inline void set_disconnect_cb(disconnect_handler_t&& fn) {_disconnect_cb = std::move(fn);}
 
     bool connect(const char* ip, 
                  const std::uint16_t port, 
@@ -98,25 +95,21 @@ public:
         return true;
     }
 
-    bool send(message* msg, bool block = true, int timeout_ms = -1)
+    bool send(message* msg)
     {
         if (_sock == nullptr || _w_closed.load())
             return false;
 
         _w_ch << msg;
-        if (block)
-            write_flush(timeout_ms);
         return true;
     }
 
-    bool recv(message* msg, bool block = true, int timeout_ms = -1)
+    bool recv(message* msg)
     {
         if (_sock == nullptr || _r_closed.load())
             return false;
 
         _r_ch << msg;
-        if (block)
-            read_flush(timeout_ms);
         return true;
     }
 
@@ -126,72 +119,67 @@ public:
         _r_closed.store(true);
         _sock->close();
         delete _sock;
-        _sock == nullptr
+        _sock = nullptr;
         _disconnect_cb(this);
     }
-
-    void read_flush(int timeout_ms = -1)
+    
+    void read_all()
     {
-        _sock->poll();
-
-        auto start = std::chrono::system_clock::now();
-        auto tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
         message* msg = nullptr;
-        std::size_t sz;
-        while (_sock != nullptr) 
-        {
-            tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
-            if (timeout_ms != -1 && (timeout_ms - tm_passed_ms.count()) < 0)
-                break;
-
+        std::size_t sz = 0;
+        do {
             // read
             _r_ch >> msg;
             if (msg == nullptr)
                 break;
-            
-            tcp_socket::multi_buffer_t buf;
-            if (_sock->recv(buf) == 0)
-                break;
 
-            _r_buf
-            sz = msg->decode(_r_buf.data(), _r_buf.size());
-            if (sz == 0)
-                continue;
+            do {
+                sz = msg->decode(
+                    boost::asio::buffer_cast<const unsigned char*>(_r_buf.data()), 
+                    _r_buf.size());
+                if (sz > 0)
+                    break;
+
+                auto buf = _r_buf.prepare(MTU);
+                sz = _sock->recv(buf);
+                if (sz == 0)
+                    throw("tcp socket read fail");
+                _r_buf.commit(sz);
+            } while(sz > 0);
 
             _r_buf.consume(sz);
             _recv_cb(this, msg);
-        }
+        } while (_sock != nullptr);
     }
 
-    void write_flush(int timeout_ms = -1)
+    void write_all()
     {
-        _sock->poll();
-
-        auto start = std::chrono::system_clock::now();
-        auto tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
         message* msg = nullptr;
         std::size_t sz;
         while (_sock != nullptr) 
         {
-            tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
-            if (timeout_ms != -1 && (timeout_ms - tm_passed_ms.count()) < 0)
-                break;
-
             // write
             _w_ch >> msg;
             if (msg == nullptr)
                 break;
             
-            sz = msg->encode(_w_buf.data(), _w_buf.size());
+            unsigned char buf[msg->size()];
+            sz = msg->encode(buf, sizeof(buf));
             if (sz == 0)
                 break;
 
-            if (_sock->send(_w_buf.data(), sz) != sz)
+            if (_sock->send(buf, sz) < sz)
                 break;
 
-            _w_buf.consume(sz);
             _send_cb(this, msg);
         }
+    }
+
+    void poll()
+    {
+        _sock->poll();
+        read_all();
+        write_all();
     }
 
 public:
@@ -223,15 +211,14 @@ private:
     std::atomic<bool> _w_closed{true};
     std::atomic<bool> _r_closed{true};
 
-    tcp_socket::streambuf_t _r_buf{};
-    tcp_socket::streambuf_t _w_buf{};
-    tcp_chan<message*>      _r_ch{TCP_CONN_RCH_SZ};
-    tcp_chan<message*>      _w_ch{TCP_CONN_WCH_SZ};
+    tcp_socket::streambuf_t _r_buf{TCP_CONN_RBUF_SZ};
+    tcp_chan<message*>      _r_ch{TCP_CONN_RBUF_SZ / MTU};
+    tcp_chan<message*>      _w_ch{TCP_CONN_WBUF_SZ / MTU};
 
-    conn_handler_t _conn_cb = [](tcp_conn*){};
-    send_handler_t _send_cb = [](tcp_conn*, message*){};
-    recv_handler_t _recv_cb = [](tcp_conn*, message*){};
-    disconnect_handler_t _disconnect_cb = [](tcp_conn*){};
+    conn_handler_t _conn_cb;
+    send_handler_t _send_cb;
+    recv_handler_t _recv_cb;
+    disconnect_handler_t _disconnect_cb;
 };
 
 }

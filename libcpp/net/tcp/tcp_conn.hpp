@@ -2,18 +2,20 @@
 #define TCP_CONN
 
 #include <atomic>
+#include <chrono>
 #include <functional>
 
 #include <libcpp/net/tcp/tcp_socket.hpp>
+#include <libcpp/net/tcp/tcp_chan.hpp>
 #include <libcpp/net/proto/message.hpp>
 #include <boost/circular_buffer.hpp>
 
-#ifndef TCP_CONN_RBUF_SZ
-#define TCP_CONN_RBUF_SZ 1024
+#ifndef TCP_CONN_RCH_SZ
+#define TCP_CONN_RCH_SZ 10
 #endif
 
-#ifndef TCP_CONN_WBUF_SZ
-#define TCP_CONN_WBUF_SZ 1024
+#ifndef TCP_CONN_WCH_SZ
+#define TCP_CONN_WCH_SZ 10
 #endif
 
 #ifndef MTU
@@ -36,30 +38,50 @@ public:
 
 public:
     tcp_conn() 
-        : _conn_cb{[](tcp_conn*){}}
-        , _send_cb{[](tcp_conn*, message*){}}
-        , _recv_cb{[](tcp_conn*, message*){}}
-        , _disconnect_cb{[](tcp_conn*){}}
-    {}
-    ~tcp_conn() {}
+        : _sock{new tcp_socket()}
+    {
+        init();
+    }
+    tcp_conn(tcp_socket* sock) 
+        : _sock{sock}
+    {
+        init();
+    }
+    ~tcp_conn() 
+    {
+        close();
+    }
 
     inline void set_conn_cb(conn_handler_t&& fn) {_conn_cb = std::move(fn);}
     inline void set_send_cb(send_handler_t&& fn) {_send_cb = std::move(fn);}
     inline void set_recv_cb(recv_handler_t&& fn) {_recv_cb = std::move(fn);}
     inline void set_disconnect_cb(disconnect_handler_t&& fn) {_disconnect_cb = std::move(fn);}
+    inline tcp_socket* socket() {return _sock;}
 
-    inline bool connect(const char* ip, 
-                        const std::uint16_t port, 
-                        std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
-                        int retry_times = 1)
+    void init()
     {
-        return _sock.connect(ip, port, timeout, retry_times);
+        set_conn_cb(std::bind(this, &tcp_conn::on_conn, std::placeholder::_1));
+        set_send_cb(std::bind(this, &tcp_conn::on_send, std::placeholder::_1, std::placeholder::_2));
+        set_recv_cb(std::bind(this, &tcp_conn::on_recv, std::placeholder::_1, std::placeholder::_2));
+        set_disconnect_cb(std::bind(this, &tcp_conn::on_disconnect, std::placeholder::_1));
     }
 
-    inline bool async_connect(const char* ip, 
-                              const std::uint16_t port)
+    bool connect(const char* ip, 
+                 const std::uint16_t port, 
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+                 int retry_times = 1)
     {
-        _sock.async_connect(ip, port, [this](const tcp_socket::err_t& err, tcp_socket* sock){
+        if (_sock != nullptr || !_sock->connect(ip, port, timeout, retry_times))
+            return false;
+
+        _conn_cb(this);
+        return true;
+    }
+
+    bool async_connect(const char* ip, 
+                       const std::uint16_t port)
+    {
+        _sock->async_connect(ip, port, [this](const tcp_socket::err_t& err, tcp_socket* sock){
             this->_conn_cb(this);
         });
         return true;
@@ -67,75 +89,135 @@ public:
 
     bool disconnect()
     {
-        if (_w_closed.load() || _r_closed.load())
+        if (_sock == nullptr || _w_closed.load() || _r_closed.load())
             return false;
 
-        _sock.disconnect();
+        poll();
+        _sock->disconnect();
         _disconnect_cb(this);
         return true;
     }
 
-    bool send(message* msg)
+    bool send(message* msg, bool block = true, int timeout_ms = -1)
     {
-        unsigned char buf[msg->size()];
-        std::size_t sz = msg->encode(buf, sizeof(buf));
-        std::size_t nsend = _sock.send(buf, sz);
-        return nsend == sz;
-    }
-
-    bool async_send(message* msg)
-    {
-        unsigned char buf[msg->size()];
-        std::size_t sz = msg->encode(buf, sizeof(buf));
-        if (sz != msg->size())
+        if (_sock == nullptr || _w_closed.load())
             return false;
 
-        _sock.async_send(buf, sz, [this, msg](const tcp_socket::err_t& err, std::size_t sz){
-            this->_send_cb(this, msg);
-        });
+        _w_ch << msg;
+        if (block)
+            poll(timeout_ms);
         return true;
     }
 
-    bool recv(message* msg)
+    bool recv(message* msg, bool block = true, int timeout_ms = -1)
     {
-        do {
-            if (_sock.recv(_r_buf) == 0)
-                break;
-        } while(!msg->decode((unsigned char*)(_r_buf.data()), _r_buf.size()));
-    }
+        if (_sock == nullptr || _r_closed.load())
+            return false;
 
-    bool async_recv(message* msg)
-    {
-        _sock.async_recv(_r_buf, [this, msg](const tcp_socket::err_t& err, std::size_t sz){
-            this->_recv_cb(this, msg);
-        });
+        _r_ch << msg;
+        if (block)
+            poll(timeout_ms);
+        return true;
     }
 
     void close()
     {
         _w_closed.store(true);
         _r_closed.store(true);
-        _sock.disconnect();
-        _sock.loop_end();
+        _sock->close();
+        delete _sock;
+        _sock == nullptr
+        _disconnect_cb(this);
     }
 
-    void poll()
+    void poll(int timeout_ms = -1)
     {
-        _sock.poll();
+        _sock->poll();
+
+        auto start = std::chrono::system_clock::now();
+        message* msg = nullptr;
+        std::size_t sz;
+        while (_sock != nullptr) 
+        {
+            if (timeout_ms != -1 && (timeout_ms - (std::chrono::system_clock::now() - start)) < 0)
+                break;
+
+            // read
+            _r_ch >> msg;
+            if (msg == nullptr)
+                break;
+            
+            if (_sock->recv(_r_buf) == 0)
+                break;
+
+            sz = msg->decode(_r_buf.data(), _r_buf.size());
+            if (sz == 0)
+                continue;
+
+            _r_buf.consume(sz);
+            _recv_cb(this, msg);
+        }
+
+        while (_sock != nullptr) 
+        {
+            if (timeout_ms != -1 && (timeout_ms - (std::chrono::system_clock::now() - start)) < 0)
+                break;
+
+            // write
+            _w_ch >> msg;
+            if (msg == nullptr)
+                break;
+            
+            sz = msg->encode(_w_buf.data(), _w_buf.size());
+            if (sz == 0)
+                break;
+
+            if (_sock->send(_w_buf.data(), sz) != sz)
+                break;
+
+            _w_buf.consume(sz);
+            _send_cb(this, msg);
+        }
+    }
+
+public:
+    virtual void on_conn(tcp_conn* conn)
+    {
+        _w_closed.store(false);
+        _r_closed.store(false);
+    }
+
+    virtual void on_send(tcp_conn* conn, message* msg)
+    {
+        // do something
+    }
+
+    virtual void on_recv(tcp_conn* conn, message* msg)
+    {
+        // do something
+    }
+
+    virtual void on_disconnect(tcp_conn* conn)
+    {
+        _w_closed.store(true);
+        _r_closed.store(true);
     }
 
 private:
-    tcp_socket _sock;
+    tcp_socket* _sock;
 
     std::atomic<bool> _w_closed{true};
     std::atomic<bool> _r_closed{true};
 
-    tcp_socket::multi_buffer_t _r_buf{};
+    tcp_socket::streambuf_t _r_buf{};
+    tcp_socket::streambuf_t _w_buf{};
+    tcp_chan<message*>      _r_ch{TCP_CONN_RCH_SZ};
+    tcp_chan<message*>      _w_ch{TCP_CONN_WCH_SZ};
 
-    conn_handler_t _conn_cb;
-    send_handler_t _send_cb;
-    recv_handler_t _recv_cb;
-    disconnect_handler_t _disconnect_cb;
+    conn_handler_t _conn_cb = [](tcp_conn*){};
+    send_handler_t _send_cb = [](tcp_conn*, message*){};
+    recv_handler_t _recv_cb = [](tcp_conn*, message*){};
+    disconnect_handler_t _disconnect_cb = [](tcp_conn*){};
 };
 
 }

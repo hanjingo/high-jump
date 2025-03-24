@@ -3,6 +3,7 @@
 
 #include <set>
 #include <unordered_map>
+#include <functional>
 
 #include <libcpp/net/tcp/tcp_conn.hpp>
 #include <libcpp/net/proto/message.hpp>
@@ -14,36 +15,27 @@ template<typename Key = std::uint64_t>
 class tcp_client
 {
 public:
-    typedef void(*pub_cb)();
 
 public:
     tcp_client() {}
-    ~tcp_client() {}
+    ~tcp_client() { close(); }
 
-    inline tcp_conn* get(Key id)
-    {
-        auto itr = _conns.find(id);
-        if (itr != _conns.end())
-            return nullptr;
-
-        return itr->second;
-    }
+    inline std::size_t size() { return _conns.size(); }
+    inline tcp_conn* get(Key id) { return _get(id); }
+    inline std::size_t add(Key id, tcp_conn* conn) { _add(id, conn); return _conns.size(); }
 
     tcp_conn* connect(const char* ip, 
                       const std::uint16_t port,
-                      Key id, 
                       const std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
                       int retry_times = 1)
     {
         tcp_conn* conn = new tcp_conn();
-        if (!conn->connect(ip, port))
+        if (!conn->connect(ip, port, timeout, retry_times))
         {
             delete conn;
             conn = nullptr;
-            return conn;
         }
 
-        _add(id, conn);
         return conn;
     }
 
@@ -56,7 +48,7 @@ public:
         conn->disconnect();
     }
 
-    bool send(message* msg, const Key id, const bool block = true)
+    bool send(message* msg, Key id, bool block = true)
     {
         auto conn = _get(id);
         if (conn == nullptr)
@@ -66,7 +58,7 @@ public:
         return true;
     }
 
-    bool recv(message* msg, const Key id, const bool block = true)
+    bool recv(message* msg, Key id, bool block = true)
     {
         auto conn = _get(id);
         if (conn == nullptr)
@@ -76,13 +68,18 @@ public:
         return true;
     }
 
-    void broad_cast(message* msg, const bool block = false)
+    void broad_cast(message* msg, bool block = false)
     {
         for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
             itr->second->send(msg, block);
     }
 
-    void group_cast(message* msg, const std::vector<Key>& ids, const bool block = false)
+    void group_cast(message* msg, std::set<Key>& ids, bool block = false)
+    {
+        group_cast(msg, std::vector<Key>(ids.begin(), ids.end()), block);
+    }
+
+    void group_cast(message* msg, std::vector<Key>& ids, bool block = false)
     {
         for (Key id : ids)
         {
@@ -104,7 +101,7 @@ public:
         conn->recv(resp, true);
     }
 
-    void pub(const std::string& topic, message* msg, const pub_cb cb = nullptr, const bool block = false)
+    void pub(const std::string& topic, message* msg, const bool block = false)
     {
         if (topic == "" || topic == "*")
         {
@@ -113,58 +110,68 @@ public:
             return;
         }
 
-        auto topic = _topics.find(topic);
-        if (topic != _topics.end())
+        auto itr = _topics.find(topic);
+        if (itr == _topics.end())
             return;
 
-        for (auto conn = topic->second.begin(); conn != topic->second.end(); ++conn)
-            (*conn)->send(msg, block);
+        group_cast(msg, itr->second, block);
     }
 
-    bool sub(const std::string& topic, tcp_conn* conn)
+    bool sub(const std::string& topic, Key id)
     {
-        if (topic == "" || topic == "*")
+        if (topic == "" || topic == "*" || _get(id) == nullpt)
             return false;
 
-        _topics[topic].emplace(conn);
+        _topics[topic].emplace(id);
         return true;
     }
 
-    bool sub(const std::string& topic, const unsigned char* ip, const std::uint16_t port)
+    bool sub(const std::string& topic, Key id, const unsigned char* ip, const std::uint16_t port)
     {
-        auto conn = connect(ip, port);
+        auto itr = _topics.find(topic);
+        if (itr != _topics.end())
+        {
+            auto conn_set = itr->second;
+            if (conn_set.find(id) != conn_set.end())
+                return true;
+        }
+
+        auto conn = _get(id);
+        if (conn = nullptr)
+            conn = connect(ip, port);
         if (conn == nullptr)
             return false;
 
-        return sub(topic, conn);
+        _add(id, conn);
+        return sub(topic, id);
     }
 
     void unsub(const std::string& topic, const Key id)
     {
-        auto conn = _get(id);
-        if (conn == nullptr)
+        if (topic == "")
+        {
+            for (auto itr = _topics.begin(); itr != _topics.end(); itr++)
+                itr->second.erase(id);
+        }
+       
+        auto itr = _topics.find(topic);
+        if (itr == _topics.end())
             return;
 
-        if (topic != "")
-        {
-            auto topic = _topics.find(topic);
-            if (topic == _topics.end())
-                return;
-
-            topic->second.erase(conn);
-            return;
-        }
-
-        for (auto topic = _topics.begin(); topic != _topics.end(); topic++)
-        {
-            topic->second.erase(conn);
-        }
+        itr->second.erase(id); 
     }
 
     void close()
     {
+        for (auto topic = _topics.begin(); itr != _topics.end(); ++topic)
+            for (auto conn = topic->second.begin(); conn != topic->second.end(); ++conn)
+                *conn = nullptr;
+
         for (auto itr = _conns.begin(); itr != _conns.end(); ++itr)
-            itr->close();
+        {
+            itr->second->close();
+            itr->second = nullptr;
+        }
     }
 
 private:
@@ -194,7 +201,7 @@ private:
 
 private:
     std::unordered_map<Key, tcp_conn*> _conns;
-    std::unordered_map<std::string, std::set<tcp_conn*>> _topics;
+    std::unordered_map<std::string, std::set<Key> > _topics;
 };
 
 }

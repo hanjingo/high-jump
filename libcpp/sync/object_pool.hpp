@@ -1,7 +1,7 @@
 #ifndef OBJECT_POOL_HPP
 #define OBJECT_POOL_HPP
 
-#include <vector>
+#include <queue>
 
 #include <boost/pool/object_pool.hpp>
 
@@ -13,7 +13,6 @@ class object_pool
 {
 public:
     object_pool()
-        : _pool{boost::object_pool<T>()}
     {
     }
     ~object_pool() 
@@ -26,17 +25,21 @@ public:
         auto ptr = _pool.malloc();
         new(ptr) typename boost::object_pool<T>::element_type(std::forward<Args>(args)...);
         push(ptr);
-        return ptr;
     }
 
-    inline boost::object_pool<T>::element_type* pop()
+    typename boost::object_pool<T>::element_type* pop()
     {
-        return (_container.empty() ? nullptr : _container.pop_front());
+        if (_container.empty())
+            return nullptr;
+
+        auto ret = _container.front();
+        _container.pop();
+        return ret;
     }
 
-    inline void push(boost::object_pool<T>::element_type* obj)
+    inline void push(typename boost::object_pool<T>::element_type* obj)
     {
-        _container.push_back();
+        _container.push(obj);
     }
 
     inline std::size_t size()
@@ -46,7 +49,7 @@ public:
 
 private:
     boost::object_pool<T> _pool;
-    std::vector<boost::object_pool<T>::element_type*> _container;
+    std::queue<typename boost::object_pool<T>::element_type*> _container;
 };
 
 }

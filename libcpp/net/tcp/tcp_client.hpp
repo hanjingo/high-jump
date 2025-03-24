@@ -11,7 +11,7 @@
 namespace libcpp
 {
 
-template<typename Key = std::uint64_t>
+template<typename Key>
 class tcp_client
 {
 public:
@@ -76,10 +76,10 @@ public:
 
     void group_cast(message* msg, std::set<Key>& ids, bool block = false)
     {
-        group_cast(msg, std::vector<Key>(ids.begin(), ids.end()), block);
+        group_cast(msg, std::initializer_list<Key>(ids.begin(), ids.end()), block);
     }
 
-    void group_cast(message* msg, std::vector<Key>& ids, bool block = false)
+    void group_cast(message* msg, std::initializer_list<Key> ids, bool block = false)
     {
         for (Key id : ids)
         {
@@ -91,7 +91,7 @@ public:
         }
     }
 
-    void req_resp(message* req, message& resp, const Key target)
+    void req_resp(message* req, message& resp, const Key id)
     {
         auto conn = _get(id);
         if (conn == nullptr)
@@ -119,7 +119,7 @@ public:
 
     bool sub(const std::string& topic, Key id)
     {
-        if (topic == "" || topic == "*" || _get(id) == nullpt)
+        if (topic == "" || topic == "*" || _get(id) == nullptr)
             return false;
 
         _topics[topic].emplace(id);
@@ -163,10 +163,6 @@ public:
 
     void close()
     {
-        for (auto topic = _topics.begin(); itr != _topics.end(); ++topic)
-            for (auto conn = topic->second.begin(); conn != topic->second.end(); ++conn)
-                *conn = nullptr;
-
         for (auto itr = _conns.begin(); itr != _conns.end(); ++itr)
         {
             itr->second->close();

@@ -3,6 +3,8 @@
 #include <thread>
 #include <shared_mutex>
 #include <chrono>
+#include <mutex>
+#include <memory>
 
 TEST(dbuffer, read)
 {
@@ -48,7 +50,7 @@ TEST(dbuffer, read)
     auto dbuffer_total_end = std::chrono::system_clock::now();
     std::cout << "dbuffer total read/write time passed:" << (dbuffer_total_end - dbuffer_total_start).count() << std::endl;
 
-    std::shared_mutex mu;
+    std::mutex mu;
     auto rwlock_total_start = std::chrono::system_clock::now();
     std::thread t3([&](){
         auto start = std::chrono::system_clock::now();
@@ -65,9 +67,9 @@ TEST(dbuffer, read)
         auto start = std::chrono::system_clock::now();
         for (int n = 0; n < times; ++n)
         {
-            mu.lock_shared();
+            mu.lock();
             buf2 = buf3; // read
-            mu.unlock_shared();
+            mu.unlock();
         }
         auto end = std::chrono::system_clock::now();
         std::cout << "rwlock read time passed:" << (end - start).count() << std::endl;

@@ -21,12 +21,12 @@ public:
         return len;
     }
 
-    bool decode(const unsigned char* buf, const std::size_t len)
+    std::size_t decode(const unsigned char* buf, const std::size_t len)
     {
         char tmp[len];
         memcpy(tmp, buf, len);
         _name = std::string(tmp);
-        return true;
+        return _name.size();
     }
 
     std::string name() { return _name; }
@@ -128,7 +128,7 @@ TEST(tcp, tcp_listener)
     ASSERT_EQ(sock1 != nullptr, true);
     sock1->close();
 
-    listener.async_accept(10090, [](const err_t& err, tcp_socket* sock){
+    listener.async_accept(10090, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock){
         ASSERT_EQ(sock != nullptr, true);
         sock->close();
     });
@@ -158,18 +158,18 @@ TEST(tcp, tcp_conn)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     message1* msg1 = new message1("harry");
-    ASSERT_EQ(msg1.size() == 6, true);
+    ASSERT_EQ(msg1->size() == 6, true);
     conn1.send((libcpp::message*)(msg1));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     message1* msg2 = new message1();
     conn1.recv((libcpp::message*)(msg2));
-    ASSERT_EQ(msg2.name() == std::string("potter"), true);
+    ASSERT_EQ(msg2->name() == std::string("potter"), true);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     ASSERT_EQ(conn1.disconnect(), true);
 
-    ASSERT_EQ(conn1.close(), true);
+    conn1.close();
     delete msg1; delete msg2;
     msg1 = nullptr; msg2 = nullptr;
 }
@@ -205,11 +205,11 @@ TEST(tcp, tcp_conn_async)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     message1* msg1 = new message1("harry");
-    conn1.async_send((libcpp::message*)(&msg1));
+    conn1.send((libcpp::message*)(&msg1), false);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    message1 msg2 = new message1();
-    conn1.async_recv((libcpp::message*)(&msg2));
+    message1* msg2 = new message1();
+    conn1.recv((libcpp::message*)(&msg2), false);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     ASSERT_EQ(conn1.disconnect(), true);
@@ -219,17 +219,17 @@ TEST(tcp, tcp_server)
 {
     std::thread([]() {
         libcpp::tcp_server<std::string> srv{};
-        ASSERT_EQ(srv.conn_size() == 0, true);
+        ASSERT_EQ(srv.size() == 0, true);
 
         auto conn = srv.listen("127.0.0.1", 10089);
         ASSERT_EQ(conn != nullptr, true);
-        conn.set_recv_cb([](tcp_conn* conn, message* msg){
+        conn->set_recv_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
             message1* real = (message1*)(msg);
             ASSERT_EQ(real->name() == std::string("hello"), true);
             delete msg;
             msg = nullptr;
         });
-        conn.set_send_cb([](tcp_conn* conn, message* msg){
+        conn->set_send_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
             message1* real = (message1*)(msg);
             ASSERT_EQ(real->name() == std::string("world"), true);
             delete msg;
@@ -237,14 +237,14 @@ TEST(tcp, tcp_server)
         });
 
         ASSERT_EQ(srv.add("k1", conn) == 1, true);
-        ASSERT_EQ(srv.conn_size() == 1, true);
+        ASSERT_EQ(srv.size() == 1, true);
         ASSERT_EQ(srv.get("k1") != nullptr, true);
 
         message1* msg1 = new message1();
-        ASSERT_EQ(conn.recv(msg1), true);
+        ASSERT_EQ(conn->recv(msg1), true);
 
         message1* msg2 = new message1();
-        ASSERT_EQ(conn.send(msg2), true);
+        ASSERT_EQ(conn->send(msg2), true);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     });
@@ -252,11 +252,11 @@ TEST(tcp, tcp_server)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     libcpp::tcp_conn conn{};
     ASSERT_EQ(conn.connect("127.0.0.1", 10089), true);
-    conn.set_send_cb([](tcp_conn* conn, message* msg){
+    conn.set_send_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
         delete msg;
         msg = nullptr;
     });
-    conn.set_recv_cb([](tcp_conn* conn, message* msg){
+    conn.set_recv_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
         delete msg;
         msg = nullptr;
     });
@@ -281,7 +281,7 @@ TEST(tcp, tcp_client)
         libcpp::tcp_server<std::string> srv{};
         auto conn1 = srv.listen("127.0.0.1", 10091);
         ASSERT_EQ(conn1 != nullptr, true);
-        conn1.set_recv_cb([](tcp_conn* conn, message* msg){
+        conn1->set_recv_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
             message1* real = (message1*)(msg);
             ASSERT_EQ(real->name() == std::string("123"), true);
             srv_conn1_recv_count++;
@@ -289,14 +289,14 @@ TEST(tcp, tcp_client)
             message1* msg2 = new message1("hello conn1");
             conn->send(msg2);
         });
-        conn1.set_send_cb([](tcp_conn* conn, message* msg){
+        conn1->set_send_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
             message1* real = (message1*)(msg);
         });
         srv.add("conn1", conn1);
 
         auto conn2 = srv.listen("127.0.0.1", 10091);
         ASSERT_EQ(conn2 != nullptr, true);
-        conn2.set_recv_cb([](tcp_conn* conn, message* msg){
+        conn2->set_recv_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
             message1* real = (message1*)(msg);
             ASSERT_EQ(real->name() == std::string("123"), true);
             srv_conn2_recv_count++;
@@ -304,7 +304,7 @@ TEST(tcp, tcp_client)
             message1* msg2 = new message1("hello conn2");
             conn->send(msg2);
         });
-        conn2.set_send_cb([](tcp_conn* conn, message* msg){
+        conn2->set_send_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
             message1* real = (message1*)(msg);
         });
         srv.add("conn2", conn2);
@@ -314,16 +314,16 @@ TEST(tcp, tcp_client)
     }).detach();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    libcpp::tcp_client cli{};
+    libcpp::tcp_client<int> cli{};
     ASSERT_EQ(cli.size() == 0, true);
-    ASSERT_EQ(cli.get("k1") == nullptr, true);
+    ASSERT_EQ(cli.get(1) == nullptr, true);
     auto conn1 = cli.connect("127.0.0.1", 10091);
     ASSERT_EQ(conn1 != nullptr, true);
-    conn1.set_recv_cb([](tcp_conn* conn, message* msg){
+    conn1->set_recv_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
         message1* real = (message1*)(msg);
         ASSERT_EQ(real->name() == std::string("hello conn1"), true);
     });
-    conn1.set_send_cb([](tcp_conn* conn, message* msg){
+    conn1->set_send_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
         message1* real = (message1*)(msg);
         ASSERT_EQ(real->name() == std::string("conn1"), true);
     });
@@ -333,14 +333,13 @@ TEST(tcp, tcp_client)
     ASSERT_EQ(cli.size() == 1, true);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    cli.async_connect("127.0.0.1", 10091, )
-    auto conn2 = cli.connect();
+    auto conn2 = cli.connect("127.0.0.1", 10091);
     ASSERT_EQ(conn2 != nullptr, true);
-    conn2.set_recv_cb([](tcp_conn* conn, message* msg){
+    conn2->set_recv_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
         message1* real = (message1*)(msg);
         ASSERT_EQ(real->name() == std::string("hello conn2"), true);
     });
-    conn2.set_send_cb([](tcp_conn* conn, message* msg){
+    conn2->set_send_cb([](libcpp::tcp_conn* conn, libcpp::message* msg){
         message1* real = (message1*)(msg);
         ASSERT_EQ(real->name() == std::string("conn2"), true);
     });
@@ -351,7 +350,7 @@ TEST(tcp, tcp_client)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     message1* msg1 = new message1("123");
-    ASSERT_EQ(cli.send(msg1, 1));
+    ASSERT_EQ(cli.send(msg1, 1), true);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     ASSERT_EQ(srv_conn1_recv_count == 1, true);
 
@@ -364,6 +363,10 @@ TEST(tcp, tcp_client)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     ASSERT_EQ(srv_conn1_recv_count == 3, true);
     ASSERT_EQ(srv_conn2_recv_count == 2, true);
+
+    message1* msg2 = new message1();
+    cli.recv(msg2, false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     delete msg1; delete msg2;
     msg1 = nullptr; msg2 = nullptr;

@@ -2,6 +2,7 @@
 #define TCP_SERVER_HPP
 
 #include <atomic>
+#include <initializer_list>
 
 #include <libcpp/net/proto/message.hpp>
 #include <libcpp/net/tcp/tcp_listener.hpp>
@@ -27,7 +28,7 @@ public:
         close();
     }
 
-    inline std::size_t conn_size() { return _conns.size(); }
+    inline std::size_t size() { return _conns.size(); }
     inline std::size_t add(const Key id, tcp_conn* conn) { _add(id, conn); return size(); }
     inline tcp_conn* get(const Key id) { return _get(id); }
 
@@ -37,17 +38,21 @@ public:
         if (sock_ptr == nullptr)
             return nullptr;
 
-        auto ret = new tcp_socket(sock_ptr);
+        auto ret = new tcp_conn(sock_ptr);
         return ret;
     }
 
-    void async_listen(const char* ip, const uint16_t port, listen_handler_t&& fn)
+    void async_listen(const char* ip, const uint16_t port, listen_handler_t fn)
     {
-        _listener.async_accept(ip, port, [this, std::move(fn)](const err_t& err, tcp_socket* sock) {
-            if (err.fail())
+        _listener.async_accept(ip, port, [this, fn](const tcp_listener::err_t& err, tcp_socket* sock) {
+            if (err.failed())
+            {
                 fn(this, nullptr);
-            else
-                fn(this, new tcp_conn(sock));
+                return;
+            }
+            
+            tcp_conn* conn = new tcp_conn(sock);
+            fn(this, conn);
         });
     }
 
@@ -55,9 +60,8 @@ public:
     {
         _listener.close();
 
-        auto keys = _conns.keys();
-        for (Key id : keys)
-            _del(id);
+        for (auto itr = _conns.begin(); itr != _conns.end(); ++itr)
+            itr = _conns.erase(itr);
     }
 
     bool send(message* msg, const Key id, bool block = false)
@@ -70,7 +74,7 @@ public:
         return true;
     }
 
-    bool recv(message* msg, const Key id, const bool block = false)
+    bool recv(message* msg, const Key id, bool block = false)
     {
         auto conn = _get(id);
         if (conn == nullptr)
@@ -82,18 +86,17 @@ public:
 
     void broad_cast(message* msg, const bool block = false)
     {
-        auto ids = _conns.keys();
-        for (Key id : ids)
-            send(msg, id, block);
+        for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
+            itr->second->send(msg, block);            
     }
 
-    void group_cast(message* msg, const std::vector<Key>& ids, const bool block = false)
+    void group_cast(message* msg, std::initializer_list<Key> ids, bool block = false)
     {
         for (auto id : ids)
             send(msg, id, block);
     }
 
-    void kick_off(const std::vector<Key>& ids)
+    void kick_off(std::initializer_list<Key> ids)
     {
         for (Key id : ids)
             _del(id);

@@ -48,38 +48,38 @@ public:
         conn->disconnect();
     }
 
-    bool send(message* msg, Key id, bool block = true)
+    bool send(message* msg, Key id)
     {
         auto conn = _get(id);
         if (conn == nullptr)
             return false;
 
-        conn->send(msg, block);
+        conn->send(msg);
         return true;
     }
 
-    bool recv(message* msg, Key id, bool block = true)
+    bool recv(message* msg, Key id)
     {
         auto conn = _get(id);
         if (conn == nullptr)
             return false;
 
-        conn->recv(msg, block);
+        conn->recv(msg);
         return true;
     }
 
-    void broad_cast(message* msg, bool block = false)
+    void broad_cast(message* msg)
     {
         for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
-            itr->second->send(msg, block);
+            itr->second->send(msg);
     }
 
-    void group_cast(message* msg, std::set<Key>& ids, bool block = false)
+    void group_cast(message* msg, std::set<Key>& ids)
     {
-        group_cast(msg, std::initializer_list<Key>(ids.begin(), ids.end()), block);
+        group_cast(msg, std::initializer_list<Key>(ids.begin(), ids.end()));
     }
 
-    void group_cast(message* msg, std::initializer_list<Key> ids, bool block = false)
+    void group_cast(message* msg, std::initializer_list<Key> ids)
     {
         for (Key id : ids)
         {
@@ -87,7 +87,7 @@ public:
             if (conn == nullptr)
                 continue;
 
-            conn->send(msg, block);
+            conn->send(msg);
         }
     }
 
@@ -101,12 +101,12 @@ public:
         conn->recv(resp, true);
     }
 
-    void pub(const std::string& topic, message* msg, const bool block = false)
+    void pub(const std::string& topic, message* msg)
     {
         if (topic == "" || topic == "*")
         {
             for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
-                itr->second->send(msg, block);
+                itr->second->send(msg);
             return;
         }
 
@@ -114,7 +114,7 @@ public:
         if (itr == _topics.end())
             return;
 
-        group_cast(msg, itr->second, block);
+        group_cast(msg, itr->second);
     }
 
     bool sub(const std::string& topic, Key id)

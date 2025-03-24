@@ -64,36 +64,36 @@ public:
             itr = _conns.erase(itr);
     }
 
-    bool send(message* msg, const Key id, bool block = false)
+    bool send(message* msg, const Key id)
     {
         auto conn = _get(id);
         if (conn == nullptr)
             return false;
 
-        conn->send(msg, block);
+        conn->send(msg);
         return true;
     }
 
-    bool recv(message* msg, const Key id, bool block = false)
+    bool recv(message* msg, const Key id)
     {
         auto conn = _get(id);
         if (conn == nullptr)
             return false;
 
-        conn->recv(msg, block);
+        conn->recv(msg);
         return true;
     }
 
-    void broad_cast(message* msg, const bool block = false)
+    void broad_cast(message* msg)
     {
         for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
-            itr->second->send(msg, block);            
+            itr->second->send(msg);            
     }
 
-    void group_cast(message* msg, std::initializer_list<Key> ids, bool block = false)
+    void group_cast(message* msg, std::initializer_list<Key> ids)
     {
         for (auto id : ids)
-            send(msg, id, block);
+            send(msg, id);
     }
 
     void kick_off(std::initializer_list<Key> ids)

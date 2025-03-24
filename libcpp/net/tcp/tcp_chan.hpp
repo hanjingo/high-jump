@@ -33,17 +33,6 @@ struct tcp_chan {
         return *this;
     }
 
-    std::size_t resize(const std::size_t sz)
-    {
-        moodycamel::BlockingConcurrentQueue<T>* tmp = 
-            new moodycamel::BlockingConcurrentQueue<T>(sz * moodycamel::BlockingConcurrentQueue<T>::BLOCK_SIZE);
-        for (; sz > 0 && !_q->empty(); sz--)
-            tmp << _q;
-
-        delete _q;
-        _q = tmp;
-    }
-
 private:
     moodycamel::BlockingConcurrentQueue<T>* _q;
 };

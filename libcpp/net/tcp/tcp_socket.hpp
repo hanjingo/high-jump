@@ -157,9 +157,8 @@ public:
 
     void disconnect()
     {
-        if (!is_connected()) {
+        if (!is_connected()) 
             return;
-        }
 
         _sock->close();
         delete _sock;
@@ -169,31 +168,33 @@ public:
 
     size_t send(const const_buffer_t& buf)
     {
-        if (!is_connected()) {
+        if (!is_connected())
             return 0;
-        }
 
         return _sock->send(buf);
     }
 
     size_t send(const char* data, size_t len)
     {
-        auto buf = boost::asio::buffer(data, len);
-        return send(buf);
+        if (!is_connected()) 
+            return 0;
+
+        return _sock->send(boost::asio::buffer(data, len));
     }
 
     size_t send(const unsigned char* data, size_t len)
     {
-        auto buf = boost::asio::buffer(data, len);
-        return send(buf);
+        if (!is_connected()) 
+            return 0;
+
+        return _sock->send(boost::asio::buffer(data, len));
     }
 
     void async_send(const const_buffer_t& buf, send_handler_t&& fn)
     {
-        if (!is_connected()) {
-            fn(boost::system::errc::make_error_code(
-                   boost::system::errc::not_connected),
-               0);
+        if (!is_connected()) 
+        {
+            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
             return;
         }
 
@@ -202,21 +203,30 @@ public:
 
     void async_send(const char* data, size_t len, send_handler_t&& fn)
     {
-        auto buf = boost::asio::buffer(data, len);
-        return async_send(buf, std::move(fn));
+        if (!is_connected()) 
+        {
+            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
+            return;
+        }
+
+        return async_send(boost::asio::buffer(data, len), std::move(fn));
     }
 
     void async_send(const unsigned char* data, size_t len, send_handler_t&& fn)
     {
-        auto buf = boost::asio::buffer(data, len);
-        return async_send(buf, std::move(fn));
+        if (!is_connected()) 
+        {
+            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
+            return;
+        }
+
+        return async_send(boost::asio::buffer(data, len), std::move(fn));
     }
 
     size_t recv(multi_buffer_t& buf)
     {
-        if (!is_connected()) {
+        if (!is_connected()) 
             return 0;
-        }
 
         return _sock->read_some(buf);
     }
@@ -235,9 +245,8 @@ public:
 
     size_t recv_until(streambuf_t& buf, size_t least)
     {
-        if (!is_connected()) {
+        if (!is_connected())
             return 0;
-        }
 
         return boost::asio::read(*_sock, buf, boost::asio::transfer_at_least(least));
     }

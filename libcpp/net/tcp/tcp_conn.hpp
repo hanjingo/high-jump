@@ -52,18 +52,18 @@ public:
         close();
     }
 
-    inline void set_conn_cb(conn_handler_t&& fn) {_conn_cb = std::move(fn);}
-    inline void set_send_cb(send_handler_t&& fn) {_send_cb = std::move(fn);}
-    inline void set_recv_cb(recv_handler_t&& fn) {_recv_cb = std::move(fn);}
-    inline void set_disconnect_cb(disconnect_handler_t&& fn) {_disconnect_cb = std::move(fn);}
+    inline void set_conn_cb(conn_handler_t fn) {_conn_cb = fn;}
+    inline void set_send_cb(send_handler_t fn) {_send_cb = fn;}
+    inline void set_recv_cb(recv_handler_t fn) {_recv_cb = fn;}
+    inline void set_disconnect_cb(disconnect_handler_t fn) {_disconnect_cb = fn;}
     inline tcp_socket* socket() {return _sock;}
 
     void init()
     {
-        set_conn_cb(std::bind(this, &tcp_conn::on_conn, std::placeholder::_1));
-        set_send_cb(std::bind(this, &tcp_conn::on_send, std::placeholder::_1, std::placeholder::_2));
-        set_recv_cb(std::bind(this, &tcp_conn::on_recv, std::placeholder::_1, std::placeholder::_2));
-        set_disconnect_cb(std::bind(this, &tcp_conn::on_disconnect, std::placeholder::_1));
+        set_conn_cb(std::bind(this, &tcp_conn::on_conn, std::placeholders::_1));
+        set_send_cb(std::bind(this, &tcp_conn::on_send, std::placeholders::_1, std::placeholders::_2));
+        set_recv_cb(std::bind(this, &tcp_conn::on_recv, std::placeholders::_1, std::placeholders::_2));
+        set_disconnect_cb(std::bind(this, &tcp_conn::on_disconnect, std::placeholders::_1));
     }
 
     bool connect(const char* ip, 
@@ -105,7 +105,7 @@ public:
 
         _w_ch << msg;
         if (block)
-            poll(timeout_ms);
+            write_flush(timeout_ms);
         return true;
     }
 
@@ -116,7 +116,7 @@ public:
 
         _r_ch << msg;
         if (block)
-            poll(timeout_ms);
+            read_flush(timeout_ms);
         return true;
     }
 
@@ -130,16 +130,18 @@ public:
         _disconnect_cb(this);
     }
 
-    void poll(int timeout_ms = -1)
+    void read_flush(int timeout_ms = -1)
     {
         _sock->poll();
 
         auto start = std::chrono::system_clock::now();
+        auto tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
         message* msg = nullptr;
         std::size_t sz;
         while (_sock != nullptr) 
         {
-            if (timeout_ms != -1 && (timeout_ms - (std::chrono::system_clock::now() - start)) < 0)
+            tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
+            if (timeout_ms != -1 && (timeout_ms - tm_passed_ms.count()) < 0)
                 break;
 
             // read
@@ -147,9 +149,11 @@ public:
             if (msg == nullptr)
                 break;
             
-            if (_sock->recv(_r_buf) == 0)
+            tcp_socket::multi_buffer_t buf;
+            if (_sock->recv(buf) == 0)
                 break;
 
+            _r_buf
             sz = msg->decode(_r_buf.data(), _r_buf.size());
             if (sz == 0)
                 continue;
@@ -157,10 +161,20 @@ public:
             _r_buf.consume(sz);
             _recv_cb(this, msg);
         }
+    }
 
+    void write_flush(int timeout_ms = -1)
+    {
+        _sock->poll();
+
+        auto start = std::chrono::system_clock::now();
+        auto tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
+        message* msg = nullptr;
+        std::size_t sz;
         while (_sock != nullptr) 
         {
-            if (timeout_ms != -1 && (timeout_ms - (std::chrono::system_clock::now() - start)) < 0)
+            tm_passed_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - start);
+            if (timeout_ms != -1 && (timeout_ms - tm_passed_ms.count()) < 0)
                 break;
 
             // write

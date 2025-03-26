@@ -34,12 +34,12 @@ TEST(coroutine, coroutine)
 
     libcpp::coroutine<void>::pull_type co1_lambda([](libcpp::coroutine<void>::push_type& out){
         ASSERT_EQ(true, true);
-        std::cout << "I AM HERE lambda" << std::endl;
+        std::cout << "lambda" << std::endl;
     });
 
     COROUTINE(
         ASSERT_EQ(true, true);
-        std::cout << "I AM HERE COROUTINE" << std::endl;
+        std::cout << "COROUTINE" << std::endl;
     );
 
 

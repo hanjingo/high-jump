@@ -15,9 +15,10 @@ template<typename Key>
 class tcp_client
 {
 public:
+    using io_t = boost::asio::io_context;
 
 public:
-    tcp_client() {}
+    tcp_client() : _io{} {}
     ~tcp_client() { close(); }
 
     inline std::size_t size() { return _conns.size(); }
@@ -29,7 +30,7 @@ public:
                       const std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
                       int retry_times = 1)
     {
-        tcp_conn* conn = new tcp_conn();
+        tcp_conn* conn = new tcp_conn(&_io);
         if (!conn->connect(ip, port, timeout, retry_times))
         {
             delete conn;
@@ -48,57 +49,66 @@ public:
         conn->disconnect();
     }
 
-    bool send(message* msg, Key id)
+    bool send(message* msg, Key id, bool noblock = false)
     {
         auto conn = _get(id);
         if (conn == nullptr)
             return false;
 
-        conn->send(msg);
-        return true;
+        if (noblock)
+            return conn->async_send(msg);
+        else 
+            return conn->send(msg);
     }
 
-    bool recv(message* msg, Key id)
+    bool recv(message* msg, Key id, bool noblock = false)
     {
         auto conn = _get(id);
         if (conn == nullptr)
             return false;
 
-        conn->recv(msg);
-        return true;
+        if (noblock)
+            return conn->recv(msg);
+        else
+            return conn->async_recv(msg);
     }
 
-    void broad_cast(message* msg)
+    std::size_t broad_cast(message* msg)
     {
+        std::size_t nsend = 0;
         for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
-            itr->second->send(msg);
+            nsend = (itr->second->async_send(msg) ? nsend + 1 : nsend);
+        return nsend;
     }
 
-    void group_cast(message* msg, std::set<Key>& ids)
+    std::size_t group_cast(message* msg, std::set<Key>& ids)
     {
-        group_cast(msg, std::initializer_list<Key>(ids.begin(), ids.end()));
+        std::vector<Key> li{ids.begin(), ids.end()};
+        return group_cast(msg, li);
     }
 
-    void group_cast(message* msg, std::initializer_list<Key> ids)
+    std::size_t group_cast(message* msg, std::vector<Key> ids)
     {
+        std::size_t nsend = 0;
         for (Key id : ids)
         {
             auto conn = _get(id);
             if (conn == nullptr)
                 continue;
 
-            conn->send(msg);
+            if (conn->async_send(msg))
+                nsend++;
         }
+        return nsend;
     }
 
-    void req_resp(message* req, message& resp, const Key id)
+    bool req_resp(message* req, message* resp, const Key id)
     {
         auto conn = _get(id);
         if (conn == nullptr)
-            return;
+            return false;
 
-        conn->send(req, true);
-        conn->recv(resp, true);
+        return conn->send(req) && conn->recv(resp);
     }
 
     void pub(const std::string& topic, message* msg)
@@ -106,7 +116,7 @@ public:
         if (topic == "" || topic == "*")
         {
             for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
-                itr->second->send(msg);
+                itr->second->async_send(msg);
             return;
         }
 
@@ -163,9 +173,17 @@ public:
 
     void close()
     {
-        for (auto itr = _conns.begin(); itr != _conns.end(); ++itr)
+        if (_closed.load())
+            return;
+
+        _closed.store(true);
+        for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
         {
+            if (itr->second == nullptr)
+                continue;
+
             itr->second->close();
+            delete itr->second;
             itr->second = nullptr;
         }
     }
@@ -196,6 +214,8 @@ private:
     }
 
 private:
+    io_t              _io;
+    std::atomic<bool> _closed{false};
     std::unordered_map<Key, tcp_conn*> _conns;
     std::unordered_map<std::string, std::set<Key> > _topics;
 };

@@ -5,6 +5,8 @@
 #include <chrono>
 #include <iostream>
 #include <functional>
+#include <atomic>
+#include <memory>
 
 #include <boost/asio.hpp>
 
@@ -17,23 +19,26 @@ class tcp_listener
 {
 public:
     using signal_t          = int;
-    using signal_set_t      = boost::asio::signal_set;
+    using signal_set_t      = tcp_socket::signal_set_t;
 
-    using io_t              = boost::asio::io_context;
-    using io_work_t         = boost::asio::io_service::work;
-    using err_t             = boost::system::error_code;
-    using address_t         = boost::asio::ip::address;
+    using io_t              = tcp_socket::io_t;
+    using io_work_t         = tcp_socket::io_work_t;
+    using err_t             = tcp_socket::err_t;
+    using address_t         = tcp_socket::address_t;
 
-    using sock_t            = boost::asio::ip::tcp::socket;
+    using sock_t            = tcp_socket::sock_t;
+    using endpoint_t        = tcp_socket::endpoint_t;
     using acceptor_t        = boost::asio::ip::tcp::acceptor;
-    using endpoint_t        = boost::asio::ip::tcp::endpoint;
 
     using accept_handler_t  = std::function<void(const err_t&, tcp_socket*)>;
     using signal_handler_t  = std::function<void(const err_t&, signal_t)>;
 
 public:
-    tcp_listener()
-        : _sigs{_io}
+    tcp_listener() = delete;
+
+    explicit tcp_listener(io_t& io)
+        : _io{io}
+        , _sigs{io}
     {
     }
     virtual ~tcp_listener()
@@ -41,28 +46,11 @@ public:
         close();
     }
 
-    inline void poll()
-    {
-        _io.run();
-    }
-
-    inline void loop_start()
-    {
-        io_work_t work{_io};
-        _io.run();
-    }
-
-    inline void loop_end()
-    {
-        _io.stop();
-    }
-
     template<typename T>
     inline void set_option(T opt)
     {
-        if (_acceptor != nullptr && _acceptor->is_open()) {
+        if (_acceptor != nullptr && _acceptor->is_open())
             _acceptor->set_option(opt);
-        }
     }
 
     tcp_socket* accept(uint16_t port)
@@ -103,9 +91,9 @@ public:
             return nullptr;
         }
 
-        auto net = new tcp_socket(sock);
-        net->set_conn_status(true);
-        return net;
+        auto ret = new tcp_socket(_io, sock);
+        ret->set_conn_status(true);
+        return ret;
     }
 
     void async_accept(uint16_t port, accept_handler_t&& fn)
@@ -141,7 +129,7 @@ public:
 
         auto sock = new sock_t(_io);
         _acceptor->async_accept(*sock, [&](const err_t & err) {
-            auto net = new tcp_socket(sock);
+            auto net = new tcp_socket(_io, sock);
 
             if (!err.failed()) {
                 fn(err, net);
@@ -162,21 +150,23 @@ public:
 
     void close()
     {
+        if (_closed.load())
+            return;
+
+        _closed.store(true);
         if (_acceptor != nullptr) {
             _acceptor->close();
             delete _acceptor;
             _acceptor = nullptr;
         }
-
-        loop_end();
     }
 
 private:
-    io_t                 _io;
+    io_t&                _io;
     signal_set_t         _sigs;
-
     acceptor_t*          _acceptor = nullptr;
     endpoint_t           _binded_endpoint;
+    std::atomic<bool>    _closed{false};
 };
 
 }

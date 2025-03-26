@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/sync/once.hpp>
+#include <libcpp/util/once.hpp>
 
 static int once_num = 0;
 

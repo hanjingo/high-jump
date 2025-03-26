@@ -4,19 +4,16 @@
 #include <set>
 #include <functional>
 #include <unordered_map>
-#include <libcpp/net/proto/message.hpp>
-#include <libcpp/net/tcp/tcp_conn.hpp>
+
+#include <boost/thread/mutex.hpp>
 
 namespace libcpp
 {
 
-template<typename Key = std::uint64_t>
+template<typename Key, typename Value>
 class tcp_muxer
 {
 public:
-    using conn_ptr_t = tcp_conn*;
-    using connlist_t = std::vector<conn_ptr_t>;
-    using msg_ptr_t = libcpp::message*;
     using namelist_t = std::set<Key>;
     using namelist_generator_t = std::function<namelist_t(msg_ptr_t)>;
 
@@ -96,6 +93,7 @@ public:
     }
 
 private:
+    boost::shared_mutex _mu;
     std::unordered_map<Key, conn_ptr_t> _conns;
 };
 

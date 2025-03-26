@@ -2,7 +2,7 @@
 #define HELLO_HPP
 
 #include <iostream>
-#include <libcpp/sync/init.hpp>
+#include <libcpp/util/init.hpp>
 
 INIT(
     std::cout << "init hello.hpp" << std::endl;

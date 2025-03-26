@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include <libcpp/sync/init.hpp>
+#include <libcpp/util/init.hpp>
 
 #include "hello.hpp"
 #include "world.hpp"

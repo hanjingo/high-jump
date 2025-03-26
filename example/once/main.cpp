@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include <libcpp/sync/once.hpp>
+#include <libcpp/util/once.hpp>
 
 void hello()
 {

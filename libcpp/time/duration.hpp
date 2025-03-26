@@ -5,10 +5,6 @@
 
 namespace libcpp
 {
-    using ns = std::chrono::nanoseconds;
-    using ms = std::chrono::milliseconds;
-    using sec = std::chrono::seconds;
-
     static std::chrono::time_point<std::chrono::high_resolution_clock> tm_start = std::chrono::high_resolution_clock::now();
 }
 
@@ -26,14 +22,5 @@ namespace libcpp
 
 #define TIME_PASSED_SEC() \
     std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - libcpp::tm_start).count()
-
-#define NANO_SEC(dur) \
-    std::chrono::duration_cast<std::chrono::nanoseconds>(dur)
-
-#define MILLI_SEC(dur) \
-    std::chrono::duration_cast<std::chrono::milliseconds>(dur)
-
-#define SEC(dur) \
-    std::chrono::duration_cast<std::chrono::seconds>(dur)
 
 #endif

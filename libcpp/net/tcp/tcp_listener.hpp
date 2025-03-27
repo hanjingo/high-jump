@@ -27,6 +27,7 @@ public:
     using address_t         = tcp_socket::address_t;
 
     using sock_t            = tcp_socket::sock_t;
+    using sock_ptr_t        = tcp_socket::sock_t*;
     using endpoint_t        = tcp_socket::endpoint_t;
     using acceptor_t        = boost::asio::ip::tcp::acceptor;
 

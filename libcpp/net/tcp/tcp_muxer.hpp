@@ -3,9 +3,6 @@
 
 #include <set>
 #include <functional>
-#include <unordered_map>
-
-#include <boost/thread/mutex.hpp>
 
 namespace libcpp
 {
@@ -26,40 +23,27 @@ public:
     {
     }
 
-    bool add(Key id, conn_ptr_t conn)
-    {
-        if (_conns.find(id) != _conns.end())
-            return false;
-
-        _conns.emplace(id, conn);
-        return true;
-    }
-
-    conn_ptr_t del(Key id)
-    {
-        auto itr = _conns.find(id);
-        if (itr == _conns.end())
-            return nullptr;
-
-        _conns.erase(itr);
-        return itr->second;
-    }
-
-    conn_ptr_t get(Key id)
-    {
-        auto itr = _conns.find(id);
-        if (itr == _conns.end())
-            return nullptr;
-
-        return itr->second;
-    }
-
     std::size_t broad_cast(msg_ptr_t msg)
     {
         for (auto itr = _conns.begin(); itr != _conns.end(); itr++)
             itr->second->async_send(msg);
 
         return _conns.size();
+    }
+
+    bool group_combine()
+    {
+
+    }
+
+    bool group_join()
+    {
+
+    }
+
+    bool group_exit()
+    {
+
     }
 
     std::size_t group_cast(msg_ptr_t msg, namelist_generator_t&& fn)
@@ -93,7 +77,6 @@ public:
     }
 
 private:
-    boost::shared_mutex _mu;
     std::unordered_map<Key, conn_ptr_t> _conns;
 };
 

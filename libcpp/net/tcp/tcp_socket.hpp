@@ -245,15 +245,19 @@ public:
         if (!is_connected())
             return 0;
 
-        return boost::asio::read(*_sock, buf, boost::asio::transfer_at_least(least));
+        try {
+            std::size_t sz = boost::asio::read(*_sock, buf, boost::asio::transfer_at_least(least));
+            return sz;
+        } catch (const boost::system::system_error& err) {
+            std::cout << "I AM HERE with err=" << err.what() << std::endl;
+            return 0;
+        }
     }
 
     void async_recv(multi_buffer_t& buf, recv_handler_t&& fn)
     {
         if (!is_connected()) {
-            fn(boost::system::errc::make_error_code(
-                   boost::system::errc::not_connected),
-               0);
+            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
             return;
         }
 
@@ -297,9 +301,8 @@ public:
     // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_tcp_client.cpp
     size_t recv(multi_buffer_t& buf, std::chrono::milliseconds timeout)
     {
-        if (!is_connected()) {
+        if (!is_connected())
             return 0;
-        }
 
         std::size_t nrecvd = 0;
         std::future<void> f = std::async(std::launch::async, [&]() {

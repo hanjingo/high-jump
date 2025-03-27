@@ -14,17 +14,15 @@ public:
     sha256() {};
     ~sha256() {};
 
-    static const std::string& encode(const std::string& src)
+    static void encode(const std::string& src, std::string& dst)
     {
-        std::string hash;
-        hash.resize(256 / 8);
+        dst.resize(256 / 8);
         SHA256(reinterpret_cast<const unsigned char *>(&src[0]), 
                src.size(), 
-               reinterpret_cast<unsigned char *>(&hash[0]));
-        return hash;
+               reinterpret_cast<unsigned char *>(&dst[0]));
     };
 
-    static const std::string& encode(std::istream& in)
+    static void encode(std::istream& in, std::string& dst)
     {
         SHA256_CTX ctx;
         SHA256_Init(&ctx);
@@ -33,10 +31,8 @@ public:
         while ((sz = in.read(&buf[0], sz).gcount()) > 0)
             SHA256_Update(&ctx, buf.data(), sz);
 
-        std::string hash;
-        hash.resize(256 / 8);
-        SHA256_Final(reinterpret_cast<unsigned char *>(&hash[0]), &ctx);
-        return hash;
+        dst.resize(256 / 8);
+        SHA256_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
     };
 };
 

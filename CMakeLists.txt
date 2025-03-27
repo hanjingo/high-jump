@@ -18,6 +18,7 @@ endif()
 # build tests
 if (BUILD_TEST)
     add_subdirectory(tests)
+    add_subdirectory(bench)
 endif()
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/libcpp

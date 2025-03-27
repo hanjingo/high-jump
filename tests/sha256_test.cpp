@@ -3,5 +3,7 @@
 
 TEST(sha256, encode)
 {
-    // std::string ret = libcpp::sha256::encode(std::string("12345678"));
+    std::string data;
+    libcpp::sha256::encode(std::string("123456"), data);
+    ASSERT_EQ(data.empty(), false);
 }

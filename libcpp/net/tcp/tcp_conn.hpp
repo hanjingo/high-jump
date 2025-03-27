@@ -27,6 +27,7 @@ namespace libcpp
 class tcp_conn
 {
 public:
+    using flag_t         = std::int64_t;
     using io_t           = libcpp::tcp_socket::io_t;
     using io_work_t      = libcpp::tcp_socket::io_work_t;
     using err_t          = libcpp::tcp_socket::err_t;
@@ -58,6 +59,8 @@ public:
     }
 
     inline void set_disconnect_handler(disconnect_handler_t&& fn) { _disconnect_handler = std::move(fn); }
+    inline flag_t get_flag() { return _flag.load(); }
+    inline void set_flag(const flag_t flag) { _flag.store(flag); }
 
     bool connect(const char* ip, 
                  const std::uint16_t port, 
@@ -162,34 +165,50 @@ public:
 
     bool async_recv(msg_ptr_t msg, recv_handler_t&& fn)
     {
+        std::cout << "I AM HERE1" << std::endl;
         if (_sock == nullptr || _r_closed.load())
             return false;
 
+        std::cout << "I AM HERE2" << std::endl;
         _r_ch << msg;
+        std::cout << "I AM HERE3" << std::endl;
         _r_ch >> msg;
+        std::cout << "I AM HERE4" << std::endl;
         if (msg == nullptr) // already consumed by other thread
             return true;
+        std::cout << "I AM HERE5" << std::endl;
 
         auto buf = _r_buf.prepare(MTU);
+        std::cout << "I AM HERE6" << std::endl;
         _sock->async_recv(buf, [this, msg, fn](const err_t& err, std::size_t sz){
+            std::cout << "I AM HERE7" << std::endl;
             if (err.failed())
             {
                 this->_r_closed.store(true);
                 return;
             }
-
+    
+            std::cout << "I AM HERE8 with sz=" << sz << std::endl;
             this->_r_buf.commit(sz);
+            std::cout << "I AM HERE8 commit end with msg=" << msg << std::endl;
             do {
-                sz = msg->decode(boost::asio::buffer_cast<const unsigned char*>(_r_buf.data()), _r_buf.size());
+                auto data = boost::asio::buffer_cast<const unsigned char*>(_r_buf.data());
+                std::cout << "I AM HERE8 buff cast with sizeof(data)=" << sizeof(data) << ", size=" << _r_buf.size() << std::endl;
+                sz = msg->decode(data, _r_buf.size());
+                std::cout << "I AM HERE9 with sz=" << sz << ", _r_buf.size()=" << _r_buf.size() << std::endl;
                 if (sz > 0)
                 {
+                    std::cout << "I AM HERE10" << std::endl;
                     this->_r_buf.consume(sz);
                     fn(this, msg);
                     return;
                 }
-
+    
                 // msg too big
-                sz = _sock->recv_until(_r_buf, MTU);
+                std::cout << "I AM HERE11" << std::endl;
+                auto tmp = _r_buf.prepare(MTU);
+                sz = _sock->recv(tmp);
+                std::cout << "I AM HERE12 with sz=" << sz << std::endl;
                 if (sz == 0)
                 {
                     _r_closed.store(true);
@@ -274,8 +293,9 @@ private:
     }
 
 private:
-    io_t&       _io;
-    sock_ptr_t  _sock = nullptr;
+    io_t&               _io;
+    sock_ptr_t          _sock = nullptr;
+    std::atomic<flag_t> _flag{0};
 
     std::atomic<bool> _w_closed{false};
     std::atomic<bool> _r_closed{false};

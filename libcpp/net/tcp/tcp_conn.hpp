@@ -165,50 +165,36 @@ public:
 
     bool async_recv(msg_ptr_t msg, recv_handler_t&& fn)
     {
-        std::cout << "I AM HERE1" << std::endl;
         if (_sock == nullptr || _r_closed.load())
             return false;
 
-        std::cout << "I AM HERE2" << std::endl;
         _r_ch << msg;
-        std::cout << "I AM HERE3" << std::endl;
         _r_ch >> msg;
-        std::cout << "I AM HERE4" << std::endl;
         if (msg == nullptr) // already consumed by other thread
             return true;
-        std::cout << "I AM HERE5" << std::endl;
 
         auto buf = _r_buf.prepare(MTU);
-        std::cout << "I AM HERE6" << std::endl;
         _sock->async_recv(buf, [this, msg, fn](const err_t& err, std::size_t sz){
-            std::cout << "I AM HERE7" << std::endl;
             if (err.failed())
             {
                 this->_r_closed.store(true);
                 return;
             }
     
-            std::cout << "I AM HERE8 with sz=" << sz << std::endl;
-            this->_r_buf.commit(sz);
-            std::cout << "I AM HERE8 commit end with msg=" << msg << std::endl;
             do {
+                this->_r_buf.commit(sz);
                 auto data = boost::asio::buffer_cast<const unsigned char*>(_r_buf.data());
-                std::cout << "I AM HERE8 buff cast with sizeof(data)=" << sizeof(data) << ", size=" << _r_buf.size() << std::endl;
                 sz = msg->decode(data, _r_buf.size());
-                std::cout << "I AM HERE9 with sz=" << sz << ", _r_buf.size()=" << _r_buf.size() << std::endl;
                 if (sz > 0)
                 {
-                    std::cout << "I AM HERE10" << std::endl;
                     this->_r_buf.consume(sz);
                     fn(this, msg);
                     return;
                 }
     
                 // msg too big
-                std::cout << "I AM HERE11" << std::endl;
                 auto tmp = _r_buf.prepare(MTU);
                 sz = _sock->recv(tmp);
-                std::cout << "I AM HERE12 with sz=" << sz << std::endl;
                 if (sz == 0)
                 {
                     _r_closed.store(true);

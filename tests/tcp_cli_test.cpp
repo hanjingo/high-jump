@@ -4,12 +4,12 @@
 #include <string>
 #include <iostream>
 
-class my_message_srv : public libcpp::message
+class my_message_cli : public libcpp::message
 {
 public:
-    my_message_srv() : _text{std::string()} {}
-    my_message_srv(const char* str) : _text{str} {}
-    ~my_message_srv() {}
+    my_message_cli() : _text{std::string()} {}
+    my_message_cli(const char* str) : _text{str} {}
+    ~my_message_cli() {}
 
     std::size_t size() override
     {
@@ -40,16 +40,16 @@ private:
     std::string _text;
 };
 
-TEST(tcp_server, bind)
+TEST(tcp_client, bind)
 {
     std::thread([](){
         static int lambda_entryed_times = 0;
         libcpp::tcp_listener::io_t io;
-        my_message_srv* resp = new my_message_srv();
+        my_message_cli* resp = new my_message_cli();
         libcpp::tcp_server srv{
             [resp](libcpp::tcp_server::msg_ptr_t req)->libcpp::tcp_server::msg_ptr_t{
                 lambda_entryed_times++;
-                my_message_srv* real = (my_message_srv*)(req);
+                my_message_cli* real = (my_message_cli*)(req);
                 if (real->text() == std::string("hello"))
                     resp->set_text("world");
                 else if (real->text() == std::string("harry"))
@@ -59,13 +59,13 @@ TEST(tcp_server, bind)
                 return (libcpp::message*)(resp);
             },
             [](libcpp::tcp_server::msg_ptr_t req)->libcpp::tcp_server::msg_ptr_t{
-                my_message_srv* resp = new my_message_srv();
+                my_message_cli* resp = new my_message_cli();
                 return (libcpp::message*)(resp);
             }
         };
 
         libcpp::tcp_listener li{io};
-        auto sock = li.accept(10011);
+        auto sock = li.accept(10012);
         ASSERT_EQ(sock != nullptr, true);
 
         auto conn = new libcpp::tcp_conn(io, sock);
@@ -79,31 +79,47 @@ TEST(tcp_server, bind)
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     libcpp::tcp_listener::io_t io;
-    libcpp::tcp_conn conn{io};
-    ASSERT_EQ(conn.connect("127.0.0.1", 10011), true);
+    libcpp::tcp_conn* conn = new libcpp::tcp_conn(io);
+    ASSERT_EQ(conn->connect("127.0.0.1", 10012), true);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    my_message_srv* msg1 = new my_message_srv("hello");
-    ASSERT_EQ(conn.send(msg1), true);
+    static bool hello_check_ok = false;
+    static bool harry_check_ok = false;
+    libcpp::tcp_client cli{[](libcpp::tcp_server::msg_ptr_t req, libcpp::tcp_server::msg_ptr_t resp){
+        my_message_cli* req_real = (my_message_cli*)(req);
+        my_message_cli* resp_real = (my_message_cli*)(resp);
 
-    my_message_srv* msg2 = new my_message_srv();
-    ASSERT_EQ(conn.recv(msg2), true);
-    ASSERT_EQ(msg2->text() == std::string("world"), true);
+        if (req_real->text() == std::string("hello")) {
+            hello_check_ok = (resp_real->text() == std::string("world"));
+        }
+        else if (req_real->text() == std::string("harry")) {
+            harry_check_ok = (resp_real->text() == std::string("potter"));
+        }
+        else {
+            hello_check_ok = false;
+            harry_check_ok = false;
+        }
+    }};
+    ASSERT_EQ(cli.bind(conn), true);
+    
+    my_message_cli* msg1 = new my_message_cli("hello");
+    my_message_cli* msg2 = new my_message_cli();
+    ASSERT_EQ(cli.req(conn, msg1, msg2), true);
 
-    my_message_srv* msg3 = new my_message_srv("harry");
-    ASSERT_EQ(conn.send(msg3), true);
+    my_message_cli* msg3 = new my_message_cli("harry");
+    my_message_cli* msg4 = new my_message_cli();
+    ASSERT_EQ(cli.req(conn, msg3, msg4), true);
 
-    my_message_srv* msg4 = new my_message_srv();
-    ASSERT_EQ(conn.recv(msg4), true);
-    ASSERT_EQ(msg4->text() == std::string("potter"), true);
-
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    ASSERT_EQ(hello_check_ok, true);
+    ASSERT_EQ(harry_check_ok, true);
     delete msg1; delete msg2;
     msg1 = nullptr; msg2 = nullptr;
     delete msg3; delete msg4;
     msg3 = nullptr; msg4 = nullptr;
 };
 
-TEST(tcp_server, detach)
+TEST(tcp_client, detach)
 {
 
 };

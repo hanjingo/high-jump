@@ -246,10 +246,8 @@ public:
             return 0;
 
         try {
-            std::size_t sz = boost::asio::read(*_sock, buf, boost::asio::transfer_at_least(least));
-            return sz;
+            return boost::asio::read(*_sock, buf, boost::asio::transfer_at_least(least));
         } catch (const boost::system::system_error& err) {
-            std::cout << "I AM HERE with err=" << err.what() << std::endl;
             return 0;
         }
     }

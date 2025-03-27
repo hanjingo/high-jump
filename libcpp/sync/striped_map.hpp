@@ -8,12 +8,10 @@
 
 #if (__cplusplus >= 201703L)
 #include <shared_mutex>
-
 using shared_mutex_t = std::shared_mutex;
-using shared_lock
+
 #else
 #include <boost/thread.hpp>
-
 using shared_mutex_t = boost::shared_mutex;
 #endif
 

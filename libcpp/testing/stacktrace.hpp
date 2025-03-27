@@ -1,13 +1,13 @@
 #ifndef STACKTRACE_HPP
 #define STACKTRACE_HPP
 
-#include <boost/stacktrace.hpp>
+// #include <boost/stacktrace.hpp>
 
-namespace libcpp
-{
+// namespace libcpp
+// {
 
-using stacktrace_t = boost::stacktrace::stacktrace;
+// using stacktrace_t = boost::stacktrace::stacktrace;
 
-}
+// }
 
 #endif

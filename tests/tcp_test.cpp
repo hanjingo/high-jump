@@ -3,40 +3,40 @@
 #include <thread>
 #include <string>
 
-class my_message : public libcpp::message
-{
-public:
-    my_message() : _name{std::string()} {}
-    my_message(const char* str) : _name{str} {}
-    ~my_message() {}
+// class my_message : public libcpp::message
+// {
+// public:
+//     my_message() : _name{std::string()} {}
+//     my_message(const char* str) : _name{str} {}
+//     ~my_message() {}
 
-    std::size_t size()
-    {
-        return _name.size() + 1;
-    }
+//     std::size_t size()
+//     {
+//         return _name.size() + 1;
+//     }
 
-    std::size_t encode(unsigned char* buf, const std::size_t len)
-    {
-        memcpy(buf, _name.c_str(), len);
-        return len;
-    }
+//     std::size_t encode(unsigned char* buf, const std::size_t len)
+//     {
+//         memcpy(buf, _name.c_str(), len);
+//         return len;
+//     }
 
-    std::size_t decode(const unsigned char* buf, const std::size_t len)
-    {
-        if (len < 2)
-            return 0;
+//     std::size_t decode(const unsigned char* buf, const std::size_t len)
+//     {
+//         if (len < 2)
+//             return 0;
 
-        char tmp[len];
-        memcpy(tmp, buf, len);
-        _name = std::string(tmp);
-        return _name.size();
-    }
+//         char tmp[len];
+//         memcpy(tmp, buf, len);
+//         _name = std::string(tmp);
+//         return _name.size();
+//     }
 
-    std::string name() { return _name; }
+//     std::string name() { return _name; }
 
-private:
-    std::string _name;
-};
+// private:
+//     std::string _name;
+// };
 
 
 // TEST(tcp, tcp_server)

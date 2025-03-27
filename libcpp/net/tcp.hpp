@@ -3,7 +3,7 @@
 
 #include <libcpp/net/tcp/tcp_chan.hpp>
 
-// #include <libcpp/net/tcp/tcp_client.hpp>
+#include <libcpp/net/tcp/tcp_client.hpp>
 
 #include <libcpp/net/tcp/tcp_conn.hpp>
 

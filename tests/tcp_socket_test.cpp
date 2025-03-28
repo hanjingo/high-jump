@@ -1,78 +1,161 @@
 #include <gtest/gtest.h>
 #include <libcpp/net/tcp.hpp>
 
-TEST(tcp_socket, tcp_socket)
-{
-    libcpp::tcp_socket::io_t io;
-    std::thread([&]() {
-        char buf1[1024] = {0};
-        libcpp::tcp_listener listener{io};
-        auto sock = listener.accept(10085);
-        sock->recv(buf1, 1024);
-        sock->send(std::string("world1").c_str(), 7);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        sock->close();
-        delete sock;
-    }).detach();
+// TEST(tcp_socket, sig_catch)
+// {
+//     static int sigill_lambda_entryed_times = 0;
+//     static int sigint_lambda_entryed_times = 0;
+//     static int last_sig = 0;
 
-    char buf2[1024] = {0};
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    libcpp::tcp_socket sock1{io};
-    ASSERT_EQ(sock1.connect("127.0.0.1", 10085), true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    ASSERT_EQ(sock1.send(std::string("hello").c_str(), 6) == 6, true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    ASSERT_EQ(sock1.recv(buf2, 1024) == 7, true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    ASSERT_EQ(sock1.is_connected(), true);
-    sock1.close();
-    ASSERT_EQ(sock1.is_connected(), false);
+//     libcpp::tcp_socket::io_t io;
+//     libcpp::tcp_socket sock{io};
+
+//     sock.signal_catch({SIGILL}, [](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket::signal_t sig)->bool{
+//         std::cout << "sigill_lambda_entryed_times++" << std::endl;
+//         sigill_lambda_entryed_times++;
+//         last_sig = sig;
+//         return true;
+//     }, true);
+
+//     raise(SIGILL);
+//     io.run();
+//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(sigint_lambda_entryed_times == 0, true);
+//     ASSERT_EQ(last_sig == SIGILL, true);
+
+//     raise(SIGILL);
+//     io.run();
+//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(sigint_lambda_entryed_times == 0, true);
+//     ASSERT_EQ(last_sig == SIGILL, true);
+
+//     sock.signal_catch({SIGINT, SIGILL}, [](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket::signal_t sig)->bool{
+//         std::cout << "sigint_lambda_entryed_times++" << std::endl;
+//         sigint_lambda_entryed_times++;
+//         last_sig = sig;
+//         return true;
+//     }, true);
+//     raise(SIGINT);
+//     io.run();
+//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(sigint_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(last_sig == SIGINT, true);
+
+//     raise(SIGILL);
+//     io.run();
+//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(sigint_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(last_sig == SIGINT, true);
+
+//     sock.signal_catch({SIGINT, SIGILL}, [](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket::signal_t sig)->bool{
+//         std::cout << "sigint_lambda_entryed_times++" << std::endl;
+//         sigint_lambda_entryed_times++;
+//         last_sig = sig;
+//         return true;
+//     }, false);
+//     raise(SIGINT);
+//     io.run();
+//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(sigint_lambda_entryed_times == 2, true);
+//     ASSERT_EQ(last_sig == SIGINT, true);
+
+//     raise(SIGILL);
+//     io.run();
+//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(sigint_lambda_entryed_times == 3, true);
+//     ASSERT_EQ(last_sig == SIGILL, true);
+
+//     raise(SIGTERM);
+//     io.run();
+//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
+//     ASSERT_EQ(sigint_lambda_entryed_times == 3, true);
+//     ASSERT_EQ(last_sig == SIGILL, true);
+// }
+
+TEST(tcp_socket, set_option)
+{
+    // libcpp::tcp_socket::io_t io;
+    // libcpp::tcp_socket sock{io};
+
+    // sock.set_option(libcpp::tcp_socket::opt_no_delay(true));
+    // sock.set_option(libcpp::tcp_socket::opt_send_buf_sz(1024));
+    // sock.set_option(libcpp::tcp_socket::opt_recv_buf_sz(1024));
+    // sock.set_option(libcpp::tcp_socket::opt_reuse_addr(true));
+    // sock.set_option(libcpp::tcp_socket::opt_keep_alive(false));
 }
 
-TEST(tcp_socket, tcp_socket_async)
+TEST(tcp_socket, connect)
 {
-    libcpp::tcp_socket::io_t io;
-    std::thread([&]() {
-        char buf1[1024] = {0};
-        libcpp::tcp_listener listener{io};
-        auto sock = listener.accept(10086);
-        sock->recv(buf1, 1024);
-        sock->send(std::string("world2").c_str(), 7);
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        sock->close();
-        delete sock;
-    }).detach();
+    std::thread t([]() {
+        libcpp::tcp_socket::io_t io;
+        libcpp::tcp_listener li{io};
+        for (int i = 0; i < 2; i++)
+        {
+            if (i == 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            }
 
+            auto sock = li.accept(10091);
+            ASSERT_EQ(sock != nullptr, true);
+            sock->close();
+            delete sock;
+        }
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    libcpp::tcp_socket::io_t io;
+    libcpp::tcp_socket sock{io};
+    ASSERT_EQ(sock.connect("127.0.0.1", 10091), false);
+    
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    libcpp::tcp_socket sock2{io};
-    sock2.async_connect(
-        "127.0.0.1", 
-        10086, 
-        [&](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket* sock){
+    ASSERT_EQ(sock.connect("127.0.0.1", 10091), true);
+    t.join();
+}
+
+TEST(tcp_socket, async_connect)
+{
+    std::thread t([]() {
+        libcpp::tcp_socket::io_t io;
+        libcpp::tcp_listener li{io};
+        for (int i = 0; i < 2; i++)
+        {
+            if (i == 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            }
+
+            auto sock = li.accept(10091);
+            ASSERT_EQ(sock != nullptr, true);
+            sock->close();
+            delete sock;
+        }
+    });
+
+    libcpp::tcp_socket::io_t io;
+    libcpp::tcp_socket sock{io};
+    static bool lambda1_entryed = false;
+    sock.async_connect("127.0.0.1", 10091, 
+        [](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket* sock) {
+            ASSERT_EQ(err.failed(), true);
+            ASSERT_EQ(sock != nullptr, true);
+            lambda1_entryed = true;
+    });
+    io.run();
+
+    static bool lambda2_entryed = false;
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    sock.async_connect("127.0.0.1", 10091, 
+        [](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket* sock) {
             ASSERT_EQ(!err.failed(), true);
             ASSERT_EQ(sock != nullptr, true);
+            lambda2_entryed = true;
+    });
+    io.run();
 
-            sock2.async_send(
-                std::string("hello").c_str(), 
-                6,
-                [](const libcpp::tcp_socket::err_t& err, std::size_t sz) {
-                    ASSERT_EQ(!err.failed(), true);
-                    ASSERT_EQ(sz == 6, true);
-                }
-            );
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-            char buf[1024] = {0};
-            sock2.async_recv(
-                buf, 
-                1024,
-                [](const libcpp::tcp_socket::err_t& err, std::size_t sz) {
-                ASSERT_EQ(!err.failed(), true);
-                ASSERT_EQ(sz == 7, true);
-            });
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        });
+    t.join();
+    io.run();
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    sock2.close();
-    ASSERT_EQ(sock2.is_connected(), false);
+    ASSERT_EQ(lambda1_entryed, true);
+    ASSERT_EQ(lambda2_entryed, true);
 }

@@ -27,13 +27,13 @@ namespace libcpp
 class tcp_conn
 {
 public:
-    using flag_t         = std::int64_t;
-    using io_t           = libcpp::tcp_socket::io_t;
-    using io_work_t      = libcpp::tcp_socket::io_work_t;
-    using err_t          = libcpp::tcp_socket::err_t;
-    using msg_ptr_t      = libcpp::message*;
-    using conn_ptr_t     = libcpp::tcp_conn*;
-    using sock_ptr_t     = libcpp::tcp_socket*;
+    using flag_t           = std::int64_t;
+    using io_t             = libcpp::tcp_socket::io_t;
+    using io_work_t        = libcpp::tcp_socket::io_work_t;
+    using err_t            = libcpp::tcp_socket::err_t;
+    using msg_ptr_t        = libcpp::message*;
+    using conn_ptr_t       = libcpp::tcp_conn*;
+    using sock_ptr_t       = libcpp::tcp_socket*;
 
     using conn_handler_t       = std::function<void(conn_ptr_t, err_t)>;
     using send_handler_t       = std::function<void(conn_ptr_t, msg_ptr_t)>;
@@ -62,12 +62,12 @@ public:
     inline flag_t get_flag() { return _flag.load(); }
     inline void set_flag(const flag_t flag) { _flag.store(flag); }
 
-    bool connect(const char* ip, 
-                 const std::uint16_t port, 
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
-                 int retry_times = 1)
+    bool connect(const char* ip, const std::uint16_t port, int retry_times = 1)
     {
-        if (_sock == nullptr || !_sock->connect(ip, port, timeout, retry_times))
+        if (_sock == nullptr || _sock->is_connected())
+            return false;
+
+        if (!_sock->connect(ip, port, retry_times))
             return false;
 
         _w_closed.store(false);
@@ -117,7 +117,7 @@ public:
 
     bool send(msg_ptr_t msg)
     {
-        if (_sock == nullptr || _w_closed.load())
+        if (_sock == nullptr || !_sock->is_connected() || _w_closed.load())
             return false;
 
         _w_ch << msg;
@@ -127,7 +127,7 @@ public:
 
     bool async_send(msg_ptr_t msg, send_handler_t&& fn)
     {
-        if (_sock == nullptr || _w_closed.load())
+        if (_sock == nullptr || !_sock->is_connected() || _w_closed.load())
             return false;
 
         _w_ch << msg;
@@ -155,7 +155,7 @@ public:
 
     bool recv(msg_ptr_t msg)
     {
-        if (_sock == nullptr || _r_closed.load())
+        if (_sock == nullptr || !_sock->is_connected() || _r_closed.load())
             return false;
 
         _r_ch << msg;
@@ -165,43 +165,12 @@ public:
 
     bool async_recv(msg_ptr_t msg, recv_handler_t&& fn)
     {
-        if (_sock == nullptr || _r_closed.load())
+        if (_sock == nullptr || !_sock->is_connected() || _r_closed.load())
             return false;
 
-        _r_ch << msg;
-        _r_ch >> msg;
-        if (msg == nullptr) // already consumed by other thread
-            return true;
-
-        auto buf = _r_buf.prepare(MTU);
-        _sock->async_recv(buf, [this, msg, fn](const err_t& err, std::size_t sz){
-            if (err.failed())
-            {
-                this->_r_closed.store(true);
-                return;
-            }
-    
-            do {
-                this->_r_buf.commit(sz);
-                auto data = boost::asio::buffer_cast<const unsigned char*>(_r_buf.data());
-                sz = msg->decode(data, _r_buf.size());
-                if (sz > 0)
-                {
-                    this->_r_buf.consume(sz);
-                    fn(this, msg);
-                    return;
-                }
-    
-                // msg too big
-                auto tmp = _r_buf.prepare(MTU);
-                sz = _sock->recv(tmp);
-                if (sz == 0)
-                {
-                    _r_closed.store(true);
-                    return;
-                }
-            } while(sz > 0);
-        });
+        _r_ch << msg; // push
+        _r_ch >> msg; // pop
+        _async_recv(msg, std::move(fn));
         return true;
     }
 
@@ -221,7 +190,7 @@ public:
     {
         msg_ptr_t msg = nullptr;
         std::size_t sz = 0;
-        while (_sock != nullptr) 
+        while (_sock != nullptr && _sock->is_connected() && !_r_closed.load()) 
         {
             // read
             _r_ch >> msg;
@@ -251,7 +220,7 @@ public:
     {
         msg_ptr_t msg = nullptr;
         std::size_t sz;
-        while (_sock != nullptr) 
+        while (_sock != nullptr && _sock->is_connected() && !_w_closed.load()) 
         {
             // write
             _w_ch >> msg;
@@ -263,11 +232,8 @@ public:
             if (sz == 0)
                 break;
 
-            if (_sock->send(buf, sz) < sz)
-            {
+            if (_sock->send(buf, sz) < sz) // send fail
                 _w_closed.store(true);
-                return;
-            }
         }
     }
 
@@ -276,6 +242,43 @@ private:
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+    }
+
+    bool _async_recv(msg_ptr_t msg, recv_handler_t fn)
+    {
+        if (msg != nullptr)
+        {
+            auto data = boost::asio::buffer_cast<const unsigned char*>(_r_buf.data());
+            std::size_t sz = msg->decode(data, _r_buf.size());
+            if (sz > 0)
+            {
+                this->_r_buf.consume(sz);
+                fn(this, msg);
+
+                // next msg
+                _r_ch >> msg;
+            }
+        } 
+        else 
+        {
+            // pop msg if null
+            _r_ch >> msg;
+        }
+
+        auto buf = _r_buf.prepare(MTU);
+        _sock->async_recv(buf, [this, msg, fn](const err_t& err, std::size_t sz){
+            if (err.failed())
+            {
+                this->_r_closed.store(true);
+                return;
+            }
+    
+            this->_r_buf.commit(sz);
+            
+            // msg too big do it again
+            this->_async_recv(msg, fn);
+        });
+        return true;
     }
 
 private:

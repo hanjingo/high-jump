@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libcpp/net/tcp.hpp>
+#include <csignal>
 
 TEST(tcp_listener, tcp_listener)
 {
@@ -24,3 +25,25 @@ TEST(tcp_listener, tcp_listener)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
 }
+
+// TEST(tcp_listener, add_signal)
+// {
+//     libcpp::tcp_socket::io_t io;
+//     libcpp::tcp_listener li{io};
+//     static libcpp::tcp_listener::signal_t last_sig;
+//     li.add_signal(SIGINT, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_listener::signal_t sig){
+//         ASSERT_EQ(sig == SIGINT, true);
+//         last_sig = sig;
+//     });
+//     raise(SIGINT);
+//     io.run();
+
+//     li.add_signal(SIGILL, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_listener::signal_t sig){
+//         ASSERT_EQ(sig == SIGILL, true);
+//         last_sig = sig;
+//     });
+//     raise(SIGILL);
+//     io.run();
+
+//     ASSERT_EQ(last_sig == SIGILL, true);
+// }

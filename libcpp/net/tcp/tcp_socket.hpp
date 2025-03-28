@@ -5,6 +5,8 @@
 #include <iostream>
 #include <functional>
 #include <memory>
+#include <csignal>
+#include <initializer_list>
 
 #include <boost/asio.hpp>
 #include <boost/asio/deadline_timer.hpp>
@@ -15,9 +17,6 @@ namespace libcpp
 class tcp_socket
 {
 public:
-    using signal_t          = int;
-    using signal_set_t      = boost::asio::signal_set;
-
     using io_t              = boost::asio::io_context;
     using io_work_t         = boost::asio::io_service::work;
     using err_t             = boost::system::error_code;
@@ -34,32 +33,27 @@ public:
     using opt_send_buf_sz   = boost::asio::ip::tcp::socket::send_buffer_size;
     using opt_recv_buf_sz   = boost::asio::ip::tcp::socket::receive_buffer_size;
     using opt_reuse_addr    = boost::asio::ip::tcp::socket::reuse_address;
+    using opt_keep_alive    = boost::asio::ip::tcp::socket::keep_alive;
 
     using conn_handler_t    = std::function<void(const err_t&, tcp_socket*)>;
     using send_handler_t    = std::function<void(const err_t&, std::size_t)>;
     using recv_handler_t    = std::function<void(const err_t&, std::size_t)>;
-    using signal_handler_t  = std::function<void(const err_t&, signal_t)>;
 
 public:
     tcp_socket() = delete;
     explicit tcp_socket(io_t& io)
         : _io{io}
-        , _sigs{io}
     {
     }
     explicit tcp_socket(io_t& io, sock_t* sock)
         : _io{io}
         , _sock{sock}
-        , _sigs{io}
     {
     }
     virtual ~tcp_socket()
     {
         close();
     }
-
-    inline void add_signal(signal_t sig, signal_handler_t&& fn) { _sigs.add(sig); _sigs.async_wait(fn); }
-    inline void remove_signal(signal_t sig) { _sigs.remove(sig); }
 
     template<typename T>
     inline void set_option(T opt)
@@ -68,49 +62,40 @@ public:
             _sock->set_option(opt);
     }
 
-    bool connect(const char* ip,
-                 uint16_t port,
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
-                 int retry_times = 1)
+    bool connect(const char* ip, 
+                 uint16_t port, 
+                 int retry_times = 1,
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000))
     {
         endpoint_t ep{address_t::from_string(ip), port};
-        return connect(ep, timeout, retry_times);
+        return connect(ep, retry_times, timeout);
     }
 
     // WARNNING: boost.asio connect fail with default timeout duration = 2s
     // WARNNING: the feature of timeout is not recommended for use in a multi-connection context.
     // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_tcp_client.cpp
-    bool connect(endpoint_t ep,
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
-                 int retry_times = 1)
+    bool connect(endpoint_t ep, 
+                 int retry_times = 1, 
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000))
     {
         if (is_connected() || retry_times < 1)
             return false;
 
         _sock = new sock_t(_io);
-        
-        // if (timeout.count() > 0) {
-        //     _sock->async_connect(ep, [this](const err_t& err) {
-        //         this->set_conn_status(!err.failed());
-        //     });
-
-        //     _io.restart();
-        //     _io.run_for(timeout);
-        //     if (!_io.stopped() || !is_connected()) {
-        //         retry_times--;
-        //         disconnect();
-        //         return connect(ep, timeout, retry_times);
-        //     }
-
-        //     return true;
-        // }
-
         err_t err;
-        _sock->connect(ep, err);
-        if (err.failed()) {
+        try {
+            _sock->connect(ep, err);
+        } catch (const boost::system::system_error& exception) {
+            delete _sock;
+            _sock = nullptr;
+            return false;
+        }
+
+        if (err.failed()) 
+        {
             retry_times--;
             disconnect();
-            return connect(ep, timeout, retry_times);
+            return connect(ep, retry_times);
         }
 
         set_conn_status(true);
@@ -125,14 +110,23 @@ public:
 
     void async_connect(endpoint_t ep, conn_handler_t&& fn)
     {
-        if (is_connected()) {
+        if (is_connected()) 
+        {
             fn(boost::system::errc::make_error_code(boost::system::errc::already_connected), this);
             return;
         }
 
+        if (this->_sock != nullptr)
+        {
+            this->_sock->close();
+            delete this->_sock;
+            this->_sock = nullptr;
+        }
         _sock = new sock_t(_io);
         _sock->async_connect(ep, [this, fn](const err_t & err) {
-            this->set_conn_status(!err.failed());
+            if (err.failed())
+                set_conn_status(false);
+
             fn(err, this);
         });
     }
@@ -324,7 +318,6 @@ public:
 
 private:
     io_t&                 _io;
-    signal_set_t          _sigs;
     sock_t*               _sock = nullptr;
     std::atomic_bool      _is_connected{false};
 };

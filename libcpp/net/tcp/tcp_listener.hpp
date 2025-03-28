@@ -18,9 +18,6 @@ namespace libcpp
 class tcp_listener
 {
 public:
-    using signal_t          = int;
-    using signal_set_t      = tcp_socket::signal_set_t;
-
     using io_t              = tcp_socket::io_t;
     using io_work_t         = tcp_socket::io_work_t;
     using err_t             = tcp_socket::err_t;
@@ -32,14 +29,12 @@ public:
     using acceptor_t        = boost::asio::ip::tcp::acceptor;
 
     using accept_handler_t  = std::function<void(const err_t&, tcp_socket*)>;
-    using signal_handler_t  = std::function<void(const err_t&, signal_t)>;
 
 public:
     tcp_listener() = delete;
 
     explicit tcp_listener(io_t& io)
         : _io{io}
-        , _sigs{io}
     {
     }
     virtual ~tcp_listener()
@@ -86,7 +81,15 @@ public:
 
         err_t err;
         auto sock = new sock_t(_io);
-        _acceptor->accept(*sock, err);
+
+        try {
+            _acceptor->accept(*sock, err);
+        } catch (const boost::system::system_error& exception) {
+            delete sock;
+            sock = nullptr;
+            return nullptr;
+        }
+
         if (err.failed()) {
             delete sock;
             return nullptr;
@@ -138,17 +141,6 @@ public:
         });
     }
 
-    inline void add_signal(signal_t sig, signal_handler_t&& fn)
-    {
-        _sigs.add(sig);
-        _sigs.async_wait(fn);
-    }
-
-    void remove_signal(signal_t sig)
-    {
-        _sigs.remove(sig);
-    }
-
     void close()
     {
         if (_closed.load())
@@ -164,7 +156,6 @@ public:
 
 private:
     io_t&                _io;
-    signal_set_t         _sigs;
     acceptor_t*          _acceptor = nullptr;
     endpoint_t           _binded_endpoint;
     std::atomic<bool>    _closed{false};

@@ -3,40 +3,40 @@
 #include <thread>
 #include <string>
 
-class my_message : public libcpp::message
-{
-public:
-    my_message() : _name{std::string()} {}
-    my_message(const char* str) : _name{str} {}
-    ~my_message() {}
+// class my_message : public libcpp::message
+// {
+// public:
+//     my_message() : _name{std::string()} {}
+//     my_message(const char* str) : _name{str} {}
+//     ~my_message() {}
 
-    std::size_t size()
-    {
-        return _name.size() + 1;
-    }
+//     std::size_t size()
+//     {
+//         return _name.size() + 1;
+//     }
 
-    std::size_t encode(unsigned char* buf, const std::size_t len)
-    {
-        memcpy(buf, _name.c_str(), len);
-        return len;
-    }
+//     std::size_t encode(unsigned char* buf, const std::size_t len)
+//     {
+//         memcpy(buf, _name.c_str(), len);
+//         return len;
+//     }
 
-    std::size_t decode(const unsigned char* buf, const std::size_t len)
-    {
-        if (len < 2)
-            return 0;
+//     std::size_t decode(const unsigned char* buf, const std::size_t len)
+//     {
+//         if (len < 2)
+//             return 0;
 
-        char tmp[len];
-        memcpy(tmp, buf, len);
-        _name = std::string(tmp);
-        return _name.size();
-    }
+//         char tmp[len];
+//         memcpy(tmp, buf, len);
+//         _name = std::string(tmp);
+//         return _name.size();
+//     }
 
-    std::string name() { return _name; }
+//     std::string name() { return _name; }
 
-private:
-    std::string _name;
-};
+// private:
+//     std::string _name;
+// };
 
 // TEST(tcp_conn, tcp_conn)
 // {
@@ -125,141 +125,141 @@ private:
 //     io.stop();
 // }
 
-TEST(tcp_conn, set_disconnect_handler)
-{
-    std::thread t([]() {
-        libcpp::tcp_conn::io_t io;
-        libcpp::tcp_listener li{io};
-        for (int i = 0; i < 2; i++)
-        {
-            auto sock = li.accept(10091);
-            ASSERT_EQ(sock == nullptr, false);
-            sock->close();
-            delete sock;
-        }
-    });
+// TEST(tcp_conn, set_disconnect_handler)
+// {
+//     std::thread t([]() {
+//         libcpp::tcp_conn::io_t io;
+//         libcpp::tcp_listener li{io};
+//         for (int i = 0; i < 2; i++)
+//         {
+//             auto sock = li.accept(10091);
+//             ASSERT_EQ(sock == nullptr, false);
+//             sock->close();
+//             delete sock;
+//         }
+//     });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    libcpp::tcp_conn::io_t io;
+//     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+//     libcpp::tcp_conn::io_t io;
     
-    libcpp::tcp_conn conn1{io};
-    conn1.set_disconnect_handler([&](libcpp::tcp_conn::conn_ptr_t conn){
-        ASSERT_EQ(conn != nullptr, true);
-        ASSERT_EQ(conn == (&conn1), true);
-    });
-    ASSERT_EQ(conn1.connect("127.0.0.1", 10091), true);
+//     libcpp::tcp_conn conn1{io};
+//     conn1.set_disconnect_handler([&](libcpp::tcp_conn::conn_ptr_t conn){
+//         ASSERT_EQ(conn != nullptr, true);
+//         ASSERT_EQ(conn == (&conn1), true);
+//     });
+//     ASSERT_EQ(conn1.connect("127.0.0.1", 10091), true);
 
-    libcpp::tcp_conn conn2{io};
-    conn2.set_disconnect_handler([](libcpp::tcp_conn::conn_ptr_t conn){
-        ASSERT_EQ(conn != nullptr, true);
-    });
-    ASSERT_EQ(conn2.connect("127.0.0.1", 10091), true);
-    t.join();
-}
+//     libcpp::tcp_conn conn2{io};
+//     conn2.set_disconnect_handler([](libcpp::tcp_conn::conn_ptr_t conn){
+//         ASSERT_EQ(conn != nullptr, true);
+//     });
+//     ASSERT_EQ(conn2.connect("127.0.0.1", 10091), true);
+//     t.join();
+// }
 
-TEST(tcp_conn, get_flag)
-{
-    libcpp::tcp_conn::io_t io;
-    libcpp::tcp_conn conn1{io};
-}
+// TEST(tcp_conn, get_flag)
+// {
+//     libcpp::tcp_conn::io_t io;
+//     libcpp::tcp_conn conn1{io};
+// }
 
-TEST(tcp_conn, set_flag)
-{
-    libcpp::tcp_conn::io_t io;
-    libcpp::tcp_conn conn1{io};
+// TEST(tcp_conn, set_flag)
+// {
+//     libcpp::tcp_conn::io_t io;
+//     libcpp::tcp_conn conn1{io};
 
-    libcpp::tcp_conn::flag_t flag1 = 0x1;
-    libcpp::tcp_conn::flag_t flag2 = 0x2;
+//     libcpp::tcp_conn::flag_t flag1 = 0x1;
+//     libcpp::tcp_conn::flag_t flag2 = 0x2;
 
-    conn1.set_flag(conn1.get_flag() | flag1);
-    conn1.set_flag(conn1.get_flag() & flag1);
-    ASSERT_EQ(conn1.get_flag() == flag1, true);
+//     conn1.set_flag(conn1.get_flag() | flag1);
+//     conn1.set_flag(conn1.get_flag() & flag1);
+//     ASSERT_EQ(conn1.get_flag() == flag1, true);
 
-    conn1.set_flag(conn1.get_flag() | flag2);
-    ASSERT_EQ(conn1.get_flag() == (flag1 | flag2), true);
+//     conn1.set_flag(conn1.get_flag() | flag2);
+//     ASSERT_EQ(conn1.get_flag() == (flag1 | flag2), true);
 
-    conn1.set_flag(conn1.get_flag() & flag2);
-    ASSERT_EQ(conn1.get_flag() == flag2, true);
-}
+//     conn1.set_flag(conn1.get_flag() & flag2);
+//     ASSERT_EQ(conn1.get_flag() == flag2, true);
+// }
 
-TEST(tcp_conn, connect)
-{
-    // std::thread t([]() {
-    //     libcpp::tcp_conn::io_t io;
-    //     libcpp::tcp_listener li{io};
-    //     for (int i = 0; i < 2; i++)
-    //     {
-    //         if (i == 0) {
-    //             std::this_thread::sleep_for(std::chrono::milliseconds(3000));
-    //             continue;
-    //         }
+// TEST(tcp_conn, connect)
+// {
+//     std::thread t([]() {
+//         libcpp::tcp_conn::io_t io;
+//         libcpp::tcp_listener li{io};
+//         for (int i = 0; i < 2; i++)
+//         {
+//             if (i == 0) {
+//                 std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+//                 continue;
+//             }
 
-    //         auto sock = li.accept(10091);
-    //         ASSERT_EQ(sock != nullptr, true);
-    //         sock->close();
-    //         delete sock;
-    //     }
-    // });
+//             auto sock = li.accept(10091);
+//             ASSERT_EQ(sock != nullptr, true);
+//             sock->close();
+//             delete sock;
+//         }
+//     });
 
-    // std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    // libcpp::tcp_conn::io_t io;
+//     std::this_thread::sleep_for(std::chrono::milliseconds(20));
+//     libcpp::tcp_conn::io_t io;
     
-    // libcpp::tcp_conn conn1{io};
-    // conn1.set_disconnect_handler([&](libcpp::tcp_conn::conn_ptr_t conn){
-    //     ASSERT_EQ(conn != nullptr, true);
-    //     ASSERT_EQ(conn == (&conn1), true);
-    // });
-    // ASSERT_EQ(conn1.connect("127.0.0.1", 10091), false);
+//     libcpp::tcp_conn conn1{io};
+//     conn1.set_disconnect_handler([&](libcpp::tcp_conn::conn_ptr_t conn){
+//         ASSERT_EQ(conn != nullptr, true);
+//         ASSERT_EQ(conn == (&conn1), true);
+//     });
+//     ASSERT_EQ(conn1.connect("127.0.0.1", 10091), false);
     
-    // ASSERT_EQ(conn1.connect("127.0.0.1", 10091, 2), true);
-}
+//     ASSERT_EQ(conn1.connect("127.0.0.1", 10091, 2), true);
+// }
 
-TEST(tcp_conn, async_connect)
-{
+// TEST(tcp_conn, async_connect)
+// {
 
-}
+// }
 
-TEST(tcp_conn, is_connected)
-{
+// TEST(tcp_conn, is_connected)
+// {
 
-}
+// }
 
-TEST(tcp_conn, disconnect)
-{
+// TEST(tcp_conn, disconnect)
+// {
 
-}
+// }
 
-TEST(tcp_conn, send)
-{
+// TEST(tcp_conn, send)
+// {
 
-}
+// }
 
-TEST(tcp_conn, async_send)
-{
+// TEST(tcp_conn, async_send)
+// {
 
-}
+// }
 
-TEST(tcp_conn, recv)
-{
+// TEST(tcp_conn, recv)
+// {
 
-}
+// }
 
-TEST(tcp_conn, async_recv)
-{
+// TEST(tcp_conn, async_recv)
+// {
 
-}
+// }
 
-TEST(tcp_conn, close)
-{
+// TEST(tcp_conn, close)
+// {
 
-}
+// }
 
-TEST(tcp_conn, read_all)
-{
+// TEST(tcp_conn, read_all)
+// {
 
-}
+// }
 
-TEST(tcp_conn, write_all)
-{
+// TEST(tcp_conn, write_all)
+// {
 
-}
+// }

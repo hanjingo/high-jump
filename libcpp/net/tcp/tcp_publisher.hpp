@@ -13,6 +13,16 @@ public:
     using topic_t = std::string;
 
 public:
+    bool bind(conn_ptr_t conn)
+    {
+
+    }
+
+    bool detach(conn_ptr_t conn)
+    {
+        
+    }
+
     void pub(const topic_t& topic, message* msg)
     {
         

@@ -5,6 +5,10 @@ project(libcpp)
 # set environment param
 set(LIBCPP_VERSION 1.0.0)
 
+# for boost/stacktrace
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")
+
 # build lib
 if (BUILD_LIB)
     add_subdirectory(libcpp/binding)

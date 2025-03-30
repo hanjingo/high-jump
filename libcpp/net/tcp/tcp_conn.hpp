@@ -9,14 +9,6 @@
 #include <libcpp/net/tcp/tcp_chan.hpp>
 #include <libcpp/net/proto/message.hpp>
 
-#ifndef TCP_CONN_RBUF_SZ
-#define TCP_CONN_RBUF_SZ 65535
-#endif
-
-#ifndef TCP_CONN_WBUF_SZ
-#define TCP_CONN_WBUF_SZ 65535
-#endif
-
 #ifndef MTU
 #define MTU 1500
 #endif
@@ -37,20 +29,26 @@ public:
 
     using conn_handler_t       = std::function<void(conn_ptr_t, err_t)>;
     using send_handler_t       = std::function<void(conn_ptr_t, msg_ptr_t)>;
-    using recv_handler_t       = std::function<void(conn_ptr_t, msg_ptr_t)>;
+    using recv_handler_t       = std::function<msg_ptr_t(conn_ptr_t, msg_ptr_t)>;
     using disconnect_handler_t = std::function<void(conn_ptr_t)>;
 
 public:
     tcp_conn() = delete;
 
-    explicit tcp_conn(io_t& io) 
-        : _io{io}
-        , _sock{new tcp_socket(_io)}
+    tcp_conn(io_t& io, std::size_t rbuf_sz = 65535, std::size_t wbuf_sz = 65535) 
+        : io_{io}
+        , sock_{new tcp_socket(io_)}
+        , r_buf_{rbuf_sz}
+        , r_ch_{rbuf_sz / MTU}
+        , w_ch_{wbuf_sz / MTU}
     {
     }
-    explicit tcp_conn(io_t& io, sock_ptr_t sock) 
-        : _io{io}
-        , _sock{sock}
+    tcp_conn(io_t& io, sock_ptr_t sock, std::size_t rbuf_sz = 65535, std::size_t wbuf_sz = 65535) 
+        : io_{io}
+        , sock_{sock}
+        , r_buf_{rbuf_sz}
+        , r_ch_{rbuf_sz / MTU}
+        , w_ch_{wbuf_sz / MTU}
     {
     }
     ~tcp_conn() 
@@ -58,33 +56,43 @@ public:
         close();
     }
 
-    inline void set_disconnect_handler(disconnect_handler_t&& fn) { _disconnect_handler = std::move(fn); }
-    inline flag_t get_flag() { return _flag.load(); }
-    inline void set_flag(const flag_t flag) { _flag.store(flag); }
+    inline void set_disconnect_handler(disconnect_handler_t&& fn) { disconnect_handler_ = std::move(fn); }
+    inline void set_recv_handler(recv_handler_t&& fn) { recv_handler_ = std::move(fn); }
+    inline void set_send_handler(send_handler_t&& fn) { send_handler_ = std::move(fn); }
+    inline flag_t get_flag() { return flag_.load(); }
+    inline void set_flag(const flag_t flag) { flag_.store(flag); }
 
-    bool connect(const char* ip, const std::uint16_t port, int retry_times = 1)
+    bool connect(const char* ip, 
+                 const std::uint16_t port, 
+                 int retry_times = 1)
     {
-        if (_sock == nullptr || _sock->is_connected())
+        if (is_connected())
             return false;
 
-        if (!_sock->connect(ip, port, retry_times))
+        if (!sock_->connect(ip, port, retry_times))
             return false;
 
-        _w_closed.store(false);
-        _r_closed.store(false);
+        w_closed_.store(false);
+        r_closed_.store(false);
+
+        _async_send(err_t(), 0);
+        _async_recv(err_t(), 0);
         return true;
     }
 
-    bool async_connect(const char* ip, 
-                       const std::uint16_t port,
-                       conn_handler_t&& fn)
+    bool async_connect(const char* ip, const std::uint16_t port, conn_handler_t&& fn)
     {
-        if (_sock == nullptr || _sock->is_connected())
+        if (is_connected())
             return false;
 
-        _sock->async_connect(ip, port, [this, fn](const err_t& err, sock_ptr_t sock) {
-            this->_w_closed.store(err.failed());
-            this->_r_closed.store(err.failed());
+        sock_->async_connect(ip, port, [this, fn](const err_t& err, sock_ptr_t sock) {
+            if (!err.failed())
+            {
+                this->w_closed_.store(false);
+                this->r_closed_.store(false);
+                this->_async_send(err_t(), 0);
+                this->_async_recv(err_t(), 0);
+            }
             fn(this, err);
         });
         return true;
@@ -92,7 +100,7 @@ public:
 
     inline bool is_connected()
     {
-        return !_w_closed.load() && !_r_closed.load() && _sock != nullptr && _sock->is_connected();
+        return !w_closed_.load() && !r_closed_.load() && sock_ != nullptr && sock_->is_connected();
     }
 
     bool disconnect()
@@ -100,201 +108,150 @@ public:
         if (!is_connected())
             return false;
 
-        if (!_w_closed.load())
-        {
-            _w_closed.store(true);
-            write_all();
-        }
-        if (!_r_closed.load())
-        {
-            _r_closed.store(true);
-            read_all();
-        }
-        _sock->disconnect();
-        _disconnect_handler(this);
+        while (!w_closed_.load())
+            w_ch_ << nullptr;
+
+        while (!r_closed_.load())
+            r_ch_ << nullptr;
+
+        sock_->disconnect();
+        disconnect_handler_(this);
         return true;
     }
 
     bool send(msg_ptr_t msg)
     {
-        if (_sock == nullptr || !_sock->is_connected() || _w_closed.load())
+        if (sock_ == nullptr || !sock_->is_connected() || w_closed_.load())
             return false;
 
-        _w_ch << msg;
-        write_all();
+        w_ch_ << msg;
         return true;
     }
 
     bool async_send(msg_ptr_t msg, send_handler_t&& fn)
     {
-        if (_sock == nullptr || !_sock->is_connected() || _w_closed.load())
+        if (sock_ == nullptr || !sock_->is_connected() || w_closed_.load())
             return false;
 
-        _w_ch << msg;
-        _w_ch >> msg;
-        if (msg == nullptr) // already consumed by other thread
-            return true;
-
-        std::size_t sz = msg->size();
-        unsigned char buf[sz];
-        sz = msg->encode(buf, sz);
-        if (sz < 1)
-            return false;
-
-        _sock->async_send(buf, sz, [this, msg, fn](const err_t& err, std::size_t sz){
-            if (err.failed())
-            {
-                _w_closed.store(true);
-                return;
-            }
-
-            fn(this, msg);
-        });
+        w_ch_ << msg;
         return true;
     }
 
     bool recv(msg_ptr_t msg)
     {
-        if (_sock == nullptr || !_sock->is_connected() || _r_closed.load())
+        if (sock_ == nullptr || !sock_->is_connected() || r_closed_.load())
             return false;
 
-        _r_ch << msg;
-        read_all();
+        r_ch_ << msg;
+        return true;
+    }
+
+    bool async_recv(msg_ptr_t msg)
+    {
+        if (sock_ == nullptr || !sock_->is_connected() || r_closed_.load())
+            return false;
+
+        r_ch_ << msg;
         return true;
     }
 
     bool async_recv(msg_ptr_t msg, recv_handler_t&& fn)
     {
-        if (_sock == nullptr || !_sock->is_connected() || _r_closed.load())
+        if (sock_ == nullptr || !sock_->is_connected() || r_closed_.load())
             return false;
 
-        _r_ch << msg; // push
-        _r_ch >> msg; // pop
-        _async_recv(msg, std::move(fn));
+        r_ch_ << msg;
+        recv_handler_ = std::move(fn);
         return true;
     }
 
     void close()
     {
-        if (_sock == nullptr)
+        w_closed_.store(true);
+        r_closed_.store(true);
+        if (sock_ == nullptr)
             return;
 
-        _w_closed.store(true);
-        _r_closed.store(true);
-        _sock->close();
-        delete _sock;
-        _sock = nullptr;
-    }
-    
-    void read_all()
-    {
-        msg_ptr_t msg = nullptr;
-        std::size_t sz = 0;
-        while (_sock != nullptr && _sock->is_connected() && !_r_closed.load()) 
-        {
-            // read
-            _r_ch >> msg;
-            if (msg == nullptr)
-                break;
-           
-            do {
-                sz = msg->decode(boost::asio::buffer_cast<const unsigned char*>(_r_buf.data()), _r_buf.size());
-                if (sz > 0)
-                    break;
-
-                auto buf = _r_buf.prepare(MTU);
-                sz = _sock->recv(buf);
-                _r_buf.commit(sz);
-                if (sz == 0)
-                {
-                    _r_closed.store(true);
-                    return;
-                }
-            } while(sz > 0);
-
-            _r_buf.consume(sz);
-        }
-    }
-
-    void write_all()
-    {
-        msg_ptr_t msg = nullptr;
-        std::size_t sz;
-        while (_sock != nullptr && _sock->is_connected() && !_w_closed.load()) 
-        {
-            // write
-            _w_ch >> msg;
-            if (msg == nullptr)
-                break;
-            
-            unsigned char buf[msg->size()];
-            sz = msg->encode(buf, sizeof(buf));
-            if (sz == 0)
-                break;
-
-            if (_sock->send(buf, sz) < sz) // send fail
-                _w_closed.store(true);
-        }
+        sock_->close();
+        delete sock_;
+        sock_ = nullptr;
     }
 
 private:
-    inline int64_t _time_since_epoch_ms()
+    void _async_send(const err_t& err, std::size_t sz)
     {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-    }
+        if (err.failed())
+            w_closed_.store(true);
+        if (sock_ == nullptr || !sock_->is_connected() || w_closed_.load()) 
+            return;
 
-    bool _async_recv(msg_ptr_t msg, recv_handler_t fn)
-    {
-        if (msg != nullptr)
+        msg_ptr_t msg = nullptr;
+        w_ch_ >> msg;
+        if (msg == nullptr)
         {
-            auto data = boost::asio::buffer_cast<const unsigned char*>(_r_buf.data());
-            std::size_t sz = msg->decode(data, _r_buf.size());
-            if (sz > 0)
-            {
-                this->_r_buf.consume(sz);
-                fn(this, msg);
-
-                // next msg
-                _r_ch >> msg;
-            }
-        } 
-        else 
-        {
-            // pop msg if null
-            _r_ch >> msg;
+            w_closed_.store(true);
+            return;
         }
 
-        auto buf = _r_buf.prepare(MTU);
-        _sock->async_recv(buf, [this, msg, fn](const err_t& err, std::size_t sz){
-            if (err.failed())
-            {
-                this->_r_closed.store(true);
-                return;
-            }
-    
-            this->_r_buf.commit(sz);
-            
-            // msg too big do it again
-            this->_async_recv(msg, fn);
-        });
-        return true;
+        sz = msg->size();
+        unsigned char buf[sz];
+        sz = msg->encode(buf, sz);
+        if (sz == 0)
+        {
+            w_closed_.store(true);
+            return;
+        }
+
+        send_handler_(this, msg);
+        sock_->async_send(buf, sz, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
+    }
+
+    void _async_recv(const err_t& err, std::size_t sz)
+    {
+        if (err.failed())
+            r_closed_.store(true);
+        if (sock_ == nullptr || !sock_->is_connected() || r_closed_.load()) 
+            return;
+
+        this->r_buf_.commit(sz);
+        msg_ptr_t msg = nullptr;
+        r_ch_ >> msg;
+        if (msg == nullptr)
+        {
+            w_closed_.store(true);
+            return;
+        }
+        
+        auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
+        sz = msg->decode(data, r_buf_.size());
+        if (sz > 0)
+        {
+            this->r_buf_.consume(sz);
+            msg = recv_handler_(this, msg);
+            if (msg != nullptr)
+                r_ch_ << msg;
+        }
+
+        auto buf = r_buf_.prepare(MTU);
+        sock_->async_recv(buf, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
     }
 
 private:
-    io_t&               _io;
-    sock_ptr_t          _sock = nullptr;
-    std::atomic<flag_t> _flag{0};
+    io_t&               io_;
+    sock_ptr_t          sock_ = nullptr;
+    std::atomic<flag_t> flag_{0};
 
-    std::atomic<bool> _w_closed{false};
-    std::atomic<bool> _r_closed{false};
+    std::atomic<bool> w_closed_{false};
+    std::atomic<bool> r_closed_{false};
 
     // NOTE: maybe use boost::asio::strand is a better choice
-    tcp_socket::streambuf_t  _r_buf{TCP_CONN_RBUF_SZ};
-    tcp_chan<msg_ptr_t>      _r_ch{TCP_CONN_RBUF_SZ / MTU};
-    tcp_chan<msg_ptr_t>      _w_ch{TCP_CONN_WBUF_SZ / MTU};
+    tcp_socket::streambuf_t  r_buf_;
+    tcp_chan<msg_ptr_t>      r_ch_;
+    tcp_chan<msg_ptr_t>      w_ch_;
 
-    disconnect_handler_t _disconnect_handler = [](conn_ptr_t conn){};
+    disconnect_handler_t disconnect_handler_;
+    recv_handler_t       recv_handler_;
+    send_handler_t       send_handler_;
 };
 
 }

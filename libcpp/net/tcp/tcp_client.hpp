@@ -25,7 +25,7 @@ public:
 public:
     tcp_client() = delete;
     tcp_client(const resp_handler_t&& fn)
-        : _fhandler{std::move(fn)}
+        : fhandler_{std::move(fn)}
     {
     }
 
@@ -49,13 +49,13 @@ public:
             [this, resp](conn_ptr_t conn, msg_ptr_t mreq){
                 conn->async_recv(resp, 
                     [this, mreq](conn_ptr_t conn, msg_ptr_t resp){
-                        this->_fhandler(mreq, resp);
+                        this->fhandler_(mreq, resp);
                 });
             });
     }
 
 private:
-    resp_handler_t _fhandler;
+    resp_handler_t fhandler_;
 };
 
 }

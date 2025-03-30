@@ -15,18 +15,18 @@ public:
     using conn_ptr_t           = libcpp::tcp_conn*;
     using msg_t                = libcpp::message;
     using msg_ptr_t            = libcpp::message*;
-    using req_handler_t        = std::function<msg_ptr_t(msg_ptr_t)>;
-    using next_handler_t       = std::function<msg_ptr_t(msg_ptr_t)>;
     using conn_flag_t          = libcpp::tcp_conn::flag_t;
+
+    using req_handler_t        = std::function<msg_ptr_t(tcp_server*, conn_ptr_t, msg_ptr_t)>;
+    using tag_t                = std::uint64_t;
 
     static const conn_flag_t flag_conn_binded_by_srv = 0x1;
     static const conn_flag_t flag_conn_detached_by_srv = ~(0x1);
 
 public:
     tcp_server() = delete;
-    tcp_server(const req_handler_t&& fn, const next_handler_t&& fnext)
-        : _fhandler{std::move(fn)}
-        , _fnext{std::move(fnext)}
+    tcp_server(const req_handler_t&& fn)
+        : fn_{std::move(fn)}
     {
     }
 
@@ -36,36 +36,34 @@ public:
             return false; // conn already binded
 
         conn->set_flag(conn->get_flag() | flag_conn_binded_by_srv);
-        _next_req(conn, nullptr);
+        conn->set_recv_handler(
+            [this](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t req)->libcpp::tcp_conn::msg_ptr_t{
+            this->tag_inc();
+            return this->fn_(this, conn, req);
+        });
         return true;
     }
 
-    void detach(conn_ptr_t conn)
+    void detach()
     {
-        conn->set_flag(conn->get_flag() & flag_conn_detached_by_srv);
+        conn_->set_flag(conn_->get_flag() & flag_conn_detached_by_srv);
+        conn_->set_recv_handler();
+        conn_ = nullptr;
     }
+
+    tag_t tag_inc() 
+    { 
+        tag_t tag = tag_.load(); 
+        tag_.compare_exchange_strong(tag, tag + 1); 
+        return tag_.load();
+    }
+
+    tag_t tag_get() { return tag_.load(); }
 
 private:
-    void _on_req(conn_ptr_t conn, msg_ptr_t req)
-    {
-        msg_ptr_t resp = _fhandler(req);
-        conn->async_send(resp, [this, req](conn_ptr_t sender, msg_ptr_t resp) {
-            this->_next_req(sender, req);
-        });
-    }
-
-    void _next_req(conn_ptr_t conn, msg_ptr_t pre_req)
-    {
-        if (!(conn->get_flag() & flag_conn_binded_by_srv))
-                return;
-
-        auto req = _fnext(pre_req);
-        conn->async_recv(req, std::bind(&tcp_server::_on_req, this, std::placeholders::_1, std::placeholders::_2));
-    }
-
-private:
-    req_handler_t  _fhandler;
-    next_handler_t _fnext;
+    std::atomic<tag_t> tag_{0};
+    req_handler_t fn_;
+    libcpp::tcp_conn* conn_;
 };
 
 }

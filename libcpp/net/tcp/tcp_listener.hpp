@@ -142,24 +142,24 @@ public:
     {
         assert(acceptor_ != nullptr);
 
-        auto sock = new sock_t(io_);
+        sock_t* base = new sock_t(io_);
+        tcp_socket* sock = new tcp_socket(io_, base);
         try {
-            acceptor_->async_accept(*sock, [&](const err_t & err) {
-                tcp_socket* net = nullptr;
+            acceptor_->async_accept(*base, [fn, sock](const err_t& err) {
                 if (err.failed()) 
                 {
                     delete sock;
-                    sock = nullptr;
-                    fn(err, net);
+                    fn(err, nullptr);
                     return;
                 }
 
-                net = new tcp_socket(io_, sock);
-                fn(err, net);                
+                sock->set_conn_status(true);
+                fn(err, sock);                
             });
         } catch (...) {
             assert(false);
-            if (sock != nullptr) { delete sock; sock = nullptr;}
+            if (sock != nullptr)
+                delete sock;
         }
     }
 

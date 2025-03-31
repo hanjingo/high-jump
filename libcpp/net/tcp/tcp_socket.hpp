@@ -8,6 +8,7 @@
 #include <csignal>
 #include <initializer_list>
 
+#include <boost/stacktrace.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/deadline_timer.hpp>
 
@@ -20,7 +21,7 @@ public:
     using io_t              = boost::asio::io_context;
     using io_work_t         = boost::asio::io_service::work;
     using err_t             = boost::system::error_code;
-
+    
     using const_buffer_t    = boost::asio::const_buffer;
     using multi_buffer_t    = boost::asio::mutable_buffer;
     using streambuf_t       = boost::asio::streambuf;
@@ -67,8 +68,31 @@ public:
         if (sock_ == nullptr || !sock_->is_open())
             return false;
 
-        sock_->set_option(opt);
-        return true;
+        err_t err;
+        sock_->set_option(opt, err);
+        if (!err.failed())
+            return true;
+
+        assert(false);
+        std::cerr << err << std::endl;
+        return false;
+    }
+
+    inline bool is_connected() { return sock_ != nullptr && is_connected_.load(); }
+    
+    bool check_connected()
+    {
+        err_t err;
+        return check_connected(err);
+    }
+
+    bool check_connected(err_t& err)
+    {
+        if (sock_ == nullptr)
+            return false;
+
+        sock_->remote_endpoint(err);
+        return !err.failed();
     }
 
     bool connect(const char* ip, uint16_t port, int retry_times = 1)
@@ -154,12 +178,7 @@ public:
         if (!is_connected()) 
             return 0;
 
-        try {
-            return sock_->send(boost::asio::buffer(data, len));
-        } catch (...) {
-            assert(false);
-            return 0;
-        }
+        return sock_->send(boost::asio::buffer(data, len));
     }
 
     void async_send(const const_buffer_t& buf, send_handler_t&& fn)
@@ -172,8 +191,9 @@ public:
 
         try {
             sock_->async_send(buf, std::move(fn));
-        } catch (...) {
+        } catch (const boost::system::error_code& ec) {
             assert(false);
+            std::cerr << ec << std::endl;
             return;
         }
     }
@@ -205,12 +225,13 @@ public:
         if (!is_connected()) 
             return 0;
 
-        try {
-            return sock_->read_some(buf);
-        } catch (...) {
-            assert(false);
-            return 0;
-        }
+        err_t err;
+        auto sz = sock_->read_some(buf, err);
+        if (!err.failed())
+            return sz;
+
+        assert(false);
+        return sz;
     }
 
     size_t recv(char* data, size_t len)
@@ -240,17 +261,18 @@ public:
 
     void async_recv(multi_buffer_t& buf, recv_handler_t&& fn)
     {
+        auto cb = std::move(fn);
         if (!is_connected()) 
         {
-            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
+            cb(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
             return;
         }
 
         try {
-            sock_->async_read_some(buf, std::move(fn));
-        } catch (...) {
-            assert(false);
-            return;
+            sock_->async_read_some(buf, cb);
+        } catch (const boost::system::error_code& ec) {
+            std::cerr << ec << std::endl;
+            cb(boost::system::errc::make_error_code(boost::system::errc::network_unreachable), 0);
         }
     }
 
@@ -272,19 +294,6 @@ public:
         return is_connected_.compare_exchange_strong(old, is_connected);
     }
 
-    bool is_connected()
-    {
-        return is_connected_.load();
-    }
-
-    bool check_connected()
-    {
-        err_t err;
-        char test_data = 0;
-        sock_->write_some(boost::asio::buffer(&test_data, 1), err);
-        return !err.failed();
-    }
-
     void close()
     {
         disconnect();
@@ -298,7 +307,7 @@ public:
 
     // WARNNING: this function will be blocked while timeout = 0ms
     // WARNNING: the feature of timeout is not recommended for use in a multi-thread context.
-    // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_tcp_client.cpp
+    // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp11/timeouts/blocking_tcp_client.cpp
     size_t recv(multi_buffer_t& buf, std::chrono::milliseconds timeout)
     {
         if (!is_connected())
@@ -335,13 +344,9 @@ private:
         }
             
         sock_ = new sock_t(io_);
-        err_t err;
-        try {
-            sock_->connect(ep, err);
-        } catch (...) {
-            assert(false);
-        }
 
+        err_t err;
+        sock_->connect(ep, err);
         if (err.failed()) 
         {
             retry_times--;

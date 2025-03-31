@@ -36,27 +36,30 @@ TEST(tcp_listener, accept)
 
 TEST(tcp_listener, async_accept)
 {
+    static int async_accept_times = 0;
     std::thread t([](){
         libcpp::tcp_socket::io_t io;
         libcpp::tcp_listener li{io};
-        for (int i = 0; i < 1; i++)
+        for (int i = 0; i < 2; i++)
         {
             li.async_accept(10091, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
                 ASSERT_EQ(err.failed(), false);
                 ASSERT_EQ(sock->is_connected(), true);
+                ASSERT_EQ(sock->check_connected(), true);
+                async_accept_times++;
             });
         }
 
-        io.run();
+        io.run_for(std::chrono::milliseconds(100));
     });
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     libcpp::tcp_socket::io_t io;
     libcpp::tcp_socket sock{io};
     sock.async_connect("127.0.0.1", 10091, [&](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket* sock){
         ASSERT_EQ(err.failed(), false);
         ASSERT_EQ(sock != nullptr, true);
         ASSERT_EQ(sock->is_connected(), true);
-        ASSERT_EQ(sock->check_connected(), true);
     });
 
     libcpp::tcp_socket sock1{io};
@@ -64,11 +67,11 @@ TEST(tcp_listener, async_accept)
         ASSERT_EQ(err.failed(), false);
         ASSERT_EQ(sock != nullptr, true);
         ASSERT_EQ(sock->is_connected(), true);
-        ASSERT_EQ(sock->check_connected(), true);
     });
 
     io.run();
     t.join();
+    ASSERT_EQ(async_accept_times, 2);
 }
 
 TEST(tcp_listener, close)

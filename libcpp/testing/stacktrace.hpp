@@ -1,12 +1,11 @@
 #ifndef STACKTRACE_HPP
 #define STACKTRACE_HPP
 
+#include <iostream>
 #include <boost/stacktrace.hpp>
 
 namespace libcpp
 {
-
-// using stacktrace_t = boost::stacktrace::stacktrace;
 
 inline auto stacktrace()
 {
@@ -14,5 +13,12 @@ inline auto stacktrace()
 }
 
 }
+
+#define RECOVER(cmd) \
+    try { \
+        cmd \
+    } catch(...) { \
+        std::cerr << libcpp::stacktrace() << std::endl; \
+    } \
 
 #endif

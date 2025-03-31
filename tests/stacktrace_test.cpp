@@ -14,3 +14,11 @@ TEST(stacktrace, stacktrace)
         std::cout << libcpp::stacktrace() << std::endl;
     }
 }
+
+TEST(stacktrace, recover)
+{
+    RECOVER(
+        int n = 1;
+        throw "can not set n = 1";
+    );
+}

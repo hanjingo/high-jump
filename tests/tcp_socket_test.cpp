@@ -103,6 +103,56 @@ TEST(tcp_socket, set_option)
     ASSERT_EQ(sock2.set_option(libcpp::tcp_socket::opt_broadcast(false)), true);
 }
 
+TEST(tcp_socket, is_connected)
+{
+    std::thread t([]() {
+        libcpp::tcp_socket::io_t io;
+        libcpp::tcp_listener li{io};
+        for (int i = 0; i < 1; i++)
+        {
+            auto sock = li.accept(10091);
+            ASSERT_EQ(sock != nullptr, true);
+            sock->close();
+            delete sock;
+        }
+        li.close();
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    libcpp::tcp_socket::io_t io;
+    libcpp::tcp_socket sock{io};
+    ASSERT_EQ(sock.is_connected(), false);
+    ASSERT_EQ(sock.connect("127.0.0.1", 10091), true);
+    ASSERT_EQ(sock.is_connected(), true);
+
+    t.join();
+}
+
+TEST(tcp_socket, check_connected)
+{
+    std::thread t([]() {
+        libcpp::tcp_socket::io_t io;
+        libcpp::tcp_listener li{io};
+        for (int i = 0; i < 1; i++)
+        {
+            auto sock = li.accept(10091);
+            ASSERT_EQ(sock != nullptr, true);
+            sock->close();
+            delete sock;
+        }
+        li.close();
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    libcpp::tcp_socket::io_t io;
+    libcpp::tcp_socket sock{io};
+    ASSERT_EQ(sock.check_connected(), false);
+    ASSERT_EQ(sock.connect("127.0.0.1", 10091), true);
+    ASSERT_EQ(sock.check_connected(), true);
+
+    t.join();
+}
+
 TEST(tcp_socket, connect)
 {
     static int accept_times = 0;
@@ -238,53 +288,42 @@ TEST(tcp_socket, send)
 
 TEST(tcp_socket, async_send)
 {
-    // std::thread t([](){
-    //     libcpp::tcp_socket::io_t io;
-    //     libcpp::tcp_listener li{io};
-    //     for (int i = 0; i < 1; i++)
-    //     {
-    //         li.async_accept(10091, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
-    //             ASSERT_EQ(err.failed(), false);
-    //             ASSERT_EQ(sock->is_connected(), true);
-    //             char buf[1024] = {0};
-    //             sock->async_recv(buf, 1024, [buf, sock](const libcpp::tcp_listener::err_t & err, std::size_t sz) {
-    //                 std::cout << "err.what()=" << err.what() << std::endl;
-    //                 ASSERT_EQ(err.failed(), false);
-    //                 ASSERT_EQ(sz == 6, true);
-    //                 std::string str(buf, sz - 1);
-    //                 ASSERT_EQ(str == std::string("hello"), true);
+    static char async_send_buf[1024];
+    std::thread t([](){
+        libcpp::tcp_socket::io_t io;
+        libcpp::tcp_listener li{io};
+        li.async_accept(10091, [i](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
+            ASSERT_EQ(err.failed(), false);
+            ASSERT_EQ(sock->is_connected(), true);
 
-    //                 char buf1[1024] = {0};
-    //                 sock->async_recv(buf1, 1024, [buf1](const libcpp::tcp_listener::err_t & err, std::size_t sz) {
-    //                     ASSERT_EQ(err.failed(), false);
-    //                     ASSERT_EQ(sz == 6, true);
-    //                     std::string str(buf1, sz - 1);
-    //                     ASSERT_EQ(str == std::string("harry"), true);
-    //                 });
-    //             });
-    //         });
-    //     }
+            sock->async_recv(async_send_buf, 1024, [sock, i](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+                ASSERT_EQ(err.failed(), false);
+                ASSERT_EQ(sz == 5, true);
+                ASSERT_EQ(std::string(async_send_buf, 5) == "hello", true);
+                delete sock;
+            });
+        });
 
-    //     io.run();
-    // });
+        io.run_for(std::chrono::milliseconds(100));
+    });
 
-    // libcpp::tcp_socket::io_t io;
-    // libcpp::tcp_socket sock{io};
-    // sock.async_connect("127.0.0.1", 10091, [](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket* sock){
-    //     ASSERT_EQ(err.failed(), false);
-    //     sock->async_send(std::string("hello").c_str(), 6, [sock](const libcpp::tcp_socket::err_t& err, std::size_t sz){
-    //         ASSERT_EQ(err.failed(), false);
-    //         ASSERT_EQ(sz == 6, true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    libcpp::tcp_socket::io_t io;
+    libcpp::tcp_socket sock{io};
+    sock.async_connect("127.0.0.1", 10091, [](const libcpp::tcp_socket::err_t& err, libcpp::tcp_socket* sock){
+        ASSERT_EQ(err.failed(), false);
+        ASSERT_EQ(sock != nullptr, true);
+        ASSERT_EQ(sock->is_connected(), true);
+        ASSERT_EQ(sock->check_connected(), true);
 
-    //         sock->async_send(std::string("harry").c_str(), 6, [](const libcpp::tcp_socket::err_t& err, std::size_t sz){
-    //             ASSERT_EQ(err.failed(), false);
-    //             ASSERT_EQ(sz == 6, true);
-    //         });
-    //     });
-    // });
+        sock->async_send(std::string("hello").c_str(), 5, [](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+            ASSERT_EQ(err.failed(), false);
+            ASSERT_EQ(sz == 5, true);
+        });
+    });
 
-    // io.run();
-    // t.join();
+    io.run_for(std::chrono::milliseconds(100));
+    t.join();
 }
 
 TEST(tcp_socket, recv)
@@ -303,11 +342,6 @@ TEST(tcp_socket, async_recv)
 }
 
 TEST(tcp_socket, set_conn_status)
-{
-
-}
-
-TEST(tcp_socket, is_connected)
 {
 
 }

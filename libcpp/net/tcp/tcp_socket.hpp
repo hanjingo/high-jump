@@ -31,6 +31,7 @@ public:
     using endpoint_t        = boost::asio::ip::tcp::endpoint;
 
     using steady_timer_t    = boost::asio::steady_timer;
+    using deadline_timer_t  = boost::asio::deadline_timer;
     using ms_t              = std::chrono::milliseconds;
 
     using opt_no_delay      = boost::asio::ip::tcp::no_delay;
@@ -95,21 +96,60 @@ public:
         return !err.failed();
     }
 
-    bool connect(const char* ip, uint16_t port, int retry_times = 1)
+    bool connect(const char* ip, 
+                 uint16_t port, 
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+                 int try_times = 1)
     {
         endpoint_t ep{address_t::from_string(ip), port};
-        return connect(ep, retry_times);
+        return connect(ep, timeout, try_times);
     }
 
-    // WARNNING: boost.asio connect fail with default timeout duration = 2s
+    // WARNNING: boost.asio block connect fail with default timeout duration = 2s
     // WARNNING: the feature of timeout is not recommended for use in a multi-connection context.
-    // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp03/timeouts/blocking_tcp_client.cpp
-    bool connect(endpoint_t ep, int retry_times = 1)
+    // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp11/timeouts/blocking_tcp_client.cpp
+    bool connect(endpoint_t ep, 
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+                 int try_times = 1)
     {
-        if (is_connected() || retry_times < 1)
+        if (is_connected() || try_times < 1)
             return false;
 
-        return _do_connect(ep, retry_times);
+        try_times--;
+        if (this->sock_ != nullptr)
+        {
+            this->sock_->close();
+            delete this->sock_;
+            this->sock_ = nullptr;
+        }
+        sock_ = new sock_t(io_);
+        // start async connect
+        sock_->async_connect(ep, [this](const err_t& err) {
+            if (this->is_connected()) 
+                return;
+    
+            if (err.failed())
+            {
+                this->set_conn_status(false);
+                return;
+            }
+            
+            this->set_conn_status(true);
+        });
+
+        // start timer
+        io_.restart();
+        io_.run_for(timeout);
+        if (is_connected())
+            return true;
+
+        if (!io_.stopped()) // task still running, stop it!
+        {
+            sock_->close();
+            io_.run();
+        }
+          
+        return connect(ep, timeout, try_times);
     }
 
     void async_connect(const char* ip, uint16_t port, conn_handler_t&& fn)
@@ -145,16 +185,10 @@ public:
 
     void disconnect()
     {
-        if (!is_connected()) 
+        if (!is_connected())
             return;
 
-        set_conn_status(false);
-        if (sock_ != nullptr)
-        {
-            sock_->close();
-            delete sock_;
-            sock_ = nullptr;
-        }
+        _disconnect_anyway();
     }
 
     size_t send(const const_buffer_t& buf)
@@ -162,23 +196,21 @@ public:
         if (!is_connected())
             return 0;
 
-        return sock_->send(buf);
+        try{
+            return sock_->send(buf);
+        } catch (...) {
+            return 0;
+        }
     }
 
     size_t send(const char* data, size_t len)
     {
-        if (!is_connected()) 
-            return 0;
-
-        return sock_->send(boost::asio::buffer(data, len));
+        return send(boost::asio::buffer(data, len));
     }
 
     size_t send(const unsigned char* data, size_t len)
     {
-        if (!is_connected()) 
-            return 0;
-
-        return sock_->send(boost::asio::buffer(data, len));
+        return send(boost::asio::buffer(data, len));
     }
 
     void async_send(const const_buffer_t& buf, send_handler_t&& fn)
@@ -227,10 +259,9 @@ public:
 
         err_t err;
         auto sz = sock_->read_some(buf, err);
-        if (!err.failed())
-            return sz;
+        if (err.failed())
+            assert(false);
 
-        assert(false);
         return sz;
     }
 
@@ -251,12 +282,12 @@ public:
         if (!is_connected())
             return 0;
 
-        try {
-            return boost::asio::read(*sock_, buf, boost::asio::transfer_at_least(least));
-        } catch (...) {
+        err_t err;
+        auto sz = boost::asio::read(*sock_, buf, boost::asio::transfer_at_least(least), err);
+        if (err.failed())
             assert(false);
-            return 0;
-        }
+
+        return sz;
     }
 
     void async_recv(multi_buffer_t& buf, recv_handler_t&& fn)
@@ -268,12 +299,7 @@ public:
             return;
         }
 
-        try {
-            sock_->async_read_some(buf, cb);
-        } catch (const boost::system::error_code& ec) {
-            std::cerr << ec << std::endl;
-            cb(boost::system::errc::make_error_code(boost::system::errc::network_unreachable), 0);
-        }
+        sock_->async_read_some(buf, cb);
     }
 
     void async_recv(char* data, size_t len, recv_handler_t&& fn)
@@ -296,64 +322,19 @@ public:
 
     void close()
     {
-        disconnect();
-        if (sock_ != nullptr)
-        {
-            sock_->close();
-            delete sock_;
-            sock_ = nullptr;
-        }
-    }
-
-    // WARNNING: this function will be blocked while timeout = 0ms
-    // WARNNING: the feature of timeout is not recommended for use in a multi-thread context.
-    // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp11/timeouts/blocking_tcp_client.cpp
-    size_t recv(multi_buffer_t& buf, std::chrono::milliseconds timeout)
-    {
-        if (!is_connected())
-            return 0;
-
-        std::size_t nrecvd = 0;
-        std::future<void> f = std::async(std::launch::async, [&]() {
-            nrecvd = sock_->read_some(buf);
-        });
-        f.wait_for(timeout);
-        return nrecvd;
-    }
-
-    size_t recv(char* data, size_t len, std::chrono::milliseconds timeout)
-    {
-        multi_buffer_t buf{data, len};
-        return recv(buf, timeout);
-    }
-
-    size_t recv(unsigned char* data, size_t len, std::chrono::milliseconds timeout)
-    {
-        multi_buffer_t buf{data, len};
-        return recv(buf, timeout);
+        _disconnect_anyway();
     }
 
 private:
-    bool _do_connect(endpoint_t ep, int retry_times = 1)
+    void _disconnect_anyway()
     {
+        set_conn_status(false);
         if (sock_ != nullptr)
         {
             sock_->close();
             delete sock_;
             sock_ = nullptr;
         }
-            
-        sock_ = new sock_t(io_);
-
-        err_t err;
-        sock_->connect(ep, err);
-        if (err.failed()) 
-        {
-            retry_times--;
-            disconnect();
-            return _do_connect(ep, retry_times);
-        }
-        return set_conn_status(true);
     }
 
 private:

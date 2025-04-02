@@ -23,8 +23,10 @@ TEST(tcp_listener, accept)
             ASSERT_EQ(sock != nullptr, true);
             sock->close();
         }
+        li.close();
     });
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     libcpp::tcp_socket::io_t io;
     libcpp::tcp_socket sock{io};
     ASSERT_EQ(sock.connect("127.0.0.1", 10091), true);

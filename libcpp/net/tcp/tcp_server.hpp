@@ -15,13 +15,14 @@ public:
     using conn_ptr_t           = libcpp::tcp_conn*;
     using msg_t                = libcpp::message;
     using msg_ptr_t            = libcpp::message*;
-    using conn_flag_t          = libcpp::tcp_conn::flag_t;
-
+    using serial_num_t         = std::uint64_t;
     using req_handler_t        = std::function<msg_ptr_t(tcp_server*, conn_ptr_t, msg_ptr_t)>;
-    using tag_t                = std::uint64_t;
 
-    static const conn_flag_t flag_conn_binded_by_srv = 0x1;
-    static const conn_flag_t flag_conn_detached_by_srv = ~(0x1);
+    enum flag : std::int64_t 
+    {
+        conn_binded_by_srv = 0x1,
+        conn_detached_by_srv = ~(0x1),
+    };
 
 public:
     tcp_server() = delete;
@@ -32,36 +33,21 @@ public:
 
     bool bind(conn_ptr_t conn)
     {
-        if (conn->get_flag() & flag_conn_binded_by_srv)
-            return false; // conn already binded
 
-        conn->set_flag(conn->get_flag() | flag_conn_binded_by_srv);
-        conn->set_recv_handler(
-            [this](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t req)->libcpp::tcp_conn::msg_ptr_t{
-            this->tag_inc();
-            return this->fn_(this, conn, req);
-        });
-        return true;
     }
 
     void detach()
     {
-        conn_->set_flag(conn_->get_flag() & flag_conn_detached_by_srv);
-        conn_->set_recv_handler();
-        conn_ = nullptr;
+
     }
 
-    tag_t tag_inc() 
+    serial_num_t inc() 
     { 
-        tag_t tag = tag_.load(); 
-        tag_.compare_exchange_strong(tag, tag + 1); 
-        return tag_.load();
-    }
 
-    tag_t tag_get() { return tag_.load(); }
+    }
 
 private:
-    std::atomic<tag_t> tag_{0};
+    std::atomic<serial_num_t> num_{0};
     req_handler_t fn_;
     libcpp::tcp_conn* conn_;
 };

@@ -51,8 +51,14 @@ public:
         if (acceptor_ == nullptr || !acceptor_->is_open())
             return false;
 
-        acceptor_->set_option(opt);
-        return true;
+        err_t err;
+        acceptor_->set_option(opt, err);
+        if (!err.failed())
+            return true;
+
+        assert(false);
+        std::cerr << err << std::endl;
+        return false;
     }
 
     tcp_socket* accept(uint16_t port)

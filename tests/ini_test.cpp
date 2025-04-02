@@ -12,21 +12,25 @@ TEST(ini, parse)
 
 TEST(ini, read_file)
 {
-    libcpp::ini cfg;
-    cfg.read_file("cfg.ini");
-    ASSERT_EQ(cfg.get_child("person").get<std::string>("name") == std::string("hanjingo"), true);
-    ASSERT_EQ(cfg.get_child("person").get<int>("age") == 30, true);
-    ASSERT_EQ(cfg.get_child("person").get<float>("income") == float(10000.123), true);
+    char text[] = "[person] \nname=hanjingo \nage=30 \nincome=10000.123";
+    libcpp::ini cfg1 = libcpp::ini::parse(text);
+    cfg1.write_file("cfg.ini");
+
+    libcpp::ini cfg2;
+    cfg2.read_file("cfg.ini");
+    ASSERT_EQ(cfg2.get_child("person").get<std::string>("name") == std::string("hanjingo"), true);
+    ASSERT_EQ(cfg2.get_child("person").get<int>("age") == 30, true);
+    ASSERT_EQ(cfg2.get_child("person").get<float>("income") == float(10000.123), true);
 }
 
 TEST(ini, write_file)
 {
-    libcpp::ini cfg;
-    cfg.read_file("cfg.ini");
-    cfg.get_child("person").put("email", "hehehunanchina@live.com");
-    cfg.write_file("cfg.ini");
+    char text[] = "[person] \nname=hanjingo \nage=30 \nincome=10000.123";
+    libcpp::ini cfg1 = libcpp::ini::parse(text);
+    cfg1.get_child("person").put("email", "hehehunanchina@live.com");
+    cfg1.write_file("cfg.ini");
 
-    libcpp::ini tmp;
-    tmp.read_file("cfg.ini");
-    ASSERT_EQ(tmp.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"), true);
+    libcpp::ini cfg2;
+    cfg2.read_file("cfg.ini");
+    ASSERT_EQ(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"), true);
 }

@@ -10,52 +10,39 @@ class tcp_dialer
 {
 public:
     using io_t       = libcpp::tcp_conn::io_t;
-    using conn_t     = libcpp::tcp_conn;
     using conn_ptr_t = libcpp::tcp_conn*;
-    using sock_t     = libcpp::tcp_conn::sock_t;
     using sock_ptr_t = libcpp::tcp_conn::sock_ptr_t;
     using err_t      = libcpp::tcp_conn::err_t;
 
-    using conn_handler_t       = std::function<void(conn_ptr_t, err_t)>;
+    using dial_handler_t = libcpp::tcp_conn::conn_handler_t;
 
-    tcp_dialer(io_t& io) 
-        : io_{io} 
+    tcp_dialer() = delete;
+    virtual ~tcp_dialer() {}
+
+    static conn_ptr_t dial(io_t& io,
+                           const char* ip, 
+                           const std::uint16_t port, 
+                           std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+                           int try_times = 1)
     {
-    }
-    virtual ~tcp_dialer() 
-    { 
-        close(); 
+        tcp_conn* conn = new tcp_conn(io);
+        if (conn->connect(ip, port, timeout, try_times))
+            return conn;
+
+        conn->close();
+        delete conn;
+        return nullptr;
     }
 
-    template<typename T>
-    inline bool set_option(T opt)
+    static void async_dail(io_t& io,
+                           const char* ip, 
+                           uint16_t port, 
+                           dial_handler_t&& fn)
     {
-        // TODO
-        return true;
+        tcp_conn* conn = new tcp_conn(io);
+        conn->set_connect_handler(std::move(fn));
+        conn->async_connect(ip, port);
     }
-
-    conn_ptr_t dial(const char* ip, 
-                    const std::uint16_t port, 
-                    std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
-                    int retry_times = 1)
-    {
-        return dial(io_, ip, port, timeout, retry_times);
-    }
-
-    void async_dail(const char* ip, 
-                    uint16_t port, 
-                    conn_handler_t&& fn)
-    {
-        async_dail(io_, ip, port, std::move(fn)); 
-    }
-
-    void close()
-    {
-        // TODO
-    }
-
-private:
-    io_t& io_;
 };
 
 }

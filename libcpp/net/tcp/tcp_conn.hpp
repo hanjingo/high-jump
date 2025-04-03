@@ -27,7 +27,7 @@ public:
     using conn_ptr_t       = libcpp::tcp_conn*;
     using sock_ptr_t       = libcpp::tcp_socket*;
 
-    using conn_handler_t    = std::function<void(conn_ptr_t, err_t)>;
+    using conn_handler_t    = std::function<void(conn_ptr_t, const err_t&)>;
     using send_handler_t    = std::function<void(conn_ptr_t, msg_ptr_t)>;
     using recv_handler_t    = std::function<void(conn_ptr_t, msg_ptr_t)>;
     using disconn_handler_t = std::function<void(conn_ptr_t)>;
@@ -109,7 +109,9 @@ public:
                 set_r_closed(false);
 
                 io_.post(std::bind(&tcp_conn::_async_send, this, err_t(), 1));
-                io_.post(std::bind(&tcp_conn::_async_recv, this, err_t(), 1));
+                
+                auto buf = r_buf_.prepare(MTU);
+                sock_->async_recv(buf, std::bind(&tcp_conn::_async_recv, this, std::placeholders::_1, std::placeholders::_2));
             }
 
             this->conn_handler_(this, err);
@@ -151,7 +153,7 @@ public:
             return false;
 
         r_ch_ << msg;
-        return true;
+        return _recv_all();
     }
 
     template<typename T>
@@ -235,14 +237,15 @@ private:
         {
             auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
             sz = msg->decode(data, r_buf_.size());
-            if (sz > 0)
-                recv_handler_(this, msg);
-
             this->r_buf_.consume(sz);
+            if (sz > 0)
+            {
+                recv_handler_(this, msg);
+            }
         }
 
         auto buf = r_buf_.prepare(MTU);
-        sock_->async_recv(buf, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
+        sock_->async_recv(buf, std::bind(&tcp_conn::_async_recv, this, std::placeholders::_1, std::placeholders::_2));
     }
 
     bool _send_all()
@@ -278,16 +281,17 @@ private:
         msg_ptr_t msg = nullptr;
         r_ch_ >> msg;
         do {
-            if (sock_ == nullptr || !sock_->is_connected()) 
-                return false;
-
             if (msg == nullptr)
                 break;
+
+            if (sock_ == nullptr || !sock_->is_connected()) 
+                return false;
             
             auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
             sz = msg->decode(data, r_buf_.size());
-            if (sz > 0)
+            if (sz > 0) 
             {
+                r_buf_.consume(sz);
                 r_ch_ >> msg;
                 continue;
             }
@@ -296,6 +300,9 @@ private:
             auto buf = r_buf_.prepare(MTU);
             sz = sock_->recv(buf);
             r_buf_.commit(sz);
+            if (sz < 1)
+                return false;
+
         } while (sz > 0);
         return true;
     }
@@ -314,8 +321,8 @@ private:
     tcp_chan<msg_ptr_t>      r_ch_;
     tcp_chan<msg_ptr_t>      w_ch_;
 
-    conn_handler_t    conn_handler_ = [](conn_ptr_t, err_t){};
-    disconn_handler_t disconn_handler_ = [](conn_ptr_t){};
+    conn_handler_t       conn_handler_ = [](conn_ptr_t, const err_t&){};
+    disconn_handler_t    disconn_handler_ = [](conn_ptr_t){};
     recv_handler_t       recv_handler_ = [](conn_ptr_t, msg_ptr_t){};
     send_handler_t       send_handler_ = [](conn_ptr_t, msg_ptr_t){};
 };

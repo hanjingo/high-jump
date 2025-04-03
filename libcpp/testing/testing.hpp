@@ -7,8 +7,6 @@
 
 #include <libcpp/testing/exception.hpp>
 
-#include <libcpp/testing/solver.hpp>
-
 #include <libcpp/testing/stacktrace.hpp>
 
 #include <libcpp/testing/unit_test.hpp>

@@ -15,7 +15,7 @@ struct tcp_chan {
     inline tcp_chan& operator>>(T& t)
     {
         // q_.wait_dequeue(t);
-        q_.try_dequeue(t);
+        t = (q_.try_dequeue(t) ? t : nullptr);
         return *this;
     }
 

@@ -27,6 +27,7 @@ find_package(httplib REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(pugixml REQUIRED)
 # find_package(Protobuf REQUIRED)
+find_package(TBB REQUIRED)
 find_package(Boost REQUIRED 
     system 
     filesystem 
@@ -73,6 +74,7 @@ target_link_libraries(${PROJECT_NAME}
     pugixml
     # breakpad_client
     fmt::fmt
+    TBB::tbb
 )
 
 add_test(test ${PROJECT_NAME})

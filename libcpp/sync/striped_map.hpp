@@ -10,7 +10,6 @@
 #include <shared_mutex>
 
 using shared_mutex_t = std::shared_mutex;
-using shared_lock
 #else
 #include <boost/thread.hpp>
 
@@ -33,42 +32,42 @@ public:
 
 public:
     explicit striped_map(strip_key_handler_t fn, std::size_t capa) 
-        : _strip_fn(std::move(fn))
+        : strip_fn_(std::move(fn))
     {
-        _buckets.reserve(capa);
-        _locks.reserve(capa);
+        buckets_.reserve(capa);
+        locks_.reserve(capa);
         for (std::size_t bucket = 0; bucket < capa; bucket++)
         {
-            _buckets.emplace_back();
-            _locks.emplace_back(std::make_unique<shared_mutex_t>());
+            buckets_.emplace_back();
+            locks_.emplace_back(std::make_unique<shared_mutex_t>());
         }
     }
 
     void emplace(Key&& key, Value&& value)
     {
-        int bucket = _strip_fn(key);
-        auto& mu = _locks[bucket];
+        int bucket = strip_fn_(key);
+        auto& mu = locks_[bucket];
         mu->lock();
-        _buckets[bucket].emplace(std::forward<Key>(key), std::forward<Value>(value));
+        buckets_[bucket].emplace(std::forward<Key>(key), std::forward<Value>(value));
         mu->unlock();
     }
 
     void replace(Key&& key, Value&& value)
     {
-        int bucket = _strip_fn(key);
-        auto& mu = _locks[bucket];
+        int bucket = strip_fn_(key);
+        auto& mu = locks_[bucket];
         mu->lock();
-        _buckets[bucket][std::forward<Key>(key)] = std::forward<Value>(value);
+        buckets_[bucket][std::forward<Key>(key)] = std::forward<Value>(value);
         mu->unlock();
     }
 
     bool find(const Key& key, Value& value) const
     {
-        int bucket = _strip_fn(key);
-        auto& mu = _locks[bucket];
+        int bucket = strip_fn_(key);
+        auto& mu = locks_[bucket];
         mu->lock_shared();
-        auto itr = _buckets[bucket].find(key);
-        if (itr == _buckets[bucket].end()) 
+        auto itr = buckets_[bucket].find(key);
+        if (itr == buckets_[bucket].end()) 
         {
             mu->unlock_shared();
             return false;
@@ -81,21 +80,21 @@ public:
 
     bool erase(const Key& key)
     {
-        int bucket = _strip_fn(key);
-        auto& mu = _locks[bucket];
+        int bucket = strip_fn_(key);
+        auto& mu = locks_[bucket];
         mu->lock();
-        bool ret = _buckets[bucket].erase(key) > 0;
+        bool ret = buckets_[bucket].erase(key) > 0;
         mu->unlock();
         return ret;
     }
 
     void range(const range_handler_t& fn) const
     {
-        for (std::size_t bucket = 0; bucket < _buckets.size(); ++bucket)
+        for (std::size_t bucket = 0; bucket < buckets_.size(); ++bucket)
         {
-            auto& mu = _locks[bucket];
+            auto& mu = locks_[bucket];
             mu->lock();
-            for (auto itr = _buckets[bucket].begin(); itr != _buckets[bucket].end(); ++itr)
+            for (auto itr = buckets_[bucket].begin(); itr != buckets_[bucket].end(); ++itr)
             {
                 auto k = itr->first;
                 auto v = itr->second;
@@ -105,16 +104,6 @@ public:
                 mu->unlock();
                 return;
             }
-            // for (auto& pair : _buckets[bucket])
-            // {
-            //     auto k = pair.first;
-            //     auto v = pair.second;
-            //     if (fn(k, v)) 
-            //         continue;
-                
-            //     mu->unlock();
-            //     return;
-            // }
             mu->unlock();
         }
     }
@@ -122,20 +111,20 @@ public:
     std::size_t size() const
     {
         std::size_t total = 0;
-        for (std::size_t bucket = 0; bucket < _buckets.size(); ++bucket)
+        for (std::size_t bucket = 0; bucket < buckets_.size(); ++bucket)
         {
-            auto& mu = _locks[bucket];
+            auto& mu = locks_[bucket];
             mu->lock_shared();
-            total += _buckets[bucket].size();
+            total += buckets_[bucket].size();
             mu->unlock_shared();
         }
         return total;
     }
 
 private:
-    std::vector<std::unordered_map<Key, Value> > _buckets;
-    mutable std::vector<std::unique_ptr<shared_mutex_t> > _locks;
-    strip_key_handler_t _strip_fn;
+    std::vector<std::unordered_map<Key, Value> > buckets_;
+    mutable std::vector<std::unique_ptr<shared_mutex_t> > locks_;
+    strip_key_handler_t strip_fn_;
 };
 
 }

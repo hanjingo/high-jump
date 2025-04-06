@@ -105,3 +105,5 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - oneTBB: https://github.com/oneapi-src/oneTBB
 - fmt: https://github.com/fmtlib/fmt
 - hat-trie: https://github.com/Tessil/hat-trie
+- pcm: https://github.com/intel/pcm
+- benchmark: https://github.com/google/benchmark

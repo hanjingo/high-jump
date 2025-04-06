@@ -16,31 +16,31 @@ class zmq_pubsub_broker
 {
 public:
     zmq_pubsub_broker(void* ctx)
-        : _ctx{ctx}
-        , _back{zmq_socket(ctx, ZMQ_XPUB)}
-        , _front{zmq_socket(ctx, ZMQ_XSUB)}
+        : ctx_{ctx}
+        , back_{zmq_socket(ctx, ZMQ_XPUB)}
+        , front_{zmq_socket(ctx, ZMQ_XSUB)}
     {}
     virtual ~zmq_pubsub_broker()
     {
-        if (_back != nullptr)
+        if (back_ != nullptr)
         {
-            zmq_close(_back);
-            _back = nullptr;
+            zmq_close(back_);
+            back_ = nullptr;
         }
-        if (_back != nullptr)
+        if (back_ != nullptr)
         {
-            zmq_close(_front);
-            _front = nullptr;
+            zmq_close(front_);
+            front_ = nullptr;
         }
     }
 
     inline int bind(const std::string& xpub_addr, const std::string& xsub_addr)
     {
-        int ret = zmq_bind(_back, xpub_addr.c_str());
+        int ret = zmq_bind(back_, xpub_addr.c_str());
         if (ret != 0)
             return ret;
 
-        ret = zmq_bind(_front, xsub_addr.c_str());
+        ret = zmq_bind(front_, xsub_addr.c_str());
         if (ret != 0)
             return ret;
 
@@ -49,13 +49,13 @@ public:
 
     inline int proxy(void *capture = nullptr)
     {
-        return zmq_proxy(_front, _back, capture);
+        return zmq_proxy(front_, back_, capture);
     }
 
 private:
-    void*     _ctx;
-    void*     _back;
-    void*     _front;
+    void*     ctx_;
+    void*     back_;
+    void*     front_;
 };
 
 }

@@ -11,6 +11,8 @@
 
 #include <libcpp/sync/object_pool.hpp>
 
+#include <libcpp/sync/safe_map.hpp>
+
 #include <libcpp/sync/shared_memory.hpp>
 
 #include <libcpp/sync/striped_map.hpp>

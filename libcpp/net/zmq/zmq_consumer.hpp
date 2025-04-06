@@ -12,55 +12,55 @@ class zmq_consumer
 {
 public:
     zmq_consumer(void* ctx)
-        : _ctx{ctx}
-        , _sock{zmq_socket(ctx, ZMQ_PULL)}
+        : ctx_{ctx}
+        , sock_{zmqsock_et(ctx, ZMQ_PULL)}
     {
-        zmq_msg_init(&_buf);
+        zmq_msg_init(&buf_);
     }
     ~zmq_consumer()
     {
-        zmq_close(_sock);
-		_sock = nullptr;
+        zmq_close(sock_);
+		sock_ = nullptr;
 
-        zmq_msg_close(&_buf);
+        zmq_msg_close(&buf_);
     }
 
     inline int set_opt(const int opt, const int value)
     {
-        return zmq_setsockopt(_sock, opt, &value, sizeof(value));
+        return zmq_setsockopt(sock_, opt, &value, sizeof(value));
     }
 
     inline int connect(const std::string& addr)
     {
-        return zmq_connect(_sock, addr.c_str());
+        return zmq_connect(sock_, addr.c_str());
     }
 
     inline int disconnect(const std::string& addr)
     {
-        return zmq_disconnect(_sock, addr.c_str());
+        return zmq_disconnect(sock_, addr.c_str());
     }
 
     int pull(std::string& dst, int flags = 0)
     {
-        zmq_msg_init(&_buf);
-        int nbytes = zmq_msg_recv(&_buf, _sock, flags);
+        zmq_msg_init(&buf_);
+        int nbytes = zmq_msg_recv(&buf_, sock_, flags);
         if (nbytes < 0)
             return nbytes;
 
         dst.reserve(nbytes);
-        dst.assign(static_cast<char*>(zmq_msg_data(&_buf)), nbytes);
+        dst.assign(static_cast<char*>(zmq_msg_data(&buf_)), nbytes);
         return nbytes;
     }
 
     inline int pull(zmq_msg_t& data, int flags = 0)
     {
-        return zmq_msg_recv(&data, _sock, flags);
+        return zmq_msg_recv(&data, sock_, flags);
     }
 
 private:
-    void*            _ctx;
-    void*            _sock;
-    zmq_msg_t        _buf;
+    void*            ctx_;
+    void*            sock_;
+    zmq_msg_t        buf_;
 };
 
 }

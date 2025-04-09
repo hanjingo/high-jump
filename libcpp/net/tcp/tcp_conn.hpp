@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <memory>
 
 #include <libcpp/net/tcp/tcp_socket.hpp>
 #include <libcpp/net/tcp/tcp_chan.hpp>
@@ -23,9 +24,16 @@ public:
     using io_t             = libcpp::tcp_socket::io_t;
     using io_work_t        = libcpp::tcp_socket::io_work_t;
     using err_t            = libcpp::tcp_socket::err_t;
+
+#ifdef SMART_PTR_ENABLE
+    using msg_ptr_t        = std::shared_ptr<libcpp::message>;
+    using conn_ptr_t       = std::shared_ptr<libcpp::tcp_conn>;
+    using sock_ptr_t       = std::shared_ptr<libcpp::tcp_socket>;
+#else
     using msg_ptr_t        = libcpp::message*;
     using conn_ptr_t       = libcpp::tcp_conn*;
     using sock_ptr_t       = libcpp::tcp_socket*;
+#endif
 
     using conn_handler_t    = std::function<void(conn_ptr_t, const err_t&)>;
     using send_handler_t    = std::function<void(conn_ptr_t, msg_ptr_t)>;

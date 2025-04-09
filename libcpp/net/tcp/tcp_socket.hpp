@@ -18,6 +18,12 @@ namespace libcpp
 class tcp_socket
 {
 public:
+#ifdef SMART_PTR_ENABLE
+    using tcp_socket_ptr_t  = std::shared_ptr<tcp_socket>;
+#else
+    using tcp_socket_ptr_t  = tcp_socket*;
+#endif
+
     using io_t              = boost::asio::io_context;
     using io_work_t         = boost::asio::io_service::work;
     using err_t             = boost::system::error_code;
@@ -41,7 +47,7 @@ public:
     using opt_keep_alive    = boost::asio::ip::tcp::socket::keep_alive;
     using opt_broadcast     = boost::asio::ip::tcp::socket::broadcast;
 
-    using conn_handler_t    = std::function<void(const err_t&, tcp_socket*)>;
+    using conn_handler_t    = std::function<void(const err_t&, tcp_socket_ptr_t)>;
     using send_handler_t    = std::function<void(const err_t&, std::size_t)>;
     using recv_handler_t    = std::function<void(const err_t&, std::size_t)>;
 

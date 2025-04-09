@@ -10,7 +10,13 @@ class tcp_dialer
 {
 public:
     using io_t       = libcpp::tcp_conn::io_t;
+
+#ifdef SMART_PTR_ENABLE
+    using conn_ptr_t = std::shared_ptr<libcpp::tcp_conn>;
+#else
     using conn_ptr_t = libcpp::tcp_conn*;
+#endif
+
     using sock_ptr_t = libcpp::tcp_conn::sock_ptr_t;
     using err_t      = libcpp::tcp_conn::err_t;
 

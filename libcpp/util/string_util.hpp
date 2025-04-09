@@ -88,6 +88,16 @@ static std::string from_wstring(const std::wstring& src)
     return ret;
 }
 
+static std::string from_ptr_addr(const void* ptr, bool is_hex = true)
+{
+    std::ostringstream oss;
+    if (is_hex)
+        oss << std::hex << reinterpret_cast<std::uintptr_t>(ptr);
+    else
+        oss << reinterpret_cast<std::uintptr_t>(ptr);
+    return oss.str();
+}
+
 template <typename... Args>
 static std::string fmt(const char* style, Args&&... args)
 {

@@ -43,9 +43,6 @@ public:
         _ptr = nullptr;
         assert(ret > -1);
 
-        ret = shared_memory::remove(_name.c_str());
-        assert(ret > -1);
-
         if (_fd >= 0)
             ret = close(_fd);
         _fd = -1;

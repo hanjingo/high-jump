@@ -36,6 +36,13 @@ public:
         return map_.emplace(std::make_pair(std::move(key), std::move(value)));
     }
 
+    void replace(Key&& key, Value&& value)
+    {
+        accessor_t acc;
+        map_.insert(acc, std::move(key));
+        acc->second = std::move(value);
+    }
+
     void replace(Key&& key, Value&& value, Value& old)
     {
         accessor_t acc;

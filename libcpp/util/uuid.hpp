@@ -22,7 +22,7 @@ public:
         return boost::uuids::to_string(gen_rand());
     }
 
-    static unsigned long long gen_u128(bool big_endian = true)
+    static unsigned long long gen_u64(bool big_endian = true)
     {
         auto bytes = gen_rand().data;
 

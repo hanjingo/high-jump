@@ -53,6 +53,12 @@ TEST(string_util, from_wstring)
     ASSERT_STREQ(libcpp::string_util::from_wstring(libcpp::string_util::to_wstring(std::string("hello"))).c_str(), "hello");
 }
 
+TEST(string_util, from_addr)
+{
+    int* i = new int(123);
+    // TODO
+}
+
 TEST(string_util, fmt)
 {
     ASSERT_EQ(libcpp::string_util::fmt("{}-{}", "hello", "world") == std::string("hello-world"), true);

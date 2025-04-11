@@ -28,31 +28,31 @@ public:
     //   + O_CREAT
     //   + O_RDWR
     //   + O_EXCL
-    shared_memory(const char* name, const std::size_t sz, const int flag = O_CREAT | O_RDWR, const int mod = 0666)
+    shared_memory(const char* name, const std::size_t sz = 0, const int flag = O_CREAT | O_RDWR, const int mod = 0666)
         : _name{name}, _sz{sz}, _fd{shm_open(name, flag, mod)}
     {
-        assert(_fd > -1);
-
         truncate(sz);
+
+        if (_fd < 0)
+            throw std::runtime_error("shm_open failed");
     }
     ~shared_memory() 
     {
-        int ret = 1;
-        if (_ptr != nullptr)
-            ret = munmap(_ptr, size());
-        _ptr = nullptr;
-        assert(ret > -1);
-
+        unmap();
         if (_fd >= 0)
-            ret = close(_fd);
+            close(_fd);
         _fd = -1;
-        assert(ret > -1);
+        _sz = 0;
+        _ptr = nullptr;
     }
 
     static int remove(const char* name)
     {
-        return (strcmp(name, "") ? -1 : shm_unlink(name));
+        return shm_unlink(name);
     }
+
+    inline void* addr() { return _ptr; }
+    inline std::size_t size() { return _sz; }
 
     void truncate(const std::size_t sz)
     {
@@ -60,11 +60,6 @@ public:
             ftruncate(_fd, sz);
 
         _sz = sz;
-    }
-
-    std::size_t size()
-    {
-        return _sz;
     }
 
     // param description
@@ -101,9 +96,14 @@ public:
         return _ptr;
     }
 
-    inline void* addr()
+    bool unmap()
     {
-        return _ptr;
+        if (_ptr != nullptr)
+            if (munmap(_ptr, size()) < 0)
+                return false;
+
+        _ptr = nullptr;
+        return true;
     }
 
 private:

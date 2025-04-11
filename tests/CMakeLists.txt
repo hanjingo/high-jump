@@ -6,14 +6,17 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(tests)
 
-add_subdirectory(dll_example)
-# add_subdirectory(child)
-# add_subdirectory(daemon)
-
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
+
+add_subdirectory(dll_example)
+# add_subdirectory(child)
+# add_subdirectory(daemon)
+
+add_subdirectory(shm_consumer)
+add_subdirectory(shm_producer)
 
 enable_testing()
 
@@ -33,6 +36,7 @@ find_package(Boost REQUIRED
     filesystem 
     context 
     thread 
+    program_options
     coroutine)
 
 include_directories(${CMAKE_SOURCE_DIR})
@@ -75,6 +79,7 @@ target_link_libraries(${PROJECT_NAME}
     # breakpad_client
     fmt::fmt
     TBB::tbb
+    rt
 )
 
 add_test(test ${PROJECT_NAME})

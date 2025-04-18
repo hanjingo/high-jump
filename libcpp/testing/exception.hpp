@@ -33,6 +33,20 @@ static void throw_if_not_equal(T target1, T target2, const char* memo = "not equ
 }
 
 template<typename T>
+static void throw_if_empty(T target, const char* memo = "empty")
+{
+    if (target.empty())
+        throw std::logic_error(memo);
+}
+
+template<typename T>
+static void throw_if_not_empty(T target, const char* memo = "not empty")
+{
+    if (!target.empty())
+        throw std::logic_error(memo);
+}
+
+template<typename T>
 static void throw_if_null(T target, const char* memo = "null")
 {
     if (target == nullptr || target == NULL)

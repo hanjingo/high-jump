@@ -1,6 +1,7 @@
 #ifndef INI_HPP
 #define INI_HPP
 
+#include <string>
 #include <unistd.h>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -38,6 +39,13 @@ public:
     void write_file(const char* filepath)
     {
         boost::property_tree::ini_parser::write_ini(filepath, *this);
+    }
+
+    std::string str()
+    {
+        std::ostringstream ss;
+        boost::property_tree::write_ini(ss, *this);
+        return ss.str();
     }
 };
 

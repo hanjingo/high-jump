@@ -1,6 +1,7 @@
 #ifndef SHARED_MEMORY_HPP
 #define SHARED_MEMORY_HPP
 
+#include <stdexcept>
 #include <exception>
 #include <string>
 #include <string.h>

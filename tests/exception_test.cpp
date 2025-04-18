@@ -62,6 +62,40 @@ TEST(exception, throw_if_not_equal)
     }
 }
 
+TEST(exception, throw_if_empty)
+{
+    try {
+        std::string str1{};
+        libcpp::throw_if_empty(str1);
+    } catch(std::exception& memo) {
+        ASSERT_STREQ(memo.what(), "empty");
+    }
+
+    try {
+        std::string str2{"hello"};
+        libcpp::throw_if_empty(str2);
+    } catch(std::exception& memo) {
+        ASSERT_FALSE(false);
+    }
+}
+
+TEST(exception, throw_if_not_empty)
+{
+    try {
+        std::string str1{"hello"};
+        libcpp::throw_if_not_empty(str1);
+    } catch(std::exception& memo) {
+        ASSERT_STREQ(memo.what(), "not empty");
+    }
+
+    try {
+        std::string str2{};
+        libcpp::throw_if_not_empty(str2);
+    } catch(std::exception& memo) {
+        ASSERT_FALSE(false);
+    }
+}
+
 TEST(exception, throw_if_null)
 {
     try {

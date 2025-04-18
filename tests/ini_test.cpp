@@ -34,3 +34,13 @@ TEST(ini, write_file)
     cfg2.read_file("cfg.ini");
     ASSERT_EQ(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"), true);
 }
+
+TEST(ini, str)
+{
+    char text[] = "[person] \nname=hanjingo";
+    libcpp::ini cfg1 = libcpp::ini::parse(text);
+    cfg1.get_child("person").put("email", "hehehunanchina@live.com");
+    
+    libcpp::ini cfg2 = libcpp::ini::parse(cfg1.str().c_str());
+    ASSERT_EQ(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"), true);
+}

@@ -23,7 +23,7 @@ enable_testing()
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 find_package(ZeroMQ REQUIRED)
-# find_package(SQLite3 REQUIRED)
+find_package(SQLite3 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(httplib REQUIRED)
 # find_package(BehaviorTreeV3 REQUIRED)
@@ -44,7 +44,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${GTEST_INCLUDE_DIR})
 include_directories(${ZeroMQ_INCLUDE_DIR})
-# include_directories(${SQLite3_INCLUDE_DIRS})
+include_directories(${SQLite3_INCLUDE_DIRS})
 include_directories(${Eigen_INCLUDE_DIRS})
 include_directories(${OpenSSL_INCLUDE_DIRS})
 include_directories(${PUGIXML_INCLUDE_DIR})
@@ -69,7 +69,7 @@ target_link_libraries(${PROJECT_NAME}
     ${CMAKE_DL_LIBS}
     ${GTEST_LIBRARIES} 
     ${Boost_LIBRARIES} 
-    # ${SQLite3_LIBRARIES} 
+    ${SQLite3_LIBRARIES} 
     ${Eigen_LIBRARIES} 
     ${ODBC_LIBRARIES}
     # ${PROTOBUF_LIBRARIES}

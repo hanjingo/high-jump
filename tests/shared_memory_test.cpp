@@ -60,11 +60,11 @@ TEST(shared_memory, producer_1_consume_n)
     }
 
     libcpp::process::spawn("./shm_producer --key=prod1");
-    // std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
     libcpp::process::spawn("./shm_consumer --key=prod1 --result=result1");
     libcpp::process::spawn("./shm_consumer --key=prod1 --result=result2");
 
-    // std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
     libcpp::shared_memory shm1{"result1", 256};
     libcpp::shared_memory shm2{"result2", 256};
     shm1.map();

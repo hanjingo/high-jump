@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/process.hpp>
 #include <libcpp/sync/shared_memory.hpp>
+#include <thread>
 
 TEST(shared_memory, size)
 {

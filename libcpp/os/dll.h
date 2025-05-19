@@ -11,19 +11,17 @@
 #else // Warnning
 #define DLL_EXPORT
 #define DLL_IMPORT
-#progma WARNING UNKNOWN DYNAMIC LINK IMPORT/EXPORT SEMANTICS.
+#pragma WARNING UNKNOWN DYNAMIC LINK IMPORT/EXPORT SEMANTICS.
 #endif
 
-// // export/import c style dll
-// #ifdef _cplusplus
-// #define C_STYLE_EXPORT extern "C" DLL_EXPORT
-// #define C_STYLE_IMPORT DLL_IMPORT
-// #else
-// #define C_STYLE_EXPORT DLL_EXPORT
-// #define C_STYLE_IMPORT DLL_IMPORT
-// #endif
-
+// export/import c style dll
+#ifdef _cplusplus
 #define C_STYLE_EXPORT extern "C" DLL_EXPORT
+#define C_STYLE_IMPORT DLL_IMPORT
+#else
+#define C_STYLE_EXPORT DLL_EXPORT
+#define C_STYLE_IMPORT DLL_IMPORT
+#endif
 
 
 #if defined(_WIN32)

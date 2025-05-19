@@ -1,7 +1,6 @@
 #ifndef DEFER_HPP
 #define DEFER_HPP
 
-#include <list>
 #include <functional>
 
 namespace libcpp

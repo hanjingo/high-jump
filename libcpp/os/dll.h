@@ -15,7 +15,7 @@
 #endif
 
 // export/import c style dll
-#ifdef _cplusplus
+#ifdef __cplusplus
 #define C_STYLE_EXPORT extern "C" DLL_EXPORT
 #define C_STYLE_IMPORT DLL_IMPORT
 #else

@@ -19,11 +19,12 @@ if(BUILD_EXAMPLE)
     add_subdirectory(example)
 endif()
 
-# build tests
+# build benmark
 if (BUILD_TEST)
-    add_subdirectory(tests)
     add_subdirectory(bench)
 endif()
+
+add_subdirectory(tests)
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/libcpp
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include)

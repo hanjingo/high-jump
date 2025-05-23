@@ -69,7 +69,7 @@ static void* dll_open(const char* filename, int flag)
 static void* dll_get(void* handler, const char* symbol)
 {
 #if defined(_WIN32)
-    return (void*)(GetProcAddress((HMODULE)(handler), symbol));
+    return (void*)(GetProcAddress((HMODULE)handler, symbol));
 #else
     return dlsym(handler, symbol);
 #endif
@@ -78,7 +78,7 @@ static void* dll_get(void* handler, const char* symbol)
 static int dll_close(void* handler)
 {
 #if defined(_WIN32)
-    return FreeLibrary((HMODULE)(handler));
+    return FreeLibrary((HMODULE)handler);
 #else
     return dlclose(handler);
 #endif

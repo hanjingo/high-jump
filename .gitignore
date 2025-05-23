@@ -44,6 +44,12 @@ libs
 
 # vs
 *.user
+out
+CMakeSettings.json
+.vs
+
+# vcpkg
+vcpkg_installed
 
 # vim
 *.swo

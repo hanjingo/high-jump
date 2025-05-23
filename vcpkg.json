@@ -1,0 +1,24 @@
+{
+  "dependencies": [
+    "boost",
+	  "nlohmann-json",
+		"pugixml",
+		"zeromq",
+		"concurrentqueue",
+		"spdlog",
+		"gtest",
+		"flatbuffers",
+		"sqlite3",
+		"behaviortree-cpp",
+		"cpp-httplib",
+		"hiredis",
+		"hidapi",
+		"breakpad",
+		"eigen3",
+		"tbb",
+		"fmt"
+  ],
+  "overrides": [
+    { "name": "boost", "version": "1.75.0" }
+  ]
+}

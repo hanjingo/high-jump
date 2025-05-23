@@ -41,6 +41,14 @@ cpp library framework implementationed by c++11.
 | Clang    | 2013-04         |
 | MSVC     | 2013            |
 
+For vcpkg run cmd:
+
+```cmd
+vcpkg install
+```
+
+or install 3rd-party project by yourself.
+
 ### Build Library
 
 ```sh
@@ -89,7 +97,6 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - json: https://github.com/nlohmann/json
 - pugixml: https://github.com/zeux/pugixml
 - libzmq: https://github.com/zeromq/libzmq
-- zmqpp: https://github.com/zeromq/zmqpp
 - concurrentqueue: https://github.com/cameron314/concurrentqueue
 - spdlog: https://github.com/gabime/spdlog
 - googletest: https://github.com/google/googletest
@@ -97,7 +104,6 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - sqlite3: https://github.com/sqlite/sqlite
 - BehaviorTree.CPP: https://github.com/BehaviorTree/BehaviorTree.CPP
 - cpp-httplib: https://github.com/yhirose/cpp-httplib
-- ThreadPool: https://github.com/progschj/ThreadPool
 - hiredis: https://github.com/redis/hiredis
 - hidapi: https://github.com/signal11/hidapi
 - breakpad: https://github.com/google/breakpad

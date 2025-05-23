@@ -1,4 +1,0 @@
-[submodule "cmakes"]
-	path = cmakes
-	url = https://github.com/hanjingo/cmakes.git
-	branch = main

@@ -40,6 +40,9 @@ find_package(Boost REQUIRED
     program_options
     coroutine)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(BREAKPAD REQUIRED breakpad-client)
+
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${GTEST_INCLUDE_DIR})
@@ -79,7 +82,7 @@ target_link_libraries(${PROJECT_NAME}
     OpenSSL::SSL 
     OpenSSL::Crypto
     pugixml
-    # breakpad_client
+    breakpad_client
     fmt::fmt
     TBB::tbb
     rt

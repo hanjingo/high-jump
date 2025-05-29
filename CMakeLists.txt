@@ -15,9 +15,9 @@ if (BUILD_LIB)
 endif()
 
 # build example
-if(BUILD_EXAMPLE)
-    add_subdirectory(example)
-endif()
+#if(BUILD_EXAMPLE)
+     add_subdirectory(example)
+#endif()
 
 # build benmark
 if (BUILD_TEST)
@@ -25,5 +25,42 @@ if (BUILD_TEST)
     add_subdirectory(bench)
 endif()
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/libcpp
-        DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+add_library(libcpp INTERFACE)
+target_include_directories(libcpp INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libcpp>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmakes/libcppConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libcpp
+    # Passes the includedir install path
+    PATH_VARS CMAKE_INSTALL_FULL_INCLUDEDIR
+)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfigVersion.cmake
+    VERSION ${LIBCPP_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libcpp
+)
+
+install(DIRECTORY libcpp/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcpp)
+
+install(TARGETS libcpp 
+        EXPORT libcppTargets
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcpp
+)
+
+install(EXPORT libcppTargets 
+    FILE libcppTargets.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libcpp
+)

@@ -38,6 +38,7 @@ bin
 bins
 lib
 libs
+install
 
 # vscode
 .vscode

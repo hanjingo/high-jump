@@ -15,9 +15,9 @@ if (BUILD_LIB)
 endif()
 
 # build example
-#if(BUILD_EXAMPLE)
+if(BUILD_EXAMPLE)
      add_subdirectory(example)
-#endif()
+endif()
 
 # build benmark
 if (BUILD_TEST)

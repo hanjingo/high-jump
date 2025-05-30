@@ -37,7 +37,7 @@ target_include_directories(libcpp INTERFACE
 configure_package_config_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmakes/libcppConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/libcppConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libcpp
+    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/libcpp
     # Passes the includedir install path
     PATH_VARS CMAKE_INSTALL_FULL_INCLUDEDIR
 )
@@ -50,7 +50,7 @@ write_basic_package_version_file(
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/libcppConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/libcppConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libcpp
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/libcpp
 )
 
 install(DIRECTORY libcpp/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcpp)
@@ -62,5 +62,5 @@ install(TARGETS libcpp
 
 install(EXPORT libcppTargets 
     FILE libcppTargets.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libcpp
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/libcpp
 )

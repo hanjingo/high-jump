@@ -2,7 +2,7 @@
 #define INI_HPP
 
 #include <string>
-#include <unistd.h>
+#include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
@@ -27,7 +27,7 @@ public:
 
     bool read_file(const char* filepath)
     {
-        if (access(filepath, F_OK) == -1)
+        if (!boost::filesystem::exists(filepath))
             return false;
 
         boost::property_tree::ptree tree;

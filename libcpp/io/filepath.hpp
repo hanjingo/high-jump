@@ -46,14 +46,14 @@ public:
         return path.string();
     }
 
-    static std::string file_name(const std::string& file, const bool with_ext = true)
-    {
-        if (boost::filesystem::is_directory(file)) {
-            return "";
-        }
+    static std::string file_name(const std::string& file, const bool with_ext = true)  
+    {  
+        if (boost::filesystem::is_directory(file)) {  
+            return "";  
+        }  
 
-        return with_ext ? boost::filesystem::path(file).leaf().string()
-               : boost::filesystem::basename(boost::filesystem::path(file));
+        return with_ext ? boost::filesystem::path(file).filename().string()  
+               : boost::filesystem::path(file).stem().string();  
     }
 
     static std::string dir_name(const std::string& path)
@@ -169,7 +169,7 @@ public:
         if (recursive) {
             auto itr = boost::filesystem::recursive_directory_iterator(fpath);
             for (; itr != boost::filesystem::recursive_directory_iterator(); itr++) {
-                if (itr->path().leaf().string() != file) {
+                if (itr->path().filename().string() != file) {
                     continue;
                 }
 
@@ -180,7 +180,7 @@ public:
 
         auto itr = boost::filesystem::directory_iterator(fpath);
         for (; itr != boost::filesystem::directory_iterator(); itr++) {
-            if (itr->path().leaf().string() != file) {
+            if (itr->path().filename().string() != file) {
                 continue;
             }
 
@@ -215,13 +215,32 @@ public:
         return true;
     }
 
-    static bool copy_dir(const std::string& from, const std::string& to)
-    {
-        auto f_from = boost::filesystem::path(from);
-        auto f_to   = boost::filesystem::path(to);
-        boost::filesystem::copy_directory(f_from, f_to);
+    static bool copy_dir(const std::string& from, const std::string& to)  
+    {  
+        auto f_from = boost::filesystem::path(from);  
+        auto f_to   = boost::filesystem::path(to);  
 
-        return boost::filesystem::exists(f_to);
+        if (!boost::filesystem::exists(f_from) || !boost::filesystem::is_directory(f_from))
+            return false;   
+
+        if (!boost::filesystem::exists(f_to))
+            boost::filesystem::create_directory(f_to);  
+
+        for (boost::filesystem::directory_iterator file(f_from); file != boost::filesystem::directory_iterator(); ++file) 
+        {  
+            const auto& entry = file->path();  
+            auto dest = f_to / entry.filename();  
+            if (boost::filesystem::is_directory(entry)) 
+            {  
+                if (!copy_dir(entry.string(), dest.string()))
+                    return false;   
+            } 
+            else 
+            {  
+                boost::filesystem::copy_file(entry, dest);  
+            }  
+        }  
+        return true;  
     }
 
     static bool copy_file(const std::string& from, const std::string& to)

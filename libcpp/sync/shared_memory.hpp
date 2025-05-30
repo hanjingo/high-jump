@@ -7,13 +7,13 @@
 #include <string.h>
 #include <assert.h>
 #include <fcntl.h>
-#include <unistd.h>
 
 #if defined(_WIN32)
 
 // TODO
 
 #elif __linux__
+#include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>

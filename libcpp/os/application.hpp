@@ -6,7 +6,7 @@
 
 #include <functional>
 
-#if defined(__WIN32)
+#if defined(_WIN32)
 #include <io.h>
 #include <fcntl.h>
 #elif __linux__
@@ -29,7 +29,7 @@ public:
 
     static long gettid() 
     {
-#if defined(__WIN32)
+#if defined(_WIN32)
         return static_cast<long>(::GetCurrentThreadId());
 #elif __linux__
         return static_cast<long>(syscall(SYS_gettid));

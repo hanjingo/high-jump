@@ -4,6 +4,7 @@
 #include <string>
 #include <regex>
 #include <vector>
+#include <sstream>
 
 #include <fmt/core.h>
 

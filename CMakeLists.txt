@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.19.2)
 
+# import vcpkg module
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    if(DEFINED ENV{VCPKG_ROOT})
+        set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+    endif()
+endif()
+
 project(libcpp)
 
 # set environment param

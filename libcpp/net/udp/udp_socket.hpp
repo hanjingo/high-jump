@@ -77,24 +77,12 @@ public:
         return send(buf, ep);
     }
 
-    size_t send(const unsigned char* data, size_t len, endpoint_t& ep)
-    {
-        auto buf = boost::asio::buffer(data, len);
-        return send(buf, ep);
-    }
-
     void async_send(const const_buffer_t& buf, endpoint_t& ep, send_handler_t&& fn)
     {
         sock_->async_send_to(buf, ep, std::move(fn));
     }
 
     void async_send(const char* data, size_t len, endpoint_t& ep, send_handler_t&& fn)
-    {
-        auto buf = boost::asio::buffer(data, len);
-        async_send(buf, ep, std::move(fn));
-    }
-
-    void async_send(const unsigned char* data, size_t len, endpoint_t& ep, send_handler_t&& fn)
     {
         auto buf = boost::asio::buffer(data, len);
         async_send(buf, ep, std::move(fn));
@@ -111,24 +99,12 @@ public:
         return recv(buf, ep);
     }
 
-    size_t recv(unsigned char* data, size_t len, endpoint_t& ep)
-    {
-        multi_buffer_t buf{data, len};
-        return recv(buf, ep);
-    }
-
     void async_recv(multi_buffer_t& buf, endpoint_t& ep, recv_handler_t&& fn)
     {
         sock_->async_receive_from(buf, ep, std::move(fn));
     }
 
     void async_recv(char* data, size_t len, endpoint_t& ep, recv_handler_t&& fn)
-    {
-        multi_buffer_t buf{data, len};
-        async_recv(buf, ep, std::move(fn));
-    }
-
-    void async_recv(unsigned char* data, size_t len, endpoint_t& ep, recv_handler_t&& fn)
     {
         multi_buffer_t buf{data, len};
         async_recv(buf, ep, std::move(fn));

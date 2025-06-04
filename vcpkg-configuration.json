@@ -6,9 +6,10 @@
   },
   "registries": [
     {
-      "kind": "artifact",
-      "location": "https://github.com/microsoft/vcpkg-ce-catalog/archive/refs/heads/main.zip",
-      "name": "microsoft"
+      "kind": "git",
+      "repository": "https://github.com/Microsoft/vcpkg",
+      "baseline": "761c81d43335a5d5ccc2ec8ad90bd7e2cbba734e",
+      "packages": [ "boost*", "boost-*" ]
     }
   ]
 }

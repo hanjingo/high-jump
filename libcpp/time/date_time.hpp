@@ -57,6 +57,8 @@ public:
         : tm_{boost::posix_time::ptime_from_tm(tm) + boost::posix_time::time_duration(0, 0, 0, ms * 1000)} {};
     explicit date_time(const std::time_t time, long ms = 0)
         : tm_{boost::posix_time::from_time_t(time) + boost::posix_time::time_duration(0, 0, 0, ms * 1000)} {};
+
+#if not defined(_WIN32)
     explicit date_time(const timeval& tv)
         : tm_{boost::posix_time::from_time_t(tv.tv_sec) +
               boost::posix_time::time_duration(0, 0, 0, tv.tv_usec * 1000)} {};
@@ -72,6 +74,8 @@ public:
         strptime(str.c_str(), fmt.c_str(), &tm);
         tm_ = boost::posix_time::ptime_from_tm(tm);
     }
+#endif
+
     date_time(unsigned short year, unsigned short month, unsigned short day,
              long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
         : tm_{boost::posix_time::ptime(boost::gregorian::date(year, month, day),
@@ -115,21 +119,36 @@ public:
     static date_time parse(const std::string& str, const std::string& fmt = TIME_FMT)
     {
         std::tm tm;
-        strptime(str.c_str(), fmt.c_str(), &tm);
+        //strptime(str.c_str(), fmt.c_str(), &tm);
+        std::istringstream ss(str);
+        ss >> std::get_time(&tm, fmt.c_str());
+        if (ss.fail())
+            throw std::runtime_error("Failed to parse date/time string");
+
         return date_time(tm);
     }
 
     static void parse(date_time& dt, const char* str, const char* fmt)
     {
         std::tm tm;
-        strptime(str, fmt, &tm);
+        //strptime(str, fmt, &tm);
+        std::istringstream ss(str);
+        ss >> std::get_time(&tm, fmt);
+        if (ss.fail())
+            throw std::runtime_error("Failed to parse date/time string");
+
         dt.tm_ = boost::posix_time::ptime_from_tm(tm);
     }
 
     static void parse(date_time& dt, const std::string& str, const std::string& fmt = TIME_FMT)
     {
         std::tm tm;
-        strptime(str.c_str(), fmt.c_str(), &tm);
+        //strptime(str.c_str(), fmt.c_str(), &tm);
+        std::istringstream ss(str);
+        ss >> std::get_time(&tm, fmt.c_str());
+        if (ss.fail())
+            throw std::runtime_error("Failed to parse date/time string");
+
         dt.tm_ = boost::posix_time::ptime_from_tm(tm);
     }
 

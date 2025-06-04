@@ -1,7 +1,7 @@
 #ifndef TCP_CHAN_HPP
 #define TCP_CHAN_HPP
 
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+#include <concurrentqueue/blockingconcurrentqueue.h>
 
 namespace libcpp
 {
@@ -14,8 +14,7 @@ struct tcp_chan {
 
     inline tcp_chan& operator>>(T& t)
     {
-        // q_.wait_dequeue(t);
-        t = (q_.try_dequeue(t) ? t : nullptr);
+        q_.try_dequeue(t);
         return *this;
     }
 

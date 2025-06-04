@@ -12,7 +12,7 @@ TEST(env, compile_time)
     ASSERT_EQ(COMPILE_DAY > 0, true);
     ASSERT_EQ(COMPILE_HOUR >= 0, true);
     ASSERT_EQ(COMPILE_MINUTE >= 0, true);
-    ASSERT_EQ(COMPILE_SECONDS >= 0, true);
+    ASSERT_EQ(COMPILE_SECOND >= 0, true);
 
     std::string str;
     str.assign(COMPILE_TIME, COMPILE_TIME_LEN);

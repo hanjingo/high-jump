@@ -15,8 +15,8 @@ add_subdirectory(dll_example)
 # add_subdirectory(child)
 # add_subdirectory(daemon)
 
-add_subdirectory(shm_consumer)
-add_subdirectory(shm_producer)
+#add_subdirectory(shm_consumer)
+#add_subdirectory(shm_producer)
 
 enable_testing()
 
@@ -26,67 +26,61 @@ find_package(ZeroMQ REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(httplib REQUIRED)
-# find_package(BehaviorTreeV3 REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(pugixml REQUIRED)
-# find_package(Protobuf REQUIRED)
+find_package(Protobuf REQUIRED)
 find_package(TBB REQUIRED)
 find_package(ODBC REQUIRED)
-find_package(Boost REQUIRED 
-    system 
-    filesystem 
-    context 
-    thread 
+find_package(nlohmann_json REQUIRED)
+find_package(unofficial-breakpad REQUIRED)
+find_package(unofficial-concurrentqueue REQUIRED)
+find_package(Boost REQUIRED COMPONENTS
+    system
+    filesystem
     program_options
-    coroutine)
-
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(BREAKPAD REQUIRED breakpad-client)
+    context
+)
 
 include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${GTEST_INCLUDE_DIR})
-include_directories(${ZeroMQ_INCLUDE_DIR})
-include_directories(${SQLite3_INCLUDE_DIRS})
-include_directories(${Eigen_INCLUDE_DIRS})
-include_directories(${OpenSSL_INCLUDE_DIRS})
-include_directories(${PUGIXML_INCLUDE_DIR})
-include_directories(${ODBC_INCLUDE_DIRS})
-# include_directories(${PROTOBUF_INCLUDE_DIRS})
-
-# if (NOT Breakpad_INCLUDE_DIR)
-#     set(Breakpad_INCLUDE_DIR /usr/local/include/breakpad)
-# endif()
-# include_directories(${Breakpad_INCLUDE_DIR})
-
 aux_source_directory(. SRC)
-
 add_executable(${PROJECT_NAME} ${SRC})
 
-# if (NOT Breakpad_LIB_DIR)
-#     set(Breakpad_LIB_DIR /usr/local/lib)
-# endif()
-# link_directories(${Breakpad_LIB_DIR})
-
 target_link_libraries(${PROJECT_NAME} 
-    ${CMAKE_DL_LIBS}
-    ${GTEST_LIBRARIES} 
     ${Boost_LIBRARIES} 
+    ${GTEST_LIBRARIES} 
     ${SQLite3_LIBRARIES} 
     ${Eigen_LIBRARIES} 
     ${ODBC_LIBRARIES}
-    # ${PROTOBUF_LIBRARIES}
-    pthread
+    protobuf::libprotobuf
     pugixml
-    # BT::behaviortree_cpp_v3
+    BT::behaviortree_cpp
     OpenSSL::SSL 
     OpenSSL::Crypto
     pugixml
-    breakpad_client
     fmt::fmt
     TBB::tbb
-    rt
+    nlohmann_json::nlohmann_json
+
+#    breakpad_client
+    unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
+    unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
+
+#    concurrentqueue
+    unofficial::concurrentqueue::concurrentqueue # for unofficial concurrentqueue cmake config
 )
+
+if (WIN32)
+    target_link_libraries(${PROJECT_NAME} 
+        ws2_32 # for windows sockets
+        bcrypt # for Windows cryptography
+    )
+else()
+    target_link_libraries(${PROJECT_NAME} 
+        pthread # for *nix threads
+        rt # for *nix real-time extensions
+    )
+endif()
 
 add_test(test ${PROJECT_NAME})
 

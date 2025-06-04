@@ -25,27 +25,26 @@ public:
     ecb() {}
     ~ecb() {}
 
-    // template<typename T>
-    // inline ecb& operator<<(const T& src)
-    // {
-    //     unsigned char buf[(sizeof(src) / 8) * 8 + 8];
-    //     encrypt((unsigned char*)src, (unsigned char*)key_.data(), buf);
-    //     return *this;
-    // }
-
-    // template<typename T>
-    // inline ecb& operator>>(T& dst)
-    // {
-    //     decrypt()
-    //     return *this;
-    // }
+     template<typename T>
+     inline ecb& operator<<(const T& src)
+     {
+         unsigned char buf[(sizeof(src) / 8) * 8 + 8];
+         encrypt((unsigned char*)src, (unsigned char*)key_.data(), buf);
+         return *this;
+     }
+    
+     template<typename T>
+     inline ecb& operator>>(T& dst)
+     {
+         decrypt()
+         return *this;
+     }
 
     static std::string encrypt(const std::string& src, const std::string& key)
     {
-        unsigned char buf[(src.size() / 8) * 8 + 8];
-        
-        std::size_t len = encrypt((unsigned char *)src.c_str(), src.size(), (unsigned char *)key.c_str(), key.size(), buf);
-        return std::string(buf, buf + len);
+        std::vector<unsigned char> buf((src.size() / 8) * 8 + 8);
+        std::size_t len = encrypt((unsigned char*)src.c_str(), src.size(), (unsigned char*)key.c_str(), key.size(), buf.data());
+        return std::string(buf.begin(), buf.begin() + len);
     }
 
     static std::size_t encrypt(const unsigned char* src, 
@@ -90,10 +89,9 @@ public:
 
     static std::string decrypt(const std::string& cipher, const std::string& key)
     {
-        unsigned char buf[(cipher.size() / 8) * 8 + 8];
-        
-        std::size_t len = decrypt((unsigned char *)cipher.c_str(), cipher.size(), (unsigned char *)key.c_str(), key.size(), buf);
-        return std::string(buf, buf + len);
+        std::vector<unsigned char> buf((cipher.size() / 8) * 8 + 8);
+        std::size_t len = decrypt((unsigned char*)cipher.c_str(), cipher.size(), (unsigned char*)key.c_str(), key.size(), buf.data());
+        return std::string(buf.begin(), buf.begin() + len);
     }
 
     static std::size_t decrypt(const unsigned char* cipher, 

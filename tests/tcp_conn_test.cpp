@@ -15,20 +15,18 @@ public:
         return text_.size(); // ignore '\n'
     }
 
-    std::size_t encode(unsigned char* buf, const std::size_t len)
+    std::size_t encode(char* buf, const std::size_t len)
     {
         memcpy(buf, text_.c_str(), len);
         return len;
     }
 
-    std::size_t decode(const unsigned char* buf, const std::size_t len)
+    std::size_t decode(const char* buf, const std::size_t len)
     {
         if (len < 5)
             return 0;
 
-        char tmp[len];
-        memcpy(tmp, buf, 5);
-        text_ = std::string(tmp, 5);
+        text_ = std::string(buf, 5);
         return 5; // ignore '\n'
     }
 

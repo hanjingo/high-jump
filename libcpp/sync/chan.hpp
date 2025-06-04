@@ -1,7 +1,7 @@
 #ifndef CHAN_HPP
 #define CHAN_HPP
 
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+#include <concurrentqueue/blockingconcurrentqueue.h>
 
 #ifndef CHAN_CAPA
 #define CHAN_CAPA 6

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <vector>
 
 #include <libcpp/net/tcp/tcp_socket.hpp>
 #include <libcpp/net/tcp/tcp_chan.hpp>
@@ -218,8 +219,8 @@ private:
         }
 
         sz = msg->size();
-        unsigned char buf[sz];
-        sz = msg->encode(buf, sz);
+        std::vector<char> buf(sz);
+        sz = msg->encode(buf.data(), sz);
         if (sz == 0)
         {
             set_w_closed(true);
@@ -227,7 +228,7 @@ private:
         }
 
         send_handler_(this, msg);
-        sock_->async_send(buf, sz, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
+        sock_->async_send(buf.data(), sz, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
     }
 
     void _async_recv(const err_t& err, std::size_t sz)
@@ -243,7 +244,7 @@ private:
         r_ch_ >> msg;
         if (msg != nullptr)
         {
-            auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
+            auto data = boost::asio::buffer_cast<const char*>(r_buf_.data());
             sz = msg->decode(data, r_buf_.size());
             this->r_buf_.consume(sz);
             if (sz > 0)
@@ -269,15 +270,15 @@ private:
                 return false;
 
             sz = msg->size();
-            unsigned char buf[sz];
-            sz = msg->encode(buf, sz);
+            std::vector<char> buf(sz);
+            sz = msg->encode(buf.data(), sz);
             if (sz < 1) // decode fail, exit
             {
                 set_w_closed(true);
                 return false;
             }
 
-            if (sock_->send(buf, sz) < sz) // send fail, exit
+            if (sock_->send(buf.data(), sz) < sz) // send fail, exit
                 return false;
         } while (sz > 0);
         return true;
@@ -295,7 +296,7 @@ private:
             if (sock_ == nullptr || !sock_->is_connected()) 
                 return false;
             
-            auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
+            auto data = boost::asio::buffer_cast<const char*>(r_buf_.data());
             sz = msg->decode(data, r_buf_.size());
             if (sz > 0) 
             {

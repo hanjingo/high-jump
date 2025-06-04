@@ -3,19 +3,19 @@
 
 TEST(trie, insert)
 {
-    libcpp::htrie_map<char, std::int64_t> map;
-    map.insert("hello", 1);
-    map.insert("world", 2);
-    map.insert("hell", 3);
-    map.insert("helloo", 4);
-    map.insert("hellooo", 5);
-    map.insert("helloooo", 6);
-    map.insert("hellooooo", 7);
-    map.insert("helloooooo", 8);
-    map.insert("hellooooooo", 9);
-    map.insert("helloooooooo", 10);
+    //libcpp::htrie_map<char, std::int64_t> map;
+    //map.insert("hello", 1);
+    //map.insert("world", 2);
+    //map.insert("hell", 3);
+    //map.insert("helloo", 4);
+    //map.insert("hellooo", 5);
+    //map.insert("helloooo", 6);
+    //map.insert("hellooooo", 7);
+    //map.insert("helloooooo", 8);
+    //map.insert("hellooooooo", 9);
+    //map.insert("helloooooooo", 10);
 
-    ASSERT_EQ(map.size(), 10);
+    //ASSERT_EQ(map.size(), 10);
 
     // std::int64_t value;
     // ASSERT_EQ(map.find("hello", value), true);

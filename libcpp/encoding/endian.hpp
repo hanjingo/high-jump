@@ -2,7 +2,7 @@
 #define ENDIAN_HPP
 
 #if defined(_WIN32)
-#include <winsock.h>
+#include <WinSock2.h>
 #else
 #include <arpa/inet.h>
 #endif

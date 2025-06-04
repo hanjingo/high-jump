@@ -1,6 +1,6 @@
 # libcpp
 
-cpp library framework implementationed by c++11.
+cpp library framework implementationed by c++17.
 
 ---
 
@@ -35,13 +35,13 @@ cpp library framework implementationed by c++11.
 
 ### Dependencies
 
-| compiler | minimum version |
+| compiler | version         |
 | -------- | --------------- |
-| GCC      | 4.8.0           |
-| Clang    | 2013-04         |
-| MSVC     | 2013            |
+| GCC      | 11              |
+| Clang    | 16              |
+| MSVC     | 2019            |
 
-For vcpkg run cmd:
+For vcpkg run cmd (reference from: https://learn.microsoft.com/zh-cn/vcpkg/consume/boost-versions):
 
 ```cmd
 vcpkg install
@@ -113,3 +113,4 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - hat-trie: https://github.com/Tessil/hat-trie
 - pcm: https://github.com/intel/pcm
 - benchmark: https://github.com/google/benchmark
+- clickhouse-cpp: https://github.com/ClickHouse/clickhouse-cpp

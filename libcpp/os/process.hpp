@@ -5,6 +5,7 @@
 #include <functional>
 #include <boost/process.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
 
 namespace libcpp
 {
@@ -39,7 +40,11 @@ static constexpr char cmd_kill[]     = "kill -9 ";
 
 static pid_t getpid() { return pid_t(::getpid()); }
 
+#if defined(_WIN32)
+static pid_t getppid() { return pid_t(0); }
+#else
 static pid_t getppid() { return pid_t(::getppid()); }
+#endif
 
 template <typename... Args>
 static int system(Args&&... args) 

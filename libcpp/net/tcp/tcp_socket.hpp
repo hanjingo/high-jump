@@ -1,6 +1,11 @@
 #ifndef TCP_SOCKET_HPP
 #define TCP_SOCKET_HPP
 
+#ifdef _WIN32
+#include <WinSock2.h>
+#include <Windows.h>
+#endif
+
 #include <chrono>
 #include <iostream>
 #include <functional>
@@ -214,11 +219,6 @@ public:
         return send(boost::asio::buffer(data, len));
     }
 
-    size_t send(const unsigned char* data, size_t len)
-    {
-        return send(boost::asio::buffer(data, len));
-    }
-
     void async_send(const const_buffer_t& buf, send_handler_t&& fn)
     {
         if (!is_connected()) 
@@ -247,17 +247,6 @@ public:
         return async_send(boost::asio::buffer(data, len), std::move(fn));
     }
 
-    void async_send(const unsigned char* data, size_t len, send_handler_t&& fn)
-    {
-        if (!is_connected()) 
-        {
-            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
-            return;
-        }
-
-        return async_send(boost::asio::buffer(data, len), std::move(fn));
-    }
-
     size_t recv(multi_buffer_t& buf)
     {
         if (!is_connected()) 
@@ -272,12 +261,6 @@ public:
     }
 
     size_t recv(char* data, size_t len)
-    {
-        multi_buffer_t buf{data, len};
-        return recv(buf);
-    }
-
-    size_t recv(unsigned char* data, size_t len)
     {
         multi_buffer_t buf{data, len};
         return recv(buf);
@@ -309,12 +292,6 @@ public:
     }
 
     void async_recv(char* data, size_t len, recv_handler_t&& fn)
-    {
-        multi_buffer_t buf{data, len};
-        async_recv(buf, std::move(fn));
-    }
-
-    void async_recv(unsigned char* data, size_t len, recv_handler_t&& fn)
     {
         multi_buffer_t buf{data, len};
         async_recv(buf, std::move(fn));

@@ -12,6 +12,11 @@ project(libcpp)
 # set environment param
 set(LIBCPP_VERSION 1.0.0)
 
+# set windows version macro
+if (WIN32)
+    add_definitions(-D_WIN32_WINNT=0x0A00) # Windows 10
+endif()
+
 # for boost/stacktrace
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")

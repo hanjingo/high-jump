@@ -97,9 +97,12 @@ public:
         return boost::filesystem::last_write_time(boost::filesystem::path(filepath));
     }
 
-    static unsigned long long size(const std::string& filepath)
+    static long long size(const std::string& file)
     {
-        return boost::filesystem::file_size(boost::filesystem::path(filepath));
+        if (!is_exist(file) || is_dir(file))
+            return -1; // Return -1 for directories or non-existent files
+
+        return boost::filesystem::file_size(boost::filesystem::path(file));
     }
 
     static void walk(const std::string& path, std::function<bool(const std::string&)> fn, bool recursive = false)

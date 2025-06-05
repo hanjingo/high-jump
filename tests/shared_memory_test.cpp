@@ -61,7 +61,7 @@ TEST(shared_memory, producer_1_consume_n)
     }
 
     libcpp::process::spawn("./shm_producer --key=prod1");
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     libcpp::process::spawn("./shm_consumer --key=prod1 --result=result1");
     libcpp::process::spawn("./shm_consumer --key=prod1 --result=result2");
 

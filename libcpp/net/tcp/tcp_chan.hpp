@@ -8,13 +8,15 @@ namespace libcpp
 
 template<typename T>
 struct tcp_chan {
-    tcp_chan(std::size_t capa = 6) 
-        : q_{capa * moodycamel::BlockingConcurrentQueue<T>::BLOCK_SIZE} {};
-    ~tcp_chan() {};
+    tcp_chan(const std::size_t min_capa) 
+        : q_{min_capa * moodycamel::BlockingConcurrentQueue<T>::BLOCK_SIZE} 
+    {};
+    ~tcp_chan() 
+    {};
 
     inline tcp_chan& operator>>(T& t)
     {
-        q_.try_dequeue(t);
+        q_.wait_dequeue(t); // blocks until an item is available
         return *this;
     }
 

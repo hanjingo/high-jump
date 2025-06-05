@@ -120,7 +120,7 @@ public:
 
     bool prevent_set_unhandled_exception_filter()  
     {  
-    #if defined(_WIN32)  
+#if defined(_WIN32) && !defined(_WIN64) // Only for 32-bit Windows
         HMODULE hKernel32 = LoadLibraryW(L"kernel32.dll"); // Use LoadLibraryW for wide-character strings  
         if (hKernel32 == NULL)  
             return false;  
@@ -145,9 +145,9 @@ public:
         BOOL bRet = ::WriteProcessMemory(::GetCurrentProcess(), pOrgEntry, newJump, 5, &bytesWritten);  
         ::VirtualProtect(pOrgEntry, 5, dwOldFlag, &dwTempFlag);  
         return bRet;  
-    #else  
+#else  
         return true;  
-    #endif  
+#endif  
     }
 
 public:

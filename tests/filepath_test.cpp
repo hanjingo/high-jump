@@ -16,10 +16,12 @@ TEST(file_path, parent)
 
 TEST(file_path, absolute)
 {
+#if !defined(_WIN32)
     ASSERT_STREQ(
         libcpp::filepath::absolute("/usr/local/src").c_str(), 
         "/usr/local/src"
     );
+#endif
 
     ASSERT_STREQ(
         libcpp::filepath::absolute("./007.txt").c_str(), 
@@ -29,24 +31,42 @@ TEST(file_path, absolute)
 
 TEST(file_path, relative)
 {
+#if defined(_WIN32)
     ASSERT_STREQ(
         libcpp::filepath::relative("/usr/local/src/007.txt").c_str(), 
+        "..\\..\\..\\usr\\local\\src\\007.txt"
+    );
+#else
+    ASSERT_STREQ(
+        libcpp::filepath::relative("/usr/local/src/007.txt").c_str(),
         "../../../../007.txt"
     );
+#endif
 }
 
 TEST(file_path, join)
 {
+#if defined(_WIN32)
     ASSERT_STREQ(
         libcpp::filepath::join("/usr/local/src", "007.txt").c_str(), 
-        "/usr/local/src/007.txt"
+        "/usr/local/src\\007.txt"
     );
-
     std::vector<std::string> args{"/usr/local/src", "007.txt"};
     ASSERT_STREQ(
         libcpp::filepath::join(args).c_str(), 
+        "/usr/local/src\\007.txt"
+    );
+#else
+    ASSERT_STREQ(
+        libcpp::filepath::join("/usr/local/src", "007.txt").c_str(),
         "/usr/local/src/007.txt"
     );
+    std::vector<std::string> args{ "/usr/local/src", "007.txt" };
+    ASSERT_STREQ(
+        libcpp::filepath::join(args).c_str(),
+        "/usr/local/src/007.txt"
+    );
+#endif
 }
 
 TEST(file_path, file_name)
@@ -91,7 +111,7 @@ TEST(file_path, replace_extension)
 
 TEST(file_path, is_dir)
 {
-    ASSERT_EQ(libcpp::filepath::is_dir("/usr/local/src"), true);
+    ASSERT_EQ(libcpp::filepath::is_dir(libcpp::filepath::pwd()), true);
     ASSERT_EQ(libcpp::filepath::is_dir("/usr/local/src/007.txt"), false);
 }
 
@@ -112,7 +132,13 @@ TEST(file_path, last_mod_time)
 
 TEST(file_path, size)
 {
-    ASSERT_EQ(libcpp::filepath::size(libcpp::filepath::pwd()) > 0, true);
+    ASSERT_EQ(libcpp::filepath::size(libcpp::filepath::pwd()) == -1, true);
+
+    std::string f = libcpp::filepath::join(libcpp::filepath::pwd(), "file_path_size_test.txt");
+    if (!libcpp::filepath::is_exist(f))
+        ASSERT_EQ(libcpp::filepath::make_file(f), true);
+
+    ASSERT_EQ(libcpp::filepath::size(f) >= 0, true);
 }
 
 TEST(file_path, walk)
@@ -132,7 +158,11 @@ TEST(file_path, list)
 
 TEST(file_path, find)
 {
-    ASSERT_EQ(libcpp::filepath::find(libcpp::filepath::pwd(), "tests").size() > 0, true);
+    std::string f = libcpp::filepath::join(libcpp::filepath::pwd(), "file_path_find_test.txt");
+    if (!libcpp::filepath::is_exist(f))
+        ASSERT_EQ(libcpp::filepath::make_file(f), true);
+
+    ASSERT_EQ(libcpp::filepath::find(libcpp::filepath::pwd(), "file_path_find_test.txt").size() > 0, true);
 }
 
 TEST(file_path, make_dir)

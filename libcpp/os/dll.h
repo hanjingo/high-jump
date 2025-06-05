@@ -75,12 +75,12 @@ static void* dll_get(void* handler, const char* symbol)
 #endif
 }
 
-static int dll_close(void* handler)
+static bool dll_close(void* handler)
 {
 #if defined(_WIN32)
     return FreeLibrary((HMODULE)handler);
 #else
-    return dlclose(handler);
+    return dlclose(handler) == 0;
 #endif
 }
 

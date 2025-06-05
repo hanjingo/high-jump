@@ -6,7 +6,8 @@
 namespace libcpp
 {
 
-using namespace boost::leaf;
+template<typename T>
+using result = boost::leaf::result<T>;
 
 }
 

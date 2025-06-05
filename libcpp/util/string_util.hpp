@@ -5,6 +5,8 @@
 #include <regex>
 #include <vector>
 #include <sstream>
+#include <locale>
+#include <codecvt>
 
 #include <fmt/core.h>
 
@@ -76,17 +78,27 @@ static std::wstring to_wstring(const std::string& src)
 
 static std::string from_wchar(const wchar_t* src)
 {
-    std::wstring w_src(src);
-    std::string ret(w_src.length(), ' ');
-    std::copy(w_src.begin(), w_src.end(), ret.begin());
-    return ret;
+    if (!src) 
+        return std::string();
+
+#if defined(_MSC_VER)
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+    return conv.to_bytes(src);
+#else
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.to_bytes(src);
+#endif
 }
 
 static std::string from_wstring(const std::wstring& src)
 {
-    std::string ret(src.length(), ' ');
-    std::copy(src.begin(), src.end(), ret.begin());
-    return ret;
+#if defined(_MSC_VER)
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+    return conv.to_bytes(src);
+#else
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.to_bytes(src);
+#endif
 }
 
 static std::string from_ptr_addr(const void* ptr, bool is_hex = true)

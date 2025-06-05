@@ -130,15 +130,15 @@ public:
             return false;  
 
         unsigned char newJump[5];  
-        DWORD dwOrgEntryAddr = (DWORD)pOrgEntry;  
+        ULONG_PTR dwOrgEntryAddr = reinterpret_cast<ULONG_PTR>(pOrgEntry);  
         dwOrgEntryAddr += 5; // jump instruction has 5 byte space.  
 
         void *pNewFunc = (void*)(&crash_handler::temp_set_unhandled_exception_filter);
-        DWORD dwNewEntryAddr = (DWORD)pNewFunc;  
-        DWORD dwRelativeAddr = dwNewEntryAddr - dwOrgEntryAddr;  
+        ULONG_PTR dwNewEntryAddr = reinterpret_cast<ULONG_PTR>(pNewFunc);
+        LONG dwRelativeAddr = static_cast<LONG>(dwNewEntryAddr - dwOrgEntryAddr);
 
-        newJump[0] = 0xE9;  // jump  
-        memcpy(&newJump[1], &dwRelativeAddr, sizeof(DWORD));  
+        newJump[0] = 0xE9;  // jump
+        memcpy(&newJump[1], &dwRelativeAddr, sizeof(LONG)); 
         SIZE_T bytesWritten;  
         DWORD dwOldFlag, dwTempFlag;  
         ::VirtualProtect(pOrgEntry, 5, PAGE_READWRITE, &dwOldFlag);  

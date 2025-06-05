@@ -1,2 +1,2 @@
 #include <gtest/gtest.h>
-// #include <libcpp/math/matrix.hpp>
+#include <libcpp/math/matrix.hpp>

@@ -34,10 +34,6 @@ TEST(date_time, format)
         libcpp::date_time::format(tm, "%Y%m%d-%H:%M:%S").c_str(), 
         "20230101-00:00:00"
     );
-
-    // char* buf[100];
-    // libcpp::date_time::format(tm, buf, 100, fmt.c_str());
-    // ASSERT_STREQ(std::string(buf).c_str(), "2023-01-01 00:00:00");
 }
 
 TEST(date_time, parse)

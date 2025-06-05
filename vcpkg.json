@@ -1,34 +1,35 @@
 {
   "dependencies": [
-    "pugixml",
-    "zeromq",
-    "concurrentqueue",
-    "spdlog",
-    "gtest",
-    "flatbuffers",
-    "sqlite3",
     "behaviortree-cpp",
-    "cpp-httplib",
-    "hiredis",
-    "hidapi",
-    "breakpad",
-    "eigen3",
-    "tbb",
-    "fmt",
-    "protobuf",
-    "openssl",
-    "clickhouse-cpp",
-    "nlohmann-json",
     "benchmark",
     "boost-asio",
-    "boost-program-options",
-    "boost-filesystem",
-    "boost-property-tree",
     "boost-circular-buffer",
+    "boost-filesystem",
+    "boost-interprocess",
+    "boost-leaf",
     "boost-process",
+    "boost-program-options",
+    "boost-property-tree",
     "boost-stacktrace",
     "boost-uuid",
-    "boost-interprocess"
+    "breakpad",
+    "clickhouse-cpp",
+    "concurrentqueue",
+    "cpp-httplib",
+    "eigen3",
+    "flatbuffers",
+    "fmt",
+    "gtest",
+    "hidapi",
+    "hiredis",
+    "nlohmann-json",
+    "openssl",
+    "protobuf",
+    "pugixml",
+    "spdlog",
+    "sqlite3",
+    "tbb",
+    "zeromq"
   ],
   "overrides": [
     {
@@ -149,6 +150,10 @@
     },
     {
       "name": "boost-interprocess",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-leaf",
       "version": "1.76.0"
     }
   ]

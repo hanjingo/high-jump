@@ -1,22 +1,19 @@
 cmake_minimum_required(VERSION 3.19.2)
 
-# cmake -DBUILD_TEST=ON ..
-# make
-# make test
-
 project(tests)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
 
-add_subdirectory(dll_example)
-# add_subdirectory(child)
-# add_subdirectory(daemon)
-
-#add_subdirectory(shm_consumer)
-#add_subdirectory(shm_producer)
+# set windows version macro
+if (WIN32)
+    add_definitions(-D_WIN32_WINNT=0x0A00) # Windows 10
+endif()
 
 enable_testing()
 
@@ -44,7 +41,7 @@ find_package(Boost REQUIRED COMPONENTS
 
 include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
-add_executable(${PROJECT_NAME} ${SRC})
+add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
 
 target_link_libraries(${PROJECT_NAME} 
     ${Boost_LIBRARIES} 
@@ -85,3 +82,10 @@ endif()
 add_test(test ${PROJECT_NAME})
 
 file(COPY cfg.ini DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+
+add_subdirectory(dll_example)
+add_subdirectory(child)
+add_subdirectory(daemon)
+
+add_subdirectory(shm_consumer)
+add_subdirectory(shm_producer)

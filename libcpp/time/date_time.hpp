@@ -54,11 +54,33 @@ public:
     date_time(const date_time& dt)
         : tm_{dt.tm_} {};
     explicit date_time(const std::tm& tm, long ms = 0)
-        : tm_{boost::posix_time::ptime_from_tm(tm) + boost::posix_time::time_duration(0, 0, 0, ms * 1000)} {};
+        : tm_{boost::posix_time::ptime_from_tm(tm) + boost::posix_time::time_duration(0, 0, 0, int64_t(ms) * 1000)} {};
     explicit date_time(const std::time_t time, long ms = 0)
-        : tm_{boost::posix_time::from_time_t(time) + boost::posix_time::time_duration(0, 0, 0, ms * 1000)} {};
+        : tm_{boost::posix_time::from_time_t(time) + boost::posix_time::time_duration(0, 0, 0, int64_t(ms) * 1000)} {};
+    date_time(unsigned short year, unsigned short month, unsigned short day,
+             long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
+        : tm_{boost::posix_time::ptime(boost::gregorian::date(year, month, day),
+                                       boost::posix_time::time_duration(hour, minute, seconds, int64_t(ms) * 1000))}
+    {};
+    explicit date_time(const boost::posix_time::ptime& tm) : tm_{tm} {};
+    explicit date_time(const boost::gregorian::date& dt,
+                      long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
+        : tm_{boost::posix_time::ptime(dt, boost::posix_time::time_duration(hour, minute, seconds, int64_t(ms) * 1000))}
+    {};
+    explicit date_time(const std::chrono::system_clock::time_point& tp)
+        : date_time(std::chrono::system_clock::to_time_t(tp)) 
+    {};
 
-#if not defined(_WIN32)
+    date_time(const std::string& str, const std::string& fmt = TIME_FMT)
+    {
+        std::tm tm = {};
+        std::istringstream ss(str);
+        ss >> std::get_time(&tm, fmt.c_str());
+        if (!ss.fail())
+            tm_ = boost::posix_time::ptime_from_tm(tm);
+    };
+
+#if !defined(_WIN32)
     explicit date_time(const timeval& tv)
         : tm_{boost::posix_time::from_time_t(tv.tv_sec) +
               boost::posix_time::time_duration(0, 0, 0, tv.tv_usec * 1000)} {};
@@ -68,29 +90,9 @@ public:
         strptime(str, fmt, &tm);
         tm_ = boost::posix_time::ptime_from_tm(tm);
     };
-    date_time(const std::string& str, const std::string& fmt = TIME_FMT)
-    {
-        std::tm tm;
-        strptime(str.c_str(), fmt.c_str(), &tm);
-        tm_ = boost::posix_time::ptime_from_tm(tm);
-    }
 #endif
 
-    date_time(unsigned short year, unsigned short month, unsigned short day,
-             long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
-        : tm_{boost::posix_time::ptime(boost::gregorian::date(year, month, day),
-                                       boost::posix_time::time_duration(hour, minute, seconds, ms * 1000))}
-    {}
-
-    explicit date_time(const boost::posix_time::ptime& tm) : tm_{tm} {};
-    explicit date_time(const boost::gregorian::date& dt,
-                      long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
-        : tm_{boost::posix_time::ptime(dt, boost::posix_time::time_duration(hour, minute, seconds, ms * 1000))}
-    {};
-    explicit date_time(const std::chrono::system_clock::time_point& tp)
-        : date_time(std::chrono::system_clock::to_time_t(tp)) {}
-
-    ~date_time() {}
+    ~date_time() {};
 
     static date_time now()
     {

@@ -15,8 +15,8 @@ int main(int argc, char* argv[])
     std::cout << "parse(\"2023-03-16 07:41:29\").string(\"%Y%m%d %H%M%S\") = "
               << libcpp::date_time::parse("2023-03-16 07:41:29").string() << std::endl;
 
-    // std::cout << "MonthDayCount(2023, 3) = "
-    //           << libcpp::date_time::MonthDayCount(2023, 3) << std::endl;
+    std::cout << "MonthDayCount(2023, 3) = "
+              << libcpp::date_time::MonthDayCount(2023, 3) << std::endl;
 
     std::cout << "date_time(2023, 3, 17).is_null() = " << libcpp::date_time(2023, 3, 17).is_null() << std::endl;
 

@@ -1,3 +1,21 @@
+/*
+ *  This file is part of libcpp.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef MD5_HPP
 #define MD5_HPP
 
@@ -29,8 +47,9 @@ public:
     explicit md5() {};
     virtual ~md5() {};
 
-    static std::string calc(const std::string& src, 
-                            libcpp::md5::out_case ocase = libcpp::md5::lower_case)
+    static void encode(const std::string& src, 
+                       std::string& dst,
+                       libcpp::md5::out_case ocase = libcpp::md5::lower_case)
     {
         unsigned char hash[MD5_DIGEST_LENGTH];
         MD5_CTX ctx;
@@ -48,10 +67,10 @@ public:
             }
         }
 
-        return ss.str();
+        dst = ss.str();
     };
 
-    static void calc(std::istream &in, std::string& out)
+    static void encode(std::istream &in, std::string& out)
     {
         MD5_CTX ctx;
         MD5_Init(&ctx);

@@ -4,11 +4,10 @@
 
 int main(int argc, char* argv[])
 {
-    std::cout << "encode(\"https://github.com/hanjingo/libcpp\"): "
-              << libcpp::base64::encode("https://github.com/hanjingo/libcpp") << std::endl;
-
-    std::cout << "decode(\"aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==\"): "
-              << libcpp::base64::decode("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==") << std::endl;
+    std::string str_dst;
+    std::cout << "libcpp::base64::encode(std::string(\"https://github.com/hanjingo/libcpp\"): "
+              << libcpp::base64::encode("https://github.com/hanjingo/libcpp", str_dst) << std::endl;
+    std::cout << "str_dst: " << str_dst << std::endl;
 
     std::cin.get();
     return 0;

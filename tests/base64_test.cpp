@@ -1,18 +1,49 @@
 #include <gtest/gtest.h>
 #include <libcpp/crypto/base64.hpp>
 
+#include <libcpp/log/logger.hpp>
+
 TEST(base64, encode)
 {
-    ASSERT_STREQ(
-        libcpp::base64::encode("https://github.com/hanjingo/libcpp").c_str(), 
-        "aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA=="
-    );
+    // string -> base64 string
+    std::string str_dst;
+    ASSERT_EQ(libcpp::base64::encode(std::string("https://github.com/hanjingo/libcpp"), str_dst), true);
+    ASSERT_STREQ(str_dst.c_str(), "aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
+
+    // bytes -> base64 string
+    std::string buf_dst;
+    char buf[] = { 'a', 'b', 'c', 'd', '1', '2', '3' };
+    ASSERT_EQ(libcpp::base64::encode(buf, 7, buf_dst), true);
+    ASSERT_STREQ(buf_dst.c_str(), "YWJjZDEyMw==");
 }
 
 TEST(base64, decode)
 {
-    ASSERT_STREQ(
-        libcpp::base64::decode("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==").c_str(), 
-        "https://github.com/hanjingo/libcpp"
-    );
+    // base64 string -> string
+    std::string str_dst;
+    ASSERT_EQ(libcpp::base64::decode(std::string("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA=="), str_dst), true);
+    ASSERT_STREQ(str_dst.c_str(), "https://github.com/hanjingo/libcpp");
+
+    // base64 byte -> string
+    std::string buf_dst;
+    char buf[] = { 'a', 'G', 'V', 's', 'b', 'G', '8', 'g', 'b', 'G', 'l', 'j', 'c', 'H', 'A', '=' };
+    ASSERT_EQ(libcpp::base64::decode(buf, 16, buf_dst), true);
+    ASSERT_STREQ(buf_dst.c_str(), "hello licpp");
+}
+
+TEST(base64, encode_file)
+{
+    // base64 file -> file
+    libcpp::logger::instance()->clear_sink();
+    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./base64_file_test.log", 1024 * 1024 * 1024, 1, true));
+    for (int i = 0; i < 1 * 1024 * 1024; i++)
+        libcpp::logger::instance()->info("{}", i);
+    libcpp::logger::instance()->flush();
+
+    ASSERT_EQ(libcpp::base64::encode_file(std::string("./base64_file_test.log"), std::string("./base64_file_test_encode.log")), true);
+}
+
+TEST(base64, decode_file)
+{
+    ASSERT_EQ(libcpp::base64::decode_file(std::string("./base64_file_test_encode.log"), std::string("./base64_file_test_decode.log")), true);
 }

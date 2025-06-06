@@ -13,7 +13,7 @@ TEST(logger, create_stdout_sink)
 
 TEST(logger, create_rotate_file_sink)
 {
-    ASSERT_EQ(libcpp::logger::create_rotate_file_sink("./007.log", 1024, 3, true) != nullptr, true);
+    ASSERT_EQ(libcpp::logger::create_rotate_file_sink("./007.log", 512 * 1024 * 1024, 3, true) != nullptr, true);
 }
 
 TEST(logger, create_daily_file_sink)

@@ -2,7 +2,16 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(base64)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# set binary output path
+if (NOT EXECUTABLE_OUTPUT_PATH)
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
+endif()
+
 find_package(OpenSSL REQUIRED)
+include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${OpenSSL_INCLUDE_DIRS})
 
 add_executable(${PROJECT_NAME}   

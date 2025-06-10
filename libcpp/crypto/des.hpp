@@ -38,39 +38,14 @@ using key_schedule_t = DES_key_schedule;
 class ecb
 {
 public:
-    // string -> ecb string
-    static bool encode(const std::string& src, 
-                       const std::string& key, 
-                       std::string& dst,
-                       std::size_t idx = 0)
-    {
-        std::size_t len = 0;
-        dst.resize((src.size() / 8) * 8 + 8);
-        if (!encode(src.c_str(), src.size(), key.c_str(), key.size(), const_cast<char*>(dst.c_str()), len, idx))
-            return false;
-
-        dst.resize(len);
-        return true;
-    }
-
-    // string -> ecb bytes
-    static bool encode(const std::string& src, 
-                       const std::string& key, 
-                       char* dst, 
-                       std::size_t& dst_len,
-                       std::size_t idx = 0)
-    {
-        return encode(src.c_str(), src.size(), key.c_str(), key.size(), dst, dst_len, idx);
-    }
-
     // bytes -> ecb bytes (padding zero)
-    static bool encode(const char* src, 
-                       const std::size_t src_len, 
-                       const char* key, 
-                       const std::size_t key_len, 
-                       char* dst,
-                       std::size_t& dst_len,
-                       std::size_t idx = 0)
+    static bool encode(const unsigned char* src, 
+                       const unsigned long src_len, 
+                       unsigned char* dst,
+                       unsigned long& dst_len,
+                       unsigned char* key, 
+                       unsigned long key_len, 
+                       unsigned long idx = 0)
     {
         cblock_t key_encrypt;
         memset(key_encrypt, 0, 8);
@@ -106,26 +81,63 @@ public:
         return dst_len > 0;
     }
 
-    // file -> ecb file
-    static bool encode_file(const std::string& src_file_path, 
-                            const std::string& key, 
-                            const std::string& dst_file_path)
+    // bytes -> ecb bytes
+    static bool encode(const char* src, 
+                       const unsigned long src_len, 
+                       char* dst,
+                       unsigned long& dst_len,
+                       char* key, 
+                       unsigned long key_len, 
+                       unsigned long idx = 0)
     {
-        std::ifstream src_file(src_file_path, std::ios::binary);
+        return encode(reinterpret_cast<const unsigned char*>(src),
+                      src_len,
+                      reinterpret_cast<unsigned char*>(dst),
+                      dst_len,
+                      reinterpret_cast<unsigned char*>(key),
+                      key_len,
+                      idx);
+    }
+
+    // string -> ecb string
+    static bool encode(const std::string& src, 
+                       const std::string& key, 
+                       std::string& dst,
+                       unsigned long idx = 0)
+    {
+        unsigned long len = 0;
+        dst.resize((src.size() / 8) * 8 + 8);
+        if (!encode(src.c_str(), src.size(), dst.data(), len, const_cast<char*>(key.c_str()), key.size(), idx))
+        {
+            dst.clear();
+            return false;
+        }
+
+        dst.resize(len);
+        return true;
+    }
+
+    // file -> ecb file
+    static bool encode_file(const unsigned char* src_file_path,  
+                            const unsigned char* dst_file_path,
+                            const unsigned char* key, 
+                            const unsigned long key_len)
+    {
+        std::ifstream src_file(reinterpret_cast<const char*>(src_file_path), std::ios::binary);
         if (!src_file.is_open())
             return false;
 
-        std::ofstream dst_file(dst_file_path, std::ios::binary);
+        std::ofstream dst_file(reinterpret_cast<const char*>(dst_file_path), std::ios::binary);
         if (!dst_file.is_open())
             return false;
 
-        constexpr std::size_t block_size = 8;
+        constexpr unsigned long block_size = 8;
         char inbuf[block_size] = {0};
         char outbuf[block_size] = {0};
 
         DES_cblock key_encrypt;
         memset(key_encrypt, 0, 8);
-        memcpy(key_encrypt, key.data(), std::min<size_t>(key.size(), 8));
+        memcpy(key_encrypt, key, std::min<size_t>(key_len, 8));
         DES_key_schedule key_schedule;
         DES_set_key_unchecked(&key_encrypt, &key_schedule);
 
@@ -154,46 +166,25 @@ public:
         return true;
     }
 
-    // ecb string -> string
-    static bool decode(const std::string& cipher, 
-                       const std::string& key, 
-                       std::string& dst, 
-                       std::size_t idx = 0)
+    // file -> ecb file
+    static bool encode_file(const std::string& src_file_path,
+                            const std::string& dst_file_path,
+                            const std::string& key)
     {
-        std::size_t len = 0;
-        dst.resize((cipher.size() / 8) * 8 + 8);
-        if (!decode(cipher.c_str(), cipher.size(), key.c_str(), key.size(), const_cast<char*>(dst.c_str()), len, idx))
-            return false;
-
-        dst.resize(len);
-        return !dst.empty();
-    }
-
-    // ecb bytes -> string
-    static bool decode(const char* cipher, 
-                       const std::size_t cipher_len, 
-                       const char* key, 
-                       const std::size_t key_len, 
-                       std::string& dst,
-                       std::size_t idx = 0)
-    {
-        std::size_t len = 0;
-        dst.resize((cipher_len / 8) * 8 + 8);
-        if (!decode(cipher, cipher_len, key, key_len, const_cast<char*>(dst.c_str()), len, idx))
-            return false;
-
-        dst.resize(len);
-        return !dst.empty();
+        return encode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()), 
+                            reinterpret_cast<const unsigned char*>(dst_file_path.c_str()), 
+                            reinterpret_cast<const unsigned char*>(key.c_str()), 
+                            key.size());
     }
 
     // ecb bytes -> bytes
-    static bool decode(const char* cipher, 
-                       const std::size_t cipher_len, 
-                       const char* key, 
-                       const std::size_t key_len, 
-                       char* dst,
-                       std::size_t& dst_len,
-                       std::size_t idx = 0)
+    static bool decode(const unsigned char* src, 
+                       const unsigned long src_len, 
+                       unsigned char* dst,
+                       unsigned long& dst_len,
+                       unsigned char* key, 
+                       unsigned long key_len, 
+                       unsigned long idx = 0)
     {
         cblock_t key_encrypt;
         memset(key_encrypt, 0, 8);
@@ -209,18 +200,18 @@ public:
         const_cblock_t input;
         cblock_t output;
 
-        for (; idx < cipher_len; idx += 8)
+        for (; idx < src_len; idx += 8)
         {
-            memcpy(input, cipher + idx, 8);
+            memcpy(input, src + idx, 8);
             DES_ecb_encrypt(&input, &output, &key_schedule, DES_DECRYPT);
             memcpy(dst + idx, output, 8);
         }
 
-        if (cipher_len % 8 != 0)
+        if (src_len % 8 != 0)
         {
             idx -= 8;
             memset(input, 0, 8);
-            memcpy(input, cipher + idx, cipher_len - idx);
+            memcpy(input, src + idx, src_len - idx);
 
             DES_ecb_encrypt(&input, &output, &key_schedule, DES_DECRYPT);
             memcpy(dst + idx, output, 8);
@@ -230,26 +221,64 @@ public:
         return dst_len > 0;
     }
 
-    // ecb file -> file
-    static bool decode_file(const std::string& src_file_path, 
-                            const std::string& key, 
-                            const std::string& dst_file_path)
+    // ecb bytes -> bytes
+    static bool decode(const char* src, 
+                       const unsigned long src_len, 
+                       char* dst,
+                       unsigned long& dst_len,
+                       char* key, 
+                       unsigned long key_len, 
+                       unsigned long idx = 0)
     {
-        std::ifstream src_file(src_file_path, std::ios::binary);
+        return decode(reinterpret_cast<const unsigned char*>(src),
+                        src_len,
+                        reinterpret_cast<unsigned char*>(dst),
+                        dst_len,
+                        reinterpret_cast<unsigned char*>(key),
+                        key_len,
+                        idx);
+    }
+
+    // ecb string -> string
+    static bool decode(const std::string& src, 
+                       std::string& dst, 
+                       std::string& key, 
+                       unsigned long idx = 0)
+    {
+        unsigned long len = 0;
+        dst.resize((src.size() / 8) * 8 + 8);
+        if (!decode(src.c_str(), src.size(), dst.data(), len, const_cast<char*>(key.c_str()), key.size(),  idx))
+        {
+            dst.clear();
+            return false;
+        }
+
+        dst.resize(len);
+        return !dst.empty();
+    }
+
+    
+    // ecb file -> file
+    static bool decode_file(const unsigned char* src_file_path, 
+                            const unsigned char* dst_file_path,
+                            const unsigned char* key, 
+                            const unsigned long key_len)
+    {
+        std::ifstream src_file(reinterpret_cast<const char*>(src_file_path), std::ios::binary);
         if (!src_file.is_open())
             return false;
 
-        std::ofstream dst_file(dst_file_path, std::ios::binary);
+        std::ofstream dst_file(reinterpret_cast<const char*>(dst_file_path), std::ios::binary);
         if (!dst_file.is_open())
             return false;
 
-        constexpr std::size_t block_size = 8;
+        constexpr unsigned long block_size = 8;
         char inbuf[block_size] = {0};
         char outbuf[block_size] = {0};
 
         DES_cblock key_encrypt;
         memset(key_encrypt, 0, 8);
-        memcpy(key_encrypt, key.data(), std::min<size_t>(key.size(), 8));
+        memcpy(key_encrypt, key, std::min<size_t>(key_len, 8));
         DES_key_schedule key_schedule;
         DES_set_key_unchecked(&key_encrypt, &key_schedule);
         while (true) 
@@ -273,6 +302,33 @@ public:
 
         return true;
     }
+
+    // ecb file -> file
+    static bool decode_file(const char* src_file_path, 
+                            const char* dst_file_path,
+                            const char* key, 
+                            const unsigned long key_len)
+    {
+        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path),
+                            reinterpret_cast<const unsigned char*>(dst_file_path),
+                            reinterpret_cast<const unsigned char*>(key),
+                            key_len);
+    }
+
+    static bool decode_file(const std::string& src_file_path,
+                            const std::string& dst_file_path,
+                            const std::string& key)
+    {
+        return decode_file(src_file_path.c_str(), dst_file_path.c_str(), key.c_str(), key.size());
+    }
+
+private:
+    ecb() = default;
+    ~ecb() = default;
+    ecb(const ecb&) = delete;
+    ecb& operator=(const ecb&) = delete;
+    ecb(ecb&&) = delete;
+    ecb& operator=(ecb&&) = delete;
 };
 
 }

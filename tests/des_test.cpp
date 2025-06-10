@@ -9,7 +9,7 @@
 TEST(des, ecb_encode)
 {
     std::string str_dst;
-    ASSERT_EQ(libcpp::des::ecb::encode(std::string("hello world"), std::string("12345678"), str_dst), true);
+    ASSERT_EQ(libcpp::des::ecb::encode(std::string("hello world"), str_dst, std::string("12345678")), true);
 
     // to hex style
     std::stringstream ss;
@@ -24,8 +24,8 @@ TEST(des, ecb_decode)
     std::string str_dst;
     std::string str_encoded;
     std::string str_key("12345678");
-    ASSERT_EQ(libcpp::des::ecb::encode(std::string("hello world"), str_key, str_encoded), true);
-    ASSERT_EQ(libcpp::des::ecb::decode(str_encoded, str_key, str_dst), true);
+    ASSERT_EQ(libcpp::des::ecb::encode(std::string("hello world"), str_encoded, str_key), true);
+    ASSERT_EQ(libcpp::des::ecb::decode(str_encoded, str_dst, str_key), true);
     ASSERT_STREQ(str_dst.c_str(), "hello world");
 }
 
@@ -41,8 +41,8 @@ TEST(des, ecb_encode_file)
     ASSERT_EQ(
         libcpp::des::ecb::encode_file(
             std::string("./ecb_file_test.log"), 
-            std::string("12345678"), 
-            std::string("./ecb_file_test_encode.log")), 
+            std::string("./ecb_file_test_encode.log"),
+            std::string("12345678")), 
         true);
 }
 
@@ -51,7 +51,7 @@ TEST(des, ecb_decode_file)
     ASSERT_EQ(
         libcpp::des::ecb::decode_file(
             std::string("./ecb_file_test_encode.log"), 
-            std::string("12345678"), 
-            std::string("./ecb_file_test1.log")), 
+            std::string("./ecb_file_test1.log"),
+            std::string("12345678")), 
         true);
 }

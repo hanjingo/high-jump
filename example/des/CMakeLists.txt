@@ -2,9 +2,15 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(des)
 
-find_package(OpenSSL)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if (OpenSSL_FOUND)
+# set binary output path
+if (NOT EXECUTABLE_OUTPUT_PATH)
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
+endif()
+
+find_package(OpenSSL REQUIRED)
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${OpenSSL_INCLUDE_DIRS})
 
@@ -13,8 +19,3 @@ add_executable(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} OpenSSL::SSL OpenSSL::Crypto)
-
-else()
-message("!!! openssl not found, skip build example/des")
-
-endif()

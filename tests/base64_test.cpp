@@ -11,10 +11,11 @@ TEST(base64, encode)
     ASSERT_STREQ(str_dst.c_str(), "aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
 
     // bytes -> base64 string
-    std::string buf_dst;
+    char buf_dst[1024];
+    unsigned long buf_dst_len = 0;
     char buf[] = { 'a', 'b', 'c', 'd', '1', '2', '3' };
-    ASSERT_EQ(libcpp::base64::encode(buf, 7, buf_dst), true);
-    ASSERT_STREQ(buf_dst.c_str(), "YWJjZDEyMw==");
+    ASSERT_EQ(libcpp::base64::encode(buf, 7, buf_dst, buf_dst_len), true);
+    ASSERT_STREQ(std::string(buf_dst, buf_dst_len).c_str(), "YWJjZDEyMw==");
 }
 
 TEST(base64, decode)
@@ -25,10 +26,11 @@ TEST(base64, decode)
     ASSERT_STREQ(str_dst.c_str(), "https://github.com/hanjingo/libcpp");
 
     // base64 byte -> string
-    std::string buf_dst;
+    char buf_dst[1024];
+    unsigned long buf_dst_len = 0;
     char buf[] = { 'a', 'G', 'V', 's', 'b', 'G', '8', 'g', 'b', 'G', 'l', 'j', 'c', 'H', 'A', '=' };
-    ASSERT_EQ(libcpp::base64::decode(buf, 16, buf_dst), true);
-    ASSERT_STREQ(buf_dst.c_str(), "hello licpp");
+    ASSERT_EQ(libcpp::base64::decode(buf, 16, buf_dst, buf_dst_len), true);
+    ASSERT_STREQ(std::string(buf_dst, buf_dst_len).c_str(), "hello licpp");
 }
 
 TEST(base64, encode_file)

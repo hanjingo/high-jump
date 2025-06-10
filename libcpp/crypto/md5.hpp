@@ -35,6 +35,7 @@
 namespace libcpp
 {
 
+// because of unidirectionality, md5 not support decode
 class md5
 {
 public:
@@ -47,27 +48,43 @@ public:
     explicit md5() {};
     virtual ~md5() {};
 
-    static void encode(const std::string& src, 
+    static bool encode(const char* src, 
+                       const std::size_t src_len, 
+                       char* dst, 
+                       std::size_t& dst_len)
+    {
+        if (dst_len < MD5_DIGEST_LENGTH)
+            return false;
+
+        MD5_CTX ctx;
+        MD5_Init(&ctx);
+        MD5_Update(&ctx, src, src_len);
+        MD5_Final(reinterpret_cast<unsigned char*>(dst), &ctx);
+        dst_len = MD5_DIGEST_LENGTH;
+        return true;
+    }
+
+    static bool encode(const std::string& src, 
                        std::string& dst,
                        libcpp::md5::out_case ocase = libcpp::md5::lower_case)
     {
-        unsigned char hash[MD5_DIGEST_LENGTH];
-        MD5_CTX ctx;
-        MD5_Init(&ctx);
-        MD5_Update(&ctx, src.c_str(), src.size());
-        MD5_Final(hash, &ctx);;
+        std::size_t len = MD5_DIGEST_LENGTH;
+        char hash[MD5_DIGEST_LENGTH];
+        if (!encode(src.c_str(), src.size(), hash, len))
+            return false;
 
         std::stringstream ss;
-        for (size_t i = 0; i < MD5_DIGEST_LENGTH; ++i) {
-            if (ocase == libcpp::md5::upper_case) {
+        for (size_t i = 0; i < MD5_DIGEST_LENGTH; ++i) 
+        {
+            if (ocase == libcpp::md5::upper_case)
                 ss << std::setiosflags(std::ios::uppercase) << std::hex << std::setw(2)
                    << std::setfill('0') << static_cast<int>(hash[i]);
-            } else {
+            else
                 ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
-            }
         }
 
         dst = ss.str();
+        return true;
     };
 
     static void encode(std::istream &in, std::string& out)
@@ -82,6 +99,14 @@ public:
         out.resize(128 / 8);
         MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &ctx);
     };
+
+private:
+    md5() = default;
+    ~md5() = default;
+    md5(const md5&) = delete;
+    md5& operator=(const md5&) = delete;
+    md5(md5&&) = delete;
+    md5& operator=(md5&&) = delete;
 };
 
 }

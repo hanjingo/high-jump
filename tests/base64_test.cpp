@@ -3,6 +3,14 @@
 
 #include <libcpp/log/logger.hpp>
 
+// for OpenSSL compatibility on Windows
+#ifdef _WIN32
+extern "C" 
+{
+    #include <openssl/applink.c>
+}
+#endif
+
 TEST(base64, encode)
 {
     // string -> base64 string
@@ -11,11 +19,11 @@ TEST(base64, encode)
     ASSERT_STREQ(str_dst.c_str(), "aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
 
     // bytes -> base64 string
-    char buf_dst[1024];
-    unsigned long buf_dst_len = 0;
-    char buf[] = { 'a', 'b', 'c', 'd', '1', '2', '3' };
+    unsigned char buf_dst[1024];
+    unsigned long buf_dst_len = 1024;
+    unsigned char buf[] = { 'a', 'b', 'c', 'd', '1', '2', '3' };
     ASSERT_EQ(libcpp::base64::encode(buf, 7, buf_dst, buf_dst_len), true);
-    ASSERT_STREQ(std::string(buf_dst, buf_dst_len).c_str(), "YWJjZDEyMw==");
+    ASSERT_STREQ(std::string((char*)buf_dst, buf_dst_len).c_str(), "YWJjZDEyMw==");
 }
 
 TEST(base64, decode)
@@ -27,7 +35,7 @@ TEST(base64, decode)
 
     // base64 byte -> string
     char buf_dst[1024];
-    unsigned long buf_dst_len = 0;
+    unsigned long buf_dst_len = 1024;
     char buf[] = { 'a', 'G', 'V', 's', 'b', 'G', '8', 'g', 'b', 'G', 'l', 'j', 'c', 'H', 'A', '=' };
     ASSERT_EQ(libcpp::base64::decode(buf, 16, buf_dst, buf_dst_len), true);
     ASSERT_STREQ(std::string(buf_dst, buf_dst_len).c_str(), "hello licpp");

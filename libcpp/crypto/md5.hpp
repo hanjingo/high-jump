@@ -39,19 +39,10 @@ namespace libcpp
 class md5
 {
 public:
-    enum out_case {
-        lower_case,
-        upper_case
-    };
-
-public:
-    explicit md5() {};
-    virtual ~md5() {};
-
-    static bool encode(const char* src, 
-                       const std::size_t src_len, 
-                       char* dst, 
-                       std::size_t& dst_len)
+    static bool encode(const unsigned char* src, 
+                       const unsigned long src_len, 
+                       unsigned char* dst, 
+                       unsigned long& dst_len)
     {
         if (dst_len < MD5_DIGEST_LENGTH)
             return false;
@@ -65,29 +56,20 @@ public:
     }
 
     static bool encode(const std::string& src, 
-                       std::string& dst,
-                       libcpp::md5::out_case ocase = libcpp::md5::lower_case)
+                       std::string& dst)
     {
-        std::size_t len = MD5_DIGEST_LENGTH;
-        char hash[MD5_DIGEST_LENGTH];
-        if (!encode(src.c_str(), src.size(), hash, len))
+        unsigned long len = MD5_DIGEST_LENGTH;
+        dst.resize(MD5_DIGEST_LENGTH);
+        if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), src.size(), 
+                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), len))
             return false;
 
-        std::stringstream ss;
-        for (size_t i = 0; i < MD5_DIGEST_LENGTH; ++i) 
-        {
-            if (ocase == libcpp::md5::upper_case)
-                ss << std::setiosflags(std::ios::uppercase) << std::hex << std::setw(2)
-                   << std::setfill('0') << static_cast<int>(hash[i]);
-            else
-                ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
-        }
-
-        dst = ss.str();
+        dst.resize(len);
         return true;
     };
 
-    static void encode(std::istream &in, std::string& out)
+    static void encode(std::istream &in, 
+                       std::string& out)
     {
         MD5_CTX ctx;
         MD5_Init(&ctx);
@@ -98,6 +80,22 @@ public:
 
         out.resize(128 / 8);
         MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &ctx);
+    };
+
+    static std::string to_hex(const std::string& str, bool upper_case = false)
+    {
+        std::stringstream ss;
+        for (size_t i = 0; i < MD5_DIGEST_LENGTH && i < str.size(); ++i) 
+        {
+            if (upper_case)
+                ss << std::uppercase;
+            else
+                ss << std::nouppercase;
+            ss << std::hex << std::setw(2) << std::setfill('0')
+                << static_cast<unsigned int>(static_cast<unsigned char>(str[i]));
+        }
+
+        return ss.str();
     };
 
 private:

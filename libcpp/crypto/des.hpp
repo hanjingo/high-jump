@@ -43,8 +43,8 @@ public:
                        const unsigned long src_len, 
                        unsigned char* dst,
                        unsigned long& dst_len,
-                       unsigned char* key, 
-                       unsigned long key_len, 
+                       const unsigned char* key, 
+                       const unsigned long key_len, 
                        unsigned long idx = 0)
     {
         cblock_t key_encrypt;
@@ -81,33 +81,21 @@ public:
         return dst_len > 0;
     }
 
-    // bytes -> ecb bytes
-    static bool encode(const char* src, 
-                       const unsigned long src_len, 
-                       char* dst,
-                       unsigned long& dst_len,
-                       char* key, 
-                       unsigned long key_len, 
-                       unsigned long idx = 0)
-    {
-        return encode(reinterpret_cast<const unsigned char*>(src),
-                      src_len,
-                      reinterpret_cast<unsigned char*>(dst),
-                      dst_len,
-                      reinterpret_cast<unsigned char*>(key),
-                      key_len,
-                      idx);
-    }
-
     // string -> ecb string
     static bool encode(const std::string& src, 
-                       const std::string& key, 
                        std::string& dst,
+                       const std::string& key,
                        unsigned long idx = 0)
     {
-        unsigned long len = 0;
         dst.resize((src.size() / 8) * 8 + 8);
-        if (!encode(src.c_str(), src.size(), dst.data(), len, const_cast<char*>(key.c_str()), key.size(), idx))
+        unsigned long len = dst.size();
+        if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
+                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+                    len, 
+                    reinterpret_cast<const unsigned char*>(key.c_str()), 
+                    key.size(), 
+                    idx))
         {
             dst.clear();
             return false;
@@ -182,8 +170,8 @@ public:
                        const unsigned long src_len, 
                        unsigned char* dst,
                        unsigned long& dst_len,
-                       unsigned char* key, 
-                       unsigned long key_len, 
+                       const unsigned char* key, 
+                       const unsigned long key_len, 
                        unsigned long idx = 0)
     {
         cblock_t key_encrypt;
@@ -221,33 +209,21 @@ public:
         return dst_len > 0;
     }
 
-    // ecb bytes -> bytes
-    static bool decode(const char* src, 
-                       const unsigned long src_len, 
-                       char* dst,
-                       unsigned long& dst_len,
-                       char* key, 
-                       unsigned long key_len, 
-                       unsigned long idx = 0)
-    {
-        return decode(reinterpret_cast<const unsigned char*>(src),
-                        src_len,
-                        reinterpret_cast<unsigned char*>(dst),
-                        dst_len,
-                        reinterpret_cast<unsigned char*>(key),
-                        key_len,
-                        idx);
-    }
-
     // ecb string -> string
     static bool decode(const std::string& src, 
                        std::string& dst, 
-                       std::string& key, 
+                       const std::string& key, 
                        unsigned long idx = 0)
     {
-        unsigned long len = 0;
         dst.resize((src.size() / 8) * 8 + 8);
-        if (!decode(src.c_str(), src.size(), dst.data(), len, const_cast<char*>(key.c_str()), key.size(),  idx))
+        unsigned long len = dst.size();
+        if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
+                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+                    len, 
+                    reinterpret_cast<const unsigned char*>(key.c_str()), 
+                    key.size(), 
+                    idx))
         {
             dst.clear();
             return false;
@@ -256,7 +232,6 @@ public:
         dst.resize(len);
         return !dst.empty();
     }
-
     
     // ecb file -> file
     static bool decode_file(const unsigned char* src_file_path, 
@@ -304,22 +279,14 @@ public:
     }
 
     // ecb file -> file
-    static bool decode_file(const char* src_file_path, 
-                            const char* dst_file_path,
-                            const char* key, 
-                            const unsigned long key_len)
-    {
-        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path),
-                            reinterpret_cast<const unsigned char*>(dst_file_path),
-                            reinterpret_cast<const unsigned char*>(key),
-                            key_len);
-    }
-
     static bool decode_file(const std::string& src_file_path,
                             const std::string& dst_file_path,
                             const std::string& key)
     {
-        return decode_file(src_file_path.c_str(), dst_file_path.c_str(), key.c_str(), key.size());
+        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()),
+                           reinterpret_cast<const unsigned char*>(dst_file_path.c_str()),
+                           reinterpret_cast<const unsigned char*>(key.c_str()),
+                           key.size());
     }
 
 private:

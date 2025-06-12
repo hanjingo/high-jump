@@ -30,10 +30,10 @@ namespace libcpp
 class sha256
 {
 public:
-    sha256() {};
-    ~sha256() {};
-
-    static bool encode(const char* src, const std::size_t src_len, char* dst, std::size_t& dst_len)
+    static bool encode(const char* src, 
+                       const unsigned long src_len, 
+                       char* dst, 
+                       unsigned long& dst_len)
     {
         if (dst_len < 256 / 8)
             return false;
@@ -42,7 +42,8 @@ public:
         return true;
     }
 
-    static bool encode(const std::string& src, std::string& dst)
+    static bool encode(const std::string& src, 
+                       std::string& dst)
     {
         dst.resize(256 / 8);
         SHA256(reinterpret_cast<const unsigned char *>(&src[0]), 
@@ -51,7 +52,8 @@ public:
         return true;
     };
 
-    static void encode(std::istream& in, std::string& dst)
+    static void encode(std::istream& in, 
+                       std::string& dst)
     {
         SHA256_CTX ctx;
         SHA256_Init(&ctx);

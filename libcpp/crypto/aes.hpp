@@ -78,10 +78,10 @@ public:
                        const unsigned long src_len, 
                        unsigned char* dst,
                        unsigned long& dst_len,
-                       unsigned char* key, 
-                       unsigned long key_len,
-                       unsigned char* iv,
-                       cipher cip = aes_256_cbc)
+                       const unsigned char* key, 
+                       const unsigned long key_len,
+                       const unsigned char* iv,
+                       const cipher cip = aes_256_cbc)
     {
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
         if (!ctx)
@@ -113,37 +113,22 @@ public:
         return true;
     }
 
-    static bool encode(const char* src, 
-                       const unsigned long src_len, 
-                       char* dst,
-                       unsigned long& dst_len,
-                       char* key, 
-                       unsigned long key_len,
-                       char* iv,
-                       cipher cip = aes_256_cbc)
+    static bool encode(const std::string& src, 
+                       std::string& dst, 
+                       const std::string& key, 
+                       const std::string& iv, 
+                       const cipher cip = aes_256_cbc)
     {
-        return encode(reinterpret_cast<const unsigned char*>(src), 
-                      src_len, 
-                      reinterpret_cast<unsigned char*>(dst), 
-                      dst_len,
-                      reinterpret_cast<unsigned char*>(key), 
-                      key_len,
-                      reinterpret_cast<unsigned char*>(iv),
-                      cip);
-    }
-
-    static bool encode(const std::string& src, std::string& dst, std::string& key, std::string& iv, cipher cip = aes_256_cbc)
-    {
-        unsigned long dst_len = 0;
         dst.resize(src.size() + EVP_CIPHER_block_size(_select_cipher(cip)));
+        unsigned long dst_len = dst.size();
         if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
-                      static_cast<const unsigned long>(src.size()), 
-                      reinterpret_cast<unsigned char*>(const_cast<char*>(dst.c_str())), 
-                      dst_len, 
-                      reinterpret_cast<unsigned char*>(const_cast<char*>(key.c_str())), 
-                      static_cast<unsigned long>(key.size()), 
-                      reinterpret_cast<unsigned char*>(const_cast<char*>(iv.c_str())), 
-                      cip))
+                    src.size(), 
+                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
+                    dst_len, 
+                    reinterpret_cast<const unsigned char*>(key.c_str()), 
+                    key.size(), 
+                    reinterpret_cast<const unsigned char*>(iv.c_str()), 
+                    cip))
             return false;
 
         dst.resize(dst_len);
@@ -155,7 +140,7 @@ public:
                             const unsigned char* key, 
                             const unsigned long key_len,
                             const unsigned char* iv,
-                            cipher cip = aes_256_cbc)
+                            const cipher cip = aes_256_cbc)
     {
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
         if (!ctx)
@@ -206,38 +191,28 @@ public:
         return true;
     }
 
-    static bool encode_file(const char* src_file_path, 
-                            const char* dst_file_path,
-                            const char* key, 
-                            const unsigned long key_len,
-                            const char* iv,
-                            const cipher cip = aes_256_cbc)
-    {
-        return encode_file(reinterpret_cast<const unsigned char*>(src_file_path), 
-                            reinterpret_cast<const unsigned char*>(dst_file_path),
-                            reinterpret_cast<const unsigned char*>(key), 
-                            key_len,
-                            reinterpret_cast<const unsigned char*>(iv),
-                            cip);
-    }
-
     static bool encode_file(const std::string& src_file_path,
                             const std::string& dst_file_path,
                             const std::string& key,
                             const std::string& iv,
                             const cipher cip = aes_256_cbc)
     {
-        return encode_file(src_file_path.c_str(), dst_file_path.c_str(), key.c_str(), iv.c_str(), cip);
+        return encode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()),
+                           reinterpret_cast<const unsigned char*>(dst_file_path.c_str()),
+                           reinterpret_cast<const unsigned char*>(key.c_str()),
+                           key.size(),
+                           reinterpret_cast<const unsigned char*>(iv.c_str()),
+                           cip);
     }
 
     static bool decode(const unsigned char* src,
                        const unsigned long src_len,
                        unsigned char* dst,
                        unsigned long& dst_len,
-                       unsigned char* key,
-                       unsigned long key_len,
-                       unsigned char* iv,
-                       cipher cip = aes_256_cbc)
+                       const unsigned char* key,
+                       const unsigned long key_len,
+                       const unsigned char* iv,
+                       const cipher cip = aes_256_cbc)
     {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
         if (!ctx)
@@ -269,31 +244,22 @@ public:
         return true;
     }
 
-    static bool decode(const char* src,
-                       const unsigned long src_len,
-                       char* dst,
-                       unsigned long& dst_len,
-                       char* key,
-                       unsigned long key_len,
-                       char* iv,
-                       cipher cip = aes_256_cbc)
-    {
-        return decode(reinterpret_cast<const unsigned char*>(src), src_len,
-                        reinterpret_cast<unsigned char*>(dst), dst_len,
-                        reinterpret_cast<unsigned char*>(key), key_len,
-                        reinterpret_cast<unsigned char*>(iv),
-                        cip);
-    }
-
     static bool decode(const std::string& src, 
                        std::string& dst, 
-                       std::string& key, 
-                       std::string& iv, 
-                       cipher cip = aes_256_cbc)
+                       const std::string& key, 
+                       const std::string& iv, 
+                       const cipher cip = aes_256_cbc)
     {
-        unsigned long dst_len = 0;
         dst.resize(src.size());
-        if (!decode(src.c_str(), src.size(), dst.data(), dst_len, key.data(), key.size(), iv.data(), cip))
+        unsigned long dst_len = dst.size();
+        if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
+                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+                    dst_len, 
+                    reinterpret_cast<const unsigned char*>(key.c_str()), 
+                    key.size(), 
+                    reinterpret_cast<const unsigned char*>(iv.c_str()), 
+                    cip))
         {
             dst.clear();
             return false;
@@ -359,28 +325,18 @@ public:
         return true;
     }
 
-    static bool decode_file(const char* src_file_path,
-                            const char* dst_file_path,
-                            const char* key,
-                            const unsigned long key_len,
-                            const char* iv,
-                            const cipher cip = aes_256_cbc)
-    {
-        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path),
-                            reinterpret_cast<const unsigned char*>(dst_file_path),
-                            reinterpret_cast<const unsigned char*>(key),
-                            key_len,
-                            reinterpret_cast<const unsigned char*>(iv),
-                            cip);
-    }
-
     static bool decode_file(const std::string& src_file_path,
                             const std::string& dst_file_path,
                             const std::string& key,
                             const std::string& iv,
                             const cipher cip = aes_256_cbc)
     {
-        return decode_file(src_file_path.c_str(), dst_file_path.c_str(), key.c_str(), iv.c_str(), cip);
+        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()),
+                           reinterpret_cast<const unsigned char*>(dst_file_path.c_str()),
+                           reinterpret_cast<const unsigned char*>(key.c_str()),
+                           key.size(),
+                           reinterpret_cast<const unsigned char*>(iv.c_str()),
+                           cip);
     }
 
 private:

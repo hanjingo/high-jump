@@ -24,14 +24,6 @@
 #include <fstream>
 #include <vector>
 
-// for OpenSSL compatibility on Windows
-#ifdef _WIN32
-extern "C" 
-{
-    #include <applink.c>
-}
-#endif
-
 #include <openssl/bio.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
@@ -83,19 +75,16 @@ public:
         return true;
     }
 
-    // byte -> base64 bytes
-    static bool encode(const char* src, const unsigned long src_len, char* dst, unsigned long& dst_len)
-    {
-        return encode(reinterpret_cast<const unsigned char*>(src), src_len, 
-                        reinterpret_cast<unsigned char*>(dst), dst_len);
-    }
-
     // string -> base64 string
-    static bool encode(const std::string& src, std::string& dst)
+    static bool encode(const std::string& src, 
+                       std::string& dst)
     {
         dst.resize((src.size() + 2) / 3 * 4); // Base64 encoding increases size by ~33%
-        unsigned long dst_len = 0;
-        if (!encode(src.c_str(), src.size(), dst.data(), dst_len))
+        unsigned long dst_len = dst.size();
+        if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
+                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
+                    dst_len))
         {
             dst.clear();
             return false;
@@ -106,7 +95,8 @@ public:
     }
 
     // file -> base64 file
-    static bool encode_file(const unsigned char* src_file_path, const unsigned char* dst_file_path)
+    static bool encode_file(const unsigned char* src_file_path, 
+                            const unsigned char* dst_file_path)
     {
         FILE* in = fopen(reinterpret_cast<const char*>(src_file_path), "rb");
         if (!in) 
@@ -153,7 +143,8 @@ public:
     }
 
     // file -> base64 file
-    static bool encode_file(const std::string& src_file_path, const std::string& dst_file_path)
+    static bool encode_file(const std::string& src_file_path, 
+                            const std::string& dst_file_path)
     {
         return encode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()), 
                             reinterpret_cast<const unsigned char*>(dst_file_path.c_str()));
@@ -200,17 +191,21 @@ public:
                        unsigned long& dst_len)
     {
         return decode(reinterpret_cast<const unsigned char*>(src), 
-                        src_len, 
-                        reinterpret_cast<unsigned char*>(dst),
-                        dst_len);
+                      src_len, 
+                      reinterpret_cast<unsigned char*>(dst),
+                      dst_len);
     }
 
     // base64 string -> string
-    static bool decode(const std::string& src, std::string& dst)
+    static bool decode(const std::string& src, 
+                       std::string& dst)
     {
         dst.resize((src.size() / 4) * 3);
-        unsigned long dst_len = 0;
-        if (!decode(src.c_str(), src.size(), dst.data(), dst_len))
+        unsigned long dst_len = dst.size();
+        if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
+                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+                    dst_len))
         {
             dst.clear(); // Clear the string if decoding fails
             return false;
@@ -221,7 +216,8 @@ public:
     }
 
     // base64 file -> file
-    static bool decode_file(const unsigned char* src_file_path, const unsigned char* dst_file_path)
+    static bool decode_file(const unsigned char* src_file_path, 
+                            const unsigned char* dst_file_path)
     {
         FILE* in = fopen(reinterpret_cast<const char*>(src_file_path), "rb");
         if (!in) 
@@ -267,7 +263,8 @@ public:
     }
 
     // base64 file -> file
-    static bool decode_file(const std::string& src_file_path, const std::string& dst_file_path)
+    static bool decode_file(const std::string& src_file_path, 
+                            const std::string& dst_file_path)
     {
         return decode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()), 
                             reinterpret_cast<const unsigned char*>(dst_file_path.c_str()));

@@ -19,6 +19,12 @@
 #ifndef MD5_HPP
 #define MD5_HPP
 
+// disable msvc safe check warning
+#define _CRT_SECURE_NO_WARNINGS
+
+// support deprecated api for low version openssl
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <string.h>
 #include <string>
 #include <sstream>
@@ -97,6 +103,12 @@ public:
 
         return ss.str();
     };
+
+    // reserve encode dst buf size
+	static unsigned long encode_len_reserve()
+	{
+		return MD5_DIGEST_LENGTH;
+	}
 
 private:
     md5() = default;

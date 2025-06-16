@@ -19,6 +19,12 @@
 #ifndef BASE64_HPP
 #define BASE64_HPP
 
+// disable msvc safe check warning
+#define _CRT_SECURE_NO_WARNINGS
+
+// support deprecated api for low version openssl
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -79,7 +85,7 @@ public:
     static bool encode(const std::string& src, 
                        std::string& dst)
     {
-        dst.resize((src.size() + 2) / 3 * 4); // Base64 encoding increases size by ~33%
+        dst.resize(encode_len_reserve(src.size())); // Base64 encoding increases size by ~33%
         unsigned long dst_len = dst.size();
         if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
                     src.size(), 
@@ -184,23 +190,11 @@ public:
         return true;
     }
 
-    // base64 bytes -> bytes
-    static bool decode(const char* src, 
-                       const unsigned long src_len, 
-                       char* dst, 
-                       unsigned long& dst_len)
-    {
-        return decode(reinterpret_cast<const unsigned char*>(src), 
-                      src_len, 
-                      reinterpret_cast<unsigned char*>(dst),
-                      dst_len);
-    }
-
     // base64 string -> string
     static bool decode(const std::string& src, 
                        std::string& dst)
     {
-        dst.resize((src.size() / 4) * 3);
+        dst.resize(decode_len_reserve(src.size()));
         unsigned long dst_len = dst.size();
         if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
                     src.size(), 
@@ -269,6 +263,18 @@ public:
         return decode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()), 
                             reinterpret_cast<const unsigned char*>(dst_file_path.c_str()));
     }
+
+	// reserve encode dst buf size
+	static unsigned long encode_len_reserve(const unsigned long src_len)
+	{
+		return (src_len + 2) / 3 * 4;
+	}
+
+	// reserve decode dst buf size
+	static unsigned long decode_len_reserve(const unsigned long src_len)
+	{
+		return (src_len / 4) * 3;
+	}
 
 private:
     base64() = default;

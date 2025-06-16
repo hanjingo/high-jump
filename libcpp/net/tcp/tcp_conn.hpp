@@ -111,7 +111,7 @@ public:
         if (is_connected())
             return false;
 
-        sock_->async_connect(ip, port, [this](const err_t& err, sock_ptr_t sock) {
+        sock_->async_connect(ip, port, [this](const err_t& err) {
             if (!err.failed())
             {
                 set_w_closed(false);
@@ -219,7 +219,7 @@ private:
         }
 
         sz = msg->size();
-        std::vector<char> buf(sz);
+        std::vector<unsigned char> buf(sz);
         sz = msg->encode(buf.data(), sz);
         if (sz == 0)
         {
@@ -244,7 +244,7 @@ private:
         r_ch_ >> msg;
         if (msg != nullptr)
         {
-            auto data = boost::asio::buffer_cast<const char*>(r_buf_.data());
+            auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
             sz = msg->decode(data, r_buf_.size());
             this->r_buf_.consume(sz);
             if (sz > 0)
@@ -270,7 +270,7 @@ private:
                 return false;
 
             sz = msg->size();
-            std::vector<char> buf(sz);
+            std::vector<unsigned char> buf(sz);
             sz = msg->encode(buf.data(), sz);
             if (sz < 1) // decode fail, exit
             {
@@ -296,7 +296,7 @@ private:
             if (sock_ == nullptr || !sock_->is_connected()) 
                 return false;
             
-            auto data = boost::asio::buffer_cast<const char*>(r_buf_.data());
+            auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
             sz = msg->decode(data, r_buf_.size());
             if (sz > 0) 
             {

@@ -2,13 +2,21 @@
 #define DLL_H
 
 // export/import dll
-#if defined(_MSC_VER) //  Microsoft
+#if defined(_MSC_VER) // Microsoft
 #define DLL_EXPORT __declspec(dllexport)
 #define DLL_IMPORT __declspec(dllimport)
-#elif defined(__GNUC__) //  GCC
+#elif defined(__GNUC__) || defined(__clang__) // GCC/Clang (Linux, macOS, Android)
+#if defined(__APPLE__)
 #define DLL_EXPORT __attribute__((visibility("default")))
 #define DLL_IMPORT
-#else // Warnning
+#elif defined(__ANDROID__)
+#define DLL_EXPORT __attribute__((visibility("default")))
+#define DLL_IMPORT
+#else
+#define DLL_EXPORT __attribute__((visibility("default")))
+#define DLL_IMPORT
+#endif
+#else // Unknown compiler/platform
 #define DLL_EXPORT
 #define DLL_IMPORT
 #pragma WARNING UNKNOWN DYNAMIC LINK IMPORT/EXPORT SEMANTICS.

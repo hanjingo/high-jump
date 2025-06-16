@@ -1,6 +1,12 @@
 #ifndef AES_HPP
 #define AES_HPP
 
+// disable msvc safe check warning
+#define _CRT_SECURE_NO_WARNINGS
+
+// support deprecated api for low version openssl
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <fstream>
 #include <iostream>
 
@@ -119,7 +125,7 @@ public:
                        const std::string& iv, 
                        const cipher cip = aes_256_cbc)
     {
-        dst.resize(src.size() + EVP_CIPHER_block_size(_select_cipher(cip)));
+        dst.resize(encode_len_reserve(src.size(), cip));
         unsigned long dst_len = dst.size();
         if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
                     src.size(), 
@@ -250,7 +256,7 @@ public:
                        const std::string& iv, 
                        const cipher cip = aes_256_cbc)
     {
-        dst.resize(src.size());
+        dst.resize(decode_len_reserve(src.size()));
         unsigned long dst_len = dst.size();
         if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
                     src.size(), 
@@ -338,6 +344,19 @@ public:
                            reinterpret_cast<const unsigned char*>(iv.c_str()),
                            cip);
     }
+
+    // reserve encode dst buf size
+	static unsigned long encode_len_reserve(const unsigned long src_len, 
+											const cipher cip = aes_256_cbc)
+	{
+		return src_len + EVP_CIPHER_block_size(_select_cipher(cip));
+	}
+
+	// reserve decode dst buf size
+	static unsigned long decode_len_reserve(const unsigned long src_len)
+	{
+		return src_len;
+	}
 
 private:
     static const EVP_CIPHER* _select_cipher(const cipher cip)

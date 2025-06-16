@@ -1,5 +1,29 @@
+/*
+*  This file is part of libcpp.
+*  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef RSA_HPP
 #define RSA_HPP
+
+// disable msvc safe check warning
+#define _CRT_SECURE_NO_WARNINGS
+
+// support deprecated api for low version openssl
+#define OPENSSL_SUPPRESS_DEPRECATED
 
 #include <string>
 #include <fstream>
@@ -52,7 +76,7 @@ public:
                        const std::string& pubkey_pem,
                        const int padding = RSA_PKCS1_PADDING)
     {
-        dst.resize(RSA_MAX_KEY_LENGTH);
+        dst.resize(encode_len_reserve(reinterpret_cast<const unsigned char*>(pubkey_pem.c_str()), pubkey_pem.size()));
         unsigned long dst_len = dst.size();
         if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()),
                     src.size(),
@@ -183,7 +207,7 @@ public:
                        const std::string& prikey_pem,
                        const int padding = RSA_PKCS1_PADDING)
     {
-        dst.resize(RSA_MAX_KEY_LENGTH);
+        dst.resize(decode_len_reserve(reinterpret_cast<const unsigned char*>(prikey_pem.c_str()), prikey_pem.size()));
         unsigned long dst_len = dst.size();
         if(!decode(reinterpret_cast<const unsigned char*>(src.c_str()),
                    src.size(),
@@ -403,6 +427,26 @@ public:
         prikey_pem.resize(prikey_pem_len);
         return true;
     }
+
+    // reserve encode dst buf size
+	static unsigned long encode_len_reserve(const unsigned char* pubkey_pem, const unsigned long pubkey_pem_len)
+	{
+		RSA* rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
+        if (!rsa)
+            return 0;
+
+        return RSA_size(rsa);
+	}
+
+    // reserve decode dst buf size
+	static unsigned long decode_len_reserve(const unsigned char* prikey_pem, const unsigned long prikey_pem_len)
+	{
+		RSA* rsa = _load_private_key(prikey_pem, prikey_pem_len);
+        if (!rsa)
+            return 0;
+
+        return RSA_size(rsa);
+	}
 
 private:
     static RSA* _load_public_key(const unsigned char* pubkey_pem, 

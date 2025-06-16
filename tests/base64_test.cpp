@@ -34,11 +34,11 @@ TEST(base64, decode)
     ASSERT_STREQ(str_dst.c_str(), "https://github.com/hanjingo/libcpp");
 
     // base64 byte -> string
-    char buf_dst[1024];
+    unsigned char buf_dst[1024];
     unsigned long buf_dst_len = 1024;
-    char buf[] = { 'a', 'G', 'V', 's', 'b', 'G', '8', 'g', 'b', 'G', 'l', 'j', 'c', 'H', 'A', '=' };
+    unsigned char buf[] = { 'a', 'G', 'V', 's', 'b', 'G', '8', 'g', 'b', 'G', 'l', 'j', 'c', 'H', 'A', '=' };
     ASSERT_EQ(libcpp::base64::decode(buf, 16, buf_dst, buf_dst_len), true);
-    ASSERT_STREQ(std::string(buf_dst, buf_dst_len).c_str(), "hello licpp");
+    ASSERT_STREQ(std::string(reinterpret_cast<char*>(buf_dst), buf_dst_len).c_str(), "hello licpp");
 }
 
 TEST(base64, encode_file)

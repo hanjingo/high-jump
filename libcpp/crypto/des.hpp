@@ -19,6 +19,12 @@
 #ifndef DES_HPP
 #define DES_HPP
 
+// disable msvc safe check warning
+#define _CRT_SECURE_NO_WARNINGS
+
+// support deprecated api for low version openssl
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <string>
 #include <vector>
 #include <iostream>
@@ -56,7 +62,7 @@ public:
             memcpy(key_encrypt, key, 8); 
 
         key_schedule_t key_schedule;
-        DES_set_key_unchecked(&key_encrypt, &key_schedule);
+		DES_set_key(&key_encrypt, &key_schedule);
 
         const_cblock_t input;
         cblock_t output;
@@ -87,7 +93,7 @@ public:
                        const std::string& key,
                        unsigned long idx = 0)
     {
-        dst.resize((src.size() / 8) * 8 + 8);
+        dst.resize(encode_len_reserve(src.size()));
         unsigned long len = dst.size();
         if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
                     src.size(), 
@@ -125,7 +131,7 @@ public:
 
         DES_cblock key_encrypt;
         memset(key_encrypt, 0, 8);
-        memcpy(key_encrypt, key, std::min<size_t>(key_len, 8));
+        memcpy(key_encrypt, key, (key_len < 8) ? key_len : 8);
         DES_key_schedule key_schedule;
         DES_set_key_unchecked(&key_encrypt, &key_schedule);
 
@@ -215,7 +221,7 @@ public:
                        const std::string& key, 
                        unsigned long idx = 0)
     {
-        dst.resize((src.size() / 8) * 8 + 8);
+        dst.resize(decode_len_reserve(src.size()));
         unsigned long len = dst.size();
         if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
                     src.size(), 
@@ -253,7 +259,7 @@ public:
 
         DES_cblock key_encrypt;
         memset(key_encrypt, 0, 8);
-        memcpy(key_encrypt, key, std::min<size_t>(key_len, 8));
+        memcpy(key_encrypt, key, (key_len < 8) ? key_len : 8);
         DES_key_schedule key_schedule;
         DES_set_key_unchecked(&key_encrypt, &key_schedule);
         while (true) 
@@ -288,6 +294,18 @@ public:
                            reinterpret_cast<const unsigned char*>(key.c_str()),
                            key.size());
     }
+
+    // reserve encode dst buf size
+	static unsigned long encode_len_reserve(const unsigned long src_len)
+	{
+        return (src_len / 8) * 8 + 8;
+	}
+
+	// reserve decode dst buf size
+	static unsigned long decode_len_reserve(const unsigned long src_len)
+	{
+		return (src_len / 8) * 8 + 8;
+	}
 
 private:
     ecb() = default;

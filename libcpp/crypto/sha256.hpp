@@ -19,6 +19,12 @@
 #ifndef SHA256_HPP
 #define SHA256_HPP
 
+// disable msvc safe check warning
+#define _CRT_SECURE_NO_WARNINGS
+
+// support deprecated api for low version openssl
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <iostream>
 #include <vector>
 #include <openssl/sha.h>
@@ -30,25 +36,26 @@ namespace libcpp
 class sha256
 {
 public:
-    static bool encode(const char* src, 
+    static bool encode(const unsigned char* src, 
                        const unsigned long src_len, 
-                       char* dst, 
+                       unsigned char* dst, 
                        unsigned long& dst_len)
     {
-        if (dst_len < 256 / 8)
+        if (dst_len < SHA256_DIGEST_LENGTH )
             return false;
 
-        SHA256(reinterpret_cast<const unsigned char *>(&src), src_len, reinterpret_cast<unsigned char *>(dst));
+        SHA256(src, src_len, dst);
+        dst_len = SHA256_DIGEST_LENGTH;
         return true;
     }
 
     static bool encode(const std::string& src, 
                        std::string& dst)
     {
-        dst.resize(256 / 8);
-        SHA256(reinterpret_cast<const unsigned char *>(&src[0]), 
+        dst.resize(SHA256_DIGEST_LENGTH);
+        SHA256(reinterpret_cast<const unsigned char *>(src.c_str()), 
                src.size(), 
-               reinterpret_cast<unsigned char *>(&dst[0]));
+               reinterpret_cast<unsigned char *>(const_cast<char*>(dst.data())));
         return true;
     };
 
@@ -62,9 +69,15 @@ public:
         while ((sz = in.read(&buf[0], sz).gcount()) > 0)
             SHA256_Update(&ctx, buf.data(), sz);
 
-        dst.resize(256 / 8);
+        dst.resize(SHA256_DIGEST_LENGTH);
         SHA256_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
     };
+
+    // reserve encode dst buf size
+	static unsigned long encode_len_reserve()
+	{
+		return SHA256_DIGEST_LENGTH;
+	}
 
 private:
     sha256() = default;

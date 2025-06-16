@@ -52,7 +52,7 @@ public:
     using opt_keep_alive    = boost::asio::ip::tcp::socket::keep_alive;
     using opt_broadcast     = boost::asio::ip::tcp::socket::broadcast;
 
-    using conn_handler_t    = std::function<void(const err_t&, tcp_socket_ptr_t)>;
+    using conn_handler_t    = std::function<void(const err_t&)>;
     using send_handler_t    = std::function<void(const err_t&, std::size_t)>;
     using recv_handler_t    = std::function<void(const err_t&, std::size_t)>;
 
@@ -116,51 +116,59 @@ public:
         return connect(ep, timeout, try_times);
     }
 
-    // WARNNING: boost.asio block connect fail with default timeout duration = 2s
-    // WARNNING: the feature of timeout is not recommended for use in a multi-connection context.
-    // See Also: https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/example/cpp11/timeouts/blocking_tcp_client.cpp
     bool connect(endpoint_t ep, 
                  std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
                  int try_times = 1)
     {
-        if (is_connected() || try_times < 1)
-            return false;
-
-        try_times--;
-        if (this->sock_ != nullptr)
+        for (int i = 0; i < try_times; ++i)
         {
-            this->sock_->close();
-            delete this->sock_;
-            this->sock_ = nullptr;
-        }
-        sock_ = new sock_t(io_);
-        // start async connect
-        sock_->async_connect(ep, [this](const err_t& err) {
-            if (this->is_connected()) 
-                return;
-    
-            if (err.failed())
+            set_conn_status(false);
+
+            if (sock_ != nullptr)
             {
-                this->set_conn_status(false);
-                return;
+                sock_->close();
+                delete sock_;
+                sock_ = nullptr;
             }
-            
-            this->set_conn_status(true);
-        });
+            sock_ = new sock_t(io_);
 
-        // start timer
-        io_.restart();
-        io_.run_for(timeout);
-        if (is_connected())
-            return true;
+            std::atomic_bool finished{false};
+            std::atomic_bool success{false};
 
-        if (!io_.stopped()) // task still running, stop it!
-        {
-            sock_->close();
+            steady_timer_t timer(io_);
+            timer.expires_after(timeout);
+
+            sock_->async_connect(ep, [&](const err_t& err) {
+                if (finished.exchange(true)) 
+                    return;
+
+                if (!err.failed())
+                {
+                    set_conn_status(true);
+                    success.exchange(true);
+                }
+                else
+                    set_conn_status(false);
+                timer.cancel();
+            });
+
+            timer.async_wait([&](const err_t& err) {
+                if (finished.exchange(true)) 
+                    return;
+
+                if (sock_)
+                    sock_->close();
+
+                set_conn_status(false);
+            });
+
+            io_.restart();
             io_.run();
+
+            if (success.load())
+                return true;
         }
-          
-        return connect(ep, timeout, try_times);
+        return false;
     }
 
     void async_connect(const char* ip, uint16_t port, conn_handler_t&& fn)
@@ -173,7 +181,7 @@ public:
     {
         if (is_connected()) 
         {
-            fn(boost::system::errc::make_error_code(boost::system::errc::already_connected), this);
+            fn(boost::system::errc::make_error_code(boost::system::errc::already_connected));
             return;
         }
 
@@ -190,7 +198,7 @@ public:
             else
                 set_conn_status(false);
 
-            fn(err, this);
+            fn(err);
         });
     }
 
@@ -214,7 +222,7 @@ public:
         }
     }
 
-    size_t send(const char* data, size_t len)
+    size_t send(const unsigned char* data, size_t len)
     {
         return send(boost::asio::buffer(data, len));
     }
@@ -236,7 +244,7 @@ public:
         }
     }
 
-    void async_send(const char* data, size_t len, send_handler_t&& fn)
+    void async_send(const unsigned char* data, size_t len, send_handler_t&& fn)
     {
         if (!is_connected()) 
         {
@@ -260,7 +268,7 @@ public:
         return sz;
     }
 
-    size_t recv(char* data, size_t len)
+    size_t recv(unsigned char* data, size_t len)
     {
         multi_buffer_t buf{data, len};
         return recv(buf);
@@ -291,7 +299,7 @@ public:
         sock_->async_read_some(buf, cb);
     }
 
-    void async_recv(char* data, size_t len, recv_handler_t&& fn)
+    void async_recv(unsigned char* data, size_t len, recv_handler_t&& fn)
     {
         multi_buffer_t buf{data, len};
         async_recv(buf, std::move(fn));

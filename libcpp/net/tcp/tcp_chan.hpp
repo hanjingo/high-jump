@@ -16,7 +16,7 @@ struct tcp_chan {
 
     inline tcp_chan& operator>>(T& t)
     {
-        q_.wait_dequeue(t); // blocks until an item is available
+        q_.try_dequeue(t); // noblock
         return *this;
     }
 
@@ -24,6 +24,30 @@ struct tcp_chan {
     {
         q_.enqueue(t);
         return *this;
+    }
+
+    template<typename T>
+    inline void wait_dequeue(T& t)
+    {
+        q_.wait_dequeue(t);
+    }
+
+    template<typename T>
+	inline bool wait_dequeue_timeout(T& t, std::int64_t us)
+    {
+        return q_.wait_dequeue_timed(t, us);
+    }
+
+    template<typename T>
+    inline bool try_dequeue(T& t)
+    {
+        return q_.try_dequeue(t);
+    }
+
+    template<typename T>
+    inline void enqueue(const T& t)
+    {
+        q_.enqueue(t);
     }
 
 private:

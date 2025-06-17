@@ -36,6 +36,12 @@ public:
 
     explicit tcp_listener(io_t& io)
         : io_{io}
+        , accept_handler_{}
+    {
+    }
+    tcp_listener(io_t& io, const accept_handler_t&& fn)
+        : io_{io}
+        , accept_handler_{std::move(fn)}
     {
     }
     virtual ~tcp_listener()
@@ -44,6 +50,8 @@ public:
     }
 
     inline bool is_closed() { return closed_.load(); }
+    inline void loop_start() { io_work_t work{io_}; io_.run(); }
+    inline void loop_end() { io_.stop(); }
 
     template<typename T>
     inline bool set_option(T opt)
@@ -115,15 +123,35 @@ public:
         return ret;
     }
 
+    void async_accept(uint16_t port)
+    {
+        endpoint_t ep{boost::asio::ip::tcp::v4(), port};
+        accept_handler_t fn = accept_handler_;
+        async_accept(ep, std::move(fn));
+    }
+
     void async_accept(uint16_t port, accept_handler_t&& fn)
     {
         endpoint_t ep{boost::asio::ip::tcp::v4(), port};
         async_accept(ep, std::move(fn));
     }
 
+    void async_accept(const char* ip, uint16_t port)
+    {
+        endpoint_t ep{address_t::from_string(ip), port};
+        accept_handler_t fn = accept_handler_;
+        async_accept(ep, std::move(fn));
+    }
+
     void async_accept(const char* ip, uint16_t port, accept_handler_t&& fn)
     {
         endpoint_t ep{address_t::from_string(ip), port};
+        async_accept(ep, std::move(fn));
+    }
+
+    void async_accept(endpoint_t ep)
+    {
+        accept_handler_t fn = accept_handler_;
         async_accept(ep, std::move(fn));
     }
 
@@ -189,6 +217,8 @@ private:
     acceptor_t*          acceptor_ = nullptr;
     endpoint_t           binded_endpoint_;
     std::atomic<bool>    closed_{false};
+
+    accept_handler_t     accept_handler_;
 };
 
 }

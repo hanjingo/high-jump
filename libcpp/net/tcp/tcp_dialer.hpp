@@ -46,8 +46,7 @@ public:
                            dial_handler_t&& fn)
     {
         tcp_conn* conn = new tcp_conn(io);
-        conn->set_connect_handler(std::move(fn));
-        conn->async_connect(ip, port);
+        conn->async_connect(ip, port, std::move(fn));
     }
 };
 

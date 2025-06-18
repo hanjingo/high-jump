@@ -50,8 +50,6 @@ public:
     }
 
     inline bool is_closed() { return closed_.load(); }
-    inline void loop_start() { io_work_t work{io_}; io_.run(); }
-    inline void loop_end() { io_.stop(); }
 
     template<typename T>
     inline bool set_option(T opt)

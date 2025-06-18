@@ -1,5 +1,5 @@
-#ifndef BUFFER_TOOL_HPP
-#define BUFFER_PRINTER_HPP
+#ifndef BUF_DEBUG_HPP
+#define BUF_DEBUG_HPP
 
 #include <boost/asio.hpp>
 #include <sstream>
@@ -9,7 +9,7 @@
 namespace libcpp
 {
 
-class buffer_tool
+class buf_debug
 {
 public:
     static std::string to_string(const boost::asio::streambuf& buf, bool hex = true)
@@ -41,7 +41,7 @@ public:
 #ifdef DEBUG
 // Macro to print buffer contents
 #define BUF_PRINT(buf, ...) \
-    std::cout << libcpp::buffer_tool::to_string(buf, ##__VA_ARGS__) << std::endl;
+    std::cout << libcpp::buf_debug::to_string(buf, ##__VA_ARGS__) << std::endl;
 
 #else
 #define BUF_PRINT(buf, ...)

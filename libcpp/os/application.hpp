@@ -38,7 +38,6 @@ public:
         pthread_t pt = pthread_self(); 
         return static_cast<long>((pt == nullptr ? -1 : pt->__sig));
 #else
-        // TODO
         return 0;
 #endif
     }

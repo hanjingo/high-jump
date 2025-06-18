@@ -171,7 +171,7 @@ public:
         return false;
     }
 
-    void async_connect(const char* ip, uint16_t port, conn_handler_t&& fn)
+    void async_connect(const char* ip, const uint16_t port, conn_handler_t&& fn)
     {
         endpoint_t ep{address_t::from_string(ip), port};
         async_connect(ep, std::move(fn));

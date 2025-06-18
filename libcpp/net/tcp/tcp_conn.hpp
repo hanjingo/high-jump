@@ -11,7 +11,7 @@
 #include <libcpp/net/tcp/tcp_chan.hpp>
 #include <libcpp/net/proto/message.hpp>
 
-#include <libcpp/net/debug/buffer_tool.hpp>
+#include <libcpp/net/tool/buf_debug.hpp>
 
 #ifndef MTU
 #define MTU 1500
@@ -235,7 +235,7 @@ private:
         w_buf_.commit(sz);
         BUF_PRINT(this->w_buf_);
 
-        sock_->async_send(w_buf_.data(), std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
+        sock_->async_send(data, sz, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
         if (send_handler_)
             send_handler_(this, msg);
     }
@@ -248,9 +248,13 @@ private:
         if (!is_connected() || is_r_closed()) 
             return;
 
-        this->r_buf_.commit(sz);
-        BUF_PRINT(this->r_buf_);
-        
+        if (sz > 0)
+        {
+            this->r_buf_.commit(sz);
+            is_recving_.store(false);
+            BUF_PRINT(this->r_buf_);
+        }
+
         msg_ptr_t msg = nullptr;
         do {
             msg = nullptr;
@@ -258,7 +262,8 @@ private:
                 return;
 
             auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
-            sz = msg->decode(data, r_buf_.size());
+            sz = r_buf_.size();
+            sz = msg->decode(data, sz);
             if (sz > 0) 
             {
                 this->r_buf_.consume(sz);
@@ -272,7 +277,10 @@ private:
         } while (true);
 
         // recv again
-        libcpp::tcp_socket::multi_buffer_t buf = r_buf_.prepare(MTU);
+        if (is_recving_.load())
+            return; // already recving, exit
+        auto buf = r_buf_.prepare(MTU);
+        is_recving_.store(true);
         sock_->async_recv(buf, std::bind(&tcp_conn::_async_recv, this, std::placeholders::_1, std::placeholders::_2));
     }
 
@@ -286,7 +294,7 @@ private:
         msg_ptr_t msg = nullptr;
         do {
             msg = nullptr;
-            if (sock_ == nullptr || !sock_->is_connected()) 
+            if (sock_ == nullptr || !sock_->is_connected() || is_w_closed()) 
                 return false;
 
             if (!w_ch_.try_dequeue(msg) || msg == nullptr)
@@ -328,11 +336,11 @@ private:
         msg_ptr_t msg = nullptr;
         do {
             msg = nullptr;
+            if (sock_ == nullptr || !sock_->is_connected() || is_r_closed()) 
+                return false;
+
             if (!r_ch_.try_dequeue(msg) || msg == nullptr)
                 break;
-
-            if (sock_ == nullptr || !sock_->is_connected()) 
-                return false;
             
             auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
             sz = msg->decode(data, r_buf_.size());
@@ -362,6 +370,7 @@ private:
 
     std::atomic<bool> w_closed_{false};
     std::atomic<bool> r_closed_{false};
+    std::atomic<bool> is_recving_{false};
 
     // NOTE: maybe use boost::asio::strand is a better choice
     tcp_socket::streambuf_t  r_buf_;

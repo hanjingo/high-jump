@@ -1,7 +1,10 @@
 #ifndef TCP_DIALER_HPP
 #define TCP_DIALER_HPP
 
-#include <libcpp/net/tcp/tcp_conn.hpp>
+#include <unordered_set>
+#include <mutex>
+#include <functional>
+#include <libcpp/net/tcp/tcp_socket.hpp>
 
 namespace libcpp
 {
@@ -9,45 +12,123 @@ namespace libcpp
 class tcp_dialer
 {
 public:
-    using io_t       = libcpp::tcp_conn::io_t;
+    using io_t       = libcpp::tcp_socket::io_t;
+    using err_t      = libcpp::tcp_socket::err_t;
 
 #ifdef SMART_PTR_ENABLE
-    using conn_ptr_t = std::shared_ptr<libcpp::tcp_conn>;
+    using sock_ptr_t = std::shared_ptr<libcpp::tcp_socket>;
 #else
-    using conn_ptr_t = libcpp::tcp_conn*;
+    using sock_ptr_t = libcpp::tcp_socket*;
 #endif
 
-    using sock_ptr_t = libcpp::tcp_conn::sock_ptr_t;
-    using err_t      = libcpp::tcp_conn::err_t;
+    using dial_handler_t = std::function<void(const err_t&, sock_ptr_t)>;
+    using range_handler_t = std::function<bool(sock_ptr_t)>;
 
-    using dial_handler_t = libcpp::tcp_conn::conn_handler_t;
-
+public:
     tcp_dialer() = delete;
-    virtual ~tcp_dialer() {}
-
-    static conn_ptr_t dial(io_t& io,
-                           const char* ip, 
-                           const std::uint16_t port, 
-                           std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
-                           int try_times = 1)
+    explicit tcp_dialer(io_t& io, const std::size_t sz = 0)
+        : io_{io}
     {
-        tcp_conn* conn = new tcp_conn(io);
-        if (conn->connect(ip, port, timeout, try_times))
-            return conn;
+    }
 
-        conn->close();
-        delete conn;
+    virtual ~tcp_dialer()
+    {
+        close();
+    }
+
+    inline std::size_t size()
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        return socks_.size();
+    }
+
+    inline bool is_exist(sock_ptr_t sock)
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        return socks_.find(sock) != socks_.end();
+    }
+
+    sock_ptr_t dial(const char* ip, 
+                    const std::uint16_t port, 
+                    std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+                    int try_times = 1)
+    {
+        sock_ptr_t sock = new tcp_socket(io_);
+        if (sock->connect(ip, port, timeout, try_times))
+        {
+            return add_(sock) ? sock : nullptr;
+        }
+
+        delete sock;
+        sock = nullptr;
         return nullptr;
     }
 
-    static void async_dail(io_t& io,
-                           const char* ip, 
-                           uint16_t port, 
-                           dial_handler_t&& fn)
+    void async_dial(const char* ip, 
+                    const uint16_t port, 
+                    dial_handler_t&& fn)
     {
-        tcp_conn* conn = new tcp_conn(io);
-        conn->async_connect(ip, port, std::move(fn));
+        sock_ptr_t sock = new tcp_socket(io_);
+        sock->async_connect(ip, port, [this, sock, fn = std::move(fn)](const err_t& err) mutable {
+            this->add_(sock);
+            fn(err, sock);
+        });
     }
+
+    void range(range_handler_t&& handler)
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        for (auto sock : socks_)
+        {
+            if (!handler(sock))
+                return;
+        }
+    }
+
+    void remove(sock_ptr_t sock)
+    {
+        if (sock == nullptr || !is_exist(sock))
+            return;
+
+        if (sock->is_connected())
+            sock->close();
+        del_(sock);
+        delete sock;
+        sock = nullptr;
+    }
+
+    void close()
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        for (auto itr = socks_.begin(); itr != socks_.end(); ++itr)
+        {
+            if (*itr == nullptr)
+                continue;
+
+            sock_ptr_t sock = (*itr);
+            sock->close();
+            delete sock;
+        }
+        socks_.clear();
+    }
+
+private:
+    bool add_(sock_ptr_t sock)
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        return socks_.insert(sock).second;
+    }
+
+    bool del_(sock_ptr_t sock)
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        return socks_.erase(sock) > 0;
+    }
+
+private:
+    io_t& io_;
+    std::unordered_set<sock_ptr_t> socks_;
+    std::mutex mu_;
 };
 
 }

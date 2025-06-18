@@ -353,10 +353,10 @@ TEST(tcp_conn, async_send)
             my_message* msg2 = new my_message();
             libcpp::tcp_conn sock{io, base};
             ASSERT_EQ(sock.recv(msg1), true);
-            //ASSERT_EQ(msg1->text() == std::string("hello"), true);
+            ASSERT_EQ(msg1->text() == std::string("hello"), true);
 
             ASSERT_EQ(sock.recv(msg2), true);
-            //ASSERT_EQ(msg2->text() == std::string("world"), true);
+            ASSERT_EQ(msg2->text() == std::string("world"), true);
         }
         li.close();
     });
@@ -380,21 +380,21 @@ TEST(tcp_conn, async_send)
             conn->async_send(msg2);
         }), true);
 
-     libcpp::tcp_conn conn2{
-          io,
-          [](libcpp::tcp_conn::conn_ptr_t conn) {},
-          [&nsend](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
-              nsend++;
-          }
-     };
-     ASSERT_EQ(conn2.async_connect("127.0.0.1", 10015,
-          [](libcpp::tcp_conn::conn_ptr_t conn, const libcpp::tcp_conn::err_t& err){
-              ASSERT_EQ(err.failed(), false);
-              my_message* msg1 = new my_message("hello");
-              conn->async_send(msg1);
-              my_message* msg2 = new my_message("world");
-              conn->async_send(msg2);
-          }), true);
+    libcpp::tcp_conn conn2{
+       io,
+       [](libcpp::tcp_conn::conn_ptr_t conn) {},
+       [&nsend](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
+           nsend++;
+       }
+    };
+    ASSERT_EQ(conn2.async_connect("127.0.0.1", 10015,
+       [](libcpp::tcp_conn::conn_ptr_t conn, const libcpp::tcp_conn::err_t& err){
+           ASSERT_EQ(err.failed(), false);
+           my_message* msg1 = new my_message("hello");
+           conn->async_send(msg1);
+           my_message* msg2 = new my_message("world");
+           conn->async_send(msg2);
+       }), true);
 
     io.run();
     t1.join();
@@ -430,10 +430,10 @@ TEST(tcp_conn, async_recv)
 
             auto msg = static_cast<my_message*>(arg);
             ASSERT_EQ(msg != nullptr, true);
-            // if (nrecv == 1)
-            //     ASSERT_EQ(msg->text() == std::string("hello"), true);
-            // else
-            //     ASSERT_EQ(msg->text() == std::string("world"), true);
+            if (nrecv == 1)
+                ASSERT_EQ(msg->text() == std::string("hello"), true);
+            else
+                ASSERT_EQ(msg->text() == std::string("world"), true);
         }
     };
     ASSERT_EQ(conn1.async_connect("127.0.0.1", 10016,
@@ -444,7 +444,6 @@ TEST(tcp_conn, async_recv)
             my_message* msg2 = new my_message();
             conn->async_recv(msg2);
         }), true);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     libcpp::tcp_conn conn2{
        io,
@@ -455,10 +454,10 @@ TEST(tcp_conn, async_recv)
 
            auto msg = static_cast<my_message*>(arg);
            ASSERT_EQ(msg != nullptr, true);
-        //    if (nrecv == 3)
-        //        ASSERT_EQ(msg->text() == "hello", true);
-        //    else
-        //        ASSERT_EQ(msg->text() == "world", true);
+           if (nrecv == 3)
+               ASSERT_EQ(msg->text() == "hello", true);
+           else
+               ASSERT_EQ(msg->text() == "world", true);
        }
     };
     ASSERT_EQ(conn2.async_connect("127.0.0.1", 10016,

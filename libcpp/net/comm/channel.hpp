@@ -1,5 +1,5 @@
-#ifndef TCP_CHAN_HPP
-#define TCP_CHAN_HPP
+#ifndef CHANNEL_HPP
+#define CHANNEL_HPP
 
 #include <concurrentqueue/blockingconcurrentqueue.h>
 
@@ -7,20 +7,20 @@ namespace libcpp
 {
 
 template<typename T>
-struct tcp_chan {
-    tcp_chan(const std::size_t min_capa) 
+struct channel {
+    channel(const std::size_t min_capa) 
         : q_{min_capa * moodycamel::BlockingConcurrentQueue<T>::BLOCK_SIZE} 
     {};
-    ~tcp_chan() 
+    ~channel() 
     {};
 
-    inline tcp_chan& operator>>(T& t)
+    inline channel& operator>>(T& t)
     {
         q_.try_dequeue(t); // noblock
         return *this;
     }
 
-    inline tcp_chan& operator<<(const T& t)
+    inline channel& operator<<(const T& t)
     {
         q_.enqueue(t);
         return *this;

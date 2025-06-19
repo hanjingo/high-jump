@@ -8,10 +8,8 @@
 #include <vector>
 
 #include <libcpp/net/tcp/tcp_socket.hpp>
-#include <libcpp/net/tcp/tcp_chan.hpp>
-#include <libcpp/net/proto/message.hpp>
-
-#include <libcpp/net/tool/buf_debug.hpp>
+#include <libcpp/net/comm/channel.hpp>
+#include <libcpp/net/comm/debugger.hpp>
 
 #ifndef MTU
 #define MTU 1500
@@ -23,17 +21,25 @@ namespace libcpp
 class tcp_conn
 {
 public:
+    class message
+    {
+    public:
+        virtual std::size_t size() = 0;
+        virtual std::size_t encode(unsigned char* buf, const std::size_t len) = 0;
+        virtual std::size_t decode(const unsigned char* buf, const std::size_t len)  = 0;
+    };
+
     using flag_t           = std::int64_t;
     using io_t             = libcpp::tcp_socket::io_t;
     using io_work_t        = libcpp::tcp_socket::io_work_t;
     using err_t            = libcpp::tcp_socket::err_t;
 
 #ifdef SMART_PTR_ENABLE
-    using msg_ptr_t        = std::shared_ptr<libcpp::message>;
+    using msg_ptr_t        = std::shared_ptr<message>;
     using conn_ptr_t       = std::shared_ptr<libcpp::tcp_conn>;
     using sock_ptr_t       = std::shared_ptr<libcpp::tcp_socket>;
 #else
-    using msg_ptr_t        = libcpp::message*;
+    using msg_ptr_t        = message*;
     using conn_ptr_t       = libcpp::tcp_conn*;
     using sock_ptr_t       = libcpp::tcp_socket*;
 #endif
@@ -375,8 +381,8 @@ private:
     // NOTE: maybe use boost::asio::strand is a better choice
     tcp_socket::streambuf_t  r_buf_;
     tcp_socket::streambuf_t  w_buf_;
-    tcp_chan<msg_ptr_t>      r_ch_;
-    tcp_chan<msg_ptr_t>      w_ch_;
+    channel<msg_ptr_t>          r_ch_;
+    channel<msg_ptr_t>          w_ch_;
 
     disconn_handler_t    disconn_handler_;
     recv_handler_t       recv_handler_;

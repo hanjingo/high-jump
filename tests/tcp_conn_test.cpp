@@ -3,7 +3,7 @@
 #include <thread>
 #include <string>
 
-class my_message : public libcpp::message
+class my_message : public libcpp::tcp_conn::message
 {
 public:
     my_message() : text_{std::string()} {}

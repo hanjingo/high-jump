@@ -38,6 +38,7 @@ find_package(Boost REQUIRED COMPONENTS
     filesystem
     program_options
     context
+    thread
 )
 
 include_directories(${CMAKE_SOURCE_DIR})

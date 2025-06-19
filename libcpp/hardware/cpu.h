@@ -30,7 +30,7 @@
 #define ARCH "UNKNOW ARCH"
 #endif
 
-static unsigned int cpu_cores()
+static unsigned int cpu_core_n()
 {
 #if defined(_WIN32)
     SYSTEM_INFO sysinfo;
@@ -55,15 +55,15 @@ static unsigned int cpu_cores()
 #elif __linux__
     return sysconf(_SC_NPROCESSORS_ONLN);
 #else
-    return std::thread::hardware_concurrency();
+    return 0;
 #endif
 }
 
 static bool cpu_bind(const unsigned int core)
 {
-#if defined(__windows__)
+#if defined(_WIN32)
     HANDLE hThread = GetCurrentThread();
-    DWORD_PTR mask = SetThreadAffinityMask(hThread, (DWORD_PTR)(1LLU << i));
+    DWORD_PTR mask = SetThreadAffinityMask(hThread, (DWORD_PTR)(1LLU << core));
     return (mask != 0);
 #elif __linux__
     cpu_set_t mask;
@@ -75,5 +75,57 @@ static bool cpu_bind(const unsigned int core)
 #endif
 }
 
+static void cpu_core_list(unsigned int* buf, unsigned int& len)
+{
+#if defined(_WIN32)
+    DWORD returnLength = 0;
+    GetLogicalProcessorInformation(nullptr, &returnLength);
+    auto buffer = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION)new BYTE[returnLength];
+    if (!GetLogicalProcessorInformation(buffer, &returnLength)) 
+    {
+        delete[] buffer;
+        len = 0;
+        return;
+    }
+
+    unsigned int count = 0;
+    DWORD n = returnLength / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
+    for (DWORD i = 0; i < n && count < len; ++i) 
+    {
+        if (buffer[i].Relationship != RelationProcessorCore) 
+            continue;
+        
+        DWORD_PTR mask = buffer[i].ProcessorMask;
+        for (unsigned int j = 0; j < sizeof(DWORD_PTR) * 8; ++j) 
+        {
+            if (mask & ((DWORD_PTR)1 << j))
+                buf[count++] = j;
+        }
+    }
+    len = count;
+    delete[] buffer;
+#elif defined(__linux__)
+    int ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+    unsigned int count = 0;
+    for (int i = 0; i < ncpu && count < len; ++i)
+        buf[count++] = i;
+
+    len = count;
+#elif defined(__APPLE__)
+    // macOS
+    int nm[2];
+    size_t len_cpu = sizeof(unsigned int);
+    unsigned int ncpu = 0;
+    nm[0] = CTL_HW; nm[1] = HW_NCPU;
+    sysctl(nm, 2, &ncpu, &len_cpu, NULL, 0);
+    unsigned int count = 0;
+    for (unsigned int i = 0; i < ncpu && count < len; ++i) 
+        buf[count++] = i;
+
+    len = count;
+#else
+    len = 0;
+#endif
+}
 
 #endif

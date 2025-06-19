@@ -12,6 +12,7 @@
     "boost-property-tree",
     "boost-stacktrace",
     "boost-uuid",
+    "boost-thread",
     "breakpad",
     "clickhouse-cpp",
     "concurrentqueue",
@@ -146,6 +147,10 @@
     },
     {
       "name": "boost-uuid",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-thread",
       "version": "1.76.0"
     },
     {

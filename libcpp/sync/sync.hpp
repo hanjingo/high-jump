@@ -15,8 +15,6 @@
 
 #include <libcpp/sync/shared_memory.hpp>
 
-#include <libcpp/sync/striped_map.hpp>
-
 #include <libcpp/sync/thread_pool.hpp>
 
 #endif

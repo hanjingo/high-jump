@@ -30,7 +30,7 @@
 #define ARCH "UNKNOW ARCH"
 #endif
 
-static unsigned int cpu_core_n()
+static unsigned int cpu_core_num()
 {
 #if defined(_WIN32)
     SYSTEM_INFO sysinfo;
@@ -59,7 +59,7 @@ static unsigned int cpu_core_n()
 #endif
 }
 
-static bool cpu_bind(const unsigned int core)
+static bool cpu_core_bind(const unsigned int core)
 {
 #if defined(_WIN32)
     HANDLE hThread = GetCurrentThread();

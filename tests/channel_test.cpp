@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/net/comm/channel.hpp>
+#include <libcpp/sync/channel.hpp>
 #include <thread>
 
 TEST(channel, wait_dequeue)

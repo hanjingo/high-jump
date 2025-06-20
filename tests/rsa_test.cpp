@@ -95,7 +95,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
 
     // file -> rsa file
     libcpp::logger::instance()->clear_sink();
-    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./rsa_file_test.log", 1024 * 1024 * 1024, 1, true));
+    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./rsa_file_test.log", 10 * 1024 * 1024, 1, true));
     for (int i = 0; i < 1024; i++)
         libcpp::logger::instance()->info("{}", i);
     libcpp::logger::instance()->flush();

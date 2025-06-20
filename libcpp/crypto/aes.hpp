@@ -80,10 +80,10 @@ public:
     };
 
 public:
-    static bool encode(const unsigned char* src, 
-                       const unsigned long src_len, 
-                       unsigned char* dst,
+    static bool encode(unsigned char* dst,
                        unsigned long& dst_len,
+                       const unsigned char* src, 
+                       const unsigned long src_len, 
                        const unsigned char* key, 
                        const unsigned long key_len,
                        const unsigned char* iv,
@@ -119,18 +119,18 @@ public:
         return true;
     }
 
-    static bool encode(const std::string& src, 
-                       std::string& dst, 
+    static bool encode(std::string& dst,
+                       const std::string& src, 
                        const std::string& key, 
                        const std::string& iv, 
                        const cipher cip = aes_256_cbc)
     {
         dst.resize(encode_len_reserve(src.size(), cip));
         unsigned long dst_len = dst.size();
-        if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size(), 
-                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
+        if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
                     dst_len, 
+                    reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
                     reinterpret_cast<const unsigned char*>(key.c_str()), 
                     key.size(), 
                     reinterpret_cast<const unsigned char*>(iv.c_str()), 
@@ -141,8 +141,8 @@ public:
         return true;
     }
 
-    static bool encode_file(const unsigned char* src_file_path, 
-                            const unsigned char* dst_file_path,
+    static bool encode_file(const char* dst_file_path,
+                            const char* src_file_path, 
                             const unsigned char* key, 
                             const unsigned long key_len,
                             const unsigned char* iv,
@@ -159,8 +159,8 @@ public:
             return false;
         }
 
-        std::ifstream in(reinterpret_cast<const char*>(src_file_path), std::ios::binary);
-        std::ofstream out(reinterpret_cast<const char*>(dst_file_path), std::ios::binary);
+        std::ifstream in(src_file_path, std::ios::binary);
+        std::ofstream out(dst_file_path, std::ios::binary);
         if (!in || !out)
         {
             EVP_CIPHER_CTX_free(ctx);
@@ -197,24 +197,24 @@ public:
         return true;
     }
 
-    static bool encode_file(const std::string& src_file_path,
-                            const std::string& dst_file_path,
+    static bool encode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path,
                             const std::string& key,
                             const std::string& iv,
                             const cipher cip = aes_256_cbc)
     {
-        return encode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()),
-                           reinterpret_cast<const unsigned char*>(dst_file_path.c_str()),
+        return encode_file(dst_file_path.c_str(),
+                           src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(key.c_str()),
                            key.size(),
                            reinterpret_cast<const unsigned char*>(iv.c_str()),
                            cip);
     }
 
-    static bool decode(const unsigned char* src,
-                       const unsigned long src_len,
-                       unsigned char* dst,
+    static bool decode(unsigned char* dst,
                        unsigned long& dst_len,
+                       const unsigned char* src,
+                       const unsigned long src_len,
                        const unsigned char* key,
                        const unsigned long key_len,
                        const unsigned char* iv,
@@ -250,18 +250,18 @@ public:
         return true;
     }
 
-    static bool decode(const std::string& src, 
-                       std::string& dst, 
+    static bool decode(std::string& dst, 
+                       const std::string& src, 
                        const std::string& key, 
                        const std::string& iv, 
                        const cipher cip = aes_256_cbc)
     {
         dst.resize(decode_len_reserve(src.size()));
         unsigned long dst_len = dst.size();
-        if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size(), 
-                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+        if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
                     dst_len, 
+                    reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
                     reinterpret_cast<const unsigned char*>(key.c_str()), 
                     key.size(), 
                     reinterpret_cast<const unsigned char*>(iv.c_str()), 
@@ -275,8 +275,8 @@ public:
         return true;
     }
 
-    static bool decode_file(const unsigned char* src_file_path,
-                            const unsigned char* dst_file_path,
+    static bool decode_file(const char* dst_file_path,
+                            const char* src_file_path,
                             const unsigned char* key,
                             const unsigned long key_len,
                             const unsigned char* iv,
@@ -331,14 +331,14 @@ public:
         return true;
     }
 
-    static bool decode_file(const std::string& src_file_path,
-                            const std::string& dst_file_path,
+    static bool decode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path,
                             const std::string& key,
                             const std::string& iv,
                             const cipher cip = aes_256_cbc)
     {
-        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()),
-                           reinterpret_cast<const unsigned char*>(dst_file_path.c_str()),
+        return decode_file(dst_file_path.c_str(),
+                           src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(key.c_str()),
                            key.size(),
                            reinterpret_cast<const unsigned char*>(iv.c_str()),
@@ -414,6 +414,7 @@ private:
         case aes_256_cbc_hmac_sha1: { return EVP_aes_256_cbc_hmac_sha1(); }
         case aes_128_cbc_hmac_sha256: { return EVP_aes_128_cbc_hmac_sha256(); }
         case aes_256_cbc_hmac_sha256: { return EVP_aes_256_cbc_hmac_sha256(); }
+        default: { return nullptr; }
         }
     }
 

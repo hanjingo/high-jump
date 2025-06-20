@@ -8,8 +8,8 @@
 #include <vector>
 
 #include <libcpp/net/tcp/tcp_socket.hpp>
-#include <libcpp/net/comm/channel.hpp>
-#include <libcpp/net/comm/debugger.hpp>
+#include <libcpp/net/tool/debugger.hpp>
+#include <libcpp/sync/channel.hpp>
 
 #ifndef MTU
 #define MTU 1500

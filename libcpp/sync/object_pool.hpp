@@ -22,34 +22,40 @@ public:
     template<typename ... Args>
     void construct(Args&& ... args)
     {
-        auto ptr = _pool.malloc();
+        auto ptr = pool_.malloc();
         new(ptr) typename boost::object_pool<T>::element_type(std::forward<Args>(args)...);
         push(ptr);
     }
 
     typename boost::object_pool<T>::element_type* pop()
     {
-        if (_container.empty())
+        if (container_.empty())
             return nullptr;
 
-        auto ret = _container.front();
-        _container.pop();
+        auto ret = container_.front();
+        container_.pop();
         return ret;
     }
 
     inline void push(typename boost::object_pool<T>::element_type* obj)
     {
-        _container.push(obj);
+        container_.push(obj);
     }
 
     inline std::size_t size()
     {
-        return _container.size();
+        return container_.size();
     }
 
 private:
-    boost::object_pool<T> _pool;
-    std::queue<typename boost::object_pool<T>::element_type*> _container;
+    object_pool(const object_pool&) = delete;
+    object_pool& operator=(const object_pool&) = delete;
+    object_pool(const object_pool&&) = delete;
+    object_pool& operator=(const object_pool&&) = delete;
+
+private:
+    boost::object_pool<T>                                     pool_;
+    std::queue<typename boost::object_pool<T>::element_type*> container_;
 };
 
 }

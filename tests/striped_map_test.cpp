@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/sync/striped_map.hpp>
+#include <libcpp/algo/striped_map.hpp>
 #include <string>
 
 TEST(striped_map, emplace)
@@ -32,7 +32,6 @@ TEST(striped_map, replace)
     ASSERT_EQ(m.find(1, new_value), true);
     ASSERT_EQ(new_value == std::string("new e1"), true);
 }
-
 
 TEST(striped_map, find)
 {
@@ -67,7 +66,7 @@ TEST(striped_map, range)
     m.emplace(11, "e11");
     m.emplace(123, "e123");
     bool equal = false;
-    m.range([&](const int& key, std::string& value)->bool{
+    m.range([&](const int& key, const std::string& value)->bool{
         if (key == 1) 
             equal = (value == std::string("e1"));
         if (key == 11) 

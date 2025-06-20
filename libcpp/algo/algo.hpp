@@ -7,4 +7,6 @@
 
 #include <libcpp/algo/trie.hpp>
 
+#include <libcpp/algo/striped_map.hpp>
+
 #endif

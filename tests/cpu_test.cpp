@@ -2,12 +2,12 @@
 #include <libcpp/hardware/cpu.h>
 #include <iostream>
 
-TEST(cpu, cpu_core_n)
+TEST(cpu, cpu_core_num)
 {
-    ASSERT_EQ(cpu_core_n() > 0, true);
+    ASSERT_EQ(cpu_core_num() > 0, true);
 }
 
-TEST(cpu, cpu_bind)
+TEST(cpu, cpu_core_bind)
 {
 // macos not support cpu bind
 #if defined(_WIN32) || defined(__linux__)
@@ -17,7 +17,7 @@ TEST(cpu, cpu_bind)
     ASSERT_EQ(sz != 0, true);
     for (int i = 0; i < sz; ++i)
     {
-        ASSERT_EQ(cpu_bind(buf[i]), true);
+        ASSERT_EQ(cpu_core_bind(buf[i]), true);
     }
 #endif
 }

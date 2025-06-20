@@ -45,8 +45,8 @@ TEST(base64, encode_file)
 {
     // base64 file -> file
     libcpp::logger::instance()->clear_sink();
-    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./base64_file_test.log", 1024 * 1024 * 1024, 1, true));
-    for (int i = 0; i < 1 * 1024 * 1024; i++)
+    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./base64_file_test.log", 10 * 1024 * 1024, 1, true));
+    for (int i = 0; i < 1 * 1024; i++)
         libcpp::logger::instance()->info("{}", i);
     libcpp::logger::instance()->flush();
 

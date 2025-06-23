@@ -206,7 +206,7 @@ TEST(des, encode)
     ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC46D14F");
 }
 
-TEST(des, ecb_decode)
+TEST(des, decode)
 {
     std::string str_src;
     std::string str_dst;
@@ -424,7 +424,7 @@ TEST(des, ecb_decode)
     ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
 }
 
-TEST(des, ecb_encode_file)
+TEST(des, encode_file)
 {
     std::string str_src("./des.log");
     std::string key("12345678");
@@ -576,7 +576,7 @@ TEST(des, ecb_encode_file)
         key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_no_padding, iv), true);
 }
 
-TEST(des, ecb_decode_file)
+TEST(des, decode_file)
 {
     std::string str_dst;
     std::string str_src;

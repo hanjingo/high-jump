@@ -45,18 +45,30 @@ TEST(string_util, equal)
 
 TEST(string_util, from_wchar)
 {
-    // ASSERT_STREQ(libcpp::string_util::from_wchar(libcpp::string_util::to_wchar(std::string("abc"))).c_str(), "abc");
+#if defined(_WIN32)
+    auto wstr = libcpp::string_util::to_wchar(std::string("abc"));
+    ASSERT_STREQ(libcpp::string_util::from_wchar(wstr.c_str()).c_str(), "abc");
+#endif
 }
 
 TEST(string_util, from_wstring)
 {
-    ASSERT_STREQ(libcpp::string_util::from_wstring(libcpp::string_util::to_wstring(std::string("hello"))).c_str(), "hello");
+#if defined(_WIN32)
+    auto wstr = libcpp::string_util::to_wstring(std::string("hello"));
+    ASSERT_STREQ(libcpp::string_util::from_wstring(wstr).c_str(), "hello");
+#endif
 }
 
-TEST(string_util, from_addr)
+TEST(string_util, from_ptr_addr)
 {
-    int* i = new int(123);
-    // TODO
+    std::string* ptr = new std::string("hello");
+    // not hex
+    std::string str = libcpp::string_util::from_ptr_addr(ptr, false);
+    ASSERT_EQ(static_cast<uintptr_t>(std::stoull(str, nullptr, 10)), reinterpret_cast<uintptr_t>(ptr));
+
+    // for hex
+    std::string str_hex = libcpp::string_util::from_ptr_addr(ptr, true);
+    ASSERT_EQ(static_cast<uintptr_t>(std::stoull(str_hex, nullptr, 16)), reinterpret_cast<uintptr_t>(ptr));
 }
 
 TEST(string_util, fmt)

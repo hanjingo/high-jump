@@ -1,3 +1,21 @@
+/*
+ *  This file is part of libcpp.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef STRING_UTIL_HPP
 #define STRING_UTIL_HPP
 
@@ -62,18 +80,26 @@ static bool equal(const char* a, const char* b)
     return strcmp(a, b) == 0;
 }
 
-static const wchar_t* to_wchar(const std::string& src)
+static std::wstring to_wchar(const std::string& src)
 {
-    std::wstring wstr(src.length(), L' ');
-    std::copy(src.begin(), src.end(), wstr.begin());
-    return wstr.c_str();
+#if defined(_MSC_VER)
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+    return conv.from_bytes(src);
+#else
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.from_bytes(src);
+#endif
 }
 
 static std::wstring to_wstring(const std::string& src)
 {
-    std::wstring ret(src.length(), L' ');
-    std::copy(src.begin(), src.end(), ret.begin());
-    return ret;
+#if defined(_MSC_VER)
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+    return conv.from_bytes(src);
+#else
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    return conv.from_bytes(src);
+#endif
 }
 
 static std::string from_wchar(const wchar_t* src)

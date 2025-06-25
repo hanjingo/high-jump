@@ -3,37 +3,39 @@
 #include <thread>
 #include <string>
 
-class my_message : public libcpp::tcp_conn::message
+struct message
+{
+    message(std::string str) : text{str} {};
+    ~message() {};
+
+    std::string text;
+};
+
+class my_codec
 {
 public:
-    my_message() : text_{std::string()} {}
-    my_message(const char* str) : text_{ str } {}
-    ~my_message() {}
+    my_codec()  = delete;
+    ~my_codec() = delete;
 
-    std::size_t size()
+    static std::size_t encode(unsigned char* buf, const std::size_t len, libcpp::tcp_conn::msg_ptr_t msg)
     {
-        return text_.size(); // ignore '\n'
+        message* p = (message*)msg;
+        if (p->text.size() > len)
+            return 0;
+
+        memcpy(buf, p->text.data(), p->text.size());
+        return p->text.size();
     }
 
-    std::size_t encode(unsigned char* buf, const std::size_t len)
-    {
-        memcpy(buf, text_.c_str(), len);
-        return len;
-    }
-
-    std::size_t decode(const unsigned char* buf, const std::size_t len)
+    static std::size_t decode(libcpp::tcp_conn::msg_ptr_t msg, const unsigned char* buf, const std::size_t len)
     {
         if (len < 5)
             return 0;
 
-        text_ = std::string(reinterpret_cast<const char*>(buf), 5);
+        message* p = (message*)msg;
+        p->text = std::string(reinterpret_cast<const char*>(buf), 5);
         return 5; // ignore '\n'
     }
-
-    std::string text() { return text_; }
-
-private:
-    std::string text_;
 };
 
 TEST(tcp_conn, get_flag)
@@ -270,30 +272,41 @@ TEST(tcp_conn, send)
         for (int i = 0; i < 2; i++)
         {
             auto base = li.accept(10013);
-            my_message* msg1 = new my_message();
-            my_message* msg2 = new my_message();
+            message* msg1 = new message("");
+            message* msg2 = new message("");
             libcpp::tcp_conn sock{io, base};
+            sock.set_decode_handler(std::bind(my_codec::decode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
             ASSERT_EQ(sock.recv(msg1), true);
-            ASSERT_EQ(msg1->text() == std::string("hello"), true);
+            ASSERT_EQ(msg1->text == std::string("hello"), true);
 
             ASSERT_EQ(sock.recv(msg2), true);
-            ASSERT_EQ(msg2->text() == std::string("world"), true);
+            ASSERT_EQ(msg2->text == std::string("world"), true);
             sock.close();
         }
         li.close();
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    my_message* msg1 = new my_message("hello");
-    my_message* msg2 = new my_message("world");
+    message* msg1 = new message("hello");
+    message* msg2 = new message("world");
 
     libcpp::tcp_conn::io_t io;
     libcpp::tcp_conn conn1{io};
+    conn1.set_send_handler([](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
+        ASSERT_EQ(msg != nullptr, true);
+    });
+    conn1.set_encode_handler(std::bind(my_codec::encode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     ASSERT_EQ(conn1.connect("127.0.0.1", 10013), true);
     ASSERT_EQ(conn1.send(msg1), true);
     ASSERT_EQ(conn1.send(msg2), true);
 
     libcpp::tcp_conn conn2{io};
+    conn2.set_send_handler([](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
+        ASSERT_EQ(msg != nullptr, true);
+    });
+    conn2.set_encode_handler([](unsigned char* data, const std::size_t len, libcpp::tcp_conn::msg_ptr_t msg)->std::size_t{
+        return my_codec::encode(data, len, msg);
+    });
     ASSERT_EQ(conn2.connect("127.0.0.1", 10013), true);
     ASSERT_EQ(conn2.send(msg1), true);
     ASSERT_EQ(conn2.send(msg2), true);
@@ -306,12 +319,13 @@ TEST(tcp_conn, recv)
     std::thread t1([]() {
         libcpp::tcp_conn::io_t io;
         libcpp::tcp_listener li{io};
-        my_message* msg1 = new my_message("hello");
-        my_message* msg2 = new my_message("world");
+        message* msg1 = new message("hello");
+        message* msg2 = new message("world");
         for (int i = 0; i < 2; i++)
         {
             auto base = li.accept(10014);
             libcpp::tcp_conn sock{io, base};
+            sock.set_encode_handler(std::bind(my_codec::encode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
             ASSERT_EQ(sock.send(msg1), true);
             ASSERT_EQ(sock.send(msg2), true);
         }
@@ -319,24 +333,25 @@ TEST(tcp_conn, recv)
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    my_message* msg1 = new my_message();
-    my_message* msg2 = new my_message();
+    message* msg1 = new message("");
+    message* msg2 = new message("");
 
     libcpp::tcp_conn::io_t io;
     libcpp::tcp_conn conn1{io};
+    conn1.set_decode_handler(std::bind(my_codec::decode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     ASSERT_EQ(conn1.connect("127.0.0.1", 10014), true);
     ASSERT_EQ(conn1.recv(msg1), true);
-    ASSERT_EQ(msg1->size() == 5, true);
-    ASSERT_EQ(msg1->text() == "hello", true);
+    ASSERT_EQ(msg1->text == "hello", true);
     ASSERT_EQ(conn1.recv(msg2), true);
-    ASSERT_EQ(msg2->text() == "world", true);
+    ASSERT_EQ(msg2->text == "world", true);
     
     libcpp::tcp_conn conn2{io};
+    conn2.set_decode_handler(std::bind(my_codec::decode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     ASSERT_EQ(conn2.connect("127.0.0.1", 10014), true);
     ASSERT_EQ(conn2.recv(msg1), true);
-    ASSERT_EQ(msg1->text() == "hello", true);
+    ASSERT_EQ(msg1->text == "hello", true);
     ASSERT_EQ(conn2.recv(msg2), true);
-    ASSERT_EQ(msg2->text() == "world", true);
+    ASSERT_EQ(msg2->text == "world", true);
 
     t1.join();
 }
@@ -349,14 +364,16 @@ TEST(tcp_conn, async_send)
         for (int i = 0; i < 2; i++)
         {
             auto base = li.accept(10015);
-            my_message* msg1 = new my_message();
-            my_message* msg2 = new my_message();
+            message* msg1 = new message("");
+            message* msg2 = new message("");
             libcpp::tcp_conn sock{io, base};
+            sock.set_decode_handler(std::bind(my_codec::decode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
             ASSERT_EQ(sock.recv(msg1), true);
-            ASSERT_EQ(msg1->text() == std::string("hello"), true);
+            ASSERT_EQ(msg1->text == std::string("hello"), true);
 
             ASSERT_EQ(sock.recv(msg2), true);
-            ASSERT_EQ(msg2->text() == std::string("world"), true);
+            ASSERT_EQ(msg2->text == std::string("world"), true);
         }
         li.close();
     });
@@ -364,35 +381,33 @@ TEST(tcp_conn, async_send)
     int nsend = 0;
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     libcpp::tcp_conn::io_t io;
-    libcpp::tcp_conn conn1{
-        io,
-        [](libcpp::tcp_conn::conn_ptr_t conn) {},
-        [&nsend](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
-            nsend++;
-        }
-    };
+    libcpp::tcp_conn conn1{io};
+    conn1.set_send_handler([&nsend](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
+        nsend++;
+        ASSERT_EQ(msg != nullptr, true);
+    });
+    conn1.set_encode_handler(std::bind(my_codec::encode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     ASSERT_EQ(conn1.async_connect("127.0.0.1", 10015,
         [](libcpp::tcp_conn::conn_ptr_t conn, const libcpp::tcp_conn::err_t& err){
             ASSERT_EQ(err.failed(), false);
-            my_message* msg1 = new my_message("hello");
+            message* msg1 = new message("hello");
             conn->async_send(msg1);
-            my_message* msg2 = new my_message("world");
+            message* msg2 = new message("world");
             conn->async_send(msg2);
         }), true);
 
-    libcpp::tcp_conn conn2{
-       io,
-       [](libcpp::tcp_conn::conn_ptr_t conn) {},
-       [&nsend](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
-           nsend++;
-       }
-    };
+    libcpp::tcp_conn conn2{io};
+    conn2.set_send_handler([&nsend](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t msg){
+        nsend++;
+        ASSERT_EQ(msg != nullptr, true);
+    });
+    conn2.set_encode_handler(std::bind(my_codec::encode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     ASSERT_EQ(conn2.async_connect("127.0.0.1", 10015,
        [](libcpp::tcp_conn::conn_ptr_t conn, const libcpp::tcp_conn::err_t& err){
            ASSERT_EQ(err.failed(), false);
-           my_message* msg1 = new my_message("hello");
+           message* msg1 = new message("hello");
            conn->async_send(msg1);
-           my_message* msg2 = new my_message("world");
+           message* msg2 = new message("world");
            conn->async_send(msg2);
        }), true);
 
@@ -406,12 +421,13 @@ TEST(tcp_conn, async_recv)
     std::thread t1([]() {
         libcpp::tcp_conn::io_t io;
         libcpp::tcp_listener li{io};
-        my_message* msg1 = new my_message("hello");
-        my_message* msg2 = new my_message("world");
+        message* msg1 = new message("hello");
+        message* msg2 = new message("world");
         for (int i = 0; i < 2; i++)
         {
             auto base = li.accept(10016);
             libcpp::tcp_conn sock{io, base};
+            sock.set_encode_handler(std::bind(my_codec::encode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
             ASSERT_EQ(sock.send(msg1), true);
             ASSERT_EQ(sock.send(msg2), true);
         }
@@ -421,51 +437,40 @@ TEST(tcp_conn, async_recv)
     int nrecv = 0;
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     libcpp::tcp_conn::io_t io;
-    libcpp::tcp_conn conn1{
-        io,
-        [](libcpp::tcp_conn::conn_ptr_t) {},
-        [](libcpp::tcp_conn::conn_ptr_t, libcpp::tcp_conn::msg_ptr_t) {},
-        [&nrecv](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t arg){
-            nrecv++;
-
-            auto msg = static_cast<my_message*>(arg);
-            ASSERT_EQ(msg != nullptr, true);
-            if (nrecv == 1)
-                ASSERT_EQ(msg->text() == std::string("hello"), true);
-            else
-                ASSERT_EQ(msg->text() == std::string("world"), true);
-        }
-    };
+    libcpp::tcp_conn conn1{io};
+    conn1.set_decode_handler(std::bind(my_codec::decode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    conn1.set_recv_handler([&nrecv](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t arg){
+        nrecv++;
+        auto msg = static_cast<message*>(arg);
+        ASSERT_EQ(msg != nullptr, true);
+        ASSERT_EQ(msg->text.empty(), false);
+    });
+    
     ASSERT_EQ(conn1.async_connect("127.0.0.1", 10016,
         [](libcpp::tcp_conn::conn_ptr_t conn, const libcpp::tcp_conn::err_t& err){
             ASSERT_EQ(err.failed(), false);
-            my_message* msg1 = new my_message();
+            message* msg1 = new message("");
             conn->async_recv(msg1);
-            my_message* msg2 = new my_message();
+            message* msg2 = new message("");
             conn->async_recv(msg2);
-        }), true);
+        }), 
+    true);
 
-    libcpp::tcp_conn conn2{
-       io,
-       [](libcpp::tcp_conn::conn_ptr_t conn) {},
-       [](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t arg) {},
-       [&nrecv](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t arg){
-           nrecv++;
+    libcpp::tcp_conn conn2{io};
+    conn2.set_decode_handler(std::bind(my_codec::decode, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    conn2.set_recv_handler([&nrecv](libcpp::tcp_conn::conn_ptr_t conn, libcpp::tcp_conn::msg_ptr_t arg){
+        nrecv++;
+        auto msg = static_cast<message*>(arg);
+        ASSERT_EQ(msg != nullptr, true);
+        ASSERT_EQ(msg->text.empty(), false);
+    });
 
-           auto msg = static_cast<my_message*>(arg);
-           ASSERT_EQ(msg != nullptr, true);
-           if (nrecv == 3)
-               ASSERT_EQ(msg->text() == "hello", true);
-           else
-               ASSERT_EQ(msg->text() == "world", true);
-       }
-    };
     ASSERT_EQ(conn2.async_connect("127.0.0.1", 10016,
        [](libcpp::tcp_conn::conn_ptr_t conn, const libcpp::tcp_conn::err_t& err){
            ASSERT_EQ(err.failed(), false);
-           my_message* msg1 = new my_message();
+           message* msg1 = new message("");
            conn->async_recv(msg1);
-           my_message* msg2 = new my_message();
+           message* msg2 = new message("");
            conn->async_recv(msg2);
        }), true);
 

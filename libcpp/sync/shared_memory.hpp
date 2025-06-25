@@ -1,127 +1,21 @@
 #ifndef SHARED_MEMORY_HPP
 #define SHARED_MEMORY_HPP
 
-//#include <stdexcept>
-//#include <exception>
-//#include <string>
-//#include <string.h>
-//#include <assert.h>
-//#include <fcntl.h>
-//
-//#if defined(_WIN32)
-//
-//// TODO
-//
-//#elif __linux__
-//#include <unistd.h>
-//#include <sys/mman.h>
-//#include <sys/types.h>
-//#include <sys/stat.h>
-//
-//namespace libcpp
-//{
-//
-//class shared_memory
-//{
-//public:
-//    // param description
-//    // flag:
-//    //   + O_CREAT
-//    //   + O_RDWR
-//    //   + O_EXCL
-//    shared_memory(const char* name, const std::size_t sz = 0, const int flag = O_CREAT | O_RDWR, const int mod = 0666)
-//        : _name{name}, _sz{sz}, _fd{shm_open(name, flag, mod)}
-//    {
-//        truncate(sz);
-//
-//        if (_fd < 0)
-//            throw std::runtime_error("shm_open failed");
-//    }
-//    ~shared_memory() 
-//    {
-//        unmap();
-//        if (_fd >= 0)
-//            close(_fd);
-//        _fd = -1;
-//        _sz = 0;
-//        _ptr = nullptr;
-//    }
-//
-//    static int remove(const char* name)
-//    {
-//        return shm_unlink(name);
-//    }
-//
-//    inline void* addr() { return _ptr; }
-//    inline std::size_t size() { return _sz; }
-//
-//    void truncate(const std::size_t sz)
-//    {
-//        if (_fd > -1)
-//            ftruncate(_fd, sz);
-//
-//        _sz = sz;
-//    }
-//
-//    // param description
-//    // offset: suggest n*4096
-//    // prot: 
-//    //   + PROT_EXEC
-//    //   + PROT_READ
-//    //   + PROT_WRITE
-//    //   + PROT_NONE
-//    // flags:
-//    //   + MAP_FIXED
-//    //   + MAP_SHARED
-//    //   + MAP_PRIVATE
-//    //   + MAP_DENYWRITE 
-//    //   + MAP_EXECUTABLE 
-//    //   + MAP_NORESERVE 
-//    //   + MAP_LOCKED 
-//    //   + MAP_GROWSDOWN 
-//    //   + MAP_ANONYMOUS 
-//    //   + MAP_ANON (not used)
-//    //   + MAP_FILE 
-//    //   + MAP_32BIT 
-//    //   + MAP_POPULATE 
-//    //   + MAP_NONBLOCK 
-//    void* map(std::size_t offset = 0, 
-//              const int prot = PROT_READ | PROT_WRITE, 
-//              const int flag = MAP_SHARED, 
-//              void* addr = nullptr)
-//    {
-//        _ptr = mmap(addr, size(), prot, flag, _fd, offset);
-//        if (_ptr == MAP_FAILED)
-//            return nullptr;
-//
-//        return _ptr;
-//    }
-//
-//    bool unmap()
-//    {
-//        if (_ptr != nullptr)
-//            if (munmap(_ptr, size()) < 0)
-//                return false;
-//
-//        _ptr = nullptr;
-//        return true;
-//    }
-//
-//private:
-//    const std::string _name = "";
-//    std::size_t       _sz = 0;
-//    int               _fd = -1;
-//    void*             _ptr = nullptr;
-//};
-//
-//}
-//
-//#else
-//#pragma warning unknown OS, some function will be disabled
-//#endif
+#include <stdexcept>
+#include <exception>
+#include <string>
+#include <string.h>
+#include <assert.h>
+#include <fcntl.h>
 
-#include <boost/interprocess/shared_memory_object.hpp>
-#include <boost/interprocess/mapped_region.hpp>
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#endif
 
 namespace libcpp
 {
@@ -129,43 +23,152 @@ namespace libcpp
 class shared_memory
 {
 public:
-    enum mode_t 
+
+#if defined(_WIN32)
+    enum flag : int
     {
-        read_only = boost::interprocess::read_only,
-        read_write = boost::interprocess::read_write,
+        create     = 0,
+        read_write = PAGE_READWRITE,
     };
 
+    enum access : int
+    {
+        read  = FILE_MAP_READ,
+        write = FILE_MAP_WRITE,
+        all   = FILE_MAP_ALL_ACCESS,
+    };
+
+    using fd_t = HANDLE;
+    static constexpr fd_t invalid_fd = nullptr;
+#else
+    enum flag : int
+    {
+        create     = O_CREAT,
+        read_write = O_RDWR,
+    };
+
+    enum access : int
+    {
+        read  = PROT_READ,
+        write = PROT_WRITE,
+        all   = PROT_READ | PROT_WRITE
+    };
+    
+    using fd_t = int;
+    static constexpr fd_t invalid_fd = -1;
+#endif
+
 public:
-    shared_memory(const char* name, const std::size_t sz = 0, const mode_t mod = read_write)
-    {
-		_obj = boost::interprocess::shared_memory_object(
-            boost::interprocess::open_or_create, 
-            name, 
-            boost::interprocess::mode_t(mod));
-		_obj.truncate(sz);
-    }
-    ~shared_memory() 
-    {
-    }
+   shared_memory(const char* name, 
+                 const std::size_t sz = 0, 
+                 const int op = flag::create | flag::read_write,
+                 const int arg = 0666)
+        : name_{name}
+        , sz_{sz}
+        , fd_{invalid_fd}
+   {
+#if defined(_WIN32)
+        fd_ = CreateFileMappingA(
+                INVALID_HANDLE_VALUE,
+                NULL,
+                (DWORD)op,
+                static_cast<DWORD>((sz >> 32) & 0xFFFFFFFF),
+                static_cast<DWORD>(sz & 0xFFFFFFFF),
+                name);
+#else
+        fd_ = shm_open(name, op, arg);
+        if (fd_ != -1)
+            ftruncate(fd_, sz_);
+#endif
 
-    static int remove(const char* name)
-    {
-        return boost::interprocess::shared_memory_object::remove(name);
-    }
+        if (!is_fd_valid())
+            throw std::runtime_error("shared memory open failed");
+   }
+   ~shared_memory() 
+   {
+       unmap();
+       if (is_fd_valid())
+       {
+#if defined(_WIN32)
+            CloseHandle(fd_);
+            fd_ = nullptr;
+#else
+            close(fd_);
+            fd_ = -1;
+#endif
+       }
+       sz_ = 0;
+       ptr_ = nullptr;
+   }
 
-    inline void* addr() { return _region.get_address(); }
-    inline std::size_t size() { boost::interprocess::offset_t offset; _obj.get_size(offset); return offset; }
-    inline void truncate(const std::size_t sz) { _obj.truncate(sz); }
+   static int remove(const char* name)
+   {
+#if defined(_WIN32)
+        return 0; // auto recycle
+#else
+       return shm_unlink(name);
+#endif
+   }
 
-    void* map(std::size_t offset = 0, const mode_t mod = read_write)
-    {
-		_region = boost::interprocess::mapped_region(_obj, boost::interprocess::mode_t(mod), offset, size());
-        return _region.get_address();
-    }
+   inline bool is_fd_valid()
+   {
+#if defined(_WIN32)
+        return fd_ != nullptr;
+#else
+        return fd_ != -1;
+#endif
+   }
+   inline void* addr() { return ptr_; }
+   inline std::size_t size() { return sz_; }
+
+   void* map(std::size_t offset = 0, 
+             const int prot = access::all,
+             void* addr = nullptr)
+   {
+        if (!is_fd_valid())
+            return nullptr;
+
+#if defined(_WIN32)
+        ptr_ = MapViewOfFileEx(
+            fd_,
+            prot,
+            static_cast<DWORD>((offset >> 32) & 0xFFFFFFFF),
+            static_cast<DWORD>(offset & 0xFFFFFFFF),
+            sz_,
+            addr);
+
+        return ptr_;
+#else
+        ptr_ = mmap(addr, size(), prot, MAP_SHARED, fd_, offset);
+        if (ptr_ == MAP_FAILED)
+            return nullptr;
+
+        return ptr_;
+#endif
+   }
+
+   bool unmap()
+   {
+    if (ptr_ == nullptr)
+        return true;
+
+#if defined(_WIN32)
+        if (!UnmapViewOfFile(ptr_))
+            return false;
+#else
+        if (munmap(ptr_, size()) < 0)
+            return false;
+#endif
+
+        ptr_ = nullptr;
+        return true;
+   }
 
 private:
-    boost::interprocess::shared_memory_object _obj;
-	boost::interprocess::mapped_region _region;
+   const std::string name_ = "";
+   std::size_t       sz_ = 0;
+   fd_t              fd_;
+   void*             ptr_ = nullptr;
 };
 
 }

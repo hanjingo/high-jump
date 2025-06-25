@@ -1,10 +1,11 @@
 #include <gtest/gtest.h>
+#include <codecvt>
 #include <libcpp/hardware/device.h>
 
-bool dev_range(device_info_t* info)
+void dev_print(device_info_t* info)
 {
     std::cout << "{"
-              << "path=" << std::string(info->path)
+              << "path=" << info->path
               << ", vendor_id=" << info->vendor_id
               << ", product_id=" << info->product_id
               << ", serial_number=" << info->serial_number
@@ -17,10 +18,27 @@ bool dev_range(device_info_t* info)
               << ", bus_type=" << (int)(info->bus_type)
               << "}"
               << std::endl;
+}
+
+bool dev_range(device_info_t* info)
+{
+    dev_print(info);
     return true;
 }
 
-TEST(device, range)
+TEST(device, device_range)
 {
     device_range(dev_range);
+}
+
+TEST(device, device_find_if_path_contains)
+{
+    device_info_t* buf[10];
+    unsigned long len = 10;
+    device_find_if_path_contains(buf, len, "#");
+    for (auto i = 0; i < len; ++i)
+    {
+        dev_print(buf[i]);
+    }
+    ASSERT_EQ(len > 0, true);
 }

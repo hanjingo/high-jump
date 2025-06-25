@@ -12,6 +12,7 @@ int main(int argc, char* argv[])
     std::string key = opt.parse<std::string>(argc, argv, "key");
     std::string key_result = opt.parse<std::string>(argc, argv, "result");
 
+    // read
     libcpp::shared_memory shm{key.c_str(), 256};
     if (shm.map() == nullptr)
     {
@@ -19,18 +20,10 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    libcpp::shared_memory::remove(key_result.c_str());
-    libcpp::shared_memory shm_result{key_result.c_str(), 256};
-    if (shm_result.map() == nullptr)
-    {
-        throw std::runtime_error("shm_result addr is nullptr");
-        return 0;
-    }
-
     int count = 0;
     int* ptr = static_cast<int*>(shm.addr());
     int old = *ptr;
-    while (old < 50)
+    while (old < 10)
     {
         if (*ptr == old)
             continue;
@@ -39,7 +32,15 @@ int main(int argc, char* argv[])
         count += old;
     }
 
+    // write
+    libcpp::shared_memory shm_result{key_result.c_str(), 256};
+    if (shm_result.map() == nullptr)
+    {
+        throw std::runtime_error("shm_result addr is nullptr");
+        return 0;
+    }
     int* result = static_cast<int*>(shm_result.addr());
     *result = count;
+    std::cout << "consumer write *result=" << *result << std::endl;
     return 0;
 }

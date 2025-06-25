@@ -7,7 +7,6 @@ int main(int argc, char* argv[])
 {
     libcpp::shared_memory::remove("mem");
     libcpp::shared_memory shm{"mem", 256};
-    shm.truncate(1024);
     std::cout << "shm.size() = " << shm.size() << std::endl;
     void* addr = shm.map();
     std::cout << "addr = " << addr << std::endl;

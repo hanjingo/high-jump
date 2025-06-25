@@ -8,9 +8,6 @@ TEST(shared_memory, size)
     libcpp::shared_memory::remove("mem");
     libcpp::shared_memory shm{"mem", 256};
     ASSERT_EQ(shm.size(), 256);
-
-    shm.truncate(512);
-    ASSERT_EQ(shm.size(), 512);
 }
 
 TEST(shared_memory, addr)
@@ -25,19 +22,6 @@ TEST(shared_memory, remove)
     libcpp::shared_memory::remove("mem");
     libcpp::shared_memory shm{"mem", 256};
     libcpp::shared_memory::remove("mem");
-}
-
-TEST(shared_memory, truncate)
-{
-    libcpp::shared_memory::remove("mem");
-    libcpp::shared_memory shm{"mem", 256};
-    ASSERT_EQ(shm.size(), 256);
-
-    shm.truncate(512);
-    ASSERT_EQ(shm.size(), 512);
-
-    shm.truncate(0);
-    ASSERT_EQ(shm.size(), 0);
 }
 
 TEST(shared_memory, map)
@@ -55,27 +39,42 @@ TEST(shared_memory, map)
 TEST(shared_memory, producer_1_consume_n)
 {
     int count = 0;
-    for (int i = 1; i <= 50; i++)
+    for (int i = 1; i <= 10; i++)
     {
         count += i;
     }
 
-    libcpp::process::spawn("./shm_producer --key=prod1");
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    libcpp::process::spawn("./shm_consumer --key=prod1 --result=result1");
-    libcpp::process::spawn("./shm_consumer --key=prod1 --result=result2");
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(600));
-    libcpp::shared_memory shm1{"result1", 256};
-    libcpp::shared_memory shm2{"result2", 256};
-    shm1.map();
-    shm2.map();
-    int* ptr1 = static_cast<int*>(shm1.addr());
-    int* ptr2 = static_cast<int*>(shm2.addr());
-
-    ASSERT_EQ(*ptr1 > 0, true);
-    ASSERT_EQ(*ptr2 > 0, true);
-
+    libcpp::shared_memory::remove("prod");
     libcpp::shared_memory::remove("result1");
     libcpp::shared_memory::remove("result2");
+    libcpp::shared_memory::remove("result3");
+
+    // prevent OS auto recycle
+    libcpp::shared_memory prod{"prod", 256};
+    ASSERT_EQ(prod.map() != nullptr, true);
+    libcpp::shared_memory result1{"result1", 256};
+    ASSERT_EQ(result1.map() != nullptr, true);
+    libcpp::shared_memory result2{"result2", 256};
+    ASSERT_EQ(result2.map() != nullptr, true);
+    libcpp::shared_memory result3{"result3", 256};
+    ASSERT_EQ(result3.map() != nullptr, true);
+    
+    // start producer
+    libcpp::process::spawn("./shm_producer --key=prod");
+
+    // start consumers
+    libcpp::process::spawn("./shm_consumer --key=prod --result=result1");
+    libcpp::process::spawn("./shm_consumer --key=prod --result=result2");
+    libcpp::process::spawn("./shm_consumer --key=prod --result=result3");
+
+    // wait producer write
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    int* ptr1 = static_cast<int*>(result1.addr());
+    int* ptr2 = static_cast<int*>(result2.addr());
+    int* ptr3 = static_cast<int*>(result3.addr());
+
+    ASSERT_EQ(*ptr1, count);
+    ASSERT_EQ(*ptr2, count);
+    ASSERT_EQ(*ptr3, count);
 }

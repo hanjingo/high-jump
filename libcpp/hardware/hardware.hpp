@@ -5,6 +5,4 @@
 
 #include <libcpp/hardware/device.h>
 
-#include <libcpp/hardware/dpdk.h>
-
 #endif

@@ -45,10 +45,10 @@ class base64
 {
 public:
     // bytes -> base64 bytes
-    static bool encode(const unsigned char* src, 
-                       const unsigned long src_len, 
-                       unsigned char* dst, 
-                       unsigned long& dst_len)
+    static bool encode(unsigned char* dst, 
+                       unsigned long& dst_len,
+                       const unsigned char* src, 
+                       const unsigned long src_len)
     {
         if (src_len == 0 || dst_len == 0)
             return false; // Invalid input or output length
@@ -82,15 +82,15 @@ public:
     }
 
     // string -> base64 string
-    static bool encode(const std::string& src, 
-                       std::string& dst)
+    static bool encode(std::string& dst,
+                       const std::string& src)
     {
         dst.resize(encode_len_reserve(src.size())); // Base64 encoding increases size by ~33%
         unsigned long dst_len = dst.size();
-        if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size(), 
-                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
-                    dst_len))
+        if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
+                    dst_len,
+                    reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size()))
         {
             dst.clear();
             return false;
@@ -101,14 +101,14 @@ public:
     }
 
     // file -> base64 file
-    static bool encode_file(const unsigned char* src_file_path, 
-                            const unsigned char* dst_file_path)
+    static bool encode_file(const char* dst_file_path,
+                            const char* src_file_path)
     {
-        FILE* in = fopen(reinterpret_cast<const char*>(src_file_path), "rb");
+        FILE* in = fopen(src_file_path, "rb");
         if (!in) 
             return false;
 
-        FILE* out = fopen(reinterpret_cast<const char*>(dst_file_path), "wb");
+        FILE* out = fopen(dst_file_path, "wb");
         if (!out) 
         { 
             fclose(in);
@@ -149,18 +149,18 @@ public:
     }
 
     // file -> base64 file
-    static bool encode_file(const std::string& src_file_path, 
-                            const std::string& dst_file_path)
+    static bool encode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path)
     {
-        return encode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()), 
-                            reinterpret_cast<const unsigned char*>(dst_file_path.c_str()));
+        return encode_file(dst_file_path.c_str(),
+                            src_file_path.c_str());
     }
 
     // base64 bytes -> bytes
-    static bool decode(const unsigned char* src, 
-                       const unsigned long src_len, 
-                       unsigned char* dst, 
-                       unsigned long& dst_len)
+    static bool decode(unsigned char* dst, 
+                       unsigned long& dst_len,
+                       const unsigned char* src, 
+                       const unsigned long src_len)
     {
         if (src_len % 4 != 0)
             return false; // Invalid base64 input length
@@ -191,15 +191,15 @@ public:
     }
 
     // base64 string -> string
-    static bool decode(const std::string& src, 
-                       std::string& dst)
+    static bool decode(std::string& dst,
+                       const std::string& src)
     {
         dst.resize(decode_len_reserve(src.size()));
         unsigned long dst_len = dst.size();
-        if (!decode(reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size(), 
-                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
-                    dst_len))
+        if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+                    dst_len,
+                    reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size()))
         {
             dst.clear(); // Clear the string if decoding fails
             return false;
@@ -210,14 +210,14 @@ public:
     }
 
     // base64 file -> file
-    static bool decode_file(const unsigned char* src_file_path, 
-                            const unsigned char* dst_file_path)
+    static bool decode_file(const char* dst_file_path,
+                            const char* src_file_path)
     {
-        FILE* in = fopen(reinterpret_cast<const char*>(src_file_path), "rb");
+        FILE* in = fopen(src_file_path, "rb");
         if (!in) 
             return false;
 
-        FILE* out = fopen(reinterpret_cast<const char*>(dst_file_path), "wb");
+        FILE* out = fopen(dst_file_path, "wb");
         if (!out) 
         { 
             fclose(in); 
@@ -257,11 +257,11 @@ public:
     }
 
     // base64 file -> file
-    static bool decode_file(const std::string& src_file_path, 
-                            const std::string& dst_file_path)
+    static bool decode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path)
     {
-        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()), 
-                            reinterpret_cast<const unsigned char*>(dst_file_path.c_str()));
+        return decode_file(dst_file_path.c_str(),
+                            src_file_path.c_str());
     }
 
 	// reserve encode dst buf size

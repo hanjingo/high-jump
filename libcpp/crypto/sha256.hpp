@@ -32,14 +32,13 @@
 namespace libcpp
 {
 
-// because of unidirectionality, sha256 not support decode
 class sha256
 {
 public:
-    static bool encode(const unsigned char* src, 
-                       const unsigned long src_len, 
-                       unsigned char* dst, 
-                       unsigned long& dst_len)
+    static bool encode(unsigned char* dst, 
+                       unsigned long& dst_len,
+                       const unsigned char* src, 
+                       const unsigned long src_len)
     {
         if (dst_len < SHA256_DIGEST_LENGTH )
             return false;
@@ -49,8 +48,8 @@ public:
         return true;
     }
 
-    static bool encode(const std::string& src, 
-                       std::string& dst)
+    static bool encode(std::string& dst,
+                       const std::string& src)
     {
         dst.resize(SHA256_DIGEST_LENGTH);
         SHA256(reinterpret_cast<const unsigned char *>(src.c_str()), 
@@ -59,15 +58,15 @@ public:
         return true;
     };
 
-    static void encode(std::istream& in, 
-                       std::string& dst)
+    static void encode(std::string& dst,
+                       std::istream& in)
     {
         SHA256_CTX ctx;
         SHA256_Init(&ctx);
         std::streamsize sz;
         std::vector<char> buf(1024 * 128);
         while ((sz = in.read(&buf[0], sz).gcount()) > 0)
-            SHA256_Update(&ctx, buf.data(), sz);
+            SHA256_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
 
         dst.resize(SHA256_DIGEST_LENGTH);
         SHA256_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);

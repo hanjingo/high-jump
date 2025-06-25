@@ -1,3 +1,21 @@
+/*
+ *  This file is part of libcpp.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef AES_HPP
 #define AES_HPP
 
@@ -9,6 +27,8 @@
 
 #include <fstream>
 #include <iostream>
+#include <vector>
+#include <algorithm>
 
 #include <openssl/aes.h>
 #include <openssl/evp.h>
@@ -223,6 +243,9 @@ public:
                             const unsigned char* iv = nullptr,
                             const unsigned long iv_len = 16)
     {
+        if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
+            return false;
+
         std::ifstream in(src_file_path, std::ios::binary);
         std::ofstream out(dst_file_path, std::ios::binary);
         if (!in.is_open() || !out.is_open())
@@ -271,7 +294,7 @@ public:
         {
             in.read(reinterpret_cast<char*>(inbuf.data()), AES_BUF_SIZE);
             std::streamsize read_len = in.gcount();
-            total_read += read_len;
+            total_read += static_cast<unsigned long>(read_len);
 
             if (read_len < AES_BUF_SIZE)
                 last_block = true;
@@ -286,7 +309,7 @@ public:
                 }
                 out.write(reinterpret_cast<char*>(outbuf.data()), outlen);
             } else {
-                last_plain.assign(inbuf.begin(), inbuf.begin() + read_len);
+                last_plain.assign(inbuf.begin(), inbuf.begin() + static_cast<int>(read_len));
             }
         }
 
@@ -471,6 +494,9 @@ public:
                             const unsigned char* iv = nullptr,
                             const unsigned long iv_len = 16)
     {
+        if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
+            return false;
+            
         std::ifstream in(src_file_path, std::ios::binary | std::ios::ate);
         std::ofstream out(dst_file_path, std::ios::binary);
         if (!in.is_open() || !out.is_open())
@@ -549,14 +575,14 @@ public:
             if (!last_block) 
             {
                 int outlen = 0;
-                if (1 != EVP_DecryptUpdate(ctx, outbuf.data(), &outlen, inbuf.data(), static_cast<int>(read_len))) 
+                if (1 != EVP_DecryptUpdate(ctx, outbuf.data(), &outlen, inbuf.data(), static_cast<unsigned long>(read_len)))
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
                 }
                 out.write(reinterpret_cast<char*>(outbuf.data()), outlen);
             } else {
-                last_cipher.assign(inbuf.begin(), inbuf.begin() + read_len);
+                last_cipher.assign(inbuf.begin(), inbuf.begin() + static_cast<unsigned long>(read_len));
             }
         }
 

@@ -43,10 +43,10 @@ class rsa
 {
 public:
     // use pubkey to encrypt
-    static bool encode(const unsigned char* src, 
-                       const unsigned long src_len, 
-                       unsigned char* dst,
+    static bool encode(unsigned char* dst,
                        unsigned long& dst_len,
+                       const unsigned char* src, 
+                       const unsigned long src_len, 
                        const unsigned char* pubkey_pem,
                        const unsigned long pubkey_pem_len,
                        const int padding = RSA_PKCS1_PADDING)
@@ -55,7 +55,7 @@ public:
         if (!rsa)
             return false;
 
-        if (dst_len < RSA_size(rsa))
+        if (dst_len < static_cast<unsigned long>(RSA_size(rsa)))
         {
             RSA_free(rsa);
             return false;
@@ -71,17 +71,17 @@ public:
     }
 
     // use pubkey(string) to encrypt
-    static bool encode(const std::string& src, 
-                       std::string& dst,
+    static bool encode(std::string& dst,
+                       const std::string& src, 
                        const std::string& pubkey_pem,
                        const int padding = RSA_PKCS1_PADDING)
     {
         dst.resize(encode_len_reserve(reinterpret_cast<const unsigned char*>(pubkey_pem.c_str()), pubkey_pem.size()));
         unsigned long dst_len = dst.size();
-        if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()),
+        if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+                    dst_len, 
+                    reinterpret_cast<const unsigned char*>(src.c_str()),
                     src.size(),
-                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
-                    dst_len,
                     reinterpret_cast<const unsigned char*>(pubkey_pem.c_str()),
                     pubkey_pem.size(),
                     padding))
@@ -96,8 +96,8 @@ public:
 
     // use pubkey to encrypt file
     // NOTE: this function not recommand for large file
-    static bool encode_file(const unsigned char* src_file_path,
-                            const unsigned char* dst_file_path,
+    static bool encode_file(const char* dst_file_path,
+                            const char* src_file_path,
                             const unsigned char* pubkey_pem,
                             const unsigned long pubkey_pem_len,
                             int padding = RSA_PKCS1_PADDING)
@@ -112,7 +112,7 @@ public:
             return false;
 
         int key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
-        if (pubkey_pem_len < key_size)
+        if (pubkey_pem_len < static_cast<unsigned long>(key_size))
         {
             BIO_free(bio);
             return false;
@@ -161,23 +161,23 @@ public:
 
     // use pubkey(string) to encrypt file
     // NOTE: this function not recommand for large file
-    static bool encode_file(const std::string& src_file_path,
-                            const std::string& dst_file_path,
+    static bool encode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path,
                             const std::string& pubkey_pem,
                             int padding = RSA_PKCS1_PADDING)
     {
-        return encode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()),
-                           reinterpret_cast<const unsigned char*>(dst_file_path.c_str()),
+        return encode_file(dst_file_path.c_str(),
+                           src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(pubkey_pem.c_str()),
                            pubkey_pem.size(),
                            padding);
     }
 
     // use prikey to decrypt
-    static bool decode(const unsigned char* src,
-                       const unsigned long src_len,
-                       unsigned char* dst,
+    static bool decode(unsigned char* dst,
                        unsigned long& dst_len,
+                       const unsigned char* src,
+                       const unsigned long src_len,
                        const unsigned char* prikey_pem,
                        const unsigned long prikey_pem_len,
                        const int padding = RSA_PKCS1_PADDING)
@@ -186,7 +186,7 @@ public:
         if (!rsa)
             return false;
 
-        if (dst_len < RSA_size(rsa))
+        if (dst_len < static_cast<unsigned long>(RSA_size(rsa)))
         {
             RSA_free(rsa);
             return false;
@@ -202,17 +202,17 @@ public:
     }
 
     // use prikey to decrypt
-    static bool decode(const std::string& src,
-                       std::string& dst,
+    static bool decode(std::string& dst,
+                       const std::string& src,
                        const std::string& prikey_pem,
                        const int padding = RSA_PKCS1_PADDING)
     {
         dst.resize(decode_len_reserve(reinterpret_cast<const unsigned char*>(prikey_pem.c_str()), prikey_pem.size()));
         unsigned long dst_len = dst.size();
-        if(!decode(reinterpret_cast<const unsigned char*>(src.c_str()),
-                   src.size(),
-                   reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+        if(!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
                    dst_len,
+                   reinterpret_cast<const unsigned char*>(src.c_str()),
+                   src.size(),
                    reinterpret_cast<const unsigned char*>(prikey_pem.c_str()),
                    prikey_pem.size(),
                    padding))
@@ -226,8 +226,8 @@ public:
     }
 
     // use prikey to decrypt file
-    static bool decode_file(const unsigned char* src_file_path, 
-                            const unsigned char* dst_file_path,
+    static bool decode_file(const char* dst_file_path,
+                            const char* src_file_path, 
                             const unsigned char* prikey_pem,
                             const unsigned long prikey_pem_len,
                             int padding = RSA_PKCS1_PADDING)
@@ -260,7 +260,7 @@ public:
             if (read_len < 1)
                 break;
 
-            int write_len = RSA_private_decrypt(read_len, inbuf, outbuf, rsa, padding);
+            int write_len = RSA_private_decrypt(static_cast<int>(read_len), inbuf, outbuf, rsa, padding);
             if (write_len == -1)
             {
                 RSA_free(rsa);
@@ -274,32 +274,32 @@ public:
     }
 
     // use prikey(std::string) to decrypt file
-    static bool decode_file(const std::string& src_file_path,
-                            const std::string& dst_file_path,
+    static bool decode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path,
                             const std::string& prikey_pem,
                             int padding = RSA_PKCS1_PADDING)
     {
-        return decode_file(reinterpret_cast<const unsigned char*>(src_file_path.c_str()),
-                           reinterpret_cast<const unsigned char*>(dst_file_path.c_str()),
+        return decode_file(dst_file_path.c_str(),
+                           src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(prikey_pem.c_str()),
                            prikey_pem.size(),
                            padding);
     }
 
     // use prikey to signature
-    static bool signature(const unsigned char* src, 
-                          const unsigned long src_len, 
-                          unsigned char* dst,
+    static bool signature(unsigned char* dst,
                           unsigned long& dst_len,
-                          unsigned char* prikey_pem,
-                          unsigned long prikey_pem_len,
-                          int padding = RSA_PKCS1_PADDING)
+                          const unsigned char* src, 
+                          const unsigned long src_len, 
+                          const unsigned char* prikey_pem,
+                          const unsigned long prikey_pem_len,
+                          const int padding = RSA_PKCS1_PADDING)
     {
         RSA* rsa = _load_private_key(prikey_pem, prikey_pem_len);
         if (!rsa)
             return false;
 
-        if (dst_len < RSA_size(rsa))
+        if (dst_len < static_cast<unsigned long>(RSA_size(rsa)))
             return false;
 
         int len = RSA_private_encrypt(src_len, src, dst, rsa, padding);
@@ -312,19 +312,19 @@ public:
     }
 
     // use pubkey to verify signature
-    static bool verify_signature(const unsigned char* src,
-                                 const unsigned long src_len,
-                                 unsigned char* dst,
+    static bool verify_signature(unsigned char* dst,
                                  unsigned long& dst_len,
-                                 unsigned char* pubkey_pem,
-                                 unsigned long pubkey_pem_len,
-                                 int padding = RSA_PKCS1_PADDING)
+                                 const unsigned char* src,
+                                 const unsigned long src_len,
+                                 const unsigned char* pubkey_pem,
+                                 const unsigned long pubkey_pem_len,
+                                 const int padding = RSA_PKCS1_PADDING)
     {
         RSA* rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
         if (!rsa)
             return false;
 
-        if (dst_len < RSA_size(rsa))
+        if (dst_len < static_cast<unsigned long>(RSA_size(rsa)))
             return false;
 
         int len = RSA_public_decrypt(src_len, src, dst, rsa, padding);
@@ -447,6 +447,97 @@ public:
 
         return RSA_size(rsa);
 	}
+
+    // check public key style
+    static bool is_pubkey_valid(const unsigned char* pubkey_pem, 
+                                const unsigned long pubkey_pem_len,
+                                const int padding)
+    {
+        if (pubkey_pem == nullptr || pubkey_pem_len == 0)
+            return false;
+
+        BIO* bio = BIO_new_mem_buf(pubkey_pem, static_cast<int>(pubkey_pem_len));
+        if (!bio)
+            return false;
+
+        // standarm padding style
+        RSA* rsa = PEM_read_bio_RSA_PUBKEY(bio, nullptr, nullptr, nullptr);
+        if (!rsa) 
+        {
+            // try PKCS#1 padding style
+            BIO_reset(bio);
+            rsa = PEM_read_bio_RSAPublicKey(bio, nullptr, nullptr, nullptr);
+        }
+
+        BIO_free(bio);
+        if (!rsa)
+            return false;
+
+        bool valid = false;
+        switch (padding) {
+        case RSA_PKCS1_PADDING:
+        case RSA_PKCS1_OAEP_PADDING:
+        case RSA_NO_PADDING:
+#ifdef RSA_PKCS1_PSS_PADDING
+        case RSA_PKCS1_PSS_PADDING:
+#endif
+            valid = true;
+            break;
+        default:
+            valid = false;
+            break;
+        }
+
+        RSA_free(rsa);
+        return valid;
+    }
+
+    // check private key style
+    static bool is_prikey_valid(const unsigned char* prikey_pem, 
+                                const unsigned long prikey_pem_len,
+                                const int padding)
+    {
+        if (prikey_pem == nullptr || prikey_pem_len == 0)
+            return false;
+
+        BIO* bio = BIO_new_mem_buf(prikey_pem, static_cast<int>(prikey_pem_len));
+        if (!bio)
+            return false;
+
+        RSA* rsa = PEM_read_bio_RSAPrivateKey(bio, nullptr, nullptr, nullptr);
+        if (!rsa) 
+        {
+            BIO_reset(bio);
+            EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+            if (pkey) 
+            {
+                rsa = EVP_PKEY_get1_RSA(pkey);
+                EVP_PKEY_free(pkey);
+            }
+        }
+
+        BIO_free(bio);
+        if (!rsa)
+            return false;
+
+        bool valid = false;
+        switch (padding) {
+        case RSA_PKCS1_PADDING:
+        case RSA_PKCS1_OAEP_PADDING:
+        case RSA_NO_PADDING:
+#ifdef RSA_PKCS1_PSS_PADDING
+        case RSA_PKCS1_PSS_PADDING:
+#endif
+            valid = true;
+            break;
+    default:
+            valid = false;
+            break;
+        }
+
+        RSA_free(rsa);
+        return valid;
+    }
 
 private:
     static RSA* _load_public_key(const unsigned char* pubkey_pem, 

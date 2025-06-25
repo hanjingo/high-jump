@@ -66,11 +66,11 @@ public:
                        const unsigned long src_len, 
                        const unsigned char* key, 
                        const unsigned long key_len, 
-                       const cipher mode = cipher::des_ecb,
+                       const cipher cip = cipher::des_ecb,
                        const padding pad_style = padding::des_zero_padding,
                        const unsigned char* iv = nullptr)
     {
-        if (mode != cipher::des_ecb && iv == nullptr) 
+        if (!is_key_valid(key, key_len) || !is_iv_valid(cip, iv))
             return false;
 
         DES_cblock key_encrypt;
@@ -85,7 +85,7 @@ public:
 
         unsigned long idx = 0;
         dst_len = 0;
-        switch (mode)
+        switch (cip)
         {
         case cipher::des_ecb: {
             const_DES_cblock input;
@@ -138,9 +138,7 @@ public:
                 DES_cfb64_encrypt(src + i * 8, dst + i * 8, 8, &key_schedule, &iv_block, &num, DES_ENCRYPT);
 
             idx = full_blocks * 8;
-            if (pad_style == padding::des_pkcs5_padding || pad_style == padding::des_pkcs7_padding ||
-                pad_style == padding::des_iso10126_padding || pad_style == padding::des_ansix923_padding ||
-                pad_style == padding::des_iso_iec_7816_4_padding || pad_style == padding::des_zero_padding) 
+            if (is_need_padding_(pad_style)) 
             {
                 unsigned char last_block[8];
                 if (remain > 0)
@@ -171,9 +169,7 @@ public:
                 DES_ofb64_encrypt(src + i * 8, dst + i * 8, 8, &key_schedule, &iv_block, &num);
 
             idx = full_blocks * 8;
-            if (pad_style == padding::des_pkcs5_padding || pad_style == padding::des_pkcs7_padding ||
-                pad_style == padding::des_iso10126_padding || pad_style == padding::des_ansix923_padding ||
-                pad_style == padding::des_iso_iec_7816_4_padding || pad_style == padding::des_zero_padding) 
+            if (is_need_padding_(pad_style)) 
             {
                 unsigned char last_block[8];
                 if (remain > 0)
@@ -199,12 +195,7 @@ public:
             unsigned long remain = src_len;
             idx = 0;
             unsigned long padded_len = src_len;
-            bool need_padding = (pad_style == padding::des_pkcs5_padding || 
-                                 pad_style == padding::des_pkcs7_padding ||
-                                 pad_style == padding::des_iso10126_padding || 
-                                 pad_style == padding::des_ansix923_padding ||
-                                 pad_style == padding::des_iso_iec_7816_4_padding || 
-                                 pad_style == padding::des_zero_padding);
+            bool need_padding = is_need_padding_(pad_style);
 
             if (need_padding) 
             {
@@ -250,23 +241,20 @@ public:
     static bool encode(std::string& dst,
                        const std::string& src, 
                        const std::string& key,
-                       const cipher mode = cipher::des_ecb,
+                       const cipher cip = cipher::des_ecb,
                        const padding pad_style = padding::des_zero_padding,
                        const std::string& iv = std::string())
     {
-        if (mode != cipher::des_ecb && iv.empty()) 
-            return false;
-
         dst.resize(encode_len_reserve(src.size()));
         unsigned long dst_len = dst.size();
-        const unsigned char* iv_ptr = (mode == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned char* iv_ptr = (cip == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
                     dst_len,
                     reinterpret_cast<const unsigned char*>(src.c_str()),
                     src.size(),
                     reinterpret_cast<const unsigned char*>(key.c_str()),
                     key.size(),
-                    mode,
+                    cip,
                     pad_style,
                     iv_ptr))
         {
@@ -283,10 +271,13 @@ public:
                             const char* src_file_path,  
                             const unsigned char* key, 
                             const unsigned long key_len,
-                            const cipher mode = cipher::des_ecb,
+                            const cipher cip = cipher::des_ecb,
                             const padding pad_style = padding::des_zero_padding,
                             const unsigned char* iv = nullptr)
     {
+        if (!is_key_valid(key, key_len) || !is_iv_valid(cip, iv))
+            return false;
+
         std::ifstream src_file(src_file_path, std::ios::binary);
         if (!src_file.is_open())
             return false;
@@ -306,7 +297,7 @@ public:
         DES_set_key_unchecked(&key_encrypt, &key_schedule);
 
         DES_cblock iv_block;
-        if (mode != cipher::des_ecb && iv)
+        if (cip != cipher::des_ecb && iv)
             memcpy(iv_block, iv, 8);
 
         while (true) 
@@ -334,7 +325,7 @@ public:
             {
                 unsigned char last_block[block_size];
                 padding_block_(last_block, block_size, reinterpret_cast<unsigned char*>(inbuf), static_cast<unsigned long>(read_len), pad_style);
-                switch (mode) {
+                switch (cip) {
                 case cipher::des_ecb: {
                     DES_cblock output;
                     DES_ecb_encrypt((const_DES_cblock*)last_block, &output, &key_schedule, DES_ENCRYPT);
@@ -342,7 +333,6 @@ public:
                     break;
                 }
                 case cipher::des_cbc: {
-                    DES_cblock output;
                     DES_ncbc_encrypt(last_block, reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_ENCRYPT);
                     dst_file.write(outbuf, block_size);
                     break;
@@ -373,7 +363,7 @@ public:
                 }
                 break;
             } else {
-                switch (mode) {
+                switch (cip) {
                 case cipher::des_ecb: {
                     DES_cblock input, output;
                     memcpy(input, inbuf, block_size);
@@ -419,16 +409,16 @@ public:
     static bool encode_file(const std::string& dst_file_path,
                             const std::string& src_file_path,
                             const std::string& key,
-                            const cipher mode = cipher::des_ecb,
+                            const cipher cip = cipher::des_ecb,
                             const padding pad_style = padding::des_zero_padding,
                             const std::string& iv = std::string())
     {
-        const unsigned char* iv_ptr = (mode == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned char* iv_ptr = (cip == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         return encode_file(dst_file_path.c_str(),
                            src_file_path.c_str(),  
                            reinterpret_cast<const unsigned char*>(key.c_str()), 
                            key.size(),
-                           mode,
+                           cip,
                            pad_style,
                            iv_ptr);
     }
@@ -440,11 +430,11 @@ public:
                        const unsigned long src_len, 
                        const unsigned char* key, 
                        const unsigned long key_len, 
-                       const cipher mode = cipher::des_ecb,
+                       const cipher cip = cipher::des_ecb,
                        const padding pad_style = padding::des_zero_padding,
                        const unsigned char* iv = nullptr)
     {
-        if (mode != cipher::des_ecb && iv == nullptr) 
+        if (!is_key_valid(key, key_len) || !is_iv_valid(cip, iv))
             return false;
 
         DES_cblock key_encrypt;
@@ -459,7 +449,7 @@ public:
 
         unsigned long idx = 0;
         dst_len = 0;
-        switch (mode)
+        switch (cip)
         {
         case cipher::des_ecb: {
             const_DES_cblock input;
@@ -540,23 +530,20 @@ public:
     static bool decode(std::string& dst,
                        const std::string& src, 
                        const std::string& key,
-                       const cipher mode = cipher::des_ecb,
+                       const cipher cip = cipher::des_ecb,
                        const padding pad_style = padding::des_zero_padding,
                        const std::string& iv = std::string())
     {
-        if (mode != cipher::des_ecb && iv.empty()) 
-            return false;
-
         dst.resize(decode_len_reserve(src.size()));
         unsigned long dst_len = dst.size();
-        const unsigned char* iv_ptr = (mode == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned char* iv_ptr = (cip == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
                     dst_len,
                     reinterpret_cast<const unsigned char*>(src.c_str()),
                     src.size(),
                     reinterpret_cast<const unsigned char*>(key.c_str()),
                     key.size(),
-                    mode,
+                    cip,
                     pad_style,
                     iv_ptr))
         {
@@ -573,10 +560,13 @@ public:
                             const char* src_file_path,  
                             const unsigned char* key, 
                             const unsigned long key_len,
-                            const cipher mode = cipher::des_ecb,
+                            const cipher cip = cipher::des_ecb,
                             const padding pad_style = padding::des_zero_padding,
                             const unsigned char* iv = nullptr)
     {
+        if (!is_key_valid(key, key_len) || !is_iv_valid(cip, iv))
+            return false;
+
         std::ifstream src_file(src_file_path, std::ios::binary);
         if (!src_file.is_open())
             return false;
@@ -596,7 +586,7 @@ public:
         DES_set_key_unchecked(&key_encrypt, &key_schedule);
 
         DES_cblock iv_block;
-        if (mode != cipher::des_ecb && iv)
+        if (cip != cipher::des_ecb && iv)
             memcpy(iv_block, iv, 8);
 
         std::streampos file_end;
@@ -616,7 +606,7 @@ public:
 
             if (is_last_block) 
             {
-                switch (mode) {
+                switch (cip) {
                 case cipher::des_ecb: {
                     DES_cblock input, output;
                     memcpy(input, inbuf, block_size);
@@ -628,7 +618,6 @@ public:
                     break;
                 }
                 case cipher::des_cbc: {
-                    DES_cblock output;
                     DES_ncbc_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_DECRYPT);
                     unsigned long out_len = block_size;
                     unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
@@ -666,7 +655,7 @@ public:
                 }
                 }
             } else {
-                switch (mode) {
+                switch (cip) {
                 case cipher::des_ecb: {
                     DES_cblock input, output;
                     memcpy(input, inbuf, block_size);
@@ -713,16 +702,16 @@ public:
     static bool decode_file(const std::string& dst_file_path,
                             const std::string& src_file_path,
                             const std::string& key,
-                            const cipher mode = cipher::des_ecb,
+                            const cipher cip = cipher::des_ecb,
                             const padding pad_style = padding::des_zero_padding,
                             const std::string& iv = std::string())
     {
-        const unsigned char* iv_ptr = (mode == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned char* iv_ptr = (cip == cipher::des_ecb) ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         return decode_file(dst_file_path.c_str(),
                            src_file_path.c_str(),  
                            reinterpret_cast<const unsigned char*>(key.c_str()), 
                            key.size(),
-                           mode,
+                           cip,
                            pad_style,
                            iv_ptr);
     }
@@ -738,6 +727,22 @@ public:
 	{
 		return (src_len / 8) * 8 + 8;
 	}
+
+    static bool is_key_valid(const unsigned char* key, const unsigned long key_len)
+    {
+        if (key == nullptr || key_len != 8)
+            return false;
+
+        return true;
+    }
+
+    static bool is_iv_valid(const cipher cip, const unsigned char* iv)
+    {
+        if (cip != cipher::des_ecb && iv == nullptr)
+            return false;
+
+        return true;
+    }
 
 private:
     // padding block
@@ -841,8 +846,24 @@ private:
             return;
         default:
             return;
+        }
     }
-}
+
+    static bool is_need_padding_(const padding pad_style)
+    {
+        switch (pad_style)
+        {
+        case padding::des_pkcs5_padding:
+        case padding::des_pkcs7_padding:
+        case padding::des_iso10126_padding:
+        case padding::des_ansix923_padding:
+        case padding::des_iso_iec_7816_4_padding:
+        case padding::des_zero_padding:
+            return true;
+        }
+
+        return false;
+    }
 
 private:
     des() = default;

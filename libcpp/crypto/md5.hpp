@@ -45,10 +45,10 @@ namespace libcpp
 class md5
 {
 public:
-    static bool encode(const unsigned char* src, 
-                       const unsigned long src_len, 
-                       unsigned char* dst, 
-                       unsigned long& dst_len)
+    static bool encode(unsigned char* dst, 
+                       unsigned long& dst_len,
+                       const unsigned char* src, 
+                       const unsigned long src_len)
     {
         if (dst_len < MD5_DIGEST_LENGTH)
             return false;
@@ -61,28 +61,30 @@ public:
         return true;
     }
 
-    static bool encode(const std::string& src, 
-                       std::string& dst)
+    static bool encode(std::string& dst,
+                       const std::string& src)
     {
-        unsigned long len = MD5_DIGEST_LENGTH;
         dst.resize(MD5_DIGEST_LENGTH);
-        if (!encode(reinterpret_cast<const unsigned char*>(src.c_str()), src.size(), 
-                    reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), len))
+        unsigned long len = dst.size();
+        if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
+                    len,
+                    reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size()))
             return false;
 
         dst.resize(len);
         return true;
     };
 
-    static void encode(std::istream &in, 
-                       std::string& out)
+    static void encode(std::string& out,
+                       std::istream &in)
     {
         MD5_CTX ctx;
         MD5_Init(&ctx);
         std::streamsize sz;
         std::vector<char> buffer(MD5_BUF_SZ);
         while ((sz = in.read(&buffer[0], MD5_BUF_SZ).gcount()) > 0)
-            MD5_Update(&ctx, buffer.data(), sz);
+            MD5_Update(&ctx, buffer.data(), static_cast<unsigned long>(sz));
 
         out.resize(128 / 8);
         MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &ctx);

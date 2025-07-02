@@ -114,3 +114,4 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - pcm: https://github.com/intel/pcm
 - benchmark: https://github.com/google/benchmark
 - clickhouse-cpp: https://github.com/ClickHouse/clickhouse-cpp
+- cuda: https://developer.nvidia.com/cuda-toolkit

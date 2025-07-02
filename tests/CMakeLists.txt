@@ -33,6 +33,9 @@ find_package(nlohmann_json REQUIRED)
 find_package(hidapi REQUIRED)
 find_package(unofficial-breakpad REQUIRED)
 find_package(unofficial-concurrentqueue REQUIRED)
+find_package(lz4 REQUIRED)
+find_package(zstd REQUIRED)
+find_package(cityhash REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -40,6 +43,14 @@ find_package(Boost REQUIRED COMPONENTS
     context
     thread
 )
+
+if (WIN32)
+else()
+    # for dpdk
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(DPDK REQUIRED libdpdk)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
+endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
@@ -60,7 +71,6 @@ target_link_libraries(${PROJECT_NAME}
     fmt::fmt
     TBB::tbb
     nlohmann_json::nlohmann_json
-    hidapi::winapi
 
 #    breakpad_client
     unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
@@ -74,11 +84,24 @@ if (WIN32)
     target_link_libraries(${PROJECT_NAME} 
         ws2_32 # for windows sockets
         bcrypt # for Windows cryptography
+
+        hidapi::winapi
     )
 else()
     target_link_libraries(${PROJECT_NAME} 
         pthread # for *nix threads
         rt # for *nix real-time extensions
+
+        hidapi::hidapi
+
+#       clickhouse-cpp
+        clickhouse-cpp-lib
+        lz4::lz4
+        zstd::libzstd
+        cityhash
+
+#       DPDK
+#       ${DPDK_LIBRARIES}
     )
 endif()
 

@@ -15,6 +15,7 @@
     "boost-thread",
     "breakpad",
     "clickhouse-cpp",
+    "zstd",
     "concurrentqueue",
     "cpp-httplib",
     "eigen3",
@@ -104,6 +105,10 @@
     {
       "name": "clickhouse-cpp",
       "version": "2.5.1"
+    },
+    {
+      "name": "zstd",
+      "version": "1.5.7"
     },
     {
       "name": "nlohmann-json",

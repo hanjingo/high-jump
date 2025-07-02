@@ -24,8 +24,8 @@ public:
 
     static unsigned long long gen_u64(bool big_endian = true)
     {
-        auto bytes = gen_rand().data;
-
+        auto rand = gen_rand();
+        auto& bytes = rand.data;
         unsigned long long ull = 0;
         if (big_endian) {
             ull  = bytes[7] & 0xFF;

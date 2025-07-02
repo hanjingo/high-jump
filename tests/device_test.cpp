@@ -35,7 +35,11 @@ TEST(device, device_find_if_path_contains)
 {
     device_info_t* buf[10];
     unsigned long len = 10;
+#if defined(_WIN32)
     device_find_if_path_contains(buf, len, "#");
+#else
+    device_find_if_path_contains(buf, len, "/");
+#endif
     for (auto i = 0; i < len; ++i)
     {
         dev_print(buf[i]);

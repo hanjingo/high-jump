@@ -36,7 +36,7 @@ public:
 
 public:
     explicit striped_map(std::size_t capa) 
-        : striped_map([](const Key& k){ return std::hash<Key>{}(k) % capa; }, capa)
+        : striped_map([capa](const Key& k){ return std::hash<Key>{}(k) % capa; }, capa)
     {
     }
     striped_map(strip_key_handler_t fn, std::size_t capa) 

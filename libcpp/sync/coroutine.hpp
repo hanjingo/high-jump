@@ -11,6 +11,8 @@ namespace libcpp
 template <typename T>
 using coroutine = boost::coroutines2::coroutine<T>;
 
+using stack_alloc = boost::context::fixedsize_stack;
+
 }
 
 #define __coroutine_cat(a, b) a##b

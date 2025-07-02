@@ -344,6 +344,7 @@ TEST(tcp_socket, recv)
             auto sock = li.accept(10091);
             ASSERT_EQ(sock != nullptr, true);
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char*>(std::string("hello").c_str()), 6) == 6, true);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char*>(std::string("harry").c_str()), 6) == 6, true);
             sock->close();
         }
@@ -381,6 +382,7 @@ TEST(tcp_socket, recv_until)
             auto sock = li.accept(10091);
             ASSERT_EQ(sock != nullptr, true);
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char*>(std::string("hello").c_str()), 6) == 6, true);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char*>(std::string("harry").c_str()), 6) == 6, true);
             sock->close();
         }

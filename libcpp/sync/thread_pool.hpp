@@ -14,6 +14,7 @@
 #include <functional>
 #include <stdexcept>
 #include <iostream>
+#include <string>
 
 #include <unordered_set>
 
@@ -122,9 +123,9 @@ private:
     void init_work_(const int core = -1)
     {
         workers_.emplace_back([this, core](){
-            // // Set the thread affinity to the specified core
-            // if (core > -1 && !bind_core_(core))
-            //     throw std::runtime_error("Failed to bind thread to core " + std::to_string(core));
+            // Set the thread affinity to the specified core
+            if (core > -1 && !bind_core_(core))
+                throw std::runtime_error("Failed to bind thread to core " + std::to_string(core));
 
             for (;;)
             {

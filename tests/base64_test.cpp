@@ -24,6 +24,12 @@ TEST(base64, encode)
     unsigned char buf[] = { 'a', 'b', 'c', 'd', '1', '2', '3' };
     ASSERT_EQ(libcpp::base64::encode(buf_dst, buf_dst_len, buf, 7), true);
     ASSERT_STREQ(std::string((char*)buf_dst, buf_dst_len).c_str(), "YWJjZDEyMw==");
+
+    // stream -> stream
+    std::istringstream iss("https://github.com/hanjingo/libcpp");
+    std::ostringstream oss;
+    ASSERT_TRUE(libcpp::base64::encode(oss, iss));
+    ASSERT_EQ(oss.str(), "aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
 }
 
 TEST(base64, decode)
@@ -39,6 +45,12 @@ TEST(base64, decode)
     unsigned char buf[] = { 'a', 'G', 'V', 's', 'b', 'G', '8', 'g', 'b', 'G', 'l', 'j', 'c', 'H', 'A', '=' };
     ASSERT_EQ(libcpp::base64::decode(buf_dst, buf_dst_len, buf, 16), true);
     ASSERT_STREQ(std::string(reinterpret_cast<char*>(buf_dst), buf_dst_len).c_str(), "hello licpp");
+
+    // stream -> stream
+    std::istringstream iss("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
+    std::ostringstream oss;
+    ASSERT_TRUE(libcpp::base64::decode(oss, iss));
+    ASSERT_EQ(oss.str(), "https://github.com/hanjingo/libcpp");
 }
 
 TEST(base64, encode_file)

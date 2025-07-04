@@ -7,13 +7,19 @@
 
 #include <libcpp/encoding/endian.hpp>
 
+#include <libcpp/encoding/flatbuffers.hpp>
+
 #include <libcpp/encoding/hex.hpp>
 
 #include <libcpp/encoding/ini.hpp>
 
 #include <libcpp/encoding/json.hpp>
 
-// #include <libcpp/encoding/protobuf.hpp>
+#include <libcpp/encoding/protobuf.hpp>
+
+#include <libcpp/encoding/unicode.hpp>
+
+#include <libcpp/encoding/utf8.hpp>
 
 #include <libcpp/encoding/xml.hpp>
 

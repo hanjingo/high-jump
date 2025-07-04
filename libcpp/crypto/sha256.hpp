@@ -29,6 +29,10 @@
 #include <vector>
 #include <openssl/sha.h>
 
+#ifndef SHA256_BUF_SIZE
+#define SHA256_BUF_SIZE 131072 // 128 KiB
+#endif
+
 namespace libcpp
 {
 
@@ -58,18 +62,43 @@ public:
         return true;
     };
 
-    static void encode(std::string& dst,
+    static bool encode(std::string& dst,
                        std::istream& in)
     {
+        if (!in.good())
+            return false;
+            
         SHA256_CTX ctx;
         SHA256_Init(&ctx);
         std::streamsize sz;
-        std::vector<char> buf(1024 * 128);
-        while ((sz = in.read(&buf[0], sz).gcount()) > 0)
+        std::vector<char> buf(SHA256_BUF_SIZE);
+        while ((sz = in.read(&buf[0], SHA256_BUF_SIZE).gcount()) > 0)
             SHA256_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
 
         dst.resize(SHA256_DIGEST_LENGTH);
         SHA256_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
+        return true;
+    };
+
+    static bool encode(std::ostream& out, 
+                       std::istream& in)
+    {
+        if (!in.good() || !out.good())
+            return false;
+
+        SHA256_CTX ctx;
+        SHA256_Init(&ctx);
+        std::vector<char> buf(SHA256_BUF_SIZE);
+        std::streamsize sz;
+        while ((sz = in.read(buf.data(), SHA256_BUF_SIZE).gcount()) > 0)
+            SHA256_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
+
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+        SHA256_Final(hash, &ctx);
+
+        out.write(reinterpret_cast<const char*>(hash), SHA256_DIGEST_LENGTH);
+        out.flush();
+        return true;
     };
 
     // reserve encode dst buf size

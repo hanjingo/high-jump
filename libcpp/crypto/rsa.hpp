@@ -94,6 +94,61 @@ public:
         return true;
     }
 
+    static bool encode(std::ostream& out,
+                       std::istream& in,
+                       const unsigned char* pubkey_pem,
+                       const unsigned long pubkey_pem_len,
+                       const int padding = RSA_PKCS1_PADDING)
+    {
+        if (!in || !out)
+            return false;
+
+        RSA* rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
+        if (!rsa)
+            return false;
+
+        int key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
+        if (pubkey_pem_len < static_cast<unsigned long>(key_size))
+        {
+            RSA_free(rsa);
+            return false;
+        }
+
+        int max_chunk = key_size;
+        switch (padding)
+        {
+        case RSA_PKCS1_PADDING:      { max_chunk = key_size - RSA_PKCS1_PADDING_SIZE; break; }
+        case RSA_PKCS1_OAEP_PADDING: { max_chunk = key_size - 2 * 20 - 2; break; } // SHA-1
+        case RSA_X931_PADDING:       { max_chunk = key_size - RSA_PKCS1_PADDING_SIZE; break; }
+        case RSA_NO_PADDING:         { max_chunk = key_size; break; }
+        default:                     { RSA_free(rsa); return false; }
+        }
+
+        unsigned char inbuf[RSA_MAX_KEY_LENGTH];
+        unsigned char outbuf[RSA_MAX_KEY_LENGTH];
+        std::streamsize read_len;
+        int write_len = 0;
+
+        while (in)
+        {
+            in.read(reinterpret_cast<char*>(inbuf), max_chunk);
+            read_len = in.gcount();
+            if (read_len < 1)
+                break;
+
+            write_len = RSA_public_encrypt(static_cast<int>(read_len), inbuf, outbuf, rsa, padding);
+            if (write_len == -1)
+            {
+                RSA_free(rsa);
+                return false;
+            }
+            out.write(reinterpret_cast<char*>(outbuf), write_len);
+        }
+        
+        RSA_free(rsa);
+        return true;
+    }
+
     // use pubkey to encrypt file
     // NOTE: this function not recommand for large file
     static bool encode_file(const char* dst_file_path,
@@ -102,61 +157,9 @@ public:
                             const unsigned long pubkey_pem_len,
                             int padding = RSA_PKCS1_PADDING)
     {
-        BIO* bio = BIO_new_mem_buf(pubkey_pem, pubkey_pem_len);
-        if (!bio)
-            return false;
-
-        RSA* rsa = PEM_read_bio_RSA_PUBKEY(bio, nullptr, nullptr, nullptr);
-        BIO_free(bio);
-        if (!rsa)
-            return false;
-
-        int key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
-        if (pubkey_pem_len < static_cast<unsigned long>(key_size))
-        {
-            BIO_free(bio);
-            return false;
-        }
-
-        int max_chunk = key_size;
-        switch (padding)
-        {
-        case RSA_PKCS1_PADDING: { max_chunk = key_size - RSA_PKCS1_PADDING_SIZE; break; }
-        case RSA_PKCS1_OAEP_PADDING: { int hash_len = 20; max_chunk = key_size - 2 * hash_len - 2; break; } // default use SHA-1
-        case RSA_X931_PADDING: { max_chunk = key_size - RSA_PKCS1_PADDING_SIZE; break; } // same as RSA_PKCS1_PADDING
-        case RSA_NO_PADDING: { max_chunk = key_size; break; }
-        default: { RSA_free(rsa); return false; }
-        }
-
         std::ifstream in(reinterpret_cast<const char*>(src_file_path), std::ios::binary);
         std::ofstream out(reinterpret_cast<const char*>(dst_file_path), std::ios::binary);
-        if (!in || !out)
-        {
-            RSA_free(rsa);
-            return false;
-        }
-
-        unsigned char inbuf[RSA_MAX_KEY_LENGTH];
-        unsigned char outbuf[RSA_MAX_KEY_LENGTH];
-        std::streamsize read_len;
-        int write_len = 0;
-        while (in)
-        {
-            in.read(reinterpret_cast<char*>(inbuf), max_chunk);
-            read_len = in.gcount();
-            if (read_len < 1)
-                break;
-
-            write_len = RSA_public_encrypt((int)read_len, inbuf, outbuf, rsa, padding);
-            if (write_len == -1)
-            {
-                RSA_free(rsa);
-                return false;
-            }
-            out.write(reinterpret_cast<char*>(outbuf), write_len);
-        }
-        RSA_free(rsa);
-        return true;
+        return encode(out, in, pubkey_pem, pubkey_pem_len, padding);
     }
 
     // use pubkey(string) to encrypt file
@@ -225,13 +228,16 @@ public:
         return true;
     }
 
-    // use prikey to decrypt file
-    static bool decode_file(const char* dst_file_path,
-                            const char* src_file_path, 
-                            const unsigned char* prikey_pem,
-                            const unsigned long prikey_pem_len,
-                            int padding = RSA_PKCS1_PADDING)
+    // use prikey to decrypt stream
+    static bool decode(std::ostream& out,
+                       std::istream& in,
+                       const unsigned char* prikey_pem,
+                       const unsigned long prikey_pem_len,
+                       const int padding = RSA_PKCS1_PADDING)
     {
+        if (!in || !out)
+            return false;
+
         BIO* bio = BIO_new_mem_buf(prikey_pem, prikey_pem_len);
         if (!bio)
             return false;
@@ -241,10 +247,8 @@ public:
         if (!rsa)
             return false;
 
-        int key_size = RSA_size(rsa);
-        std::ifstream in(reinterpret_cast<const char*>(src_file_path), std::ios::binary);
-        std::ofstream out(reinterpret_cast<const char*>(dst_file_path), std::ios::binary);
-        if (!in || !out)
+        int key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
+        if (prikey_pem_len < static_cast<unsigned long>(key_size))
         {
             RSA_free(rsa);
             return false;
@@ -271,6 +275,18 @@ public:
 
         RSA_free(rsa);
         return true;
+    }
+
+    // use prikey to decrypt file
+    static bool decode_file(const char* dst_file_path,
+                            const char* src_file_path, 
+                            const unsigned char* prikey_pem,
+                            const unsigned long prikey_pem_len,
+                            int padding = RSA_PKCS1_PADDING)
+    {
+        std::ifstream in(reinterpret_cast<const char*>(src_file_path), std::ios::binary);
+        std::ofstream out(reinterpret_cast<const char*>(dst_file_path), std::ios::binary);
+        return decode(out, in, prikey_pem, prikey_pem_len, padding);
     }
 
     // use prikey(std::string) to decrypt file

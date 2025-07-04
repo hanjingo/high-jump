@@ -206,51 +206,21 @@ public:
         return true;
     }
 
-    static bool encode(std::string& dst,
-                       const std::string& src, 
-                       const std::string& key, 
+    static bool encode(std::ostream& out,
+                       std::istream& in,
+                       const unsigned char* key, 
+                       const unsigned long key_len,
                        const cipher cip = cipher::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
-                       const std::string& iv = std::string())
+                       const unsigned char* iv = nullptr,
+                       const unsigned long iv_len = 16)
     {
-        dst.resize(encode_len_reserve(src.size(), cip));
-        unsigned long dst_len = dst.size();
-        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
-            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
-        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
-        if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
-                    dst_len, 
-                    reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size(), 
-                    reinterpret_cast<const unsigned char*>(key.c_str()), 
-                    key.size(), 
-                    cip,
-                    pad_style,
-                    iv_ptr,
-                    iv.size()))
+        if (!in || !out)
             return false;
 
-        dst.resize(dst_len);
-        return true;
-    }
-
-    static bool encode_file(const char* dst_file_path,
-                            const char* src_file_path, 
-                            const unsigned char* key, 
-                            const unsigned long key_len,
-                            const cipher cip = cipher::aes_256_ecb,
-                            const padding pad_style = padding::aes_zero_padding,
-                            const unsigned char* iv = nullptr,
-                            const unsigned long iv_len = 16)
-    {
         if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
             return false;
-
-        std::ifstream in(src_file_path, std::ios::binary);
-        std::ofstream out(dst_file_path, std::ios::binary);
-        if (!in.is_open() || !out.is_open())
-            return false;
-
+            
         int block_size = _get_block_size(cip);
         bool is_aead = is_aead_mode(cip);
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -351,6 +321,51 @@ public:
 
         EVP_CIPHER_CTX_free(ctx);
         return true;
+    }
+
+    static bool encode(std::string& dst,
+                       const std::string& src, 
+                       const std::string& key, 
+                       const cipher cip = cipher::aes_256_ecb,
+                       const padding pad_style = padding::aes_zero_padding,
+                       const std::string& iv = std::string())
+    {
+        dst.resize(encode_len_reserve(src.size(), cip));
+        unsigned long dst_len = dst.size();
+        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
+            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
+        if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
+                    dst_len, 
+                    reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
+                    reinterpret_cast<const unsigned char*>(key.c_str()), 
+                    key.size(), 
+                    cip,
+                    pad_style,
+                    iv_ptr,
+                    iv.size()))
+            return false;
+
+        dst.resize(dst_len);
+        return true;
+    }
+
+    static bool encode_file(const char* dst_file_path,
+                            const char* src_file_path, 
+                            const unsigned char* key, 
+                            const unsigned long key_len,
+                            const cipher cip = cipher::aes_256_ecb,
+                            const padding pad_style = padding::aes_zero_padding,
+                            const unsigned char* iv = nullptr,
+                            const unsigned long iv_len = 16)
+    {
+        std::ifstream in(src_file_path, std::ios::binary);
+        std::ofstream out(dst_file_path, std::ios::binary);
+        if (!in.is_open() || !out.is_open())
+            return false;
+
+        return encode(out, in, key, key_len, cip, pad_style, iv, iv_len);
     }
 
     static bool encode_file(const std::string& dst_file_path,
@@ -454,52 +469,19 @@ public:
         return true;
     }
 
-    static bool decode(std::string& dst,
-                       const std::string& src, 
-                       const std::string& key, 
+    static bool decode(std::ostream& out,
+                       std::istream& in,
+                       const unsigned char* key, 
+                       const unsigned long key_len,
                        const cipher cip = cipher::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
-                       const std::string& iv = std::string())
+                       const unsigned char* iv = nullptr,
+                       const unsigned long iv_len = 16)
     {
-        dst.resize(decode_len_reserve(src.size()));
-        unsigned long dst_len = dst.size();
-        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
-            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
-        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
-        if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
-                    dst_len, 
-                    reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size(), 
-                    reinterpret_cast<const unsigned char*>(key.c_str()), 
-                    key.size(), 
-                    cip,
-                    pad_style,
-                    iv_ptr,
-                    iv_len))
-        {
-            dst.clear();
+        if (!in || !out)
             return false;
-        }
 
-        dst.resize(dst_len);
-        return true;
-    }
-
-    static bool decode_file(const char* dst_file_path,
-                            const char* src_file_path, 
-                            const unsigned char* key, 
-                            const unsigned long key_len,
-                            const cipher cip = cipher::aes_256_ecb,
-                            const padding pad_style = padding::aes_zero_padding,
-                            const unsigned char* iv = nullptr,
-                            const unsigned long iv_len = 16)
-    {
         if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
-            return false;
-            
-        std::ifstream in(src_file_path, std::ios::binary | std::ios::ate);
-        std::ofstream out(dst_file_path, std::ios::binary);
-        if (!in.is_open() || !out.is_open())
             return false;
 
         std::streamsize file_size = in.tellg();
@@ -610,6 +592,54 @@ public:
 
         EVP_CIPHER_CTX_free(ctx);
         return true;
+    }
+
+    static bool decode(std::string& dst,
+                       const std::string& src, 
+                       const std::string& key, 
+                       const cipher cip = cipher::aes_256_ecb,
+                       const padding pad_style = padding::aes_zero_padding,
+                       const std::string& iv = std::string())
+    {
+        dst.resize(decode_len_reserve(src.size()));
+        unsigned long dst_len = dst.size();
+        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
+            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
+        if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
+                    dst_len, 
+                    reinterpret_cast<const unsigned char*>(src.c_str()), 
+                    src.size(), 
+                    reinterpret_cast<const unsigned char*>(key.c_str()), 
+                    key.size(), 
+                    cip,
+                    pad_style,
+                    iv_ptr,
+                    iv_len))
+        {
+            dst.clear();
+            return false;
+        }
+
+        dst.resize(dst_len);
+        return true;
+    }
+
+    static bool decode_file(const char* dst_file_path,
+                            const char* src_file_path, 
+                            const unsigned char* key, 
+                            const unsigned long key_len,
+                            const cipher cip = cipher::aes_256_ecb,
+                            const padding pad_style = padding::aes_zero_padding,
+                            const unsigned char* iv = nullptr,
+                            const unsigned long iv_len = 16)
+    {
+        std::ifstream in(src_file_path, std::ios::binary | std::ios::ate);
+        std::ofstream out(dst_file_path, std::ios::binary);
+        if (!in.is_open() || !out.is_open())
+            return false;
+
+        return decode(out, in, key, key_len, cip, pad_style, iv, iv_len);
     }
 
     static bool decode_file(const std::string& dst_file_path,

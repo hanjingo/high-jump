@@ -76,9 +76,12 @@ public:
         return true;
     };
 
-    static void encode(std::string& out,
+    static bool encode(std::string& out,
                        std::istream &in)
     {
+        if (!in.good())
+            return false;
+
         MD5_CTX ctx;
         MD5_Init(&ctx);
         std::streamsize sz;
@@ -88,6 +91,27 @@ public:
 
         out.resize(128 / 8);
         MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &ctx);
+    };
+
+    static bool encode(std::ostream& out, 
+                       std::istream& in)
+    {
+        if (!in.good() || !out.good())
+            return false;
+
+        MD5_CTX ctx;
+        MD5_Init(&ctx);
+        std::vector<char> buffer(MD5_BUF_SZ);
+        std::streamsize sz;
+        while ((sz = in.read(buffer.data(), MD5_BUF_SZ).gcount()) > 0)
+            MD5_Update(&ctx, buffer.data(), static_cast<unsigned long>(sz));
+
+        unsigned char md[MD5_DIGEST_LENGTH];
+        MD5_Final(md, &ctx);
+
+        out.write(reinterpret_cast<const char*>(md), MD5_DIGEST_LENGTH);
+        out.flush();
+        return true;
     };
 
     static std::string to_hex(const std::string& str, bool upper_case = false)

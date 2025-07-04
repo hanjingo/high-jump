@@ -100,6 +100,47 @@ public:
         return true;
     }
 
+    // base64 stream -> stream
+    static bool encode(std::ostream& out,
+                       std::istream& in)
+    {
+        if (!in || !out)
+            return false;
+
+        BIO* b64 = BIO_new(BIO_f_base64());
+        if (!b64)
+            return false;
+
+        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+        BIO* bio_out = BIO_new(BIO_s_mem());
+        if (!bio_out) 
+        {
+            BIO_free(b64);
+            return false;
+        }
+        BIO_push(b64, bio_out);
+
+        char buffer[BASE64_BUF_SIZE];
+        while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0) 
+        {
+            std::streamsize n = in.gcount();
+            if (BIO_write(b64, buffer, static_cast<int>(n)) != n) 
+            {
+                BIO_free_all(b64);
+                return false;
+            }
+        }
+
+        BIO_flush(b64);
+        BUF_MEM* mem_ptr = nullptr;
+        BIO_get_mem_ptr(b64, &mem_ptr);
+        if (mem_ptr && mem_ptr->length > 0)
+            out.write(mem_ptr->data, mem_ptr->length);
+
+        BIO_free_all(b64);
+        return true;
+    }
+
     // file -> base64 file
     static bool encode_file(const char* dst_file_path,
                             const char* src_file_path)
@@ -206,6 +247,42 @@ public:
         }
         
         dst.resize(dst_len);
+        return true;
+    }
+
+    // base64 stream -> stream
+    static bool decode(std::ostream& out,
+                       std::istream& in)
+    {
+        BIO* b64 = BIO_new(BIO_f_base64());
+        if (!b64)
+            return false;
+
+        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+
+        std::string input_buf;
+        char buffer[BASE64_BUF_SIZE];
+        while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0) 
+        {
+            input_buf.append(buffer, static_cast<size_t>(in.gcount()));
+        }
+
+        BIO* bio_in = BIO_new_mem_buf(input_buf.data(), static_cast<int>(input_buf.size()));
+        if (!bio_in) 
+        {
+            BIO_free(b64);
+            return false;
+        }
+        BIO_push(b64, bio_in);
+
+        char outbuf[BASE64_BUF_SIZE];
+        int n;
+        while ((n = BIO_read(b64, outbuf, sizeof(outbuf))) > 0) 
+        {
+            out.write(outbuf, n);
+        }
+
+        BIO_free_all(b64);
         return true;
     }
 

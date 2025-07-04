@@ -75,6 +75,12 @@ cmake .. -DBUILD_EXAMPLE=ON
 cmake .. -DBUILD_TEST=ON
 ```
 
+or
+
+```sh
+cmake .. -DBUILD_TEST=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
+```
+
 | option     | default | description                     |
 | ---------- | ------- | ------------------------------- |
 | BUILD_TEST | ON      | test this project if turned on. |

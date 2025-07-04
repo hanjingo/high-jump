@@ -46,10 +46,10 @@ find_package(Boost REQUIRED COMPONENTS
 
 if (WIN32)
 else()
-    # for dpdk
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(DPDK REQUIRED libdpdk)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
+    # # for dpdk
+    # find_package(PkgConfig REQUIRED)
+    # pkg_check_modules(DPDK REQUIRED libdpdk)
+    # target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
@@ -108,6 +108,7 @@ endif()
 add_test(test ${PROJECT_NAME})
 
 file(COPY cfg.ini DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+file(COPY json_test.json DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 
 add_subdirectory(dll_example)
 add_subdirectory(child)

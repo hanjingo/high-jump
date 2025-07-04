@@ -266,24 +266,19 @@ public:
         return !dst.empty();
     }
 
-    // file -> encode file
-    static bool encode_file(const char* dst_file_path,
-                            const char* src_file_path,  
-                            const unsigned char* key, 
-                            const unsigned long key_len,
-                            const cipher cip = cipher::des_ecb,
-                            const padding pad_style = padding::des_zero_padding,
-                            const unsigned char* iv = nullptr)
+    // stream -> encode stream
+    static bool encode(std::ostream& out,
+                       std::istream& in, 
+                       const unsigned char* key, 
+                       const unsigned long key_len,
+                       const cipher cip = cipher::des_ecb,
+                       const padding pad_style = padding::des_zero_padding,
+                       const unsigned char* iv = nullptr)
     {
+        if (!in || !out)
+            return false;
+
         if (!is_key_valid(key, key_len) || !is_iv_valid(cip, iv))
-            return false;
-
-        std::ifstream src_file(src_file_path, std::ios::binary);
-        if (!src_file.is_open())
-            return false;
-
-        std::ofstream dst_file(dst_file_path, std::ios::binary);
-        if (!dst_file.is_open())
             return false;
 
         constexpr unsigned long block_size = 8;
@@ -302,8 +297,8 @@ public:
 
         while (true) 
         {
-            src_file.read(inbuf, block_size);
-            std::streamsize read_len = src_file.gcount();
+            in.read(inbuf, block_size);
+            std::streamsize read_len = in.gcount();
 
             if (read_len == 0)
                 break;
@@ -314,11 +309,11 @@ public:
                 is_last_block = true;
             } else {
                 char peek;
-                src_file.read(&peek, 1);
-                if (src_file.gcount() == 0)
+                in.read(&peek, 1);
+                if (in.gcount() == 0)
                     is_last_block = true;
                 else
-                    src_file.seekg(-1, std::ios::cur);
+                    in.seekg(-1, std::ios::cur);
             }
 
             if (is_last_block) 
@@ -329,24 +324,24 @@ public:
                 case cipher::des_ecb: {
                     DES_cblock output;
                     DES_ecb_encrypt((const_DES_cblock*)last_block, &output, &key_schedule, DES_ENCRYPT);
-                    dst_file.write(reinterpret_cast<const char*>(output), block_size);
+                    out.write(reinterpret_cast<const char*>(output), block_size);
                     break;
                 }
                 case cipher::des_cbc: {
                     DES_ncbc_encrypt(last_block, reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_ENCRYPT);
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 case cipher::des_cfb: {
                     int num = 0;
                     DES_cfb64_encrypt(last_block, reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num, DES_ENCRYPT);
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 case cipher::des_ofb: {
                     int num = 0;
                     DES_ofb64_encrypt(last_block, reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num);
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 case cipher::des_ctr: {
@@ -356,8 +351,7 @@ public:
                     DES_ecb_encrypt(&ctr_block, &keystream, &key_schedule, DES_ENCRYPT);
                     for (unsigned long i = 0; i < block_size; ++i)
                         outbuf[i] = last_block[i] ^ keystream[i];
-
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 }
@@ -368,24 +362,24 @@ public:
                     DES_cblock input, output;
                     memcpy(input, inbuf, block_size);
                     DES_ecb_encrypt(&input, &output, &key_schedule, DES_ENCRYPT);
-                    dst_file.write(reinterpret_cast<const char*>(output), block_size);
+                    out.write(reinterpret_cast<const char*>(output), block_size);
                     break;
                 }
                 case cipher::des_cbc: {
                     DES_ncbc_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_ENCRYPT);
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 case cipher::des_cfb: {
                     int num = 0;
                     DES_cfb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num, DES_ENCRYPT);
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 case cipher::des_ofb: {
                     int num = 0;
                     DES_ofb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num);
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 case cipher::des_ctr: {
@@ -395,7 +389,7 @@ public:
                     DES_ecb_encrypt(&ctr_block, &keystream, &key_schedule, DES_ENCRYPT);
                     for (unsigned long i = 0; i < block_size; ++i)
                         outbuf[i] = inbuf[i] ^ keystream[i];
-                    dst_file.write(outbuf, block_size);
+                    out.write(outbuf, block_size);
                     break;
                 }
                 }
@@ -403,6 +397,26 @@ public:
         }
 
         return true;
+    }
+
+    // file -> encode file
+    static bool encode_file(const char* dst_file_path,
+                            const char* src_file_path,  
+                            const unsigned char* key, 
+                            const unsigned long key_len,
+                            const cipher cip = cipher::des_ecb,
+                            const padding pad_style = padding::des_zero_padding,
+                            const unsigned char* iv = nullptr)
+    {
+        std::ifstream src_file(src_file_path, std::ios::binary);
+        if (!src_file.is_open())
+            return false;
+
+        std::ofstream dst_file(dst_file_path, std::ios::binary);
+        if (!dst_file.is_open())
+            return false;
+
+        return encode(dst_file, src_file, key, key_len, cip, pad_style, iv);
     }
 
     // file -> encode file
@@ -554,25 +568,20 @@ public:
         dst.resize(dst_len);
         return !dst.empty();
     }
-    
-    // encode file -> file
-    static bool decode_file(const char* dst_file_path,
-                            const char* src_file_path,  
-                            const unsigned char* key, 
-                            const unsigned long key_len,
-                            const cipher cip = cipher::des_ecb,
-                            const padding pad_style = padding::des_zero_padding,
-                            const unsigned char* iv = nullptr)
+
+    // decode stream -> decode stream
+    static bool decode(std::ostream& out,
+                       std::istream& in, 
+                       const unsigned char* key, 
+                       const unsigned long key_len,
+                       const cipher cip = cipher::des_ecb,
+                       const padding pad_style = padding::des_zero_padding,
+                       const unsigned char* iv = nullptr)
     {
+        if (!in || !out)
+            return false;
+
         if (!is_key_valid(key, key_len) || !is_iv_valid(cip, iv))
-            return false;
-
-        std::ifstream src_file(src_file_path, std::ios::binary);
-        if (!src_file.is_open())
-            return false;
-
-        std::ofstream dst_file(dst_file_path, std::ios::binary);
-        if (!dst_file.is_open())
             return false;
 
         constexpr unsigned long block_size = 8;
@@ -590,113 +599,135 @@ public:
             memcpy(iv_block, iv, 8);
 
         std::streampos file_end;
-        src_file.seekg(0, std::ios::end);
-        file_end = src_file.tellg();
-        src_file.seekg(0, std::ios::beg);
-        while (src_file.tellg() < file_end) 
+        in.seekg(0, std::ios::end);
+        file_end = in.tellg();
+        in.seekg(0, std::ios::beg);
+        while (in.tellg() < file_end) 
         {
-            src_file.read(inbuf, block_size);
-            std::streamsize read_len = src_file.gcount();
+            in.read(inbuf, block_size);
+            std::streamsize read_len = in.gcount();
             if (read_len == 0)
                 break;
 
             bool is_last_block = false;
-            if (src_file.tellg() == file_end)
+            if (in.tellg() == file_end)
                 is_last_block = true;
 
             if (is_last_block) 
             {
                 switch (cip) {
-                case cipher::des_ecb: {
-                    DES_cblock input, output;
-                    memcpy(input, inbuf, block_size);
-                    DES_ecb_encrypt(&input, &output, &key_schedule, DES_DECRYPT);
-                    memcpy(outbuf, output, block_size);
-                    unsigned long out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    dst_file.write(outbuf, out_len);
-                    break;
-                }
-                case cipher::des_cbc: {
-                    DES_ncbc_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_DECRYPT);
-                    unsigned long out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    dst_file.write(outbuf, out_len);
-                    break;
-                }
-                case cipher::des_cfb: {
-                    int num = 0;
-                    DES_cfb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num, DES_DECRYPT);
-                    unsigned long out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    dst_file.write(outbuf, out_len);
-                    break;
-                }
-                case cipher::des_ofb: {
-                    int num = 0;
-                    DES_ofb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num);
-                    unsigned long out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    dst_file.write(outbuf, out_len);
-                    break;
-                }
-                case cipher::des_ctr: {
-                    DES_cblock ctr_block;
-                    memcpy(ctr_block, iv, 8);
-                    DES_cblock keystream;
-                    DES_ecb_encrypt(&ctr_block, &keystream, &key_schedule, DES_ENCRYPT);
-                    for (unsigned long i = 0; i < block_size; ++i)
-                        outbuf[i] = inbuf[i] ^ keystream[i];
+                    case cipher::des_ecb: {
+                        DES_cblock input, output;
+                        memcpy(input, inbuf, block_size);
+                        DES_ecb_encrypt(&input, &output, &key_schedule, DES_DECRYPT);
+                        memcpy(outbuf, output, block_size);
+                        unsigned long out_len = block_size;
+                        unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
+                        out.write(outbuf, out_len);
+                        break;
+                    }
+                    case cipher::des_cbc: {
+                        DES_ncbc_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_DECRYPT);
+                        unsigned long out_len = block_size;
+                        unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
+                        out.write(outbuf, out_len);
+                        break;
+                    }
+                    case cipher::des_cfb: {
+                        int num = 0;
+                        DES_cfb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num, DES_DECRYPT);
+                        unsigned long out_len = block_size;
+                        unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
+                        out.write(outbuf, out_len);
+                        break;
+                    }
+                    case cipher::des_ofb: {
+                        int num = 0;
+                        DES_ofb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num);
+                        unsigned long out_len = block_size;
+                        unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
+                        out.write(outbuf, out_len);
+                        break;
+                    }
+                    case cipher::des_ctr: {
+                        DES_cblock ctr_block;
+                        memcpy(ctr_block, iv, 8);
+                        DES_cblock keystream;
+                        DES_ecb_encrypt(&ctr_block, &keystream, &key_schedule, DES_ENCRYPT);
+                        for (unsigned long i = 0; i < block_size; ++i)
+                            outbuf[i] = inbuf[i] ^ keystream[i];
 
-                    unsigned long out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    dst_file.write(outbuf, out_len);
-                    break;
+                        unsigned long out_len = block_size;
+                        unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
+                        out.write(outbuf, out_len);
+                        break;
+                    }
                 }
-                }
-            } else {
+            } 
+            else 
+            {
                 switch (cip) {
-                case cipher::des_ecb: {
-                    DES_cblock input, output;
-                    memcpy(input, inbuf, block_size);
-                    DES_ecb_encrypt(&input, &output, &key_schedule, DES_DECRYPT);
-                    dst_file.write(reinterpret_cast<const char*>(output), block_size);
-                    break;
-                }
-                case cipher::des_cbc: {
-                    DES_ncbc_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_DECRYPT);
-                    dst_file.write(outbuf, block_size);
-                    break;
-                }
-                case cipher::des_cfb: {
-                    int num = 0;
-                    DES_cfb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num, DES_DECRYPT);
-                    dst_file.write(outbuf, block_size);
-                    break;
-                }
-                case cipher::des_ofb: {
-                    int num = 0;
-                    DES_ofb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num);
-                    dst_file.write(outbuf, block_size);
-                    break;
-                }
-                case cipher::des_ctr: {
-                    DES_cblock ctr_block;
-                    memcpy(ctr_block, iv, 8);
-                    DES_cblock keystream;
-                    DES_ecb_encrypt(&ctr_block, &keystream, &key_schedule, DES_ENCRYPT);
-                    for (unsigned long i = 0; i < block_size; ++i)
-                        outbuf[i] = inbuf[i] ^ keystream[i];
+                    case cipher::des_ecb: {
+                        DES_cblock input, output;
+                        memcpy(input, inbuf, block_size);
+                        DES_ecb_encrypt(&input, &output, &key_schedule, DES_DECRYPT);
+                        out.write(reinterpret_cast<const char*>(output), block_size);
+                        break;
+                    }
+                    case cipher::des_cbc: {
+                        DES_ncbc_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, DES_DECRYPT);
+                        out.write(outbuf, block_size);
+                        break;
+                    }
+                    case cipher::des_cfb: {
+                        int num = 0;
+                        DES_cfb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num, DES_DECRYPT);
+                        out.write(outbuf, block_size);
+                        break;
+                    }
+                    case cipher::des_ofb: {
+                        int num = 0;
+                        DES_ofb64_encrypt(reinterpret_cast<unsigned char*>(inbuf), reinterpret_cast<unsigned char*>(outbuf), block_size, &key_schedule, &iv_block, &num);
+                        out.write(outbuf, block_size);
+                        break;
+                    }
+                    case cipher::des_ctr: {
+                        DES_cblock ctr_block;
+                        memcpy(ctr_block, iv, 8);
+                        DES_cblock keystream;
+                        DES_ecb_encrypt(&ctr_block, &keystream, &key_schedule, DES_ENCRYPT);
+                        for (unsigned long i = 0; i < block_size; ++i)
+                            outbuf[i] = inbuf[i] ^ keystream[i];
 
-                    dst_file.write(outbuf, block_size);
-                    break;
-                }
+                        out.write(outbuf, block_size);
+                        break;
+                    }
                 }
             }
         }
         
         return true;
-        }
+    }
+    
+    // decode file -> file
+    static bool decode_file(const char* dst_file_path,
+                            const char* src_file_path,  
+                            const unsigned char* key, 
+                            const unsigned long key_len,
+                            const cipher cip = cipher::des_ecb,
+                            const padding pad_style = padding::des_zero_padding,
+                            const unsigned char* iv = nullptr)
+    {
+        std::ifstream src_file(src_file_path, std::ios::binary);
+        if (!src_file.is_open())
+            return false;
+
+        std::ofstream dst_file(dst_file_path, std::ios::binary);
+        if (!dst_file.is_open())
+            return false;
+
+        return decode(dst_file, src_file, key, key_len, cip, pad_style, iv);
+    }
 
     // encode file -> file
     static bool decode_file(const std::string& dst_file_path,

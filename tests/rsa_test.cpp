@@ -47,6 +47,30 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     std::string decoded_str;
     decoded_str.assign(reinterpret_cast<char*>(decoded), decoded_len);
     ASSERT_STREQ(decoded_str.c_str(), plain.c_str());
+
+    // for stream test
+    std::istringstream in(plain);
+    std::ostringstream out;
+    ASSERT_EQ(libcpp::rsa::encode(out, 
+                                  in, 
+                                  reinterpret_cast<const unsigned char*>(pubkey.data()), 
+                                  pubkey.size()), 
+        true);
+
+    std::string encoded_stream_str = out.str();
+    unsigned char decoded_stream[4096];
+    unsigned long decoded_stream_len = 4096;
+    ASSERT_EQ(libcpp::rsa::decode(decoded_stream,
+                                  decoded_stream_len,
+                                  reinterpret_cast<const unsigned char*>(encoded_stream_str.c_str()),
+                                  encoded_stream_str.size(), 
+                                  reinterpret_cast<unsigned char*>(prikey.data()), 
+                                  prikey.size()), 
+              true);
+
+    std::string decoded_stream_str;
+    decoded_stream_str.assign(reinterpret_cast<char*>(decoded_stream), decoded_stream_len);
+    ASSERT_STREQ(decoded_stream_str.c_str(), plain.c_str());
 }
 
 TEST(rsa, decode)
@@ -87,6 +111,28 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     std::string decoded_str;
     decoded_str.assign(reinterpret_cast<char*>(decoded), decoded_len);
     ASSERT_STREQ(decoded_str.c_str(), plain.c_str());
+
+    // for stream test
+    unsigned char encoded_stream[4096];
+    unsigned long encoded_stream_len = 4096;
+    ASSERT_EQ(libcpp::rsa::encode(encoded_stream,
+                                  encoded_stream_len,
+                                  reinterpret_cast<const unsigned char*>(plain.c_str()),
+                                  plain.size(),
+                                  reinterpret_cast<const unsigned char*>(pubkey.data()),
+                                  pubkey.size()),
+              true);
+
+    std::string encode_stream_str;
+    encode_stream_str.assign(reinterpret_cast<char*>(encoded_stream), encoded_stream_len);
+    std::istringstream in(encode_stream_str);
+    std::ostringstream out;
+    ASSERT_EQ(libcpp::rsa::decode(out,
+                                  in,
+                                  reinterpret_cast<unsigned char*>(prikey.data()),
+                                  prikey.size()),
+              true);
+    ASSERT_STREQ(out.str().c_str(), plain.c_str());
 }
 
 TEST(rsa, encode_file)

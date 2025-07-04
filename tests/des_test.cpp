@@ -35,6 +35,18 @@ TEST(des, encode)
     std::string key("12345678");
     std::string iv("abcdefgh");
 
+    // for stream ECB padding PKCS#5 test
+    std::istringstream in(str_src);
+    std::ostringstream out;
+    ASSERT_EQ(libcpp::des::encode(out, 
+                                  in, 
+                                  reinterpret_cast<const unsigned char*>(key.c_str()), 
+                                  key.size(), 
+                                  libcpp::des::cipher::des_ecb, 
+                                  libcpp::des::padding::des_pkcs5_padding), 
+        true);
+    ASSERT_STREQ(to_hex(out.str()).c_str(), "28DBA02EB5F6DD475D82E3681C83BB77");
+
     // ECB padding PKCS#5
     str_dst.clear();
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_pkcs5_padding), true);
@@ -212,6 +224,20 @@ TEST(des, decode)
     std::string str_dst;
     std::string key("12345678");
     std::string iv("abcdefgh");
+
+    // for stream ECB padding PKCS#5 test
+    str_dst.clear();
+    str_src = to_bytes("28DBA02EB5F6DD475D82E3681C83BB77");
+    std::istringstream in(str_src);
+    std::ostringstream out;
+    ASSERT_EQ(libcpp::des::decode(out, 
+                                  in, 
+                                  reinterpret_cast<const unsigned char*>(key.c_str()), 
+                                  key.size(), 
+                                  libcpp::des::cipher::des_ecb, 
+                                  libcpp::des::padding::des_pkcs5_padding), 
+        true);
+    ASSERT_STREQ(to_hex(out.str()).c_str(), "68656C6C6F20776F726C64");
 
     // ECB padding PKCS#5
     str_dst.clear();

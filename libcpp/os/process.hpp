@@ -38,34 +38,34 @@ static constexpr char cmd_list_pid[] = "ps -eo comm,pid";
 static constexpr char cmd_kill[]     = "kill -9 ";
 #endif
 
-static pid_t getpid() { return pid_t(::getpid()); }
+inline pid_t getpid() { return pid_t(::getpid()); }
 
 #if defined(_WIN32)
-static pid_t getppid() { return pid_t(0); }
+inline pid_t getppid() { return pid_t(0); }
 #else
-static pid_t getppid() { return pid_t(::getppid()); }
+inline pid_t getppid() { return pid_t(::getppid()); }
 #endif
 
 template <typename... Args>
-static int system(Args&&... args) 
+inline int system(Args&&... args) 
 { 
     return boost::process::system(std::forward<Args>(args)...); 
 }
 
 template <typename... Args>
-static child_t child(Args&&... args) 
+inline child_t child(Args&&... args) 
 { 
     return boost::process::child(std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void spawn(Args&&... args) 
+inline void spawn(Args&&... args) 
 { 
     boost::process::spawn(std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-static void daemon(Args&&... args)
+inline void daemon(Args&&... args)
 {
     // Step1. ignore signal
     // Step2. fork child and set work directory to pwd/root
@@ -83,12 +83,12 @@ static void daemon(Args&&... args)
     gp.detach();
 }
 
-static group_t group()
+inline group_t group()
 {
     return boost::process::group();
 }
 
-static void list(std::vector<pid_t>& result, 
+inline void list(std::vector<pid_t>& result, 
                  list_match_cb match = [](const std::vector<std::string>) -> bool{return true;})
 {
         boost::process::ipstream stream;
@@ -121,7 +121,7 @@ static void list(std::vector<pid_t>& result,
     }
 }
 
-static void kill(const pid_t pid)
+inline void kill(const pid_t pid)
 {
     try {
         std::string cmd = std::string(cmd_kill).append(std::to_string(pid));

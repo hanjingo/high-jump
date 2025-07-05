@@ -17,6 +17,18 @@ public:
     ini(const boost::property_tree::ptree& tree) : boost::property_tree::ptree(tree) {}
     ~ini() {}
 
+    ini& operator=(const ini& rhs) 
+    {
+        boost::property_tree::ptree::operator=(rhs);
+        return *this;
+    }
+
+    ini& operator=(const boost::property_tree::ptree& rhs) 
+    {
+        boost::property_tree::ptree::operator=(rhs);
+        return *this;
+    }
+
     static ini parse(const char* text)
     {
         std::stringstream ss(text);

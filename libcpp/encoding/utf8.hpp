@@ -70,6 +70,22 @@ std::ostream& from(std::ostream& out, std::wistream& in)
     return out;
 }
 
+std::string from(const std::wstring& str)
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
+    return cvt.to_bytes(str);
+}
+
+unsigned char* from(unsigned char* out, const wchar_t* in)
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    std::wstring wstr(in);
+    std::string str = converter.to_bytes(wstr);
+    memcpy(out, str.data(), str.size());
+    out[str.size()] = '\0'; // null-terminate
+    return out;
+}
+
 std::wostream& to(std::wostream& out, std::istream& in)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
@@ -90,16 +106,20 @@ std::wostream& to(std::wostream& out, std::istream& in)
     return out;
 }
 
-std::string from(const std::wstring& str)
-{
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
-    return cvt.to_bytes(str);
-}
-
 std::wstring to(const std::string& str)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
     return cvt.from_bytes(str);
+}
+
+wchar_t* to(wchar_t* out, const unsigned char* in)
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    std::string str(reinterpret_cast<const char*>(in));
+    std::wstring wstr = converter.from_bytes(str);
+    memcpy(out, wstr.data(), wstr.size() * sizeof(wchar_t));
+    out[wstr.size()] = L'\0'; // null-terminate
+    return out;
 }
 
 inline std::ios_base& cvt(std::ios_base& ios)

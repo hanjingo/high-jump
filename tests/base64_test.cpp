@@ -20,7 +20,7 @@ TEST(base64, encode)
 
     // bytes -> base64 string
     unsigned char buf_dst[1024];
-    unsigned long buf_dst_len = 1024;
+    std::size_t buf_dst_len = 1024;
     unsigned char buf[] = { 'a', 'b', 'c', 'd', '1', '2', '3' };
     ASSERT_EQ(libcpp::base64::encode(buf_dst, buf_dst_len, buf, 7), true);
     ASSERT_STREQ(std::string((char*)buf_dst, buf_dst_len).c_str(), "YWJjZDEyMw==");
@@ -41,7 +41,7 @@ TEST(base64, decode)
 
     // base64 byte -> string
     unsigned char buf_dst[1024];
-    unsigned long buf_dst_len = 1024;
+    std::size_t buf_dst_len = 1024;
     unsigned char buf[] = { 'a', 'G', 'V', 's', 'b', 'G', '8', 'g', 'b', 'G', 'l', 'j', 'c', 'H', 'A', '=' };
     ASSERT_EQ(libcpp::base64::decode(buf_dst, buf_dst_len, buf, 16), true);
     ASSERT_STREQ(std::string(reinterpret_cast<char*>(buf_dst), buf_dst_len).c_str(), "hello licpp");

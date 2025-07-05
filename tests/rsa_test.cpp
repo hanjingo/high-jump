@@ -25,7 +25,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     std::string plain = "hello world";
     unsigned char encoded[4096];
-    unsigned long encoded_len = 4096;
+    std::size_t encoded_len = 4096;
     ASSERT_EQ(libcpp::rsa::encode(encoded,
                                   encoded_len,
                                   reinterpret_cast<const unsigned char*>(plain.c_str()),
@@ -35,7 +35,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
               true);
 
     unsigned char decoded[4096];
-    unsigned long decoded_len = 4096;
+    std::size_t decoded_len = 4096;
     ASSERT_EQ(libcpp::rsa::decode(decoded, 
                                   decoded_len, 
                                   encoded, 
@@ -59,7 +59,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     std::string encoded_stream_str = out.str();
     unsigned char decoded_stream[4096];
-    unsigned long decoded_stream_len = 4096;
+    std::size_t decoded_stream_len = 4096;
     ASSERT_EQ(libcpp::rsa::decode(decoded_stream,
                                   decoded_stream_len,
                                   reinterpret_cast<const unsigned char*>(encoded_stream_str.c_str()),
@@ -87,7 +87,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
 
     std::string plain = "hehehunanchina@live.com";
     unsigned char encoded[4096];
-    unsigned long encoded_len = 4096;
+    std::size_t encoded_len = 4096;
     ASSERT_EQ(libcpp::rsa::encode(
         encoded,
         encoded_len,
@@ -98,7 +98,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
         true);
 
     unsigned char decoded[4096];
-    unsigned long decoded_len = 4096;
+    std::size_t decoded_len = 4096;
     ASSERT_EQ(libcpp::rsa::decode(
         decoded,
         decoded_len,
@@ -114,7 +114,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
 
     // for stream test
     unsigned char encoded_stream[4096];
-    unsigned long encoded_stream_len = 4096;
+    std::size_t encoded_stream_len = 4096;
     ASSERT_EQ(libcpp::rsa::encode(encoded_stream,
                                   encoded_stream_len,
                                   reinterpret_cast<const unsigned char*>(plain.c_str()),
@@ -177,7 +177,7 @@ TEST(rsa, make_key_pair_x509)
     ASSERT_EQ(libcpp::rsa::make_key_pair_x509(pubkey, prikey, 2048), true);
 
     unsigned char encoded[4096];
-    unsigned long encoded_len = 4096;
+    std::size_t encoded_len = 4096;
     ASSERT_EQ(libcpp::rsa::encode(encoded,
                                   encoded_len,
                                   reinterpret_cast<const unsigned char*>(plain.c_str()),
@@ -187,7 +187,7 @@ TEST(rsa, make_key_pair_x509)
         true);
 
     unsigned char decoded[4096];
-    unsigned long decoded_len = 4096;
+    std::size_t decoded_len = 4096;
     ASSERT_EQ(libcpp::rsa::decode(decoded, 
                                   decoded_len,
                                   encoded, 

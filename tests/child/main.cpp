@@ -5,6 +5,8 @@
 
 int main(int argc, char* argv[])
 {
+    (void)argc;
+    (void)argv;
     boost::process::pstream p;
     std::string hello("hello");
     p << hello;

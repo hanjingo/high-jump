@@ -34,19 +34,19 @@ namespace libcpp
 namespace string_util
 {
 
-static bool contains(const std::string& src, const std::string& sub)
+bool contains(const std::string& src, const std::string& sub)
 {
     return src.find(sub) != std::string::npos;
 }
 
-static std::string search(const std::string& src, const std::string& regex)
+std::string search(const std::string& src, const std::string& regex)
 {
     std::smatch match;
     std::regex_search(src, match, std::regex(regex));
     return match[0];
 }
 
-static std::vector<std::string> search_n(const std::string& src, const std::string& regex)
+std::vector<std::string> search_n(const std::string& src, const std::string& regex)
 {
     std::regex pattern(regex);
     std::sregex_iterator begin(src.begin(), src.end(), pattern), end;
@@ -57,30 +57,30 @@ static std::vector<std::string> search_n(const std::string& src, const std::stri
     return results;
 }
 
-static void search(const std::string& src, std::smatch& match, const std::string& regex)
+void search(const std::string& src, std::smatch& match, const std::string& regex)
 {
     std::regex_search(src, match, std::regex(regex));
 }
 
-static std::vector<std::string> split(const std::string& str, const std::string& regex)
+std::vector<std::string> split(const std::string& str, const std::string& regex)
 {
     std::regex patten(regex);
     std::sregex_token_iterator first{str.begin(), str.end(), patten, -1}, last;
     return {first, last};
 }
 
-static std::string& replace(std::string& str, const std::string& from, const std::string& to)
+std::string& replace(std::string& str, const std::string& from, const std::string& to)
 {
     str = std::regex_replace(str, std::regex(from), to);
     return str;
 }
 
-static bool equal(const char* a, const char* b)
+bool equal(const char* a, const char* b)
 {
     return strcmp(a, b) == 0;
 }
 
-static std::wstring to_wchar(const std::string& src)
+std::wstring to_wchar(const std::string& src)
 {
 #if defined(_MSC_VER)
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -91,7 +91,7 @@ static std::wstring to_wchar(const std::string& src)
 #endif
 }
 
-static std::wstring to_wstring(const std::string& src)
+std::wstring to_wstring(const std::string& src)
 {
 #if defined(_MSC_VER)
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -102,7 +102,7 @@ static std::wstring to_wstring(const std::string& src)
 #endif
 }
 
-static std::string from_wchar(const wchar_t* src)
+std::string from_wchar(const wchar_t* src)
 {
     if (!src) 
         return std::string();
@@ -116,7 +116,7 @@ static std::string from_wchar(const wchar_t* src)
 #endif
 }
 
-static std::string from_wstring(const std::wstring& src)
+std::string from_wstring(const std::wstring& src)
 {
 #if defined(_MSC_VER)
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -127,7 +127,7 @@ static std::string from_wstring(const std::wstring& src)
 #endif
 }
 
-static std::string from_ptr_addr(const void* ptr, bool is_hex = true)
+std::string from_ptr_addr(const void* ptr, bool is_hex = true)
 {
     std::ostringstream oss;
     if (is_hex)
@@ -138,7 +138,7 @@ static std::string from_ptr_addr(const void* ptr, bool is_hex = true)
 }
 
 template <typename... Args>
-static std::string fmt(const char* style, Args&&... args)
+std::string fmt(const char* style, Args&&... args)
 {
     return fmt::format(style, std::forward<Args>(args)...);
 }

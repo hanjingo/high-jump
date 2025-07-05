@@ -65,16 +65,17 @@
 #pragma WARNING UNKNOWN DYNAMIC LINK LIBRARY FILE EXTENSION.
 #endif
 
-static void* dll_open(const char* filename, int flag)
+void* dll_open(const char* filename, int flag)
 {
 #if defined(_WIN32)
+    (void)flag;
     return LoadLibrary(filename);
 #else
     return dlopen(filename, flag);
 #endif
 }
 
-static void* dll_get(void* handler, const char* symbol)
+void* dll_get(void* handler, const char* symbol)
 {
 #if defined(_WIN32)
     return (void*)(GetProcAddress((HMODULE)handler, symbol));
@@ -83,7 +84,7 @@ static void* dll_get(void* handler, const char* symbol)
 #endif
 }
 
-static bool dll_close(void* handler)
+bool dll_close(void* handler)
 {
 #if defined(_WIN32)
     return FreeLibrary((HMODULE)handler);

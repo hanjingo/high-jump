@@ -33,6 +33,12 @@ static bool default_dump_callback(const wchar_t* dump_dir,
                                   MDRawAssertionInfo* assertion,
                                   bool succeeded)
 {
+    (void)dump_dir;
+    (void)minidump_id;
+    (void)context;
+    (void)exinfo;
+    (void)assertion;
+    (void)succeeded;
     return true;
 }
 
@@ -41,6 +47,10 @@ typedef bool (*dump_callback_t)(const char *, const char *, void *, bool);
 
 static bool default_dump_callback(const char *dump_dir, const char *minidump_id, void *context, bool succeeded)
 {
+    (void)dump_dir;
+    (void)minidump_id;
+    (void)context;
+    (void)succeeded;
     return true;
 }
 
@@ -49,6 +59,9 @@ typedef bool (*dump_callback_t)(const google_breakpad::MinidumpDescriptor&, void
 
 static bool default_dump_callback(const google_breakpad::MinidumpDescriptor& descriptor, void* context, bool succeeded)
 {
+    (void)descriptor;
+    (void)context;
+    (void)succeeded;
     return true;
 }
 #endif
@@ -111,9 +124,10 @@ public:
 
 #if defined(_WIN32)
     // Reference to: https://www.cnblogs.com/cswuyg/p/3207576.html
-    static LPTOP_LEVEL_EXCEPTION_FILTER WINAPI temp_set_unhandled_exception_filter( 
-        LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter )
+    static LPTOP_LEVEL_EXCEPTION_FILTER WINAPI temp_set_unhandled_exception_filter(
+        LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
     {
+        (void)lpTopLevelExceptionFilter;
         return NULL;
     }
 #endif

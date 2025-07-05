@@ -31,8 +31,7 @@
     "spdlog",
     "sqlite3",
     "tbb",
-    "zeromq",
-    "cuda"
+    "zeromq"
   ],
   "overrides": [
     {
@@ -166,10 +165,6 @@
     {
       "name": "boost-leaf",
       "version": "1.76.0"
-    },
-    {
-      "name": "cuda",
-      "version": "10.1#13"
     }
   ]
 }

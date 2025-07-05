@@ -14,17 +14,17 @@ TEST(hex, from)
     std::ostringstream out2;
     std::ostringstream out3;
 
-    libcpp::hex::from(out1, in1);
+    libcpp::hex::from(out1, in1, libcpp::hex::upper_case);
     auto str1 = out1.str();
     ASSERT_EQ(str1.size(), 1);
     ASSERT_EQ(static_cast<unsigned char>(str1[0]), 0x0F);
 
-    libcpp::hex::from(out2, in2);
+    libcpp::hex::from(out2, in2, libcpp::hex::upper_case);
     auto str2 = out2.str();
     ASSERT_EQ(str2.size(), 1);
     ASSERT_EQ(static_cast<unsigned char>(str2[0]), 0xFF);
 
-    libcpp::hex::from(out3, in3);
+    libcpp::hex::from(out3, in3, libcpp::hex::upper_case);
     auto str3 = out3.str();
     ASSERT_EQ(str3.size(), 2);
     ASSERT_EQ(static_cast<unsigned char>(str3[0]), 0xFF);
@@ -33,19 +33,19 @@ TEST(hex, from)
 
 TEST(hex, to)
 {
-    ASSERT_STREQ(libcpp::hex::to<std::string>(255).c_str(), "FF");
-    ASSERT_STREQ(libcpp::hex::to<std::string>(255, false).c_str(), "ff");
+    ASSERT_STREQ(libcpp::hex::to(255, libcpp::hex::upper_case).c_str(), "FF");
+    ASSERT_STREQ(libcpp::hex::to(255, libcpp::hex::lower_case).c_str(), "ff");
 
-    ASSERT_STREQ(libcpp::hex::to<std::string>(4095).c_str(), "FFF");
-    ASSERT_STREQ(libcpp::hex::to<std::string>(4095, false).c_str(), "fff");
+    ASSERT_STREQ(libcpp::hex::to(4095, libcpp::hex::upper_case).c_str(), "FFF");
+    ASSERT_STREQ(libcpp::hex::to(4095, libcpp::hex::lower_case).c_str(), "fff");
 
     std::istringstream in1("\xFF", std::ios::binary);
     std::ostringstream out1;
-    libcpp::hex::to(out1, in1);
+    libcpp::hex::to(out1, in1, libcpp::hex::upper_case);
     ASSERT_EQ(out1.str(), "FF");
 
     std::istringstream in2(std::string("\xFF\x0F", 2), std::ios::binary);
     std::ostringstream out2;
-    libcpp::hex::to(out2, in2);
+    libcpp::hex::to(out2, in2, libcpp::hex::upper_case);
     ASSERT_EQ(out2.str(), "FF0F");
 }

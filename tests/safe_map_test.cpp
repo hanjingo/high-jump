@@ -98,6 +98,8 @@ TEST(safe_map, range)
     ASSERT_EQ(map.emplace(10, "ten"), true);
 
     map.range([](const int& key, std::string& value) {
+        (void) key;
+        (void) value;
         return true;
     });
 }

@@ -5,11 +5,13 @@ static int signal_num = 0;
 
 void handler1(int sig)
 {
+    (void)sig;
     signal_num += 1;
 }
 
 void handler2(int sig)
 {
+    (void)sig;
     signal_num += 2;
 }
 

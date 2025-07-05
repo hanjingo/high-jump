@@ -136,7 +136,9 @@ TEST(file_path, size)
 
     std::string f = libcpp::filepath::join(libcpp::filepath::pwd(), "file_path_size_test.txt");
     if (!libcpp::filepath::is_exist(f))
+    {
         ASSERT_EQ(libcpp::filepath::make_file(f), true);
+    }
 
     ASSERT_EQ(libcpp::filepath::size(f) >= 0, true);
 }
@@ -145,6 +147,7 @@ TEST(file_path, walk)
 {
     int n = 0;
     libcpp::filepath::walk(libcpp::filepath::pwd(), [&](const std::string& f)->bool{
+        (void)f;
         n++;
         return true;
     });
@@ -160,7 +163,9 @@ TEST(file_path, find)
 {
     std::string f = libcpp::filepath::join(libcpp::filepath::pwd(), "file_path_find_test.txt");
     if (!libcpp::filepath::is_exist(f))
+    {
         ASSERT_EQ(libcpp::filepath::make_file(f), true);
+    }
 
     ASSERT_EQ(libcpp::filepath::find(libcpp::filepath::pwd(), "file_path_find_test.txt").size() > 0, true);
 }

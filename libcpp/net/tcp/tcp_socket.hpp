@@ -153,6 +153,7 @@ public:
             });
 
             timer.async_wait([&](const err_t& err) {
+                (void)err; // ignore timer error
                 if (finished.exchange(true)) 
                     return;
 

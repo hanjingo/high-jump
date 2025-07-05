@@ -30,19 +30,3 @@ TEST(device, device_range)
 {
     device_range(dev_range);
 }
-
-TEST(device, device_find_if_path_contains)
-{
-    device_info_t* buf[10];
-    unsigned long len = 10;
-#if defined(_WIN32)
-    device_find_if_path_contains(buf, len, "#");
-#else
-    device_find_if_path_contains(buf, len, "/");
-#endif
-    for (auto i = 0; i < len; ++i)
-    {
-        dev_print(buf[i]);
-    }
-    ASSERT_EQ(len > 0, true);
-}

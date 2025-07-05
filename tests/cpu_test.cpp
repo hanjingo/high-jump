@@ -15,7 +15,7 @@ TEST(cpu, cpu_core_bind)
     unsigned int sz = 1024;
     cpu_core_list(buf, sz);
     ASSERT_EQ(sz != 0, true);
-    for (int i = 0; i < sz; ++i)
+    for (unsigned int i = 0; i < sz; ++i)
     {
         ASSERT_EQ(cpu_core_bind(buf[i]), true);
     }
@@ -28,7 +28,7 @@ TEST(cpu, cpu_core_list)
     unsigned int sz = 1024;
     cpu_core_list(buf, sz);
     ASSERT_EQ(sz != 0, true);
-    for (int i = 0; i < sz; ++i)
+    for (unsigned int i = 0; i < sz; ++i)
     {
         std::cout << "cpu core:" << buf[i] << std::endl;
     }

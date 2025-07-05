@@ -25,7 +25,7 @@ endif()
 
 # add_subdirectory(app)
 
-add_subdirectory(base64)
+# add_subdirectory(base64)
 
 # add_subdirectory(bits)
 
@@ -47,7 +47,7 @@ add_subdirectory(base64)
 
 # add_subdirectory(defer)
 
-add_subdirectory(des)
+# add_subdirectory(des)
 
 # add_subdirectory(endian)
 

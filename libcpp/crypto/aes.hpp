@@ -20,10 +20,14 @@
 #define AES_HPP
 
 // disable msvc safe check warning
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 
 // support deprecated api for low version openssl
+#ifndef OPENSSL_SUPPRESS_DEPRECATED
 #define OPENSSL_SUPPRESS_DEPRECATED
+#endif
 
 #include <fstream>
 #include <iostream>
@@ -122,23 +126,23 @@ public:
 
 public:
     static bool encode(unsigned char* dst,
-                       unsigned long& dst_len,
+                       std::size_t& dst_len,
                        const unsigned char* src, 
-                       const unsigned long src_len, 
+                       const std::size_t src_len, 
                        const unsigned char* key, 
-                       const unsigned long key_len,
+                       const std::size_t key_len,
                        const cipher cip = cipher::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
-                       const unsigned long iv_len = 16)
+                       const std::size_t iv_len = 16)
     {
-        if (!is_plain_text_valid(cip, pad_style, src, src_len) || 
+        if (!is_plain_text_valid(cip, pad_style, src_len) || 
                 !is_key_valid(cip, key, key_len) || 
                     !is_iv_valid(cip, iv, iv_len))
             return false;
 
         std::vector<unsigned char> padded_src;
-        unsigned long padded_len;
+        std::size_t padded_len;
         _pad_block(padded_src, padded_len, cip, pad_style, src, src_len);
 
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
@@ -155,7 +159,7 @@ public:
         {
             if (iv && iv_len > 0) 
             {
-                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL)) 
+                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
@@ -174,7 +178,7 @@ public:
             EVP_CIPHER_CTX_set_padding(ctx, 0);
 
         int outlen1 = 0, outlen2 = 0;
-        if (1 != EVP_EncryptUpdate(ctx, dst, &outlen1, padded_src.data(), padded_len)) 
+        if (1 != EVP_EncryptUpdate(ctx, dst, &outlen1, padded_src.data(), static_cast<int>(padded_len))) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -209,11 +213,11 @@ public:
     static bool encode(std::ostream& out,
                        std::istream& in,
                        const unsigned char* key, 
-                       const unsigned long key_len,
+                       const std::size_t key_len,
                        const cipher cip = cipher::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
-                       const unsigned long iv_len = 16)
+                       const std::size_t iv_len = 16)
     {
         if (!in || !out)
             return false;
@@ -237,7 +241,7 @@ public:
         {
             if (iv && iv_len > 0) 
             {
-                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL)) 
+                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
@@ -256,7 +260,7 @@ public:
 
         std::vector<unsigned char> inbuf(AES_BUF_SIZE);
         std::vector<unsigned char> outbuf(AES_BUF_SIZE + block_size * 2);
-        unsigned long total_read = 0;
+        std::size_t total_read = 0;
         bool last_block = false;
         std::vector<unsigned char> last_plain;
 
@@ -264,7 +268,7 @@ public:
         {
             in.read(reinterpret_cast<char*>(inbuf.data()), AES_BUF_SIZE);
             std::streamsize read_len = in.gcount();
-            total_read += static_cast<unsigned long>(read_len);
+            total_read += static_cast<std::size_t>(read_len);
 
             if (read_len < AES_BUF_SIZE)
                 last_block = true;
@@ -284,7 +288,7 @@ public:
         }
 
         std::vector<unsigned char> padded_plain;
-        unsigned long padded_len;
+        std::size_t padded_len;
         _pad_block(padded_plain, padded_len, cip, pad_style, last_plain.data(), last_plain.size());
 
         int outlen1 = 0, outlen2 = 0;
@@ -330,11 +334,11 @@ public:
                        const padding pad_style = padding::aes_zero_padding,
                        const std::string& iv = std::string())
     {
-        dst.resize(encode_len_reserve(src.size(), cip));
-        unsigned long dst_len = dst.size();
+        std::size_t dst_len = encode_len_reserve(src.size(), cip);
+        dst.resize(dst_len);
         const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
-        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
+        const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
                     dst_len, 
                     reinterpret_cast<const unsigned char*>(src.c_str()), 
@@ -344,7 +348,7 @@ public:
                     cip,
                     pad_style,
                     iv_ptr,
-                    iv.size()))
+                    iv_len))
             return false;
 
         dst.resize(dst_len);
@@ -354,11 +358,11 @@ public:
     static bool encode_file(const char* dst_file_path,
                             const char* src_file_path, 
                             const unsigned char* key, 
-                            const unsigned long key_len,
+                            const std::size_t key_len,
                             const cipher cip = cipher::aes_256_ecb,
                             const padding pad_style = padding::aes_zero_padding,
                             const unsigned char* iv = nullptr,
-                            const unsigned long iv_len = 16)
+                            const std::size_t iv_len = 16)
     {
         std::ifstream in(src_file_path, std::ios::binary);
         std::ofstream out(dst_file_path, std::ios::binary);
@@ -377,7 +381,7 @@ public:
     {
         const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
-        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
+        const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         return encode_file(dst_file_path.c_str(),
                            src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(key.c_str()),
@@ -389,21 +393,21 @@ public:
     }
 
     static bool decode(unsigned char* dst,
-                       unsigned long& dst_len,
+                       std::size_t& dst_len,
                        const unsigned char* src,
-                       const unsigned long src_len,
+                       const std::size_t src_len,
                        const unsigned char* key,
-                       const unsigned long key_len,
+                       const std::size_t key_len,
                        const cipher cip = cipher::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
-                       const unsigned long iv_len = 16)
+                       const std::size_t iv_len = 16)
     {
         if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
             return false;
 
         int block_size = _get_block_size(cip);
-        unsigned long cipher_len = src_len;
+        std::size_t cipher_len = src_len;
         const unsigned char* tag_ptr = nullptr;
         if (is_aead_mode(cip) && src_len > 16) 
         {
@@ -424,7 +428,7 @@ public:
         {
             if (iv && iv_len > 0) 
             {
-                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL)) 
+                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
@@ -450,7 +454,7 @@ public:
         }
 
         int outlen1 = 0, outlen2 = 0;
-        if (1 != EVP_DecryptUpdate(ctx, dst, &outlen1, src, cipher_len)) 
+        if (1 != EVP_DecryptUpdate(ctx, dst, &outlen1, src, static_cast<int>(cipher_len))) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -472,11 +476,11 @@ public:
     static bool decode(std::ostream& out,
                        std::istream& in,
                        const unsigned char* key, 
-                       const unsigned long key_len,
+                       const std::size_t key_len,
                        const cipher cip = cipher::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
-                       const unsigned long iv_len = 16)
+                       const std::size_t iv_len = 16)
     {
         if (!in || !out)
             return false;
@@ -513,7 +517,7 @@ public:
         {
             if (iv && iv_len > 0) 
             {
-                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL)) 
+                if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
@@ -557,14 +561,14 @@ public:
             if (!last_block) 
             {
                 int outlen = 0;
-                if (1 != EVP_DecryptUpdate(ctx, outbuf.data(), &outlen, inbuf.data(), static_cast<unsigned long>(read_len)))
+                if (1 != EVP_DecryptUpdate(ctx, outbuf.data(), &outlen, inbuf.data(), static_cast<int>(read_len)))
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
                 }
                 out.write(reinterpret_cast<char*>(outbuf.data()), outlen);
             } else {
-                last_cipher.assign(inbuf.begin(), inbuf.begin() + static_cast<unsigned long>(read_len));
+                last_cipher.assign(inbuf.begin(), inbuf.begin() + static_cast<std::size_t>(read_len));
             }
         }
 
@@ -584,7 +588,7 @@ public:
             return false;
         }
 
-        unsigned long plain_len = outlen1 + outlen2;
+        std::size_t plain_len = outlen1 + outlen2;
         _unpad_block(outbuf.data(), plain_len, cip, pad_style, block_size);
 
         if (plain_len > 0)
@@ -602,10 +606,10 @@ public:
                        const std::string& iv = std::string())
     {
         dst.resize(decode_len_reserve(src.size()));
-        unsigned long dst_len = dst.size();
+        std::size_t dst_len = dst.size();
         const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
-        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
+        const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
                     dst_len, 
                     reinterpret_cast<const unsigned char*>(src.c_str()), 
@@ -628,11 +632,11 @@ public:
     static bool decode_file(const char* dst_file_path,
                             const char* src_file_path, 
                             const unsigned char* key, 
-                            const unsigned long key_len,
+                            const std::size_t key_len,
                             const cipher cip = cipher::aes_256_ecb,
                             const padding pad_style = padding::aes_zero_padding,
                             const unsigned char* iv = nullptr,
-                            const unsigned long iv_len = 16)
+                            const std::size_t iv_len = 16)
     {
         std::ifstream in(src_file_path, std::ios::binary | std::ios::ate);
         std::ofstream out(dst_file_path, std::ios::binary);
@@ -651,7 +655,7 @@ public:
     {
         const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
-        const unsigned long iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
+        const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         return decode_file(dst_file_path.c_str(),
                            src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(key.c_str()),
@@ -663,7 +667,7 @@ public:
     }
 
     // reserve encode dst buf size
-	static unsigned long encode_len_reserve(const unsigned long src_len, 
+	static std::size_t encode_len_reserve(const std::size_t src_len, 
 											const cipher cip = cipher::aes_256_ecb)
 	{
         int block_size = _get_block_size(cip);
@@ -674,13 +678,13 @@ public:
 	}
 
 	// reserve decode dst buf size
-	static unsigned long decode_len_reserve(const unsigned long src_len)
+	static std::size_t decode_len_reserve(const std::size_t src_len)
 	{
 		return src_len;
 	}
 
     // check key format
-    static bool is_key_valid(const cipher cip, const unsigned char* key, const unsigned long key_len)
+    static bool is_key_valid(const cipher cip, const unsigned char* key, const std::size_t key_len)
     {
         if (key == nullptr) 
             return false;
@@ -740,12 +744,10 @@ public:
     default:
             return false;
         }
-        
-        return true;
     }
 
     // check iv format
-    static bool is_iv_valid(const cipher cip, const unsigned char* iv, const unsigned long iv_len)
+    static bool is_iv_valid(const cipher cip, const unsigned char* iv, const std::size_t iv_len)
     {
         if (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb)
             return iv == nullptr;
@@ -759,8 +761,7 @@ public:
     // check plain text
     static bool is_plain_text_valid(const cipher cip, 
                                     const padding pad_style, 
-                                    const unsigned char* plain, 
-                                    const unsigned long plain_len)
+                                    const std::size_t plain_len)
     {
         int block_sz = _get_block_size(cip);
         if (pad_style == padding::aes_no_padding && plain_len % block_sz != 0)
@@ -790,9 +791,9 @@ public:
         case cipher::aes_192_ctr:
         case cipher::aes_256_ctr:
             return true;
+        default:
+            return false;
         }
-
-        return false;
     }
 
     // check aead mode
@@ -807,9 +808,9 @@ public:
         case cipher::aes_192_ccm:
         case cipher::aes_256_ccm:
             return true;
+        default:
+            return false;
         }
-
-        return false;
     }
 
 private:
@@ -880,7 +881,7 @@ private:
     }
 
     // get block size
-    static unsigned long _get_block_size(const cipher cip)
+    static int _get_block_size(const cipher cip)
     {
         switch (cip) {
         case cipher::aes_128_ecb:
@@ -914,19 +915,19 @@ private:
 
     // pad block
     static void _pad_block(std::vector<unsigned char>& padded_src, 
-                           unsigned long& padded_len,
+                           std::size_t& padded_len,
                            const cipher cip, 
                            const padding pad_style, 
                            const unsigned char* src, 
-                           const unsigned long src_len)
+                           const std::size_t src_len)
     {
-        int block_size = _get_block_size(cip);
+        int block_size = static_cast<int>(_get_block_size(cip));
         padded_len = src_len;
         if (pad_style != padding::aes_no_padding && block_size > 1) 
         {
             unsigned char pad_val = static_cast<unsigned char>(block_size - (src_len % block_size));
             if (pad_val == 0) 
-                pad_val = block_size;
+                pad_val = static_cast<unsigned char>(block_size);
 
             padded_len = src_len + pad_val;
             padded_src.resize(padded_len, 0);
@@ -934,13 +935,13 @@ private:
             switch (pad_style) {
             case padding::aes_pkcs5_padding:
             case padding::aes_pkcs7_padding:
-                for (unsigned long i = src_len; i < padded_len; ++i)
+                for (std::size_t i = src_len; i < padded_len; ++i)
                     padded_src[i] = pad_val;
                 break;
             case padding::aes_zero_padding:
                 break;
             case padding::aes_iso10126_padding:
-                for (unsigned long i = src_len; i < padded_len - 1; ++i)
+                for (std::size_t i = src_len; i < padded_len - 1; ++i)
                     padded_src[i] = static_cast<unsigned char>(rand() % 256);
                 padded_src[padded_len - 1] = pad_val;
                 break;
@@ -962,14 +963,14 @@ private:
 
     // unpad block
     static void _unpad_block(unsigned char* dst, 
-                             unsigned long& dst_len,
+                             std::size_t& dst_len,
                              const cipher cip, 
                              const padding pad_style, 
-                             const unsigned long block_size)
+                             const std::size_t block_size)
     {
         if (!is_aead_mode(cip) && pad_style != padding::aes_no_padding && block_size > 1) 
         {
-            unsigned long unpad_len = dst_len;
+            std::size_t unpad_len = dst_len;
             switch (pad_style) {
             case padding::aes_pkcs5_padding:
             case padding::aes_pkcs7_padding: {
@@ -981,7 +982,7 @@ private:
                     break;
 
                 bool valid = true;
-                for (unsigned long i = unpad_len - pad; i < unpad_len; ++i)
+                for (std::size_t i = unpad_len - pad; i < unpad_len; ++i)
                     if (dst[i] != pad) 
                         valid = false;
 
@@ -1015,7 +1016,7 @@ private:
                     break;
 
                 bool valid = true;
-                for (unsigned long i = unpad_len - pad; i < unpad_len - 1; ++i)
+                for (std::size_t i = unpad_len - pad; i < unpad_len - 1; ++i)
                     if (dst[i] != 0) 
                         valid = false;
 
@@ -1024,12 +1025,12 @@ private:
                 break;
             }
             case padding::aes_iso_iec_7816_4_padding: {
-                long i = dst_len - 1;
+                int i = dst_len - 1;
                 while (i >= 0 && dst[i] == 0) 
                     --i;
 
                 if (i >= 0 && dst[i] == 0x80)
-                    dst_len = static_cast<unsigned long>(i);
+                    dst_len = static_cast<std::size_t>(i);
                 
                 break;
             }

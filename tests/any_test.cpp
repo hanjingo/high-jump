@@ -7,5 +7,5 @@ TEST(any, any_cast)
     
     ASSERT_EQ(libcpp::any_cast<int>(libcpp::any(i)), 123);
 
-    ASSERT_EQ(libcpp::any_cast<int*>(libcpp::any(&i)), &i);
+    ASSERT_EQ(libcpp::any_cast<int*>(libcpp::any(&i)) == &i, true);
 }

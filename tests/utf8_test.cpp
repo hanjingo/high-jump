@@ -30,6 +30,13 @@ TEST(utf8, from)
     std::ostringstream oss2;
     libcpp::utf8::from(oss2, wss2);
     ASSERT_EQ(oss2.str(), libcpp::utf8::from(cn));
+
+    std::wstring wstr = L"test";
+    unsigned char buf[256];
+    unsigned char* result = libcpp::utf8::from(buf, wstr.c_str());
+    ASSERT_TRUE(result != nullptr);
+    std::string str(reinterpret_cast<char*>(buf));
+    ASSERT_EQ(str, "test");
 }
 
 TEST(utf8, to)
@@ -43,4 +50,11 @@ TEST(utf8, to)
     std::wostringstream wos;
     libcpp::utf8::to(wos, iss);
     ASSERT_EQ(wos.str(), L"中文");
+
+    std::string str = "test";
+    wchar_t buf[256];
+    wchar_t* result = libcpp::utf8::to(buf, reinterpret_cast<const unsigned char*>(str.c_str()));
+    ASSERT_TRUE(result != nullptr);
+    std::wstring wstr(reinterpret_cast<wchar_t*>(buf));
+    ASSERT_EQ(wstr, L"test");
 }

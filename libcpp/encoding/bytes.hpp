@@ -210,18 +210,16 @@ T& float_to_bytes(const float f, T& bytes)
 template <typename T>
 std::string& bytes_to_string(const T& bytes, const std::size_t sz, std::string& str)
 {
-    char buf[sz];
-    memcpy(buf, bytes, sz);
-    str.assign(buf, sz);
+    str.assign(reinterpret_cast<const char*>(bytes), sz);
     return str;
 }
 
 template <typename T>
 std::string bytes_to_string(const T& bytes, const std::size_t sz)
 {
-    char buf[sz];
-    memcpy(buf, bytes, sz);
-    return std::string(buf);
+    std::string str;
+    str.assign(reinterpret_cast<const char*>(bytes), sz);
+    return str;
 }
 
 template <typename T>

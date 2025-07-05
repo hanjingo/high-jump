@@ -20,10 +20,14 @@
 #define MD5_HPP
 
 // disable msvc safe check warning
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 
 // support deprecated api for low version openssl
+#ifndef OPENSSL_SUPPRESS_DEPRECATED
 #define OPENSSL_SUPPRESS_DEPRECATED
+#endif
 
 #include <string.h>
 #include <string>
@@ -46,9 +50,9 @@ class md5
 {
 public:
     static bool encode(unsigned char* dst, 
-                       unsigned long& dst_len,
+                       std::size_t& dst_len,
                        const unsigned char* src, 
-                       const unsigned long src_len)
+                       const std::size_t src_len)
     {
         if (dst_len < MD5_DIGEST_LENGTH)
             return false;
@@ -65,7 +69,7 @@ public:
                        const std::string& src)
     {
         dst.resize(MD5_DIGEST_LENGTH);
-        unsigned long len = dst.size();
+        std::size_t len = dst.size();
         if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
                     len,
                     reinterpret_cast<const unsigned char*>(src.c_str()), 
@@ -87,7 +91,7 @@ public:
         std::streamsize sz;
         std::vector<char> buffer(MD5_BUF_SZ);
         while ((sz = in.read(&buffer[0], MD5_BUF_SZ).gcount()) > 0)
-            MD5_Update(&ctx, buffer.data(), static_cast<unsigned long>(sz));
+            MD5_Update(&ctx, buffer.data(), static_cast<std::size_t>(sz));
 
         out.resize(128 / 8);
         MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &ctx);
@@ -104,7 +108,7 @@ public:
         std::vector<char> buffer(MD5_BUF_SZ);
         std::streamsize sz;
         while ((sz = in.read(buffer.data(), MD5_BUF_SZ).gcount()) > 0)
-            MD5_Update(&ctx, buffer.data(), static_cast<unsigned long>(sz));
+            MD5_Update(&ctx, buffer.data(), static_cast<std::size_t>(sz));
 
         unsigned char md[MD5_DIGEST_LENGTH];
         MD5_Final(md, &ctx);
@@ -131,7 +135,7 @@ public:
     };
 
     // reserve encode dst buf size
-	static unsigned long encode_len_reserve()
+	static std::size_t encode_len_reserve()
 	{
 		return MD5_DIGEST_LENGTH;
 	}

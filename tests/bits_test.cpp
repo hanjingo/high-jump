@@ -22,10 +22,10 @@ TEST(bits, reset)
 TEST(bits, flip)
 {
     unsigned int n = 0xFFFFFFFF;
-    ASSERT_EQ(libcpp::bits::flip(n), 0x0);
+    ASSERT_EQ(libcpp::bits::flip(n) == 0x0, true);
 
-    int n1 = 0xFFFFFFFF;
-    ASSERT_EQ(libcpp::bits::flip(n), -1);
+    long long n1 = -1;
+    ASSERT_EQ(libcpp::bits::flip(n1), 0LL);
 }
 
 TEST(bits, to_string)

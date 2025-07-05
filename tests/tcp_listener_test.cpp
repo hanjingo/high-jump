@@ -13,16 +13,30 @@ TEST(tcp_listener, is_closed)
 
 TEST(tcp_listener, set_option)
 {
-    libcpp::tcp_listener::io_t io;
-    libcpp::tcp_listener li{io};
+    std::thread t([]() {
+        libcpp::tcp_listener::io_t io;
+        libcpp::tcp_listener li{io};
 
-    ASSERT_EQ(li.set_option(libcpp::tcp_socket::opt_reuse_addr(true)), false);
-    li.async_accept(10091, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
-        ASSERT_EQ(err.failed(), false);
-        ASSERT_EQ(sock != nullptr, true);
-        sock->close();
+        ASSERT_EQ(li.set_option(libcpp::tcp_socket::opt_reuse_addr(true)), false);
+        li.async_accept(10091, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
+            ASSERT_EQ(err.failed(), false);
+            ASSERT_EQ(sock != nullptr, true);
+            sock->close();
+
+            delete sock;
+        });
+        ASSERT_EQ(li.set_option(libcpp::tcp_socket::opt_reuse_addr(true)), true);
+
+        io.run();
+        li.close();
     });
-    ASSERT_EQ(li.set_option(libcpp::tcp_socket::opt_reuse_addr(true)), true);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    libcpp::tcp_socket::io_t io;
+    libcpp::tcp_socket sock{io};
+    ASSERT_EQ(sock.connect("127.0.0.1", 10091), true);
+
+    t.join();
 }
 
 TEST(tcp_listener, accept)
@@ -35,6 +49,7 @@ TEST(tcp_listener, accept)
             auto sock = li.accept(10091);
             ASSERT_EQ(sock != nullptr, true);
             sock->close();
+            delete sock;
         }
         li.close();
     });
@@ -62,6 +77,8 @@ TEST(tcp_listener, async_accept)
                 ASSERT_EQ(sock->is_connected(), true);
                 ASSERT_EQ(sock->check_connected(), true);
                 async_accept_times1++;
+
+                delete sock;
             }
         };
         for (int i = 0; i < 2; i++)
@@ -80,6 +97,8 @@ TEST(tcp_listener, async_accept)
                 ASSERT_EQ(sock->is_connected(), true);
                 ASSERT_EQ(sock->check_connected(), true);
                 async_accept_times2++;
+
+                delete sock;
             });
         }
 

@@ -20,10 +20,14 @@
 #define BASE64_HPP
 
 // disable msvc safe check warning
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 
 // support deprecated api for low version openssl
+#ifndef OPENSSL_SUPPRESS_DEPRECATED
 #define OPENSSL_SUPPRESS_DEPRECATED
+#endif
 
 #include <iostream>
 #include <string>
@@ -46,9 +50,9 @@ class base64
 public:
     // bytes -> base64 bytes
     static bool encode(unsigned char* dst, 
-                       unsigned long& dst_len,
+                       std::size_t& dst_len,
                        const unsigned char* src, 
-                       const unsigned long src_len)
+                       const std::size_t src_len)
     {
         if (src_len == 0 || dst_len == 0)
             return false; // Invalid input or output length
@@ -66,7 +70,7 @@ public:
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
         BIO_push(b64, bio);
-        BIO_write(b64, src, src_len);
+        BIO_write(b64, src, static_cast<int>(src_len));
         BIO_flush(b64);
         BIO_get_mem_ptr(b64, &buffer_ptr);
         if (buffer_ptr->length > dst_len)
@@ -85,8 +89,8 @@ public:
     static bool encode(std::string& dst,
                        const std::string& src)
     {
-        dst.resize(encode_len_reserve(src.size())); // Base64 encoding increases size by ~33%
-        unsigned long dst_len = dst.size();
+        std::size_t dst_len = encode_len_reserve(src.size());
+        dst.resize(dst_len); // Base64 encoding increases size by ~33%
         if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
                     dst_len,
                     reinterpret_cast<const unsigned char*>(src.c_str()), 
@@ -170,7 +174,7 @@ public:
         BIO_push(b64, bio_out);
 
         char buffer[BASE64_BUF_SIZE];
-        unsigned long n;
+        std::size_t n;
         while ((n = fread(buffer, 1, sizeof(buffer), in)) > 0) 
         {
             if (BIO_write(b64, buffer, static_cast<int>(n)) == (int)n)
@@ -199,14 +203,14 @@ public:
 
     // base64 bytes -> bytes
     static bool decode(unsigned char* dst, 
-                       unsigned long& dst_len,
+                       std::size_t& dst_len,
                        const unsigned char* src, 
-                       const unsigned long src_len)
+                       const std::size_t src_len)
     {
         if (src_len % 4 != 0)
             return false; // Invalid base64 input length
 
-        BIO* bio = BIO_new_mem_buf(src, src_len);
+        BIO* bio = BIO_new_mem_buf(src, static_cast<int>(src_len));
         if (!bio)
             return false; // Failed to create BIO from memory buffer
 
@@ -226,7 +230,7 @@ public:
             return false;
         }
 
-        dst_len = static_cast<unsigned long>(decoded_length);
+        dst_len = static_cast<std::size_t>(decoded_length);
         BIO_free_all(b64);
         return true;
     }
@@ -236,7 +240,7 @@ public:
                        const std::string& src)
     {
         dst.resize(decode_len_reserve(src.size()));
-        unsigned long dst_len = dst.size();
+        std::size_t dst_len = dst.size();
         if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
                     dst_len,
                     reinterpret_cast<const unsigned char*>(src.c_str()), 
@@ -342,13 +346,13 @@ public:
     }
 
 	// reserve encode dst buf size
-	static unsigned long encode_len_reserve(const unsigned long src_len)
+	static std::size_t encode_len_reserve(const std::size_t src_len)
 	{
 		return (src_len + 2) / 3 * 4;
 	}
 
 	// reserve decode dst buf size
-	static unsigned long decode_len_reserve(const unsigned long src_len)
+	static std::size_t decode_len_reserve(const std::size_t src_len)
 	{
 		return (src_len / 4) * 3;
 	}

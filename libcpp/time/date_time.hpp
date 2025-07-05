@@ -53,18 +53,18 @@ public:
         : tm_{NullTime} {};
     date_time(const date_time& dt)
         : tm_{dt.tm_} {};
-    explicit date_time(const std::tm& tm, long ms = 0)
+    explicit date_time(const std::tm& tm, int64_t ms = 0)
         : tm_{boost::posix_time::ptime_from_tm(tm) + boost::posix_time::time_duration(0, 0, 0, int64_t(ms) * 1000)} {};
-    explicit date_time(const std::time_t time, long ms = 0)
+    explicit date_time(const std::time_t time, int64_t ms = 0)
         : tm_{boost::posix_time::from_time_t(time) + boost::posix_time::time_duration(0, 0, 0, int64_t(ms) * 1000)} {};
-    date_time(unsigned short year, unsigned short month, unsigned short day,
-             long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
-        : tm_{boost::posix_time::ptime(boost::gregorian::date(year, month, day),
-                                       boost::posix_time::time_duration(hour, minute, seconds, int64_t(ms) * 1000))}
-    {};
+    date_time(unsigned short year, unsigned short month, unsigned short day, long hour = 0, long minute = 0, 
+                long seconds = 0, long ms = 0)
+        : tm_{boost::posix_time::ptime(
+                boost::gregorian::date(year, month, day),
+                boost::posix_time::time_duration(hour, minute, seconds, int64_t(ms) * 1000))}
+        {}
     explicit date_time(const boost::posix_time::ptime& tm) : tm_{tm} {};
-    explicit date_time(const boost::gregorian::date& dt,
-                      long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
+    explicit date_time(const boost::gregorian::date& dt, long hour = 0, long minute = 0, long seconds = 0, long ms = 0)
         : tm_{boost::posix_time::ptime(dt, boost::posix_time::time_duration(hour, minute, seconds, int64_t(ms) * 1000))}
     {};
     explicit date_time(const std::chrono::system_clock::time_point& tp)
@@ -189,67 +189,67 @@ public:
         return boost::posix_time::to_time_t(tm_);
     }
 
-    inline int seconds()
+    inline int64_t seconds()
     {
         return tm_.time_of_day().seconds();
     }
 
-    inline long seconds_to(const date_time& dt)
+    inline int64_t seconds_to(const date_time& dt)
     {
         return (dt.tm_ - tm_).total_seconds();
     }
 
-    inline int minute()
+    inline int64_t minute()
     {
         return tm_.time_of_day().minutes();
     }
 
-    inline long minutes_to(const date_time& dt)
+    inline int64_t minutes_to(const date_time& dt)
     {
         return (dt.tm_ - tm_).total_seconds() / 60;
     }
 
-    inline int hour()
+    inline int64_t hour()
     {
         return tm_.time_of_day().hours();
     }
 
-    inline long hours_to(const date_time& dt)
+    inline int64_t hours_to(const date_time& dt)
     {
         return (dt.tm_ - tm_).total_seconds() / 3600;
     }
 
-    inline int day()
+    inline int64_t day()
     {
         return tm_.date().day();
     }
 
-    inline long days_to(const date_time& dt)
+    inline int64_t days_to(const date_time& dt)
     {
         return (dt.tm_ - tm_).total_seconds() / 86400;
     }
 
     inline week_day day_of_week()
     {
-        return week_day(int(tm_.date().day_of_week()));
+        return week_day(int64_t(tm_.date().day_of_week()));
     }
 
-    inline int day_of_month()
+    inline int64_t day_of_month()
     {
         return tm_.date().day();
     }
 
-    inline int day_of_year()
+    inline int64_t day_of_year()
     {
         return tm_.date().day_of_year();
     }
 
     inline moon month()
     {
-        return moon(int(tm_.date().month()));
+        return moon(int64_t(tm_.date().month()));
     }
 
-    inline int year()
+    inline int64_t year()
     {
         return tm_.date().year();
     }
@@ -261,7 +261,7 @@ public:
 
     inline date_time end_of_day()
     {
-        return date_time(year(), month(), day(), 23, 59, 59);
+        return date_time(tm_.date().year(), tm_.date().month(), tm_.date().day(), 23, 59, 59);
     }
 
     inline date_time start_of_week()
@@ -278,7 +278,7 @@ public:
 
     inline date_time start_of_month()
     {
-        return date_time(year(), month(), 1);
+        return date_time(tm_.date().year(), static_cast<unsigned short>(month()), 1);
     }
 
     inline date_time end_of_month()
@@ -288,29 +288,29 @@ public:
 
     inline date_time start_of_quarter()
     {
-        int m = month();
+        int64_t m = month();
         if (m <= 3) {
-            return date_time(year(), 1, 1);
+            return date_time(tm_.date().year(), 1, 1);
         } else if (m <= 6) {
-            return date_time(year(), 4, 1);
+            return date_time(tm_.date().year(), 4, 1);
         } else if (m <= 9) {
-            return date_time(year(), 7, 1);
+            return date_time(tm_.date().year(), 7, 1);
         } else {
-            return date_time(year(), 10, 1);
+            return date_time(tm_.date().year(), 10, 1);
         }
     }
 
     inline date_time end_of_quarter()
     {
-        int m = month();
+        int64_t m = month();
         if (m <= 3) {
-            return date_time(year(), 3, 31, 23, 59, 59);
+            return date_time(tm_.date().year(), 3, 31, 23, 59, 59);
         } else if (m <= 6) {
-            return date_time(year(), 6, 30, 23, 59, 59);
+            return date_time(tm_.date().year(), 6, 30, 23, 59, 59);
         } else if (m <= 9) {
-            return date_time(year(), 9, 30, 23, 59, 59);
+            return date_time(tm_.date().year(), 9, 30, 23, 59, 59);
         } else {
-            return date_time(year(), 12, 31, 23, 59, 59);
+            return date_time(tm_.date().year(), 12, 31, 23, 59, 59);
         }
     }
 
@@ -328,12 +328,12 @@ public:
 
     inline date_time start_of_year()
     {
-        return date_time(year(), 1, 1);
+        return date_time(tm_.date().year(), 1, 1);
     }
 
     inline date_time end_of_year()
     {
-        return date_time(year(), 12, 31, 23, 59, 59);
+        return date_time(tm_.date().year(), 12, 31, 23, 59, 59);
     }
 
     inline date_time next_day()
@@ -341,7 +341,7 @@ public:
         return date_time(tm_.date() + boost::gregorian::date_duration(1));
     }
 
-    inline date_time next_day_n(unsigned int n)
+    inline date_time next_day_n(unsigned long n)
     {
         return date_time(tm_.date() + boost::gregorian::date_duration(n));
     }
@@ -351,7 +351,7 @@ public:
         return date_time(tm_.date() - boost::gregorian::date_duration(1));
     }
 
-    inline date_time pre_day_n(unsigned int n)
+    inline date_time pre_day_n(unsigned long n)
     {
         return date_time(tm_.date() - boost::gregorian::date_duration(n));
     }
@@ -361,28 +361,28 @@ public:
         return date_time(tm_.date().end_of_month() + boost::gregorian::date_duration(1));
     }
 
-    inline date_time next_month_n(unsigned int n)
+    inline date_time next_month_n(unsigned long n)
     {
         date_time dt = *this;
-        for (unsigned int i = 0; i < n; i++) {
+        for (unsigned long i = 0; i < n; i++)
             dt = dt.next_month();
-        }
+
         return dt;
     }
 
     inline date_time pre_month()
     {
-        auto y = year();
+        auto y = tm_.date().year();
         auto m = tm_.date().month();
         return m == 1 ? date_time(y - 1, 12, 1) : date_time(y, m - 1, 1);
     }
 
-    inline date_time pre_month_n(unsigned int n)
+    inline date_time pre_month_n(uint64_t n)
     {
         date_time dt = *this;
-        for (unsigned int i = 0; i < n; i++) {
+        for (uint64_t i = 0; i < n; i++)
             dt = dt.pre_month();
-        }
+
         return dt;
     }
 
@@ -393,12 +393,12 @@ public:
         return dt.start_of_day();
     }
 
-    inline date_time next_quarter_n(unsigned int n)
+    inline date_time next_quarter_n(uint64_t n)
     {
         date_time dt = *this;
-        for (auto i = 0; i < n; i++) {
+        for (uint64_t i = 0; i < n; i++) 
             dt = dt.next_quarter();
-        }
+
         return dt;
     }
 
@@ -409,12 +409,12 @@ public:
         return dt.start_of_quarter();
     }
 
-    inline date_time pre_quarter_n(unsigned int n)
+    inline date_time pre_quarter_n(uint64_t n)
     {
         date_time dt = *this;
-        for (auto i = 0; i < n; i++) {
+        for (uint64_t i = 0; i < n; i++) 
             dt = dt.pre_quarter();
-        }
+
         return dt;
     }
 
@@ -424,12 +424,12 @@ public:
         return date_time(dt.tm_ + boost::gregorian::date_duration(1)).start_of_day();
     }
 
-    inline date_time next_half_year_n(unsigned int n)
+    inline date_time next_half_year_n(uint64_t n)
     {
         date_time dt = *this;
-        for (auto i = 0; i < n; i++) {
+        for (uint64_t i = 0; i < n; i++) 
             dt = dt.next_half_year();
-        }
+
         return dt;
     }
 
@@ -439,12 +439,12 @@ public:
         return date_time(dt.tm_ - boost::gregorian::date_duration(1)).start_of_half_year();
     }
 
-    inline date_time pre_half_year_n(unsigned int n)
+    inline date_time pre_half_year_n(uint64_t n)
     {
         date_time dt = *this;
-        for (auto i = 0; i < n; i++) {
+        for (uint64_t i = 0; i < n; i++) 
             dt = dt.pre_half_year();
-        }
+
         return dt;
     }
 
@@ -454,26 +454,26 @@ public:
         return date_time(dt.tm_ + boost::gregorian::date_duration(1)).start_of_day();
     }
 
-    inline date_time next_year_n(unsigned int n)
+    inline date_time next_year_n(uint64_t n)
     {
         date_time dt = *this;
-        for (auto i = 0; i < n; i++) {
+        for (uint64_t i = 0; i < n; i++) 
             dt = dt.next_year();
-        }
+
         return dt;
     }
 
     inline date_time pre_year()
     {
-        return date_time(year() - 1, 1, 1);
+        return date_time(tm_.date().year() - 1, 1, 1);
     }
 
-    inline date_time pre_year_n(unsigned int n)
+    inline date_time pre_year_n(uint64_t n)
     {
         date_time dt = *this;
-        for (auto i = 0; i < n; i++) {
+        for (uint64_t i = 0; i < n; i++) 
             dt = dt.pre_year();
-        }
+
         return dt;
     }
 

@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 // __DATE__:[Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sept, Oct, Nov, Dec] 2 2024
 // __TIME__:17:37:21
@@ -43,21 +44,13 @@
 #define COMPILE_TIME_LEN 20
 #endif
 
-#if defined(__GNUC__) || defined(__clang__)
-#define _COMPILE_TIME()\
-({\
-    static char _date_time_buf[COMPILE_TIME_LEN] = {0}; \
-    memset(_date_time_buf, 0, COMPILE_TIME_LEN); \
-    sprintf(_date_time_buf, COMPILE_TIME_FMT, COMPILE_YEAR, COMPILE_MONTH, COMPILE_DAY, COMPILE_HOUR, COMPILE_MINUTE, COMPILE_SECOND); \
-    _date_time_buf; \
-})
-#else
-const char* _COMPILE_TIME(void) {
+inline const char* _COMPILE_TIME() {
     static char _date_time_buf[COMPILE_TIME_LEN] = {0};
-    snprintf(_date_time_buf, COMPILE_TIME_LEN, COMPILE_TIME_FMT, COMPILE_YEAR, COMPILE_MONTH, COMPILE_DAY, COMPILE_HOUR, COMPILE_MINUTE, COMPILE_SECOND);
+    snprintf(_date_time_buf, COMPILE_TIME_LEN, COMPILE_TIME_FMT,
+             COMPILE_YEAR, COMPILE_MONTH, COMPILE_DAY,
+             COMPILE_HOUR, COMPILE_MINUTE, COMPILE_SECOND);
     return _date_time_buf;
 }
-#endif
 #define COMPILE_TIME _COMPILE_TIME()
 
 

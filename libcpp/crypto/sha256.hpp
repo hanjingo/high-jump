@@ -20,10 +20,14 @@
 #define SHA256_HPP
 
 // disable msvc safe check warning
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 
 // support deprecated api for low version openssl
+#ifndef OPENSSL_SUPPRESS_DEPRECATED
 #define OPENSSL_SUPPRESS_DEPRECATED
+#endif
 
 #include <iostream>
 #include <vector>
@@ -40,9 +44,9 @@ class sha256
 {
 public:
     static bool encode(unsigned char* dst, 
-                       unsigned long& dst_len,
+                       std::size_t& dst_len,
                        const unsigned char* src, 
-                       const unsigned long src_len)
+                       const std::size_t src_len)
     {
         if (dst_len < SHA256_DIGEST_LENGTH )
             return false;
@@ -102,7 +106,7 @@ public:
     };
 
     // reserve encode dst buf size
-	static unsigned long encode_len_reserve()
+	static std::size_t encode_len_reserve()
 	{
 		return SHA256_DIGEST_LENGTH;
 	}

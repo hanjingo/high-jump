@@ -203,16 +203,14 @@ public:
                : boost::filesystem::create_directory(boost::filesystem::path(path));
     }
 
-    static bool make_file(const std::string& file, bool recursive = true)
+    static bool make_file(const std::string& file)
     {
-        if (boost::filesystem::exists(boost::filesystem::path(file))) {
+        if (boost::filesystem::exists(boost::filesystem::path(file))) 
             return false;
-        }
 
         std::ofstream fs(file);
-        if (!fs.is_open()) {
+        if (!fs.is_open())
             return false;
-        }
 
         fs.close();
         return true;

@@ -5,6 +5,11 @@ project(tests)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# utf-8 support
+if (MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)

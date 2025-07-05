@@ -26,7 +26,7 @@ namespace libcpp
 
 class logger;
 
-enum log_lvl : int {
+enum class log_lvl : int {
     log_lvl_trace = 0,
     log_lvl_debug,
     log_lvl_info,
@@ -73,7 +73,7 @@ public:
             base_ = std::make_shared<spdlog::logger>(name, sinks.begin(), sinks.end());
         }
 
-        base_->set_level(spdlog::level::level_enum(log_lvl_trace));
+        base_->set_level(spdlog::level::level_enum(log_lvl::log_lvl_trace));
     }
 
     ~logger()
@@ -114,7 +114,7 @@ public:
 
     inline const std::string& name() { return base_->name(); }
 
-    inline void add_sink(const sink_ptr_t&& sink)
+    inline void add_sink(sink_ptr_t&& sink)
     {
         std::lock_guard<std::mutex> lock(log_mu);
         base_->sinks().push_back(std::move(sink));
@@ -133,10 +133,10 @@ public:
     
     inline void set_level(const libcpp::log_lvl lvl)
     {
-        base_->set_level(spdlog::level::level_enum(lvl));
+        base_->set_level(static_cast<spdlog::level::level_enum>(static_cast<int>(lvl)));
     }
 
-    inline const log_lvl get_level()
+    inline log_lvl get_level()
     {
         return static_cast<log_lvl>(base_->level());
     }
@@ -154,7 +154,7 @@ public:
 
     inline void flush_on(const log_lvl lvl)
     {
-        base_->flush_on(spdlog::level::level_enum(lvl));
+        base_->flush_on(static_cast<spdlog::level::level_enum>(static_cast<int>(lvl)));
     }
 
 public:

@@ -27,19 +27,25 @@ public:
     
 public:
     explicit db_conn_pool(const std::size_t sz, make_conn_t&& make)
-        : make_{std::move(make)}
-        , check_{[](conn_ptr_t)->bool{ return true; }}
+        : pool_{}
+        , cond_{}
+        , mu_{}
         , capa_{sz}
+        , make_{std::move(make)}
+        , check_{[](conn_ptr_t)->bool{ return true; }}
     {
-        for (int i = 0; i < sz; ++i)
+        for (std::size_t i = 0; i < sz; ++i)
             pool_.push(make_());
     }
     explicit db_conn_pool(const std::size_t sz, make_conn_t&& make, check_conn_t&& check)
-        : make_{std::move(make)}
-        , check_{std::move(check)}
+        : pool_{}
+        , cond_{}
+        , mu_{}
         , capa_{sz}
+        , make_{std::move(make)}
+        , check_{std::move(check)}
     {
-        for (int i = 0; i < sz; ++i)
+        for (std::size_t i = 0; i < sz; ++i)
             pool_.push(make_());
     }
     ~db_conn_pool()

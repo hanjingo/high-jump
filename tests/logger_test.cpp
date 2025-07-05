@@ -37,8 +37,8 @@ TEST(logger, clear_sink)
 
 TEST(logger, set_level)
 {
-    libcpp::logger::instance()->set_level(libcpp::log_lvl_info);
-    ASSERT_EQ(libcpp::logger::instance()->get_level() == libcpp::log_lvl_info, true);
+    libcpp::logger::instance()->set_level(libcpp::log_lvl::log_lvl_info);
+    ASSERT_EQ(libcpp::logger::instance()->get_level() == libcpp::log_lvl::log_lvl_info, true);
 }
 
 TEST(logger, get_level)
@@ -61,7 +61,7 @@ TEST(logger, flush_on)
     libcpp::logger::instance()->add_sink(libcpp::logger::create_stdout_sink());
     libcpp::logger::instance()->info("test flush_on with debug lvl");
     libcpp::logger::instance()->info("test flush_on with info lvl");
-    libcpp::logger::instance()->flush_on(libcpp::log_lvl_info);
+    libcpp::logger::instance()->flush_on(libcpp::log_lvl::log_lvl_info);
 }
 
 TEST(logger, trace)

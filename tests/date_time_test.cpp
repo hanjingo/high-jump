@@ -3,8 +3,6 @@
 
 TEST(date_time, date_time)
 {
-    libcpp::date_time dt1();
-
     libcpp::date_time dt2(2023, 1, 1);
     ASSERT_EQ(dt2.is_null(), false);
 }
@@ -12,14 +10,32 @@ TEST(date_time, date_time)
 TEST(date_time, now)
 {
     std::time_t tm = std::time(nullptr);
-    std::localtime(&tm);
+    std::tm tm_buf;
+#if defined(_WIN32)
+    localtime_s(&tm_buf, &tm);
+#else
+    localtime_r(&tm, &tm_buf);
+#endif
     ASSERT_EQ(libcpp::date_time::now().time(), tm);
 }
 
 TEST(date_time, today)
 {
     std::time_t tm = std::time(nullptr);
-    std::localtime(&tm);
+    std::tm tm_buf;
+#if defined(_WIN32)
+    localtime_s(&tm_buf, &tm);
+#else
+    localtime_r(&tm, &tm_buf);
+#endif
+
+    libcpp::date_time today = libcpp::date_time::today();
+    ASSERT_EQ(today.year(), tm_buf.tm_year + 1900);
+    ASSERT_EQ(today.month(), tm_buf.tm_mon + 1);
+    ASSERT_EQ(today.day(), tm_buf.tm_mday);
+    ASSERT_EQ(today.hour(), 0);
+    ASSERT_EQ(today.minute(), 0);
+    ASSERT_EQ(today.seconds(), 0);
 }
 
 TEST(date_time, format)
@@ -68,7 +84,12 @@ TEST(date_time, date)
 TEST(date_time, time)
 {
     std::time_t tm = std::time(nullptr);
-    std::localtime(&tm);
+    std::tm tm_buf;
+#if defined(_WIN32)
+    localtime_s(&tm_buf, &tm);
+#else
+    localtime_r(&tm, &tm_buf);
+#endif
     ASSERT_EQ(libcpp::date_time(tm).time(), tm);
 }
 

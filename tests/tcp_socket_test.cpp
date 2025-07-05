@@ -165,6 +165,7 @@ TEST(tcp_socket, connect)
             ASSERT_EQ(sock != nullptr, true);
             accept_times++;
             sock->close();
+            delete sock;
         }
     });
 
@@ -195,12 +196,14 @@ TEST(tcp_socket, async_connect)
         ASSERT_EQ(sock != nullptr, true);
         accept_times++;
         sock->close();
+        delete sock;
 
         li.async_accept(10091, [&accept_times](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock){
             ASSERT_EQ(err.failed(), false);
             ASSERT_EQ(sock != nullptr, true);
             accept_times++;
             sock->close();
+            delete sock;
         });
     });
 
@@ -236,6 +239,8 @@ TEST(tcp_socket, disconnect)
         {
             auto sock = li.accept(10091);
             ASSERT_EQ(sock != nullptr, true);
+
+            delete sock;
         }
     });
 
@@ -278,6 +283,7 @@ TEST(tcp_socket, send)
                 ASSERT_EQ(true, false);
 
             sock->close();
+            delete sock;
         }
     });
 
@@ -347,6 +353,7 @@ TEST(tcp_socket, recv)
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char*>(std::string("harry").c_str()), 6) == 6, true);
             sock->close();
+            delete sock;
         }
     });
 
@@ -385,6 +392,7 @@ TEST(tcp_socket, recv_until)
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char*>(std::string("harry").c_str()), 6) == 6, true);
             sock->close();
+            delete sock;
         }
         li.close();
     });
@@ -420,9 +428,11 @@ TEST(tcp_socket, async_recv)
         libcpp::tcp_listener li{io};
         unsigned char buf[1024];
         std::size_t nrecved = 0;
-        li.async_accept(10091, [&buf, &nrecved](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
+        libcpp::tcp_socket* sock_ptr = nullptr;
+        li.async_accept(10091, [&buf, &nrecved, &sock_ptr](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
             ASSERT_EQ(err.failed(), false);
             ASSERT_EQ(sock->is_connected(), true);
+            sock_ptr = sock;
 
             sock->async_recv(buf, 1024, [&buf, &nrecved](const libcpp::tcp_socket::err_t& err, std::size_t sz){
                 ASSERT_EQ(err.failed(), false);
@@ -439,6 +449,7 @@ TEST(tcp_socket, async_recv)
 
         io.run_for(std::chrono::milliseconds(100));
         ASSERT_EQ(nrecved, 10);
+        delete sock_ptr;
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));

@@ -230,7 +230,7 @@ private:
             return;
         }
         w_buf_.commit(sz);
-        BUF_PRINT(this->w_buf_);
+        BUF_PRINT(this->w_buf_, true);
 
         sock_->async_send(data, sz, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
         if (send_handler_)
@@ -249,7 +249,7 @@ private:
         {
             this->r_buf_.commit(sz);
             is_recving_.store(false);
-            BUF_PRINT(this->r_buf_);
+            BUF_PRINT(this->r_buf_, true);
         }
 
         msg_ptr_t msg = nullptr;
@@ -308,7 +308,7 @@ private:
             }
 
             w_buf_.commit(sz);
-            BUF_PRINT(this->w_buf_);
+            BUF_PRINT(this->w_buf_, true);
 
             nsend = sock_->send(w_buf_.data());
             if (nsend < sz) // send fail, exit
@@ -346,7 +346,7 @@ private:
             if (sz > 0) 
             { 
                 r_buf_.consume(sz);
-                BUF_PRINT(this->r_buf_);
+                BUF_PRINT(this->r_buf_, true);
                 if (recv_handler_)
                     recv_handler_(this, msg);
 

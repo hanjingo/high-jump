@@ -26,7 +26,7 @@ public:
 
 public:
     tcp_dialer() = delete;
-    explicit tcp_dialer(io_t& io, const std::size_t sz = 0)
+    explicit tcp_dialer(io_t& io)
         : io_{io}
     {
     }

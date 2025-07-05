@@ -12,7 +12,7 @@ TEST(sha256, encode)
 
     unsigned char src[] = { 'a', 'b', 'c'};
     unsigned char dst[1024];
-    unsigned long dst_len = 1024;
+    std::size_t dst_len = 1024;
     ASSERT_EQ(libcpp::sha256::encode(dst, dst_len, src, 3), true);
     std::string sha256_encoded;
     sha256_encoded.assign((char*)dst, dst_len);

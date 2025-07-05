@@ -62,6 +62,7 @@ TEST(string_util, from_wstring)
 TEST(string_util, from_ptr_addr)
 {
     std::string* ptr = new std::string("hello");
+
     // not hex
     std::string str = libcpp::string_util::from_ptr_addr(ptr, false);
     ASSERT_EQ(static_cast<uintptr_t>(std::stoull(str, nullptr, 10)), reinterpret_cast<uintptr_t>(ptr));
@@ -69,6 +70,8 @@ TEST(string_util, from_ptr_addr)
     // for hex
     std::string str_hex = libcpp::string_util::from_ptr_addr(ptr, true);
     ASSERT_EQ(static_cast<uintptr_t>(std::stoull(str_hex, nullptr, 16)), reinterpret_cast<uintptr_t>(ptr));
+
+    delete ptr;
 }
 
 TEST(string_util, fmt)

@@ -13,7 +13,7 @@ TEST(dbuffer, read)
     std::vector<int> buf2{0, 0, 0};
     ASSERT_EQ(dbuf.write(buf1), true);
     ASSERT_EQ(dbuf.read(buf2), true);
-    for (int i = 0; i < buf1.size(); ++i)
+    for (std::size_t i = 0; i < buf1.size(); ++i)
     {
         ASSERT_EQ(buf1[i], buf2[i]);
         ASSERT_EQ(buf2[i], i+1);
@@ -22,7 +22,7 @@ TEST(dbuffer, read)
     std::vector<int> buf3{4, 5, 6};
     ASSERT_EQ(dbuf.write(buf3), true);
     ASSERT_EQ(dbuf.read(buf2), true);
-    for (int i = 0; i < buf3.size(); ++i)
+    for (std::size_t i = 0; i < buf3.size(); ++i)
         ASSERT_EQ(buf3[i], buf2[i]);
 
     int times = 100000;

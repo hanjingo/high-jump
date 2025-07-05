@@ -29,10 +29,14 @@ namespace libcpp
 class hex
 {
 public:
+    static const bool upper_case = true;
+    static const bool lower_case = false;
+
+public:
     template<typename T>
     static T from(const std::string& str)
     {
-        return libcpp::hex::from_str<T>(str.c_str());
+        return libcpp::hex::from<T>(str.c_str());
     }
 
     template<typename T>
@@ -45,12 +49,12 @@ public:
         return t;
     }
 
-    static std::ostream& from(std::ostream& out, std::istream& in, bool upper_case = true)
+    static std::ostream& from(std::ostream& out, std::istream& in, bool fmt = upper_case)
     {
         if (!in.good())
             return out;
 
-        out << (upper_case ? std::uppercase : std::nouppercase) << std::hex;
+        out << (fmt ? std::uppercase : std::nouppercase) << std::hex;
         char c1, c2;
         while (true) 
         {
@@ -76,28 +80,28 @@ public:
         return out;
     }
 
-    template<typename RET, typename T>
-    static RET to(const T& t, bool upper_case = true)
+    template<typename T>
+    static std::string to(const T& t, bool fmt = upper_case)
     {
         std::ostringstream ss;
-        ss << (upper_case ? std::uppercase : std::nouppercase) << std::hex << t;
+        ss << (fmt ? std::uppercase : std::nouppercase) << std::hex << t;
         return ss.str();
     }
 
-    template<typename RET, typename T>
-    static RET to(const T& t, char* buf, bool upper_case = true)
+    template<typename T>
+    static char* to(char* out, const T& t, bool fmt = upper_case)
     {
-        auto str = libcpp::hex::to_str(t, upper_case);
-        memcpy(buf, str.c_str(), str.length());
-        return buf;
+        auto str = libcpp::hex::to(t, fmt);
+        memcpy(out, str.c_str(), str.length());
+        return out;
     }
 
-    static std::ostream& to(std::ostream& out, std::istream& in, bool upper_case = true)
+    static std::ostream& to(std::ostream& out, std::istream& in, bool fmt = upper_case)
     {
         if (!in.good())
             return out;
 
-        out << (upper_case ? std::uppercase : std::nouppercase) << std::hex;
+        out << (fmt ? std::uppercase : std::nouppercase) << std::hex;
         unsigned char byte;
         while (in.read(reinterpret_cast<char*>(&byte), 1)) 
         {

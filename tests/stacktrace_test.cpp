@@ -14,7 +14,6 @@ TEST(stacktrace, stacktrace)
 TEST(stacktrace, recover)
 {
     RECOVER(
-        int n = 1;
-        throw "can not set n = 1";
+        throw "throw exception";
     );
 }

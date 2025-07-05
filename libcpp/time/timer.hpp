@@ -27,8 +27,9 @@ class timer
 public:
     template <typename F>
     timer(unsigned long long us, F&& f, int64_t id = -1)
-        : tm_{io_global, boost::posix_time::microseconds(us)}
-        , id_{id}
+        : id_{id}
+        , tm_{io_global, boost::posix_time::microseconds(us)}
+        , fn_{}
     {
         auto fn = std::move(f);
         fn_ = std::bind([ = ](const boost::system::error_code & err) {
@@ -50,9 +51,9 @@ public:
     }
 
     timer(timer&& rhs)
-        : tm_{std::move(rhs.tm_)}
+        : id_{std::move(rhs.id_)}
+        , tm_{std::move(rhs.tm_)}
         , fn_{std::move(rhs.fn_)}
-        , id_{std::move(rhs.id_)}
     {}
 
     ~timer() {}

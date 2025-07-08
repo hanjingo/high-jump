@@ -4,7 +4,7 @@
 TEST(utf8, is_valid)
 {
     ASSERT_TRUE(libcpp::utf8::is_valid("hello"));
-    ASSERT_TRUE(libcpp::utf8::is_valid(u8"你好，世界"));
+    ASSERT_TRUE(libcpp::utf8::is_valid(std::string(reinterpret_cast<const char*>(u8"你好，世界"))));
     ASSERT_TRUE(libcpp::utf8::is_valid("abc\xE4\xB8\xAD\xE6\x96\x87"));
 
     ASSERT_FALSE(libcpp::utf8::is_valid("\xC3\x28"));

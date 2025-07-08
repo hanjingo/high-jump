@@ -140,7 +140,7 @@ std::string from_ptr_addr(const void* ptr, bool is_hex = true)
 template <typename... Args>
 std::string fmt(const char* style, Args&&... args)
 {
-    return fmt::format(style, std::forward<Args>(args)...);
+    return fmt::vformat(style, fmt::make_format_args(std::forward<Args>(args)...));
 }
 
 }

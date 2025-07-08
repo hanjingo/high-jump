@@ -2,9 +2,6 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(tests)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # utf-8 support
 if (MSVC)
     add_compile_options(/utf-8)
@@ -41,6 +38,7 @@ find_package(unofficial-concurrentqueue REQUIRED)
 find_package(lz4 REQUIRED)
 find_package(zstd REQUIRED)
 find_package(cityhash REQUIRED)
+find_package(OpenCL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -49,17 +47,20 @@ find_package(Boost REQUIRED COMPONENTS
     thread
 )
 
-if (WIN32)
-else()
-    # # for dpdk
-    # find_package(PkgConfig REQUIRED)
-    # pkg_check_modules(DPDK REQUIRED libdpdk)
-    # target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
+if (NOT WIN32)
+    # for dpdk
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(DPDK REQUIRED libdpdk)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
 add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
+
+if (NOT WIN32)
+    # for dpdk
+    target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
+endif()
 
 target_link_libraries(${PROJECT_NAME} 
     ${Boost_LIBRARIES} 
@@ -70,6 +71,7 @@ target_link_libraries(${PROJECT_NAME}
     protobuf::libprotobuf
     pugixml
     BT::behaviortree_cpp
+    OpenCL::OpenCL
     OpenSSL::SSL 
     OpenSSL::Crypto
     pugixml
@@ -106,7 +108,7 @@ else()
         cityhash
 
 #       DPDK
-#       ${DPDK_LIBRARIES}
+        ${DPDK_LIBRARIES}
     )
 endif()
 
@@ -114,6 +116,7 @@ add_test(test ${PROJECT_NAME})
 
 file(COPY cfg.ini DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY json_test.json DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+file(COPY crypto.log DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 
 add_subdirectory(dll_example)
 add_subdirectory(child)

@@ -31,7 +31,8 @@
     "spdlog",
     "sqlite3",
     "tbb",
-    "zeromq"
+    "zeromq",
+    "opencl"
   ],
   "overrides": [
     {
@@ -97,6 +98,10 @@
     {
       "name": "protobuf",
       "version": "5.29.3"
+    },
+    {
+      "name": "opencl",
+      "version": "2024.10.24"
     },
     {
       "name": "openssl",

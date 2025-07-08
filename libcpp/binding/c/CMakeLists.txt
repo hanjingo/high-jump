@@ -6,8 +6,6 @@ find_package(Boost REQUIRED)
 # find_package(pugixml REQUIRED)
 find_package(concurrentqueue REQUIRED)
 
-set(CMAKE_CXX_STANDARD 11)
-
 add_definitions(-DLIBCPP_EXPORT)
 
 if (NOT SHARED_NAME)

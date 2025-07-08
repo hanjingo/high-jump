@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include <libcpp/crypto/aes.hpp>
-#include <libcpp/log/logger.hpp>
 
 #include <iostream>
 #include <sstream>
@@ -1196,14 +1195,9 @@ TEST(aes, encode_file)
     std::string key192 = "123456781234567812345678";
     std::string key256 = "12345678123456781234567812345678";
     std::string iv = "abcdefghabcdefgh";
-    libcpp::logger::instance()->clear_sink();
-    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./aes.log", 1 * 1024 * 1024, 1, true));
-    for (int i = 0; i < 1 * 1024; i++)
-        libcpp::logger::instance()->info("{}", i);
-    libcpp::logger::instance()->flush();
 
     // ECB padding PKCS#5
-    str_src = "./aes.log";
+    str_src = "./crypto.log";
     str_dst = "./aes_ecb_pkcs5_padding_encode.log";
     ASSERT_EQ(libcpp::aes::encode_file(std::string("./aes_ecb_pkcs5_padding_encode.log"), str_src, 
         key128, libcpp::aes::cipher::aes_128_ecb, libcpp::aes::padding::aes_pkcs5_padding, iv), true);
@@ -1218,11 +1212,6 @@ TEST(aes, decode_file)
     std::string key192 = "123456781234567812345678";
     std::string key256 = "12345678123456781234567812345678";
     std::string iv = "abcdefghabcdefgh";
-    libcpp::logger::instance()->clear_sink();
-    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./aes.log", 1 * 1024 * 1024, 1, true));
-    for (int i = 0; i < 1 * 1024; i++)
-        libcpp::logger::instance()->info("{}", i);
-    libcpp::logger::instance()->flush();
 
     // ECB padding PKCS#5
     str_src = "./aes_ecb_pkcs5_padding_encode.log";

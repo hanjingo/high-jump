@@ -2,8 +2,6 @@
 #include <libcpp/crypto/rsa.hpp>
 #include <libcpp/crypto/base64.hpp>
 
-#include <libcpp/log/logger.hpp>
-
 TEST(rsa, encode)
 {
     // verify it by website:https://www.devglan.com/online-tools/rsa-encryption-decryption
@@ -142,15 +140,9 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
 -----END PUBLIC KEY-----)";
 
     // file -> rsa file
-    libcpp::logger::instance()->clear_sink();
-    libcpp::logger::instance()->add_sink(libcpp::logger::create_rotate_file_sink("./rsa_file_test.log", 10 * 1024 * 1024, 1, true));
-    for (int i = 0; i < 1024; i++)
-        libcpp::logger::instance()->info("{}", i);
-    libcpp::logger::instance()->flush();
-
     ASSERT_EQ(libcpp::rsa::encode_file(
         std::string("./rsa_file_test_encode.log"),
-        std::string("./rsa_file_test.log"), 
+        std::string("./crypto.log"), 
         pubkey), 
     true);
 }

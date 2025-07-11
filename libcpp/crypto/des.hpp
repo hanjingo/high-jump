@@ -93,7 +93,7 @@ public:
                 memcpy(dst + idx, block, 8);
             }
             std::size_t remain = src_len - idx;
-            if (remain > 0) 
+            if (remain > 0 || is_need_padding_(pad_style)) 
             {
                 unsigned char last_block[8];
                 padding_block_(last_block, 8, src + idx, remain, pad_style);
@@ -122,7 +122,7 @@ public:
                 memcpy(iv_block, block, 8);
             }
             std::size_t remain = src_len - idx;
-            if (remain > 0) 
+            if (remain > 0 || is_need_padding_(pad_style)) 
             {
                 unsigned char last_block[8];
                 padding_block_(last_block, 8, src + idx, remain, pad_style);

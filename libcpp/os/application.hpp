@@ -74,7 +74,7 @@ public:
             if (vm.count(key))
                 ret = vm[key].as<T>();
             return ret;
-        } catch (const std::exception& e) {
+        } catch (...) {
             return ret;
         }
     }

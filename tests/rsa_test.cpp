@@ -161,12 +161,14 @@ MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9
     true);
 }
 
-TEST(rsa, make_key_pair_x509)
+TEST(rsa, make_key_pair)
 {
     std::string prikey;
     std::string pubkey;
+    std::string passwd = "test123456";
     std::string plain = "hello world";
-    ASSERT_EQ(libcpp::rsa::make_key_pair_x509(pubkey, prikey, 2048), true);
+    ASSERT_EQ(libcpp::rsa::make_key_pair(pubkey, prikey, 2048, libcpp::rsa::key_format::x509, 
+        libcpp::rsa::cipher::aes_256_cbc, passwd), true);
 
     unsigned char encoded[4096];
     std::size_t encoded_len = 4096;
@@ -175,7 +177,8 @@ TEST(rsa, make_key_pair_x509)
                                   reinterpret_cast<const unsigned char*>(plain.c_str()),
                                   plain.size(), 
                                   reinterpret_cast<unsigned char*>(pubkey.data()),
-                                  pubkey.size()), 
+                                  pubkey.size(),
+                                  libcpp::rsa::padding::pkcs1), 
         true);
 
     unsigned char decoded[4096];
@@ -184,8 +187,11 @@ TEST(rsa, make_key_pair_x509)
                                   decoded_len,
                                   encoded, 
                                   encoded_len, 
-                                  reinterpret_cast<unsigned char*>(prikey.data()), 
-                                  prikey.size()), 
+                                  reinterpret_cast<const unsigned char*>(prikey.data()), 
+                                  prikey.size(),
+                                  libcpp::rsa::padding::pkcs1,
+                                  reinterpret_cast<const unsigned char*>(passwd.c_str()),
+                                  passwd.size()), 
         true);
 
     std::string decoded_str;
@@ -202,7 +208,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     ASSERT_EQ(libcpp::rsa::is_pubkey_valid(
         reinterpret_cast<const unsigned char*>(pubkey1.c_str()),
         pubkey1.size(),
-        RSA_PKCS1_PADDING), 
+        libcpp::rsa::padding::pkcs1), 
     true);
 
     std::string pubkey2 = R"(MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==)";
@@ -210,7 +216,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     ASSERT_EQ(libcpp::rsa::is_pubkey_valid(
         reinterpret_cast<const unsigned char*>(pubkey2.c_str()),
         pubkey2.size(),
-        RSA_PKCS1_PADDING), 
+        libcpp::rsa::padding::pkcs1), 
     false);
 }
 
@@ -223,7 +229,7 @@ MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9
     ASSERT_EQ(libcpp::rsa::is_prikey_valid(
         reinterpret_cast<const unsigned char*>(prikey1.c_str()),
         prikey1.size(),
-        RSA_PKCS1_PADDING), 
+        libcpp::rsa::padding::pkcs1), 
     true);
 
     std::string prikey2 = R"(MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9/CJtqi8S07DgthGvs+XxHeTA6R8vPKqIykZgNgp0sJsJXHOKKNtDnQIDAQABAkAGmXeWJvr3ynnQTWWRvF09hCKSeZFmOkOHz8D/JOXONAxYOPkpNVu3sShS/ccyGMQKjSHEa5Zyo0S9k/vwl+7xAiEAz6bkXHsaut7Sk2Ze4/MZZuRhR6LqE7Q9Y/ecyGyTDFECIQC2F7HqA0RB2PhuD37Gb3JkB1HNUdro9Fj6wVYATXYLjQIgSOP/k0sPRfuDlYRA2OlzyD9wunHAkywYxKednGkocRECIGsm1F31YCQzbjUtzxcsG687E2rz4RK2PuoH/PienHk9AiBIE54w2swcy1YcaL3MnZDN6eWVFYRTZXeue74hbpZ27A==)";
@@ -231,6 +237,6 @@ MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9
     ASSERT_EQ(libcpp::rsa::is_prikey_valid(
         reinterpret_cast<const unsigned char*>(prikey2.c_str()),
         prikey2.size(),
-        RSA_PKCS1_PADDING), 
+        libcpp::rsa::padding::pkcs1), 
     false);
 }

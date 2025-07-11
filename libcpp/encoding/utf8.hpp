@@ -52,7 +52,7 @@ bool is_valid(const std::string& str)
     return true;
 }
 
-std::ostream& from(std::ostream& out, std::wistream& in)
+std::ostream& decode(std::ostream& out, std::wistream& in)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     wchar_t wc;
@@ -61,7 +61,7 @@ std::ostream& from(std::ostream& out, std::wistream& in)
         try {
             std::string utf8 = converter.to_bytes(wc);
             out << utf8;
-        } catch (const std::range_error& e) {
+        } catch (...) {
             out << "?"; // bad char
         }
     }
@@ -70,13 +70,13 @@ std::ostream& from(std::ostream& out, std::wistream& in)
     return out;
 }
 
-std::string from(const std::wstring& str)
+std::string decode(const std::wstring& str)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
     return cvt.to_bytes(str);
 }
 
-unsigned char* from(unsigned char* out, const wchar_t* in)
+unsigned char* decode(unsigned char* out, const wchar_t* in)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     std::wstring wstr(in);
@@ -86,7 +86,7 @@ unsigned char* from(unsigned char* out, const wchar_t* in)
     return out;
 }
 
-std::wostream& to(std::wostream& out, std::istream& in)
+std::wostream& encode(std::wostream& out, std::istream& in)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     std::string buffer;
@@ -97,7 +97,7 @@ std::wostream& to(std::wostream& out, std::istream& in)
         try {
             std::wstring wstr = converter.from_bytes(buffer);
             out.write(wstr.data(), wstr.size());
-        } catch (const std::range_error&) {
+        } catch (...) {
             wchar_t bad = L'?';
             out.write(&bad, 1);
         }
@@ -106,13 +106,13 @@ std::wostream& to(std::wostream& out, std::istream& in)
     return out;
 }
 
-std::wstring to(const std::string& str)
+std::wstring encode(const std::string& str)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
     return cvt.from_bytes(str);
 }
 
-wchar_t* to(wchar_t* out, const unsigned char* in)
+wchar_t* encode(wchar_t* out, const unsigned char* in)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     std::string str(reinterpret_cast<const char*>(in));

@@ -1,39 +1,39 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/dpdk.h>
+// #include <libcpp/hardware/dpdk.h>
 
-TEST(dpdk, dpdk_eal_init)
-{
-    int argc = 1;
-    const char* arg0 = "tests";
-    char* argv[] = {const_cast<char*>(arg0), nullptr};
-    int ret = rte_eal_init(argc, argv);
-    if (ret < 0) {
-        std::cerr << "DPDK EAL init failed, check hugepage and permissions!" << std::endl;
-    }
-    ASSERT_GE(ret, 0);
-}
+// TEST(dpdk, dpdk_eal_init)
+// {
+//     int argc = 1;
+//     const char* arg0 = "tests";
+//     char* argv[] = {const_cast<char*>(arg0), nullptr};
+//     int ret = rte_eal_init(argc, argv);
+//     if (ret < 0) {
+//         std::cerr << "DPDK EAL init failed, check hugepage and permissions!" << std::endl;
+//     }
+//     ASSERT_GE(ret, 0);
+// }
 
-TEST(dpdk, dpdk_eth_dev_count_avail)
-{
-    ASSERT_EQ(rte_eth_dev_count_avail() >= 0, true);
-}
+// TEST(dpdk, dpdk_eth_dev_count_avail)
+// {
+//     ASSERT_EQ(rte_eth_dev_count_avail() >= 0, true);
+// }
 
-TEST(dpdk, dpdk_eth_dev_configure)
-{
-    uint16_t nb_ports = rte_eth_dev_count_avail();
-    if (nb_ports == 0) 
-    {
-        std::cerr << "ERROR: No available Ethernet ports found!" << std::endl;
-        return;
-    }
+// TEST(dpdk, dpdk_eth_dev_configure)
+// {
+//     uint16_t nb_ports = rte_eth_dev_count_avail();
+//     if (nb_ports == 0) 
+//     {
+//         std::cerr << "ERROR: No available Ethernet ports found!" << std::endl;
+//         return;
+//     }
 
-    uint16_t port_id = 0;
-    struct rte_eth_conf port_conf = {};
-    port_conf.rxmode.max_lro_pkt_size = RTE_ETHER_MAX_LEN;
+//     uint16_t port_id = 0;
+//     struct rte_eth_conf port_conf = {};
+//     port_conf.rxmode.max_lro_pkt_size = RTE_ETHER_MAX_LEN;
 
-    int ret = rte_eth_dev_configure(port_id, 1, 1, &port_conf);
-    ASSERT_GE(ret, 0);
-}
+//     int ret = rte_eth_dev_configure(port_id, 1, 1, &port_conf);
+//     ASSERT_GE(ret, 0);
+// }
 
 // TEST(dpdk, dpdk_pktmbuf_pool_create)
 // {

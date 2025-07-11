@@ -3,8 +3,18 @@
 
 TEST(date_time, date_time)
 {
+    libcpp::date_time dt1;
     libcpp::date_time dt2(2023, 1, 1);
-    ASSERT_EQ(dt2.is_null(), false);
+    libcpp::date_time dt3(2024, 1, 1);
+    ASSERT_TRUE(dt1 != dt2);
+
+    dt1 = dt2;
+    ASSERT_TRUE(dt1 == dt2);
+
+    ASSERT_TRUE(dt2 < dt3);
+    ASSERT_TRUE(dt2 <= dt3);
+    ASSERT_TRUE(dt3 > dt2);
+    ASSERT_TRUE(dt3 >= dt2);
 }
 
 TEST(date_time, now)
@@ -16,7 +26,9 @@ TEST(date_time, now)
 #else
     localtime_r(&tm, &tm_buf);
 #endif
-    ASSERT_EQ(libcpp::date_time::now().time(), tm);
+    ASSERT_EQ(libcpp::date_time::now(libcpp::timezone::UTC).time(), tm);
+
+    ASSERT_TRUE(libcpp::date_time::now(libcpp::timezone::BEIJING).time() > libcpp::date_time::now(libcpp::timezone::UTC).time());
 }
 
 TEST(date_time, today)
@@ -31,7 +43,7 @@ TEST(date_time, today)
 
     libcpp::date_time today = libcpp::date_time::today();
     ASSERT_EQ(today.year(), tm_buf.tm_year + 1900);
-    ASSERT_EQ(today.month(), tm_buf.tm_mon + 1);
+    ASSERT_EQ(today.month(), static_cast<libcpp::moon>(tm_buf.tm_mon + 1));
     ASSERT_EQ(today.day(), tm_buf.tm_mday);
     ASSERT_EQ(today.hour(), 0);
     ASSERT_EQ(today.minute(), 0);
@@ -65,8 +77,20 @@ TEST(date_time, parse)
 
 TEST(date_time, is_null)
 {
-    ASSERT_EQ(libcpp::date_time::now().is_null(), false);
-    ASSERT_EQ(libcpp::date_time().is_null(), true);
+    ASSERT_FALSE(libcpp::date_time::now().is_null());
+    ASSERT_TRUE(libcpp::date_time().is_null());
+}
+
+TEST(date_time, is_working_day)
+{
+    ASSERT_FALSE(libcpp::date_time(2025, 7, 12).is_working_day());
+    ASSERT_TRUE(libcpp::date_time(2025, 7, 11).is_working_day());
+}
+
+TEST(date_time, is_weekend)
+{
+    ASSERT_TRUE(libcpp::date_time(2025, 7, 12).is_weekend());
+    ASSERT_FALSE(libcpp::date_time(2025, 7, 11).is_weekend());
 }
 
 TEST(date_time, string)
@@ -79,6 +103,13 @@ TEST(date_time, string)
 
 TEST(date_time, date)
 {
+    libcpp::date_time dt(2023, 1, 1, 0, 0, 0);
+    ASSERT_EQ(dt.date().tm_year + 1900, 2023);
+    ASSERT_EQ(dt.date().tm_mon + 1, 1);
+    ASSERT_EQ(dt.date().tm_mday, 1);
+    ASSERT_EQ(dt.date().tm_hour, 0);
+    ASSERT_EQ(dt.date().tm_min, 0);
+    ASSERT_EQ(dt.date().tm_sec, 0);
 }
 
 TEST(date_time, time)
@@ -160,7 +191,12 @@ TEST(date_time, days_to)
 
 TEST(date_time, day_of_week)
 {
-    ASSERT_EQ(libcpp::date_time(2023, 1, 31, 0, 0, 0).day_of_week(), libcpp::tuesday);
+    ASSERT_TRUE(libcpp::date_time(2023, 1, 31, 0, 0, 0).day_of_week() == libcpp::week_day::tuesday);
+}
+
+TEST(date_time, day_of_week_str)
+{
+    ASSERT_TRUE(libcpp::date_time(2023, 1, 31, 0, 0, 0).day_of_week_str() == "Tue");
 }
 
 TEST(date_time, day_of_month)
@@ -175,7 +211,12 @@ TEST(date_time, day_of_year)
 
 TEST(date_time, month)
 {
-    ASSERT_EQ(libcpp::date_time(2023, 1, 31, 0, 0, 0).month(), 1);
+    ASSERT_EQ(libcpp::date_time(2023, 1, 31, 0, 0, 0).month(), static_cast<libcpp::moon>(1));
+}
+
+TEST(date_time, month_str)
+{
+    ASSERT_TRUE(libcpp::date_time(2023, 1, 31, 0, 0, 0).month_str() == "January");
 }
 
 TEST(date_time, year)
@@ -285,12 +326,9 @@ TEST(date_time, next_day)
         libcpp::date_time(2023, 1, 31, 12, 1, 1).next_day().time(), 
         libcpp::date_time(2023, 2, 1, 0, 0, 0).time()
     );
-}
 
-TEST(date_time, next_day_n)
-{
     ASSERT_EQ(
-        libcpp::date_time(2023, 1, 31, 12, 1, 1).next_day_n(3).time(), 
+        libcpp::date_time(2023, 1, 31, 12, 1, 1).next_day(3).time(), 
         libcpp::date_time(2023, 2, 3, 0, 0, 0).time()
     );
 }
@@ -301,13 +339,72 @@ TEST(date_time, pre_day)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_day().time(), 
         libcpp::date_time(2023, 1, 31, 0, 0, 0).time()
     );
+
+    ASSERT_EQ(
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_day(5).time(), 
+        libcpp::date_time(2023, 1, 27, 0, 0, 0).time()
+    );
 }
 
-TEST(date_time, pre_day_n)
+TEST(date_time, next_weekday)
 {
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_day_n(5).time(), 
-        libcpp::date_time(2023, 1, 27, 0, 0, 0).time()
+        libcpp::date_time(2025, 7, 12, 0, 0, 0).next_weekday(libcpp::week_day::monday).time(), 
+        libcpp::date_time(2025, 7, 14, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 12, 0, 0, 0).next_weekday(libcpp::week_day::friday).time(), 
+        libcpp::date_time(2025, 7, 18, 0, 0, 0).time()
+    );
+}
+
+TEST(date_time, pre_weekday)
+{
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 12, 0, 0, 0).pre_weekday(libcpp::week_day::monday).time(), 
+        libcpp::date_time(2025, 7, 7, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 12, 0, 0, 0).pre_weekday(libcpp::week_day::friday).time(), 
+        libcpp::date_time(2025, 7, 11, 0, 0, 0).time()
+    );
+}
+
+TEST(date_time, next_working_day)
+{
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 11).next_working_day().time(), 
+        libcpp::date_time(2025, 7, 14, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 11).next_working_day(5).time(), 
+        libcpp::date_time(2025, 7, 18, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 11).next_working_day(6).time(), 
+        libcpp::date_time(2025, 7, 21, 0, 0, 0).time()
+    );
+}
+
+TEST(date_time, pre_working_day)
+{
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 11).pre_working_day().time(),
+        libcpp::date_time(2025, 7, 10, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 11).pre_working_day(5).time(),
+        libcpp::date_time(2025, 7, 4, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2025, 7, 11).pre_working_day(10).time(),
+        libcpp::date_time(2025, 6, 27, 0, 0, 0).time()
     );
 }
 
@@ -317,12 +414,9 @@ TEST(date_time, next_month)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).next_month().time(), 
         libcpp::date_time(2023, 3, 1, 0, 0, 0).time()
     );
-}
 
-TEST(date_time, next_month_n)
-{
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_month_n(3).time(), 
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_month(3).time(), 
         libcpp::date_time(2023, 5, 1, 0, 0, 0).time()
     );
 }
@@ -333,12 +427,9 @@ TEST(date_time, pre_month)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_month().time(), 
         libcpp::date_time(2023, 1, 1, 0, 0, 0).time()
     );
-}
 
-TEST(date_time, pre_month_n)
-{
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_month_n(3).time(), 
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_month(3).time(), 
         libcpp::date_time(2022, 11, 1, 0, 0, 0).time()
     );
 }
@@ -349,13 +440,25 @@ TEST(date_time, next_quarter)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).next_quarter().time(), 
         libcpp::date_time(2023, 4, 1, 0, 0, 0).time()
     );
-}
 
-TEST(date_time, next_quarter_n)
-{
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_quarter_n(2).time(), 
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_quarter(2).time(), 
         libcpp::date_time(2023, 7, 1, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2023, 2, 15).next_quarter().time(),
+        libcpp::date_time(2023, 4, 1, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2023, 2, 15).next_quarter(2).time(),
+        libcpp::date_time(2023, 7, 1, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2023, 11, 15).next_quarter().time(),
+        libcpp::date_time(2024, 1, 1, 0, 0, 0).time()
     );
 }
 
@@ -365,13 +468,20 @@ TEST(date_time, pre_quarter)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_quarter().time(), 
         libcpp::date_time(2022, 10, 1, 0, 0, 0).time()
     );
-}
 
-TEST(date_time, pre_quarter_n)
-{
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_quarter_n(2).time(), 
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_quarter(2).time(), 
         libcpp::date_time(2022, 7, 1, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2023, 5, 15).pre_quarter().time(),
+        libcpp::date_time(2023, 1, 1, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2023, 2, 15).pre_quarter().time(),
+        libcpp::date_time(2022, 10, 1, 0, 0, 0).time()
     );
 }
 
@@ -381,13 +491,33 @@ TEST(date_time, next_half_year)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).next_half_year().time(), 
         libcpp::date_time(2023, 7, 1, 0, 0, 0).time()
     );
+
+    ASSERT_EQ(
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_half_year(3).time(), 
+        libcpp::date_time(2024, 7, 1, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2023, 3, 15).next_half_year().time(),
+        libcpp::date_time(2023, 7, 1, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2023, 9, 15).next_half_year().time(),
+        libcpp::date_time(2024, 1, 1, 0, 0, 0).time()
+    );
 }
 
-TEST(date_time, next_halfe_year_n)
+TEST(date_time, pre_half_year)
 {
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_half_year_n(3).time(), 
-        libcpp::date_time(2024, 7, 1, 0, 0, 0).time()
+        libcpp::date_time(2023, 9, 15).pre_half_year().time(),
+        libcpp::date_time(2023, 1, 1, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2023, 3, 15).pre_half_year().time(),
+        libcpp::date_time(2022, 7, 1, 0, 0, 0).time()
     );
 }
 
@@ -397,13 +527,20 @@ TEST(date_time, next_year)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).next_year().time(), 
         libcpp::date_time(2024, 1, 1, 0, 0, 0).time()
     );
-}
 
-TEST(date_time, next_year_n)
-{
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_year_n(2).time(), 
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).next_year(2).time(), 
         libcpp::date_time(2025, 1, 1, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2023, 6, 15, 12, 30, 45).next_year().time(),
+        libcpp::date_time(2024, 1, 1, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2023, 6, 15).next_year(3).time(),
+        libcpp::date_time(2026, 1, 1, 0, 0, 0).time()
     );
 }
 
@@ -413,12 +550,19 @@ TEST(date_time, pre_year)
         libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_year().time(), 
         libcpp::date_time(2022, 1, 1, 0, 0, 0).time()
     );
-}
 
-TEST(date_time, pre_year_n)
-{
     ASSERT_EQ(
-        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_year_n(2).time(), 
+        libcpp::date_time(2023, 2, 1, 12, 1, 1).pre_year(2).time(), 
+        libcpp::date_time(2021, 1, 1, 0, 0, 0).time()
+    );
+
+    ASSERT_EQ(
+        libcpp::date_time(2023, 6, 15, 12, 30, 45).pre_year().time(),
+        libcpp::date_time(2022, 1, 1, 0, 0, 0).time()
+    );
+    
+    ASSERT_EQ(
+        libcpp::date_time(2023, 6, 15).pre_year(2).time(),
         libcpp::date_time(2021, 1, 1, 0, 0, 0).time()
     );
 }

@@ -30,12 +30,13 @@ std::string to_bytes(const std::string& hex)
 
 TEST(des, encode)
 {
-    std::string str_src("hello world");
+    std::string str_src("hello world 1234");
     std::string str_dst;
     std::string key("12345678");
     std::string iv("abcdefgh");
 
     // for stream ECB padding PKCS#5 test
+    str_src = "hello world 1";
     std::istringstream in(str_src);
     std::ostringstream out;
     ASSERT_EQ(libcpp::des::encode(out, 
@@ -45,187 +46,223 @@ TEST(des, encode)
                                   libcpp::des::cipher::des_ecb, 
                                   libcpp::des::padding::des_pkcs5_padding), 
         true);
-    ASSERT_STREQ(to_hex(out.str()).c_str(), "28DBA02EB5F6DD475D82E3681C83BB77");
+    ASSERT_STREQ(to_hex(out.str()).c_str(), "28DBA02EB5F6DD47AA291D16D82146BF");
 
     // ECB padding PKCS#5
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_pkcs5_padding), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD475D82E3681C83BB77");
 
     // ECB padding PKCS#7
     str_dst.clear();
+    str_src = "hello world 1";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_pkcs7_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD475D82E3681C83BB77");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47AA291D16D82146BF");
 
     // ECB padding 0
     str_dst.clear();
+    str_src = "hello world 12";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_zero_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD476042DAEBFA59687A");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47535FFDB06574A87D");
 
     // ECB padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "hello world 123";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_iso10126_padding), true);
 
     // ECB padding ANSIX923
     str_dst.clear();
+    str_src = "hello world 1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_ansix923_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47D33696D839C770B2");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47BABFF98EFA6DB628030116F7E552E7B6");
 
     // ECB padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "hello world 12345";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_iso_iec_7816_4_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD4706B5C56593DCBE2C");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47BABFF98EFA6DB628DE3491731DCB353C");
 
     // ECB padding NOPADDING
     str_dst.clear();
+    str_src = "hello world 1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_no_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD476042DAEBFA59687A");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47BABFF98EFA6DB628");
 
     // CBC padding PKCS#5
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_pkcs5_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B0373FB9C7373EEE4D1");
 
     // CBC padding PKCS#7
     str_dst.clear();
+    str_src = "hello world 1";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B0373FB9C7373EEE4D1");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B03849FE655EE80DB80");
 
     // CBC padding 0
     str_dst.clear();
+    str_src = "hello world 12";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B036393B0FC4D701C80");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B0353E3BE76EB413AB0");
 
     // CBC padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "hello world 123";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // CBC padding ANSIX923
     str_dst.clear();
+    str_src = "hello world 1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_ansix923_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B037D1CFDBA8122DB79");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B031400731AF6B95E3BDF39AA4FBB8F6F63");
 
     // CBC padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "hello world 12345";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B03CAF03F0F1AA271F7");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B031400731AF6B95E3BC113907DECCE3490");
 
     // CBC padding NOPADDING
     str_dst.clear();
+    str_src = "hello world 1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B036393B0FC4D701C80");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B031400731AF6B95E3B");
 
     // CFB padding PKCS#5
     str_dst.clear();
+    str_src = "hello world 1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_pkcs5_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142F83354C93F");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD0763FF0EC92210E9B43584E0");
 
     // CFB padding PKCS#7
     str_dst.clear();
+    str_src = "hello world 123";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142F83354C93F");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD0763FF3B");
 
     // CFB padding 0
     str_dst.clear();
+    str_src = "hello world 12";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142FD3651CC3A");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD0763CC3A");
 
     // CFB padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "hello world 1";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // CFB padding ANSIX923
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_ansix923_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142FD3651CC3F");
 
     // CFB padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "hello world 1";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC2481427D3651CC3A");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD07D1CC3A");
 
     // CFB padding NOPADDING
     str_dst.clear();
+    str_src = "hello world 1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD0763FF0E");
 
     // OFB padding PKCS#5
     str_dst.clear();
+    str_src = "libcpp";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_pkcs5_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC3907D7ACE15B6C62");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C5B491");
 
     // OFB padding PKCS#7
     str_dst.clear();
+    str_src = "libcpp1";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC3907D7ACE15B6C62");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C58792");
 
     // OFB padding 0
     str_dst.clear();
+    str_src = "libcpp12";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC3907D7A9E45E6967");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C587A14B6BB3A9E45E6967");
 
     // OFB padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "libcpp123";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // OFB padding ANSIX923
     str_dst.clear();
+    str_src = "libcpp1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_ansix923_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC3907D7A9E45E6962");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C587A1785FB3A9E45E6961");
 
     // OFB padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "libcpp12345";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC3907D729E45E6967");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C587A1785F8629E45E6967");
 
     // OFB padding NOPADDING
     str_dst.clear();
+    str_src = "libcpp123456";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC3907D7");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C587A1785F869F");
 
     // CTR padding PKCS#5
     str_dst.clear();
+    str_src = "1";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_pkcs5_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC46D14F5AECDF0C30");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5D3446CC4B2B194");
 
     // CTR padding PKCS#7
     str_dst.clear();
+    str_src = "12";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC46D14F5AECDF0C30");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6456DC5B3B095");
 
     // CTR padding 0
     str_dst.clear();
+    str_src = "123";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC46D14F5FE9DA0935");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6706BC3B5B693");
 
     // CTR padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // CTR padding ANSIX923
     str_dst.clear();
+    str_src = "12345";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_ansix923_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC46D14F5FE9DA0930");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6705FF6B5B690");
 
     // CTR padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "123456";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC46D14FDFE9DA0935");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6705FF6833693");
 
     // CTR padding NOPADDING
     str_dst.clear();
+    str_src = "1234567";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC46D14F");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6705FF68381");
 }
 
 TEST(des, encode_n)
 {
-    std::string str_src("hello world");
+    std::string str_src("");
     std::string str_dst;
     std::string key("12345678abcdefgh00000000");
     std::string iv("abcdefgh");
 
     // for stream ECB padding PKCS#5 test
+    str_src = "hello world";
     std::istringstream in(str_src);
     std::ostringstream out;
     ASSERT_EQ(libcpp::des::encode(out, 
@@ -239,171 +276,206 @@ TEST(des, encode_n)
 
     // ECB padding PKCS#5
     str_dst.clear();
+    str_src = "1";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_pkcs5_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3E4665C52F935552F1C9C86E67880CBB");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "40C3AD88D21D2BCA");
 
     // ECB padding PKCS#7
     str_dst.clear();
+    str_src = "12";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_pkcs7_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3E4665C52F935552F1C9C86E67880CBB");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "BFA6FD1DE34FB600");
 
     // ECB padding 0
     str_dst.clear();
+    str_src = "123";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_zero_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3E4665C52F935552ED4059A86631C2ED");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "595C70C0662C2635");
 
     // ECB padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "1234";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_iso10126_padding), true);
 
     // ECB padding ANSIX923
     str_dst.clear();
+    str_src = "12345";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_ansix923_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3E4665C52F9355523559BB7793D1D266");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "B2D791C38A1AD844");
 
     // ECB padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "123456";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_iso_iec_7816_4_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3E4665C52F93555275E23EDBE984B84C");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "A1A227D1256E7C2D");
 
-    // // ECB padding NOPADDING
-    // str_dst.clear();
-    // ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_no_padding), true);
-    // ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD476042DAEBFA59687A");
+    // ECB padding NOPADDING
+    str_dst.clear();
+    str_src = "12345678";
+    ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_no_padding), true);
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "FE4ABFB5190D173D");
 
     // CBC padding PKCS#5
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_pkcs5_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E870607FEDECED97190");
 
     // CBC padding PKCS#7
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_pkcs7_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E870607FEDECED97190");
 
     // CBC padding 0
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_zero_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E875122F18A882D6318");
 
     // CBC padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // CBC padding ANSIX923
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_ansix923_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E87D3A3E13D0A9DBC1D");
 
     // CBC padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E876D62899FA608C319");
 
-    // // CBC padding NOPADDING
-    // str_dst.clear();
-    // ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_no_padding, iv), true);
-    // ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B036393B0FC4D701C80");
+    // CBC padding NOPADDING
+    str_dst.clear();
+    str_src = "hello world 1234";
+    ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_no_padding, iv), true);
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E87E5C4991F4D218550");
 
     // CFB padding PKCS#5
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_pkcs5_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5090F2BA835F");
 
     // CFB padding PKCS#7
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_pkcs7_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5090F2BA835F");
 
     // CFB padding 0
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_zero_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5095F7BF865A");
 
     // CFB padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // CFB padding ANSIX923
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_ansix923_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5095F7BF865F");
 
     // CFB padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5015F7BF865A");
 
     // CFB padding NOPADDING
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_no_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B50");
 
     // OFB padding PKCS#5
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_pkcs5_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1B96753DD5");
 
     // OFB padding PKCS#7
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_pkcs7_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1B96753DD5");
 
     // OFB padding 0
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_zero_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1E937038D0");
 
     // OFB padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // OFB padding ANSIX923
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_ansix923_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1E937038D5");
 
     // OFB padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B9E937038D0");
 
     // OFB padding NOPADDING
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_no_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B");
 
     // CTR padding PKCS#5
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_pkcs5_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF1975DDF811E");
 
     // CTR padding PKCS#7
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_pkcs7_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF1975DDF811E");
 
     // CTR padding 0
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_zero_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF19258DA841B");
 
     // CTR padding ISO10126 （random result）
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_iso10126_padding, iv), true);
 
     // CTR padding ANSIX923
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_ansix923_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF19258DA841E");
 
     // CTR padding ISO/IEC 7816-4
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF11258DA841B");
 
     // CTR padding NOPADDING
     str_dst.clear();
+    str_src = "hello world";
     ASSERT_EQ(libcpp::des::encode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_no_padding, iv), true);
     ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF1");
 }
@@ -431,21 +503,21 @@ TEST(des, decode)
 
     // ECB padding PKCS#5
     str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD475D82E3681C83BB77");
+    str_src = to_bytes("28DBA02EB5F6DD47AA291D16D82146BF");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_pkcs5_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
 
     // ECB padding PKCS#7
     str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD475D82E3681C83BB77");
+    str_src = to_bytes("28DBA02EB5F6DD47AA291D16D82146BF");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_pkcs7_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
 
     // ECB padding 0
     str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD476042DAEBFA59687A");
+    str_src = to_bytes("28DBA02EB5F6DD47535FFDB06574A87D");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_zero_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132");
 
     // ECB padding ISO10126 （random result）
     str_dst.clear();
@@ -455,21 +527,21 @@ TEST(des, decode)
 
     // ECB padding ANSIX923
     str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD476042DAEBFA59687A");
+    str_src = to_bytes("28DBA02EB5F6DD47BABFF98EFA6DB628030116F7E552E7B6");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_ansix923_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C640000000000");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
 
     // ECB padding ISO/IEC 7816-4
     str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD4706B5C56593DCBE2C");
+    str_src = to_bytes("28DBA02EB5F6DD47BABFF98EFA6DB628DE3491731DCB353C");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_iso_iec_7816_4_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132333435");
 
     // ECB padding NOPADDING
     str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD476042DAEBFA59687A");
+    str_src = to_bytes("28DBA02EB5F6DD47BABFF98EFA6DB628");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ecb, libcpp::des::padding::des_no_padding), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C640000000000");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
 
     // CBC padding PKCS#5
     str_dst.clear();
@@ -479,15 +551,15 @@ TEST(des, decode)
 
     // CBC padding PKCS#7
     str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B0373FB9C7373EEE4D1");
+    str_src = to_bytes("B72D0DC9E9433B03849FE655EE80DB80");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
 
     // CBC padding 0
     str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B036393B0FC4D701C80");
+    str_src = to_bytes("B72D0DC9E9433B0353E3BE76EB413AB0");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132");
 
     // CBC padding ISO10126 （random result）
     str_dst.clear();
@@ -497,39 +569,39 @@ TEST(des, decode)
 
     // CBC padding ANSIX923
     str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B037D1CFDBA8122DB79");
+    str_src = to_bytes("B72D0DC9E9433B031400731AF6B95E3BDF39AA4FBB8F6F63");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_ansix923_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
 
     // CBC padding ISO/IEC 7816-4
     str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B03CAF03F0F1AA271F7");
+    str_src = to_bytes("B72D0DC9E9433B031400731AF6B95E3BC113907DECCE3490");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132333435");
 
     // CBC padding NOPADDING
     str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B036393B0FC4D701C80");
+    str_src = to_bytes("B72D0DC9E9433B031400731AF6B95E3B");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cbc, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C640000000000");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
 
     // CFB padding PKCS#5
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC248142F83354C93F");
+    str_src = to_bytes("FCB12F07AC95C1FC248142DD0763FF0EC92210E9B43584E0");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_pkcs5_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
 
     // CFB padding PKCS#7
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC248142F83354C93F");
+    str_src = to_bytes("FCB12F07AC95C1FC248142DD0763FF3B");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C6420313233");
 
     // CFB padding 0
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC248142FD3651CC3A");
+    str_src = to_bytes("FCB12F07AC95C1FC248142DD0763CC3A");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132");
 
     // CFB padding ISO10126 （random result）
     str_dst.clear();
@@ -545,33 +617,33 @@ TEST(des, decode)
 
     // CFB padding ISO/IEC 7816-4
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC2481427D3651CC3A");
+    str_src = to_bytes("FCB12F07AC95C1FC248142DD07D1CC3A");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
 
     // CFB padding NOPADDING
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC248142");
+    str_src = to_bytes("FCB12F07AC95C1FC248142DD0763FF0E");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_cfb, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
 
     // OFB padding PKCS#5
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC3907D7ACE15B6C62");
+    str_src = to_bytes("F8BD2108B3C5B491");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_pkcs5_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C6962637070");
 
     // OFB padding PKCS#7
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC3907D7ACE15B6C62");
+    str_src = to_bytes("F8BD2108B3C58792");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C696263707031");
 
     // OFB padding 0
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC3907D7A9E45E6967");
+    str_src = to_bytes("F8BD2108B3C587A14B6BB3A9E45E6967");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C69626370703132");
 
     // OFB padding ISO10126 （random result）
     str_dst.clear();
@@ -581,39 +653,39 @@ TEST(des, decode)
 
     // OFB padding ANSIX923
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC3907D7A9E45E6962");
+    str_src = to_bytes("F8BD2108B3C587A1785FB3A9E45E6961");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_ansix923_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C696263707031323334");
 
     // OFB padding ISO/IEC 7816-4
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC3907D729E45E6967");
+    str_src = to_bytes("F8BD2108B3C587A1785F8629E45E6967");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C69626370703132333435");
 
     // OFB padding NOPADDING
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC3907D7");
+    str_src = to_bytes("F8BD2108B3C587A1785F869F");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ofb, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C6962637070313233343536");
 
     // CTR padding PKCS#5
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC46D14F5AECDF0C30");
+    str_src = to_bytes("A5D3446CC4B2B194");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_pkcs5_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "31");
 
     // CTR padding PKCS#7
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC46D14F5AECDF0C30");
+    str_src = to_bytes("A5E6456DC5B3B095");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_pkcs7_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "3132");
 
     // CTR padding 0
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC46D14F5FE9DA0935");
+    str_src = to_bytes("A5E6706BC3B5B693");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_zero_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "313233");
 
     // CTR padding ISO10126 （random result）
     str_dst.clear();
@@ -623,21 +695,21 @@ TEST(des, decode)
 
     // CTR padding ANSIX923
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC46D14F5FE9DA0930");
+    str_src = to_bytes("A5E6705FF6B5B690");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_ansix923_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "3132333435");
 
     // CTR padding ISO/IEC 7816-4
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC46D14FDFE9DA0935");
+    str_src = to_bytes("A5E6705FF6833693");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_iso_iec_7816_4_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "313233343536");
 
     // CTR padding NOPADDING
     str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC46D14F");
+    str_src = to_bytes("A5E6705FF68381");
     ASSERT_EQ(libcpp::des::decode(str_dst, str_src, key, libcpp::des::cipher::des_ctr, libcpp::des::padding::des_no_padding, iv), true);
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    ASSERT_STREQ(to_hex(str_dst).c_str(), "31323334353637");
 }
 
 TEST(des, decode_n)

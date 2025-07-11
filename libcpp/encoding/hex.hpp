@@ -24,94 +24,160 @@
 #include <sstream>
 #include <iomanip>
 
+#include <algorithm>
+#include <vector>
+#include <type_traits>
+
+#ifndef HEX_BUF_SZ
+#define HEX_BUF_SZ 4096
+#endif
+
 namespace libcpp
 {
 class hex
 {
 public:
-    static const bool upper_case = true;
-    static const bool lower_case = false;
-
-public:
-    template<typename T>
-    static T from(const std::string& str)
-    {
-        return libcpp::hex::from<T>(str.c_str());
-    }
-
-    template<typename T>
-    static T from(const char* buf)
-    {
-        T t;
-        std::stringstream ss;
-        ss << std::hex << buf;
-        ss >> t;
-        return t;
-    }
-
-    static std::ostream& from(std::ostream& out, std::istream& in, bool fmt = upper_case)
-    {
-        if (!in.good())
-            return out;
-
-        out << (fmt ? std::uppercase : std::nouppercase) << std::hex;
-        char c1, c2;
-        while (true) 
+    template<typename T = std::string>
+    static T decode(const std::string& str)
+    {   
+        std::string hex_str;
+        hex_str.reserve(str.length());
+        
+        for (char c : str) 
         {
-            if (!in.get(c1)) 
-                break;
+            if (hex_char_to_value_(c) >= 0)
+                hex_str += c;
+        }
 
-            if (!in.get(c2)) 
+        if (hex_str.length() % 2 != 0) 
+            hex_str = "0" + hex_str;
+        
+        if constexpr (std::is_same_v<T, std::string>) 
+        {
+            T result;
+            result.reserve(hex_str.length() / 2);
+            
+            for (std::size_t i = 0; i < hex_str.length(); i += 2) 
             {
-                // padding 0
-                unsigned int byte = 0;
-                std::istringstream iss(std::string("0") + c1);
-                iss >> std::hex >> byte;
-                out.put(static_cast<char>(byte));
-                break;
+                int high = hex_char_to_value_(hex_str[i]);
+                int low = hex_char_to_value_(hex_str[i + 1]);
+                
+                if (high >= 0 && low >= 0) 
+                {
+                    unsigned char byte_value = static_cast<unsigned char>((high << 4) | low);
+                    result.push_back(static_cast<char>(byte_value));
+                }
             }
-            unsigned int byte = 0;
-            std::istringstream iss(std::string() + c1 + c2);
-            iss >> std::hex >> byte;
-            out.put(static_cast<char>(byte));
+            return result;
         }
-        
-        out.flush();
-        return out;
-    }
-
-    template<typename T>
-    static std::string to(const T& t, bool fmt = upper_case)
-    {
-        std::ostringstream ss;
-        ss << (fmt ? std::uppercase : std::nouppercase) << std::hex << t;
-        return ss.str();
-    }
-
-    template<typename T>
-    static char* to(char* out, const T& t, bool fmt = upper_case)
-    {
-        auto str = libcpp::hex::to(t, fmt);
-        memcpy(out, str.c_str(), str.length());
-        return out;
-    }
-
-    static std::ostream& to(std::ostream& out, std::istream& in, bool fmt = upper_case)
-    {
-        if (!in.good())
-            return out;
-
-        out << (fmt ? std::uppercase : std::nouppercase) << std::hex;
-        unsigned char byte;
-        while (in.read(reinterpret_cast<char*>(&byte), 1)) 
+        else if constexpr (std::is_same_v<T, std::vector<unsigned char>>) 
         {
-            char buf[3];
-            snprintf(buf, sizeof(buf), "%02X", byte);
-            out.write(buf, 2);
+            T result;
+            result.reserve(hex_str.length() / 2);
+            
+            for (std::size_t i = 0; i < hex_str.length(); i += 2) 
+            {
+                int high = hex_char_to_value_(hex_str[i]);
+                int low = hex_char_to_value_(hex_str[i + 1]);
+                
+                if (high >= 0 && low >= 0) 
+                {
+                    unsigned char byte_value = static_cast<unsigned char>((high << 4) | low);
+                    result.push_back(byte_value);
+                }
+            }
+            return result;
+        }
+        else if constexpr (std::is_integral_v<T>) 
+        {
+            T result = 0;
+            int value = 0;
+            for (char c : hex_str) 
+            {
+                value = hex_char_to_value_(c);
+                if (value >= 0) 
+                    result = (result << 4) | value;
+            }
+            return result;
+        }
+        else 
+        {
+            T result;
+            int high = 0, low = 0;;
+            for (std::size_t i = 0; i < hex_str.length(); i += 2) 
+            {
+                high = hex_char_to_value_(hex_str[i]);
+                low = hex_char_to_value_(hex_str[i + 1]);
+                if (high >= 0 && low >= 0) 
+                {
+                    unsigned char byte_value = static_cast<unsigned char>((high << 4) | low);
+                    result.push_back(static_cast<typename T::value_type>(byte_value));
+                }
+            }
+            return result;
+        }
+    }
+
+    template<typename T = std::string>
+    static T decode(const char* buf)
+    {
+        return decode<T>(std::string(buf));
+    }
+
+    static void decode(std::ostream& out, std::istream& in)
+    {
+        std::ostringstream oss;
+        oss << in.rdbuf();
+        std::string hex_content = oss.str();
+        std::string binary_data = decode<std::string>(hex_content);
+        out << binary_data;
+    }
+
+    template<typename T>
+    static std::string encode(const T& value, bool upper_case = true)
+    {
+        std::ostringstream oss;
+        oss << (upper_case ? std::uppercase : std::nouppercase) << std::hex;
+        
+        if constexpr (std::is_integral_v<T>) 
+        {
+            oss << value;
+        }
+        else if constexpr (std::is_same_v<T, std::string>) 
+        {
+            for (unsigned char c : value)
+                oss << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(c);
+        }
+        else if constexpr (std::is_same_v<T, std::vector<unsigned char>>) 
+        {
+            for (unsigned char c : value) 
+                oss << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(c);
+        }
+        else 
+        {
+            for (auto c : value) 
+                oss << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(c);
         }
         
-        out.flush();
-        return out;
+        return oss.str();
+    }
+
+    static void encode(std::ostream& out, std::istream& in, bool upper_case = true)
+    {
+        out << (upper_case ? std::uppercase : std::nouppercase) << std::hex;
+        
+        char ch;
+        while (in.read(&ch, 1)) 
+            out << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(static_cast<unsigned char>(ch));
+    }
+
+private:
+    static int hex_char_to_value_(char c)
+    {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        return -1;
     }
 
 private:

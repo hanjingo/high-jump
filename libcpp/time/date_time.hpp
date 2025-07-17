@@ -204,6 +204,16 @@ public:
         return tm_ >= other.tm_;
     }
 
+    static libcpp::date_time::is_working_day_fn& get_working_day_func()
+    {
+        static libcpp::date_time::is_working_day_fn inst = [](const libcpp::date_time& dt) -> bool {
+            auto day = static_cast<week_day>(int64_t(dt.tm_.date().day_of_week()));
+            return day != week_day::saturday && day != week_day::sunday;
+        };
+
+        return inst;
+    }
+
     static date_time now(const timezone_info& tz = timezone::LOCAL)
     {
         if (tz.name == timezone::UTC.name) 
@@ -313,15 +323,13 @@ public:
 
     virtual inline bool is_working_day()
     {
-        // week_day wd = day_of_week();
-        // return wd != week_day::saturday && wd != week_day::sunday;
-
-        return working_day_func_(*this);
+        return get_working_day_func()(*this);
     }
 
     inline bool is_weekend()
     {
-        return !is_working_day();
+        auto day = static_cast<week_day>(int64_t(tm_.date().day_of_week()));
+        return day == week_day::saturday || day == week_day::sunday;
     }
 
     inline std::string string(const std::string& fmt = TIME_FMT)
@@ -713,18 +721,8 @@ public:
         return date_time(boost::gregorian::date(target_year, 1, 1));
     }
 
-    inline void set_working_day_func(is_working_day_fn&& func)
-    {
-        working_day_func_ = std::move(func);
-    }
-
 private:
     boost::posix_time::ptime tm_;
-
-    is_working_day_fn working_day_func_ = [](const libcpp::date_time& dt) -> bool {
-        return static_cast<week_day>(int64_t(dt.tm_.date().day_of_week())) != week_day::saturday && 
-                static_cast<week_day>(int64_t(dt.tm_.date().day_of_week())) != week_day::sunday;
-    };
 };
 
 }

@@ -48,7 +48,7 @@ namespace libcpp
 class aes
 {
 public:
-    enum class cipher 
+    enum class algo 
     {
         aes_128_ecb,
         aes_192_ecb,
@@ -131,31 +131,29 @@ public:
                        const std::size_t src_len, 
                        const unsigned char* key, 
                        const std::size_t key_len,
-                       const cipher cip = cipher::aes_256_ecb,
+                       const algo algorithm = algo::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
                        const std::size_t iv_len = 16)
     {
-        if (!is_plain_text_valid(cip, pad_style, src_len) || 
-                !is_key_valid(cip, key, key_len) || 
-                    !is_iv_valid(cip, iv, iv_len))
+        if (!is_plain_valid(algorithm, pad_style, src_len) || !is_key_valid(algorithm, key, key_len) || !is_iv_valid(algorithm, iv, iv_len))
             return false;
 
         std::vector<unsigned char> padded_src;
         std::size_t padded_len;
-        _pad_block(padded_src, padded_len, cip, pad_style, src, src_len);
+        _pad_block(padded_src, padded_len, algorithm, pad_style, src, src_len);
 
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
         if (!ctx)
             return false;
 
         // preinit iv & iv_len
-        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(cip), NULL, NULL, NULL)) 
+        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(algorithm), NULL, NULL, NULL)) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
-        if (is_aead_mode(cip)) 
+        if (is_aead_mode(algorithm)) 
         {
             if (iv && iv_len > 0) 
             {
@@ -167,14 +165,14 @@ public:
             }
         }
 
-        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(cip), NULL, key, iv)) 
+        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(algorithm), NULL, key, iv)) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
         // disable openssl auto padding
-        if (!is_aead_mode(cip))
+        if (!is_aead_mode(algorithm))
             EVP_CIPHER_CTX_set_padding(ctx, 0);
 
         int outlen1 = 0, outlen2 = 0;
@@ -193,7 +191,7 @@ public:
         dst_len = outlen1 + outlen2;
 
         // add tag
-        if (is_aead_mode(cip))
+        if (is_aead_mode(algorithm))
         {
             unsigned char tag[16] = {0};
             int tag_len = 16;
@@ -214,7 +212,7 @@ public:
                        std::istream& in,
                        const unsigned char* key, 
                        const std::size_t key_len,
-                       const cipher cip = cipher::aes_256_ecb,
+                       const algo algorithm = algo::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
                        const std::size_t iv_len = 16)
@@ -222,16 +220,16 @@ public:
         if (!in || !out)
             return false;
 
-        if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
+        if (!is_plain_valid(algorithm, pad_style, in) || !is_key_valid(algorithm, key, key_len) || !is_iv_valid(algorithm, iv, iv_len))
             return false;
             
-        int block_size = _get_block_size(cip);
-        bool is_aead = is_aead_mode(cip);
+        int block_size = _get_block_size(algorithm);
+        bool is_aead = is_aead_mode(algorithm);
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
         if (!ctx)
             return false;
 
-        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(cip), NULL, NULL, NULL)) 
+        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(algorithm), NULL, NULL, NULL)) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -249,7 +247,7 @@ public:
             }
         }
 
-        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(cip), NULL, key, iv)) 
+        if (1 != EVP_EncryptInit_ex(ctx, _select_cipher(algorithm), NULL, key, iv)) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -289,7 +287,7 @@ public:
 
         std::vector<unsigned char> padded_plain;
         std::size_t padded_len;
-        _pad_block(padded_plain, padded_len, cip, pad_style, last_plain.data(), last_plain.size());
+        _pad_block(padded_plain, padded_len, algorithm, pad_style, last_plain.data(), last_plain.size());
 
         int outlen1 = 0, outlen2 = 0;
         if (padded_len > 0) 
@@ -330,13 +328,13 @@ public:
     static bool encode(std::string& dst,
                        const std::string& src, 
                        const std::string& key, 
-                       const cipher cip = cipher::aes_256_ecb,
+                       const algo algorithm = algo::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const std::string& iv = std::string())
     {
-        std::size_t dst_len = encode_len_reserve(src.size(), cip);
+        std::size_t dst_len = encode_len_reserve(src.size(), algorithm);
         dst.resize(dst_len);
-        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
+        const unsigned char* iv_ptr = (algorithm >= algo::aes_128_ecb && algorithm <= algo::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
@@ -345,7 +343,7 @@ public:
                     src.size(), 
                     reinterpret_cast<const unsigned char*>(key.c_str()), 
                     key.size(), 
-                    cip,
+                    algorithm,
                     pad_style,
                     iv_ptr,
                     iv_len))
@@ -359,7 +357,7 @@ public:
                             const char* src_file_path, 
                             const unsigned char* key, 
                             const std::size_t key_len,
-                            const cipher cip = cipher::aes_256_ecb,
+                            const algo algorithm = algo::aes_256_ecb,
                             const padding pad_style = padding::aes_zero_padding,
                             const unsigned char* iv = nullptr,
                             const std::size_t iv_len = 16)
@@ -369,24 +367,24 @@ public:
         if (!in.is_open() || !out.is_open())
             return false;
 
-        return encode(out, in, key, key_len, cip, pad_style, iv, iv_len);
+        return encode(out, in, key, key_len, algorithm, pad_style, iv, iv_len);
     }
 
     static bool encode_file(const std::string& dst_file_path,
                             const std::string& src_file_path,
                             const std::string& key,
-                            const cipher cip = cipher::aes_256_ecb,
+                            const algo algorithm = algo::aes_256_ecb,
                             const padding pad_style = padding::aes_zero_padding,
                             const std::string& iv = std::string())
     {
-        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
+        const unsigned char* iv_ptr = (algorithm >= algo::aes_128_ecb && algorithm <= algo::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         return encode_file(dst_file_path.c_str(),
                            src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(key.c_str()),
                            key.size(),
-                           cip,
+                           algorithm,
                            pad_style,
                            iv_ptr,
                            iv_len);
@@ -398,18 +396,21 @@ public:
                        const std::size_t src_len,
                        const unsigned char* key,
                        const std::size_t key_len,
-                       const cipher cip = cipher::aes_256_ecb,
+                       const algo algorithm = algo::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
                        const std::size_t iv_len = 16)
     {
-        if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
+        if (!is_key_valid(algorithm, key, key_len) || !is_iv_valid(algorithm, iv, iv_len))
             return false;
 
-        int block_size = _get_block_size(cip);
+        int block_size = _get_block_size(algorithm);
+        if (pad_style == padding::aes_no_padding && src_len % block_size != 0) 
+            return false;
+
         std::size_t cipher_len = src_len;
         const unsigned char* tag_ptr = nullptr;
-        if (is_aead_mode(cip) && src_len > 16) 
+        if (is_aead_mode(algorithm) && src_len > 16) 
         {
             cipher_len = src_len - 16;
             tag_ptr = src + cipher_len;
@@ -419,12 +420,12 @@ public:
         if (!ctx)
             return false;
 
-        if (1 != EVP_DecryptInit_ex(ctx, _select_cipher(cip), NULL, NULL, NULL)) 
+        if (1 != EVP_DecryptInit_ex(ctx, _select_cipher(algorithm), NULL, NULL, NULL)) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
-        if (is_aead_mode(cip)) 
+        if (is_aead_mode(algorithm)) 
         {
             if (iv && iv_len > 0) 
             {
@@ -442,10 +443,10 @@ public:
             return false;
         }
 
-        if (!is_aead_mode(cip))
+        if (!is_aead_mode(algorithm))
             EVP_CIPHER_CTX_set_padding(ctx, 0);
 
-        if (is_aead_mode(cip) && tag_ptr) 
+        if (is_aead_mode(algorithm) && tag_ptr) 
         {
             if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void*)tag_ptr)) {
                 EVP_CIPHER_CTX_free(ctx);
@@ -467,7 +468,7 @@ public:
         }
 
         dst_len = outlen1 + outlen2;
-        _unpad_block(dst, dst_len, cip, pad_style, block_size);
+        _unpad_block(dst, dst_len, algorithm, pad_style, block_size);
 
         EVP_CIPHER_CTX_free(ctx);
         return true;
@@ -477,7 +478,7 @@ public:
                        std::istream& in,
                        const unsigned char* key, 
                        const std::size_t key_len,
-                       const cipher cip = cipher::aes_256_ecb,
+                       const algo algorithm = algo::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const unsigned char* iv = nullptr,
                        const std::size_t iv_len = 16)
@@ -485,13 +486,13 @@ public:
         if (!in || !out)
             return false;
 
-        if (!is_key_valid(cip, key, key_len) || !is_iv_valid(cip, iv, iv_len))
+        if (!is_key_valid(algorithm, key, key_len) || !is_iv_valid(algorithm, iv, iv_len))
             return false;
 
         std::streamsize file_size = in.tellg();
         in.seekg(0, std::ios::beg);
-        int block_size = _get_block_size(cip);
-        bool is_aead = is_aead_mode(cip);
+        int block_size = _get_block_size(algorithm);
+        bool is_aead = is_aead_mode(algorithm);
 
         EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
         if (!ctx)
@@ -507,7 +508,7 @@ public:
             in.seekg(0, std::ios::beg);
         }
 
-        if (1 != EVP_DecryptInit_ex(ctx, _select_cipher(cip), NULL, NULL, NULL)) 
+        if (1 != EVP_DecryptInit_ex(ctx, _select_cipher(algorithm), NULL, NULL, NULL)) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -525,7 +526,7 @@ public:
             }
         }
 
-        if (1 != EVP_DecryptInit_ex(ctx, _select_cipher(cip), NULL, key, iv)) 
+        if (1 != EVP_DecryptInit_ex(ctx, _select_cipher(algorithm), NULL, key, iv)) 
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -589,7 +590,7 @@ public:
         }
 
         std::size_t plain_len = outlen1 + outlen2;
-        _unpad_block(outbuf.data(), plain_len, cip, pad_style, block_size);
+        _unpad_block(outbuf.data(), plain_len, algorithm, pad_style, block_size);
 
         if (plain_len > 0)
             out.write(reinterpret_cast<char*>(outbuf.data()), plain_len);
@@ -601,13 +602,13 @@ public:
     static bool decode(std::string& dst,
                        const std::string& src, 
                        const std::string& key, 
-                       const cipher cip = cipher::aes_256_ecb,
+                       const algo algorithm = algo::aes_256_ecb,
                        const padding pad_style = padding::aes_zero_padding,
                        const std::string& iv = std::string())
     {
         dst.resize(decode_len_reserve(src.size()));
         std::size_t dst_len = dst.size();
-        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
+        const unsigned char* iv_ptr = (algorithm >= algo::aes_128_ecb && algorithm <= algo::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
@@ -616,7 +617,7 @@ public:
                     src.size(), 
                     reinterpret_cast<const unsigned char*>(key.c_str()), 
                     key.size(), 
-                    cip,
+                    algorithm,
                     pad_style,
                     iv_ptr,
                     iv_len))
@@ -633,7 +634,7 @@ public:
                             const char* src_file_path, 
                             const unsigned char* key, 
                             const std::size_t key_len,
-                            const cipher cip = cipher::aes_256_ecb,
+                            const algo algorithm = algo::aes_256_ecb,
                             const padding pad_style = padding::aes_zero_padding,
                             const unsigned char* iv = nullptr,
                             const std::size_t iv_len = 16)
@@ -643,24 +644,24 @@ public:
         if (!in.is_open() || !out.is_open())
             return false;
 
-        return decode(out, in, key, key_len, cip, pad_style, iv, iv_len);
+        return decode(out, in, key, key_len, algorithm, pad_style, iv, iv_len);
     }
 
     static bool decode_file(const std::string& dst_file_path,
                             const std::string& src_file_path,
                             const std::string& key,
-                            const cipher cip = cipher::aes_256_ecb,
+                            const algo algorithm = algo::aes_256_ecb,
                             const padding pad_style = padding::aes_zero_padding,
                             const std::string& iv = std::string())
     {
-        const unsigned char* iv_ptr = (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb) ? 
+        const unsigned char* iv_ptr = (algorithm >= algo::aes_128_ecb && algorithm <= algo::aes_256_ecb) ? 
             nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
         return decode_file(dst_file_path.c_str(),
                            src_file_path.c_str(),
                            reinterpret_cast<const unsigned char*>(key.c_str()),
                            key.size(),
-                           cip,
+                           algorithm,
                            pad_style,
                            iv_ptr,
                            iv_len);
@@ -668,9 +669,9 @@ public:
 
     // reserve encode dst buf size
 	static std::size_t encode_len_reserve(const std::size_t src_len, 
-											const cipher cip = cipher::aes_256_ecb)
+											const algo algorithm = algo::aes_256_ecb)
 	{
-        int block_size = _get_block_size(cip);
+        int block_size = _get_block_size(algorithm);
         if (block_size >= 8)
             return ((src_len / block_size) + 2) * block_size;
 
@@ -684,61 +685,61 @@ public:
 	}
 
     // check key format
-    static bool is_key_valid(const cipher cip, const unsigned char* key, const std::size_t key_len)
+    static bool is_key_valid(const algo algorithm, const unsigned char* key, const std::size_t key_len)
     {
         if (key == nullptr) 
             return false;
 
-        switch (cip) {
-        case cipher::aes_128_ecb: 
-        case cipher::aes_128_cbc: 
-        case cipher::aes_128_cfb1: 
-        case cipher::aes_128_cfb8: 
-        case cipher::aes_128_cfb128:
-        case cipher::aes_128_ofb: 
-        case cipher::aes_128_ctr: 
-        case cipher::aes_128_ccm: 
-        case cipher::aes_128_gcm: 
-        case cipher::aes_128_xts:
-        case cipher::aes_128_wrap: 
-        case cipher::aes_128_wrap_pad:
-        case cipher::aes_128_cbc_hmac_sha1: 
-        case cipher::aes_128_cbc_hmac_sha256:
+        switch (algorithm) {
+        case algo::aes_128_ecb: 
+        case algo::aes_128_cbc: 
+        case algo::aes_128_cfb1: 
+        case algo::aes_128_cfb8: 
+        case algo::aes_128_cfb128:
+        case algo::aes_128_ofb: 
+        case algo::aes_128_ctr: 
+        case algo::aes_128_ccm: 
+        case algo::aes_128_gcm: 
+        case algo::aes_128_xts:
+        case algo::aes_128_wrap: 
+        case algo::aes_128_wrap_pad:
+        case algo::aes_128_cbc_hmac_sha1: 
+        case algo::aes_128_cbc_hmac_sha256:
 # ifndef OPENSSL_NO_OCB
-        case cipher::aes_128_ocb:
+        case algo::aes_128_ocb:
 # endif
             return key_len == 16;
-        case cipher::aes_192_ecb: 
-        case cipher::aes_192_cbc: 
-        case cipher::aes_192_cfb1: 
-        case cipher::aes_192_cfb8: 
-        case cipher::aes_192_cfb128:
-        case cipher::aes_192_ofb: 
-        case cipher::aes_192_ctr: 
-        case cipher::aes_192_ccm: 
-        case cipher::aes_192_gcm:
-        case cipher::aes_192_wrap: 
-        case cipher::aes_192_wrap_pad:
+        case algo::aes_192_ecb: 
+        case algo::aes_192_cbc: 
+        case algo::aes_192_cfb1: 
+        case algo::aes_192_cfb8: 
+        case algo::aes_192_cfb128:
+        case algo::aes_192_ofb: 
+        case algo::aes_192_ctr: 
+        case algo::aes_192_ccm: 
+        case algo::aes_192_gcm:
+        case algo::aes_192_wrap: 
+        case algo::aes_192_wrap_pad:
 # ifndef OPENSSL_NO_OCB
-        case cipher::aes_192_ocb:
+        case algo::aes_192_ocb:
 # endif
             return key_len == 24;
-        case cipher::aes_256_ecb: 
-        case cipher::aes_256_cbc: 
-        case cipher::aes_256_cfb1: 
-        case cipher::aes_256_cfb8: 
-        case cipher::aes_256_cfb128:
-        case cipher::aes_256_ofb: 
-        case cipher::aes_256_ctr: 
-        case cipher::aes_256_ccm: 
-        case cipher::aes_256_gcm: 
-        case cipher::aes_256_xts:
-        case cipher::aes_256_wrap: 
-        case cipher::aes_256_wrap_pad:
-        case cipher::aes_256_cbc_hmac_sha1: 
-        case cipher::aes_256_cbc_hmac_sha256:
+        case algo::aes_256_ecb: 
+        case algo::aes_256_cbc: 
+        case algo::aes_256_cfb1: 
+        case algo::aes_256_cfb8: 
+        case algo::aes_256_cfb128:
+        case algo::aes_256_ofb: 
+        case algo::aes_256_ctr: 
+        case algo::aes_256_ccm: 
+        case algo::aes_256_gcm: 
+        case algo::aes_256_xts:
+        case algo::aes_256_wrap: 
+        case algo::aes_256_wrap_pad:
+        case algo::aes_256_cbc_hmac_sha1: 
+        case algo::aes_256_cbc_hmac_sha256:
 # ifndef OPENSSL_NO_OCB
-        case cipher::aes_256_ocb:
+        case algo::aes_256_ocb:
 # endif
             return key_len == 32;
     default:
@@ -747,9 +748,9 @@ public:
     }
 
     // check iv format
-    static bool is_iv_valid(const cipher cip, const unsigned char* iv, const std::size_t iv_len)
+    static bool is_iv_valid(const algo algorithm, const unsigned char* iv, const std::size_t iv_len)
     {
-        if (cip >= cipher::aes_128_ecb && cip <= cipher::aes_256_ecb)
+        if (algorithm >= algo::aes_128_ecb && algorithm <= algo::aes_256_ecb)
             return iv == nullptr;
 
         if (iv_len != 16)
@@ -758,38 +759,58 @@ public:
         return true;
     }
 
-    // check plain text
-    static bool is_plain_text_valid(const cipher cip, 
-                                    const padding pad_style, 
-                                    const std::size_t plain_len)
+    // check plain
+    static bool is_plain_valid(const algo algorithm, 
+                               const padding pad_style, 
+                               const std::size_t plain_len)
     {
-        int block_sz = _get_block_size(cip);
+        int block_sz = _get_block_size(algorithm);
         if (pad_style == padding::aes_no_padding && plain_len % block_sz != 0)
             return false;
 
         return true;
     }
 
-    // check stream mode
-    static bool is_stream_mode(const cipher cip)
+    // check stream plain
+    static bool is_plain_valid(const algo algorithm, const padding pad_style, std::istream& in)
     {
-        switch (cip)
+        if (!in)
+            return false;
+
+        if (pad_style == padding::aes_no_padding)
         {
-        case cipher::aes_128_cfb1:
-        case cipher::aes_192_cfb1:  
-        case cipher::aes_256_cfb1:
-        case cipher::aes_128_cfb8:
-        case cipher::aes_192_cfb8:
-        case cipher::aes_256_cfb8:
-        case cipher::aes_128_cfb128:
-        case cipher::aes_192_cfb128:
-        case cipher::aes_256_cfb128:
-        case cipher::aes_128_ofb:
-        case cipher::aes_192_ofb:
-        case cipher::aes_256_ofb:
-        case cipher::aes_128_ctr:
-        case cipher::aes_192_ctr:
-        case cipher::aes_256_ctr:
+            std::streampos current_pos = in.tellg();
+            in.seekg(0, std::ios::end);
+            std::streampos end_pos = in.tellg();
+            in.seekg(current_pos);
+            std::size_t total_length = static_cast<std::size_t>(end_pos - current_pos);
+            int block_size = _get_block_size(algorithm);
+            return total_length % block_size == 0;
+        }
+
+        return true;
+    }
+
+    // check stream mode
+    static bool is_stream_mode(const algo algorithm)
+    {
+        switch (algorithm)
+        {
+        case algo::aes_128_cfb1:
+        case algo::aes_192_cfb1:  
+        case algo::aes_256_cfb1:
+        case algo::aes_128_cfb8:
+        case algo::aes_192_cfb8:
+        case algo::aes_256_cfb8:
+        case algo::aes_128_cfb128:
+        case algo::aes_192_cfb128:
+        case algo::aes_256_cfb128:
+        case algo::aes_128_ofb:
+        case algo::aes_192_ofb:
+        case algo::aes_256_ofb:
+        case algo::aes_128_ctr:
+        case algo::aes_192_ctr:
+        case algo::aes_256_ctr:
             return true;
         default:
             return false;
@@ -797,16 +818,16 @@ public:
     }
 
     // check aead mode
-    static bool is_aead_mode(const cipher cip)
+    static bool is_aead_mode(const algo algorithm)
     {
-        switch (cip)
+        switch (algorithm)
         {
-        case cipher::aes_128_gcm:
-        case cipher::aes_192_gcm:
-        case cipher::aes_256_gcm:
-        case cipher::aes_128_ccm:
-        case cipher::aes_192_ccm:
-        case cipher::aes_256_ccm:
+        case algo::aes_128_gcm:
+        case algo::aes_192_gcm:
+        case algo::aes_256_gcm:
+        case algo::aes_128_ccm:
+        case algo::aes_192_ccm:
+        case algo::aes_256_ccm:
             return true;
         default:
             return false;
@@ -814,66 +835,66 @@ public:
     }
 
 private:
-    static const EVP_CIPHER* _select_cipher(const cipher cip)
+    static const EVP_CIPHER* _select_cipher(const algo algorithm)
     {
-        switch (cip)
+        switch (algorithm)
         {
-        case cipher::aes_128_ecb: { return EVP_aes_128_ecb(); }
-        case cipher::aes_192_ecb: { return EVP_aes_192_ecb(); }
-        case cipher::aes_256_ecb: { return EVP_aes_256_ecb(); }
+        case algo::aes_128_ecb: { return EVP_aes_128_ecb(); }
+        case algo::aes_192_ecb: { return EVP_aes_192_ecb(); }
+        case algo::aes_256_ecb: { return EVP_aes_256_ecb(); }
 
-        case cipher::aes_128_gcm: { return EVP_aes_128_gcm(); }
-        case cipher::aes_192_gcm: { return EVP_aes_192_gcm(); }
-        case cipher::aes_256_gcm: { return EVP_aes_256_gcm(); }
+        case algo::aes_128_gcm: { return EVP_aes_128_gcm(); }
+        case algo::aes_192_gcm: { return EVP_aes_192_gcm(); }
+        case algo::aes_256_gcm: { return EVP_aes_256_gcm(); }
 
-        case cipher::aes_128_cbc: { return EVP_aes_128_cbc(); }
-        case cipher::aes_192_cbc: { return EVP_aes_192_cbc(); }
-        case cipher::aes_256_cbc: { return EVP_aes_256_cbc(); }
+        case algo::aes_128_cbc: { return EVP_aes_128_cbc(); }
+        case algo::aes_192_cbc: { return EVP_aes_192_cbc(); }
+        case algo::aes_256_cbc: { return EVP_aes_256_cbc(); }
 
-        case cipher::aes_128_cfb1: { return EVP_aes_128_cfb1(); }
-        case cipher::aes_192_cfb1: { return EVP_aes_192_cfb1(); }
-        case cipher::aes_256_cfb1: { return EVP_aes_256_cfb1(); }
+        case algo::aes_128_cfb1: { return EVP_aes_128_cfb1(); }
+        case algo::aes_192_cfb1: { return EVP_aes_192_cfb1(); }
+        case algo::aes_256_cfb1: { return EVP_aes_256_cfb1(); }
 
-        case cipher::aes_128_cfb8: { return EVP_aes_128_cfb8(); }
-        case cipher::aes_192_cfb8: { return EVP_aes_192_cfb8(); }
-        case cipher::aes_256_cfb8: { return EVP_aes_256_cfb8(); }
+        case algo::aes_128_cfb8: { return EVP_aes_128_cfb8(); }
+        case algo::aes_192_cfb8: { return EVP_aes_192_cfb8(); }
+        case algo::aes_256_cfb8: { return EVP_aes_256_cfb8(); }
 
-        case cipher::aes_128_cfb128: { return EVP_aes_128_cfb128(); }
-        case cipher::aes_192_cfb128: { return EVP_aes_192_cfb128(); }
-        case cipher::aes_256_cfb128: { return EVP_aes_256_cfb128(); }
+        case algo::aes_128_cfb128: { return EVP_aes_128_cfb128(); }
+        case algo::aes_192_cfb128: { return EVP_aes_192_cfb128(); }
+        case algo::aes_256_cfb128: { return EVP_aes_256_cfb128(); }
 
-        case cipher::aes_128_ofb: { return EVP_aes_128_ofb(); }
-        case cipher::aes_192_ofb: { return EVP_aes_192_ofb(); }
-        case cipher::aes_256_ofb: { return EVP_aes_256_ofb(); }
+        case algo::aes_128_ofb: { return EVP_aes_128_ofb(); }
+        case algo::aes_192_ofb: { return EVP_aes_192_ofb(); }
+        case algo::aes_256_ofb: { return EVP_aes_256_ofb(); }
 
-        case cipher::aes_128_ctr: { return EVP_aes_128_ctr(); }
-        case cipher::aes_192_ctr: { return EVP_aes_192_ctr(); }
-        case cipher::aes_256_ctr: { return EVP_aes_256_ctr(); }
+        case algo::aes_128_ctr: { return EVP_aes_128_ctr(); }
+        case algo::aes_192_ctr: { return EVP_aes_192_ctr(); }
+        case algo::aes_256_ctr: { return EVP_aes_256_ctr(); }
 
-        case cipher::aes_128_ccm: { return EVP_aes_128_ccm(); }
-        case cipher::aes_192_ccm: { return EVP_aes_192_ccm(); } 
-        case cipher::aes_256_ccm: { return EVP_aes_256_ccm(); }
+        case algo::aes_128_ccm: { return EVP_aes_128_ccm(); }
+        case algo::aes_192_ccm: { return EVP_aes_192_ccm(); } 
+        case algo::aes_256_ccm: { return EVP_aes_256_ccm(); }
 
-        case cipher::aes_128_xts: { return EVP_aes_128_xts(); }
-        case cipher::aes_256_xts: { return EVP_aes_256_xts(); }
+        case algo::aes_128_xts: { return EVP_aes_128_xts(); }
+        case algo::aes_256_xts: { return EVP_aes_256_xts(); }
 
-        case cipher::aes_128_wrap: { return EVP_aes_128_wrap(); }
-        case cipher::aes_192_wrap: { return EVP_aes_192_wrap(); }
-        case cipher::aes_256_wrap: { return EVP_aes_256_wrap(); }
+        case algo::aes_128_wrap: { return EVP_aes_128_wrap(); }
+        case algo::aes_192_wrap: { return EVP_aes_192_wrap(); }
+        case algo::aes_256_wrap: { return EVP_aes_256_wrap(); }
 
-        case cipher::aes_128_wrap_pad: { return EVP_aes_128_wrap_pad(); }
-        case cipher::aes_192_wrap_pad: { return EVP_aes_192_wrap_pad(); }
-        case cipher::aes_256_wrap_pad: { return EVP_aes_256_wrap_pad(); }
+        case algo::aes_128_wrap_pad: { return EVP_aes_128_wrap_pad(); }
+        case algo::aes_192_wrap_pad: { return EVP_aes_192_wrap_pad(); }
+        case algo::aes_256_wrap_pad: { return EVP_aes_256_wrap_pad(); }
 
-        case cipher::aes_128_cbc_hmac_sha1: { return EVP_aes_128_cbc_hmac_sha1(); }
-        case cipher::aes_256_cbc_hmac_sha1: { return EVP_aes_256_cbc_hmac_sha1(); }
-        case cipher::aes_128_cbc_hmac_sha256: { return EVP_aes_128_cbc_hmac_sha256(); }
-        case cipher::aes_256_cbc_hmac_sha256: { return EVP_aes_256_cbc_hmac_sha256(); }
+        case algo::aes_128_cbc_hmac_sha1: { return EVP_aes_128_cbc_hmac_sha1(); }
+        case algo::aes_256_cbc_hmac_sha1: { return EVP_aes_256_cbc_hmac_sha1(); }
+        case algo::aes_128_cbc_hmac_sha256: { return EVP_aes_128_cbc_hmac_sha256(); }
+        case algo::aes_256_cbc_hmac_sha256: { return EVP_aes_256_cbc_hmac_sha256(); }
 
 # ifndef OPENSSL_NO_OCB
-        case cipher::aes_128_ocb: { return EVP_aes_128_ocb(); }
-        case cipher::aes_192_ocb: { return EVP_aes_192_ocb(); }
-        case cipher::aes_256_ocb: { return EVP_aes_256_ocb(); }
+        case algo::aes_128_ocb: { return EVP_aes_128_ocb(); }
+        case algo::aes_192_ocb: { return EVP_aes_192_ocb(); }
+        case algo::aes_256_ocb: { return EVP_aes_256_ocb(); }
 #endif
 
         default: { return nullptr; }
@@ -881,47 +902,47 @@ private:
     }
 
     // get block size
-    static int _get_block_size(const cipher cip)
+    static int _get_block_size(const algo algorithm)
     {
-        switch (cip) {
-        case cipher::aes_128_ecb:
-        case cipher::aes_192_ecb:
-        case cipher::aes_256_ecb:
-        case cipher::aes_128_cbc:
-        case cipher::aes_192_cbc:
-        case cipher::aes_256_cbc:
-        case cipher::aes_128_cfb128:
-        case cipher::aes_192_cfb128:
-        case cipher::aes_256_cfb128:
-        case cipher::aes_128_ofb:
-        case cipher::aes_192_ofb:
-        case cipher::aes_256_ofb:
-        case cipher::aes_128_ctr:
-        case cipher::aes_192_ctr:
-        case cipher::aes_256_ctr:
+        switch (algorithm) {
+        case algo::aes_128_ecb:
+        case algo::aes_192_ecb:
+        case algo::aes_256_ecb:
+        case algo::aes_128_cbc:
+        case algo::aes_192_cbc:
+        case algo::aes_256_cbc:
+        case algo::aes_128_cfb128:
+        case algo::aes_192_cfb128:
+        case algo::aes_256_cfb128:
+        case algo::aes_128_ofb:
+        case algo::aes_192_ofb:
+        case algo::aes_256_ofb:
+        case algo::aes_128_ctr:
+        case algo::aes_192_ctr:
+        case algo::aes_256_ctr:
             return 16;
-        case cipher::aes_128_cfb8:
-        case cipher::aes_192_cfb8:
-        case cipher::aes_256_cfb8:
+        case algo::aes_128_cfb8:
+        case algo::aes_192_cfb8:
+        case algo::aes_256_cfb8:
             return 1;
-        case cipher::aes_128_cfb1:
-        case cipher::aes_192_cfb1:
-        case cipher::aes_256_cfb1:
+        case algo::aes_128_cfb1:
+        case algo::aes_192_cfb1:
+        case algo::aes_256_cfb1:
             return 1;
         default:
-            return EVP_CIPHER_block_size(_select_cipher(cip));
+            return EVP_CIPHER_block_size(_select_cipher(algorithm));
         }
     }
 
     // pad block
     static void _pad_block(std::vector<unsigned char>& padded_src, 
                            std::size_t& padded_len,
-                           const cipher cip, 
+                           const algo algorithm, 
                            const padding pad_style, 
                            const unsigned char* src, 
                            const std::size_t src_len)
     {
-        int block_size = static_cast<int>(_get_block_size(cip));
+        int block_size = static_cast<int>(_get_block_size(algorithm));
         padded_len = src_len;
         if (pad_style != padding::aes_no_padding && block_size > 1) 
         {
@@ -964,11 +985,11 @@ private:
     // unpad block
     static void _unpad_block(unsigned char* dst, 
                              std::size_t& dst_len,
-                             const cipher cip, 
+                             const algo algorithm, 
                              const padding pad_style, 
                              const std::size_t block_size)
     {
-        if (!is_aead_mode(cip) && pad_style != padding::aes_no_padding && block_size > 1) 
+        if (!is_aead_mode(algorithm) && pad_style != padding::aes_no_padding && block_size > 1) 
         {
             std::size_t unpad_len = dst_len;
             switch (pad_style) {

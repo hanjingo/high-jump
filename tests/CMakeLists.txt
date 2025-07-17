@@ -117,6 +117,7 @@ add_test(test ${PROJECT_NAME})
 file(COPY cfg.ini DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY json_test.json DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY crypto.log DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+file(COPY crypto_nopadding.log DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 
 add_subdirectory(dll_example)
 add_subdirectory(child)

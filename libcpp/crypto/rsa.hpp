@@ -32,6 +32,9 @@
 #include <string>
 #include <fstream>
 
+#include <openssl/opensslconf.h>
+#include <openssl/evp.h>
+
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
@@ -52,7 +55,7 @@ public:
         pkcs1,   // PKCS#1 (-----BEGIN RSA PUBLIC KEY-----) (-----BEGIN RSA PRIVATE KEY-----)
     };
 
-    enum class cipher 
+    enum class algo 
     {
         none, // no encryption
 
@@ -73,6 +76,7 @@ public:
         aes_192_ofb,
         aes_256_ofb,
 
+#ifndef OPENSSL_NO_DES
         // 3DES
         des_ede3_ecb,
         des_ede3_cbc,
@@ -85,24 +89,31 @@ public:
         des_cbc,
         des_cfb,
         des_ofb,
+#endif
 
+#ifndef OPENSSL_NO_BF
         // Blowfish
         bf_ecb,
         bf_cbc,
         bf_cfb,
         bf_ofb,
+#endif
 
+#ifndef OPENSSL_NO_CAST
         // CAST5
         cast5_ecb,
         cast5_cbc,
         cast5_cfb,
         cast5_ofb,
+#endif
 
+#ifndef OPENSSL_NO_RC2
         // RC2
         rc2_ecb,
         rc2_cbc,
         rc2_cfb,
         rc2_ofb,
+#endif
     };
 
     enum class padding
@@ -129,6 +140,12 @@ public:
         RSA* rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
         if (!rsa)
             return false;
+
+        if (!_is_plain_valid(src_len, padding, rsa))
+        {
+            RSA_free(rsa);
+            return false;
+        }
 
         if (dst_len < static_cast<std::size_t>(RSA_size(rsa)))
         {
@@ -183,7 +200,7 @@ public:
             return false;
 
         int key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
-        if (pubkey_pem_len < static_cast<std::size_t>(key_size))
+        if (pubkey_pem_len < static_cast<std::size_t>(key_size) || !_is_stream_valid(in, padding, key_size))
         {
             RSA_free(rsa);
             return false;
@@ -210,6 +227,13 @@ public:
             read_len = in.gcount();
             if (read_len < 1)
                 break;
+
+            // for no_padding, the read_len must equal to key_size
+            if (padding == padding::no_padding && read_len != key_size) 
+            {
+                RSA_free(rsa);
+                return false;
+            }
 
             write_len = RSA_public_encrypt(static_cast<int>(read_len), inbuf, outbuf, rsa, static_cast<int>(padding));
             if (write_len == -1)
@@ -328,7 +352,7 @@ public:
             return false;
 
         std::size_t key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
-        if (prikey_pem_len < key_size)
+        if (prikey_pem_len < key_size || !_is_stream_valid(in, padding, key_size))
         {
             RSA_free(rsa);
             return false;
@@ -448,7 +472,7 @@ public:
                               std::size_t& prikey_pem_len,
                               const std::size_t bits = 2048,
                               const key_format format = key_format::x509,
-                              const cipher cip = cipher::none,
+                              const algo algorithm = algo::none,
                               const unsigned char* password = nullptr,
                               const std::size_t password_len = 0)
     {
@@ -459,7 +483,7 @@ public:
         // bits: 512, 1024, 2048, 3072, 4096
         if (!is_key_pair_bits_valid(bits))
             return false;
-        if (cip != cipher::none && (!password || !_validate_password_for_cipher(cip, password_len)))
+        if (algorithm != algo::none && (!password || !_validate_password_for_cipher(algorithm, password_len)))
             return false;
 
         RSA* rsa = nullptr;
@@ -521,8 +545,8 @@ public:
                 else 
                 {
                     // use password to encrypt private key
-                    if (cip != cipher::none) 
-                        pri_success = PEM_write_bio_PrivateKey(pri_bio, pkey, _select_cipher(cip), 
+                    if (algorithm != algo::none) 
+                        pri_success = PEM_write_bio_PrivateKey(pri_bio, pkey, _select_cipher(algorithm), 
                             const_cast<unsigned char*>(password), static_cast<int>(password_len), nullptr, nullptr);
                     else 
                         pri_success = PEM_write_bio_PrivateKey(pri_bio, pkey, nullptr, nullptr, 0, nullptr, nullptr);
@@ -531,8 +555,8 @@ public:
             case key_format::pkcs1:
                 // -----BEGIN RSA PRIVATE KEY-----
                 // use password to encrypt private key
-                if (cip != cipher::none) 
-                    pri_success = PEM_write_bio_RSAPrivateKey(pri_bio, rsa, _select_cipher(cip),
+                if (algorithm != algo::none) 
+                    pri_success = PEM_write_bio_RSAPrivateKey(pri_bio, rsa, _select_cipher(algorithm),
                         const_cast<unsigned char*>(password), static_cast<int>(password_len), nullptr, nullptr);
                 else
                     pri_success = PEM_write_bio_RSAPrivateKey(pri_bio, rsa, nullptr, nullptr, 0, nullptr, nullptr);
@@ -586,7 +610,7 @@ public:
                               std::string& prikey_pem,
                               const std::size_t bits = 2048,
                               const key_format format = key_format::x509,
-                              const cipher cip = cipher::none,
+                              const algo algorithm = algo::none,
                               const std::string& password = "")
     {
         pubkey_pem.resize(RSA_MAX_KEY_LENGTH);
@@ -599,7 +623,7 @@ public:
                            prikey_pem_len,
                            bits,
                            format,
-                           cip,
+                           algorithm,
                            reinterpret_cast<const unsigned char*>(password.c_str()),
                            password.size()))
         {
@@ -701,6 +725,55 @@ public:
 
         return true;
     }
+
+    static bool is_plain_valid(const std::size_t plain_len, 
+                               const padding pad_style,
+                               const unsigned char* pubkey_pem,
+                               const std::size_t pubkey_pem_len)
+    {
+        RSA* rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
+        if (!rsa)
+            return false;
+        
+        bool valid = _is_plain_valid(plain_len, pad_style, rsa);
+        RSA_free(rsa);
+        return valid;
+    }
+
+    static bool is_plain_valid(std::istream& in, 
+                               const padding pad_style, 
+                               const unsigned char* pubkey_pem,
+                               const std::size_t pubkey_pem_len)
+    {
+        RSA* rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
+        if (!rsa)
+            return false;
+        
+        std::size_t key_size = static_cast<std::size_t>(RSA_size(rsa));
+        RSA_free(rsa);
+        
+        return _is_stream_valid(in, pad_style, key_size);
+    }
+
+    static bool is_cipher_valid(std::istream& in, 
+                                const padding pad_style, 
+                                const unsigned char* prikey_pem,
+                                const std::size_t prikey_pem_len)
+    {
+        RSA* rsa = _load_private_key(prikey_pem, prikey_pem_len);
+        if (!rsa)
+            return false;
+        
+        std::size_t key_size = static_cast<std::size_t>(RSA_size(rsa));
+        RSA_free(rsa);
+        
+        return _is_stream_valid(in, pad_style, key_size);
+    }
+
+    // static bool is_cipher_valid()
+    // {
+
+    // }
 
 private:
     static RSA* _load_public_key(const unsigned char* pubkey_pem, 
@@ -804,98 +877,189 @@ private:
                     password_ptr, password_len);
     }
 
-    static const EVP_CIPHER* _select_cipher(const cipher cip)
+    static const EVP_CIPHER* _select_cipher(const algo algorithm)
     {
-        switch (cip)
+        switch (algorithm)
         {
-        case cipher::none: { return nullptr; }
+        case algo::none: { return nullptr; }
 
         // AES
-        case cipher::aes_128_ecb: { return EVP_aes_128_cbc(); } // AES-128-CBC is the default for AES ECB
-        case cipher::aes_192_ecb: { return EVP_aes_192_cbc(); } // AES-192-CBC is the default for AES ECB
-        case cipher::aes_256_ecb: { return EVP_aes_256_cbc(); } // AES-256-CBC is the default for AES ECB
+        case algo::aes_128_ecb: { return EVP_aes_128_cbc(); } // AES-128-CBC is the default for AES ECB
+        case algo::aes_192_ecb: { return EVP_aes_192_cbc(); } // AES-192-CBC is the default for AES ECB
+        case algo::aes_256_ecb: { return EVP_aes_256_cbc(); } // AES-256-CBC is the default for AES ECB
 
-        case cipher::aes_128_cbc: { return EVP_aes_128_cbc(); }
-        case cipher::aes_192_cbc: { return EVP_aes_192_cbc(); }
-        case cipher::aes_256_cbc: { return EVP_aes_256_cbc(); }
+        case algo::aes_128_cbc: { return EVP_aes_128_cbc(); }
+        case algo::aes_192_cbc: { return EVP_aes_192_cbc(); }
+        case algo::aes_256_cbc: { return EVP_aes_256_cbc(); }
 
-        case cipher::aes_128_cfb: { return EVP_aes_128_cfb(); }
-        case cipher::aes_192_cfb: { return EVP_aes_192_cfb(); }
-        case cipher::aes_256_cfb: { return EVP_aes_256_cfb(); }
+        case algo::aes_128_cfb: { return EVP_aes_128_cfb(); }
+        case algo::aes_192_cfb: { return EVP_aes_192_cfb(); }
+        case algo::aes_256_cfb: { return EVP_aes_256_cfb(); }
 
-        case cipher::aes_128_ofb: { return EVP_aes_128_ofb(); }
-        case cipher::aes_192_ofb: { return EVP_aes_192_ofb(); }
-        case cipher::aes_256_ofb: { return EVP_aes_256_ofb(); }
+        case algo::aes_128_ofb: { return EVP_aes_128_ofb(); }
+        case algo::aes_192_ofb: { return EVP_aes_192_ofb(); }
+        case algo::aes_256_ofb: { return EVP_aes_256_ofb(); }
 
+#ifndef OPENSSL_NO_DES
         // 3DES
-        case cipher::des_ede3_ecb: { return EVP_des_ede3_cbc(); } // 3DES-CBC is the default for 3DES ECB
-        case cipher::des_ede3_cbc: { return EVP_des_ede3_cbc(); }
-        case cipher::des_ede3_cfb: { return EVP_des_ede3_cfb(); }
-        case cipher::des_ede3_ofb: { return EVP_des_ede3_ofb(); }
-        case cipher::des_ede_cbc: { return EVP_des_ede_cbc(); }
+        case algo::des_ede3_ecb: { return EVP_des_ede3_cbc(); } // 3DES-CBC is the default for 3DES ECB
+        case algo::des_ede3_cbc: { return EVP_des_ede3_cbc(); }
+        case algo::des_ede3_cfb: { return EVP_des_ede3_cfb(); }
+        case algo::des_ede3_ofb: { return EVP_des_ede3_ofb(); }
+        case algo::des_ede_cbc: { return EVP_des_ede_cbc(); }
 
         // DES (not recommended)
-        case cipher::des_ecb: { return EVP_des_cbc(); } // DES-CBC is the default for DES ECB
-        case cipher::des_cbc: { return EVP_des_cbc(); }
-        case cipher::des_cfb: { return EVP_des_cfb(); }
-        case cipher::des_ofb: { return EVP_des_ofb(); }
+        case algo::des_ecb: { return EVP_des_cbc(); } // DES-CBC is the default for DES ECB
+        case algo::des_cbc: { return EVP_des_cbc(); }
+        case algo::des_cfb: { return EVP_des_cfb(); }
+        case algo::des_ofb: { return EVP_des_ofb(); }
+#endif
 
+#ifndef OPENSSL_NO_BF
         // Blowfish
-        case cipher::bf_ecb: { return EVP_bf_cbc(); } // Blowfish-CBC is the default for Blowfish ECB
-        case cipher::bf_cbc: { return EVP_bf_cbc(); }
-        case cipher::bf_cfb: { return EVP_bf_cfb(); }
-        case cipher::bf_ofb: { return EVP_bf_ofb(); }
+        case algo::bf_ecb: { return EVP_bf_cbc(); } // Blowfish-CBC is the default for Blowfish ECB
+        case algo::bf_cbc: { return EVP_bf_cbc(); }
+        case algo::bf_cfb: { return EVP_bf_cfb(); }
+        case algo::bf_ofb: { return EVP_bf_ofb(); }
+#endif
 
+#ifndef OPENSSL_NO_CAST
         // CAST5
-        case cipher::cast5_ecb: { return EVP_cast5_cbc(); } // CAST5-CBC is the default for CAST5 ECB
-        case cipher::cast5_cbc: { return EVP_cast5_cbc(); }
-        case cipher::cast5_cfb: { return EVP_cast5_cfb(); }
-        case cipher::cast5_ofb: { return EVP_cast5_ofb(); }
+        case algo::cast5_ecb: { return EVP_cast5_cbc(); } // CAST5-CBC is the default for CAST5 ECB
+        case algo::cast5_cbc: { return EVP_cast5_cbc(); }
+        case algo::cast5_cfb: { return EVP_cast5_cfb(); }
+        case algo::cast5_ofb: { return EVP_cast5_ofb(); }
+#endif
 
+#ifndef OPENSSL_NO_RC2
         // RC2
-        case cipher::rc2_ecb: { return EVP_rc2_cbc(); } // RC2-CBC is the default for RC2 ECB
-        case cipher::rc2_cbc: { return EVP_rc2_cbc(); }
-        case cipher::rc2_cfb: { return EVP_rc2_cfb(); }
-        case cipher::rc2_ofb: { return EVP_rc2_ofb(); }
+        case algo::rc2_ecb: { return EVP_rc2_cbc(); } // RC2-CBC is the default for RC2 ECB
+        case algo::rc2_cbc: { return EVP_rc2_cbc(); }
+        case algo::rc2_cfb: { return EVP_rc2_cfb(); }
+        case algo::rc2_ofb: { return EVP_rc2_ofb(); }
+#endif
 
         default: { return EVP_aes_256_cbc(); }
         }
     }
 
-    static bool _validate_password_for_cipher(const cipher cip, std::size_t password_len)
+    static bool _validate_password_for_cipher(const algo algorithm, std::size_t password_len)
     {
-        switch (cip)
+        switch (algorithm)
         {
-        case cipher::none:
+        case algo::none:
             return true; // no password required
 
-        case cipher::des_ecb:
-        case cipher::des_cbc:
-        case cipher::des_cfb:
-        case cipher::des_ofb:
-        case cipher::des_ede_cbc:
-        case cipher::des_ede3_ecb:
-        case cipher::des_ede3_cbc:
-        case cipher::des_ede3_cfb:
-        case cipher::des_ede3_ofb:
+#ifndef OPENSSL_NO_DES
+        case algo::des_ecb:
+        case algo::des_cbc:
+        case algo::des_cfb:
+        case algo::des_ofb:
+        case algo::des_ede_cbc:
+        case algo::des_ede3_ecb:
+        case algo::des_ede3_cbc:
+        case algo::des_ede3_cfb:
+        case algo::des_ede3_ofb:
             return password_len >= 8;
+#endif
             
-        case cipher::aes_128_ecb:
-        case cipher::aes_128_cbc:
-        case cipher::aes_128_cfb:
-        case cipher::aes_128_ofb:
-        case cipher::aes_192_ecb:
-        case cipher::aes_192_cbc:
-        case cipher::aes_192_cfb:
-        case cipher::aes_192_ofb:
-        case cipher::aes_256_ecb:
-        case cipher::aes_256_cbc:
-        case cipher::aes_256_cfb:
-        case cipher::aes_256_ofb:
+        case algo::aes_128_ecb:
+        case algo::aes_128_cbc:
+        case algo::aes_128_cfb:
+        case algo::aes_128_ofb:
+        case algo::aes_192_ecb:
+        case algo::aes_192_cbc:
+        case algo::aes_192_cfb:
+        case algo::aes_192_ofb:
+        case algo::aes_256_ecb:
+        case algo::aes_256_cbc:
+        case algo::aes_256_cfb:
+        case algo::aes_256_ofb:
             return password_len >= 8;
             
         default:
             return password_len >= 4;
+        }
+    }
+
+    static bool _is_plain_valid(const std::size_t plain_len, 
+                                const padding pad_style,
+                                const RSA* rsa)
+    {
+        if (!rsa)
+            return false;
+        
+        std::size_t key_size = static_cast<std::size_t>(RSA_size(rsa));
+        if (key_size <= 0)
+            return false;
+
+        switch (pad_style) 
+        {
+            case padding::pkcs1:
+                if (plain_len > (key_size - 11))
+                    return false;
+                break;
+                
+            case padding::pkcs1_oaep:
+                if (plain_len > (key_size - 2 * 20 - 2))
+                    return false;
+                break;
+                
+            case padding::no_padding:
+                if (plain_len != (key_size))
+                    return false;
+                break;
+                
+            case padding::x931:
+                if (plain_len > (key_size - 11))
+                    return false;
+                break;
+                
+#ifdef RSA_PKCS1_PSS_PADDING
+            case padding::pkcs1_pss:
+                if (plain_len > (key_size - 2 * 20 - 2))
+                    return false;
+                break;
+#endif
+                
+            default:
+                return false;
+        }
+    
+        return true;
+    }
+
+    static bool _is_stream_valid(std::istream& in, 
+                                 const padding pad_style, 
+                                 const std::size_t key_size)
+    {
+        std::streampos current_pos = in.tellg();
+        in.seekg(0, std::ios::end);
+        std::streampos end_pos = in.tellg();
+        in.seekg(current_pos);
+        
+        std::size_t total_length = static_cast<std::size_t>(end_pos - current_pos);
+        switch (pad_style) 
+        {
+            case padding::no_padding:
+                return total_length % key_size == 0;
+                
+            case padding::pkcs1:
+                return total_length > 0;
+                
+            case padding::pkcs1_oaep:
+                return total_length > 0;
+                
+            case padding::x931:
+                return total_length > 0;
+                
+    #ifdef RSA_PKCS1_PSS_PADDING
+            case padding::pkcs1_pss:
+                return total_length > 0;
+    #endif
+
+            default:
+                return false;
         }
     }
 };

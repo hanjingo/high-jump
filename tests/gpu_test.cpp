@@ -1,11 +1,17 @@
 #include <gtest/gtest.h>
-// #include <libcpp/hardware/gpu.h>
+#include <libcpp/hardware/gpu.h>
 
-// TEST(gpu, gpu_count)
-// {
-//     uint32_t count = gpu_count();
-//     ASSERT_GE(count, 0) << "No GPU devices found";
-// }
+TEST(gpu, gpu_count)
+{
+    uint32_t count = gpu_count();
+    ASSERT_GE(count, 0) << "No GPU devices found";
+}
+
+TEST(gpu, gpu_count_by_backend)
+{
+    uint32_t count = gpu_count_by_backend(GPU_BACKEND_OPENCL);
+    ASSERT_GE(count, 0) << "No OpenCL GPU devices found";
+}
 
 // TEST(gpu, gpu_example)
 // {

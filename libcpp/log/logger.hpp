@@ -13,6 +13,20 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
 
+#if defined(QT_VERSION) && defined(QT_CORE_LIB)
+    #ifndef LIBCPP_QT_ENVIRONMENT
+    #define LIBCPP_QT_ENVIRONMENT 1
+    #endif
+
+    #include <QString>
+    #include <QDebug>
+    #include <QLoggingCategory>
+#else
+    #ifndef LIBCPP_QT_ENVIRONMENT
+    #define LIBCPP_QT_ENVIRONMENT 0
+    #endif
+#endif
+
 #ifndef LOG_QUEUE_SIZE
 #define LOG_QUEUE_SIZE 102400
 #endif
@@ -36,6 +50,31 @@ enum class log_lvl : int {
 };
 
 static std::mutex log_mu;
+
+// for qt environment
+#if LIBCPP_QT_ENVIRONMENT
+    static void default_qt_msg_handler(QtMsgType typ, const QMessageLogContext& context, const QString& str) 
+    {
+        switch (typ)
+        {
+            case QtDebugMsg: { libcpp::logger::instance()->debug(str.toUtf8().constData()); break; }
+            case QtWarningMsg: { libcpp::logger::instance()->warn(str.toUtf8().constData()); break; }
+            case QtCriticalMsg: { libcpp::logger::instance()->critical(str.toUtf8().constData()); break; }
+            case QtInfoMsg: { libcpp::logger::instance()->info(str.toUtf8().constData()); break; }
+            default: break;
+        };
+    };
+
+    static void install_qt_msg_handler(void(*fn)(QtMsgType, const QMessageLogContext&, const QString&))
+    {
+        qInstallMessageHandler(fn);
+    }
+
+    static void uninstall_qt_msg_handler()
+    {
+        qInstallMessageHandler(nullptr);
+    }
+#endif
 
 class logger
 {

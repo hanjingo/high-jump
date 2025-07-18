@@ -36,13 +36,6 @@
 
 #include <openssl/des.h>
 
-#ifdef DES_BLOCK_SZ
-#undef DES_BLOCK_SZ
-#warning "DES_BLOCK_SZ ALREADY DEFINED!!!"
-#endif
-
-#define DES_BLOCK_SZ 8
-
 namespace libcpp
 {
 
@@ -69,6 +62,8 @@ public:
         des_no_padding
     };
 
+    static constexpr std::size_t block_size = 8;
+
 public:
     // bytes -> encode bytes
     static bool encode(unsigned char* dst,
@@ -89,7 +84,7 @@ public:
             return false;
 
         std::vector<DES_key_schedule> key_schedules;
-        std::size_t n = multiple_key_(key_schedules, key, key_len);
+        std::size_t n = _multiple_key(key_schedules, key, key_len);
         std::size_t idx = 0;
         dst_len = 0;
         switch (algorithm)
@@ -99,20 +94,20 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, src + idx, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 memcpy(dst + idx, block, 8);
             }
             std::size_t remain = src_len - idx;
             if (pad_style == padding::des_no_padding && remain > 0) 
                 return false;
 
-            if (remain > 0 || is_need_padding_(pad_style)) 
+            if (remain > 0 || _is_need_padding(pad_style)) 
             {
                 unsigned char last_block[8];
-                padding_block_(last_block, 8, src + idx, remain, pad_style);
+                _padding_block(last_block, 8, src + idx, remain, pad_style);
                 DES_cblock block;
                 memcpy(block, last_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 memcpy(dst + idx, block, 8);
                 idx += 8;
             }
@@ -130,7 +125,7 @@ public:
                 for (int i = 0; i < 8; ++i)
                     block[i] ^= iv_block[i];
 
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 memcpy(dst + idx, block, 8);
                 memcpy(iv_block, block, 8);
             }
@@ -138,16 +133,16 @@ public:
             if (pad_style == padding::des_no_padding && remain > 0) 
                 return false;
 
-            if (remain > 0 || is_need_padding_(pad_style)) 
+            if (remain > 0 || _is_need_padding(pad_style)) 
             {
                 unsigned char last_block[8];
-                padding_block_(last_block, 8, src + idx, remain, pad_style);
+                _padding_block(last_block, 8, src + idx, remain, pad_style);
                 for (int i = 0; i < 8; ++i)
                     last_block[i] ^= iv_block[i];
 
                 DES_cblock block;
                 memcpy(block, last_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 memcpy(dst + idx, block, 8);
                 idx += 8;
             }
@@ -164,24 +159,24 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 for (int k = 0; k < 8; ++k)
                     dst[i * 8 + k] = src[i * 8 + k] ^ block[k];
 
                 memcpy(iv_block, dst + i * 8, 8);
             }
             idx = full_blocks * 8;
-            if (is_need_padding_(pad_style)) 
+            if (_is_need_padding(pad_style)) 
             {
                 unsigned char last_block[8] = {0};
                 if (remain > 0)
-                    padding_block_(last_block, 8, src + idx, remain, pad_style);
+                    _padding_block(last_block, 8, src + idx, remain, pad_style);
                 else
-                    padding_block_(last_block, 8, nullptr, 0, pad_style);
+                    _padding_block(last_block, 8, nullptr, 0, pad_style);
 
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 for (int k = 0; k < 8; ++k)
                     dst[idx + k] = last_block[k] ^ block[k];
 
@@ -194,7 +189,7 @@ public:
 
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 for (int k = 0; k < remain; ++k)
                     dst[idx + k] = src[idx + k] ^ block[k];
 
@@ -216,24 +211,24 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 for (int k = 0; k < 8; ++k)
                     dst[i * 8 + k] = src[i * 8 + k] ^ block[k];
 
                 memcpy(iv_block, block, 8);
             }
             idx = full_blocks * 8;
-            if (is_need_padding_(pad_style)) 
+            if (_is_need_padding(pad_style)) 
             {
                 unsigned char last_block[8] = {0};
                 if (remain > 0)
-                    padding_block_(last_block, 8, src + idx, remain, pad_style);
+                    _padding_block(last_block, 8, src + idx, remain, pad_style);
                 else
-                    padding_block_(last_block, 8, nullptr, 0, pad_style);
+                    _padding_block(last_block, 8, nullptr, 0, pad_style);
 
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 for (int k = 0; k < 8; ++k)
                     dst[idx + k] = last_block[k] ^ block[k];
 
@@ -243,7 +238,7 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
+                _ede_encode(key_schedules, block);
                 for (int k = 0; k < remain; ++k)
                     dst[idx + k] = src[idx + k] ^ block[k];
 
@@ -258,7 +253,7 @@ public:
             memcpy(ctr_block, iv, 8);
             idx = 0;
             std::size_t padded_len = src_len;
-            if (is_need_padding_(pad_style)) 
+            if (_is_need_padding(pad_style)) 
             {
                 std::size_t pad = 8 - (src_len % 8);
                 if (pad == 0) pad = 8;
@@ -274,15 +269,15 @@ public:
                 else if (idx < src_len) 
                 {
                     std::size_t remain_bytes = src_len - idx;
-                    padding_block_(block, 8, src + idx, remain_bytes, pad_style);
+                    _padding_block(block, 8, src + idx, remain_bytes, pad_style);
                 } 
                 else 
                 {
-                    padding_block_(block, 8, nullptr, 0, pad_style);
+                    _padding_block(block, 8, nullptr, 0, pad_style);
                 }
                 DES_cblock keystream;
                 memcpy(keystream, ctr_block, 8);
-                ede_encode_(key_schedules, keystream);
+                _ede_encode(key_schedules, keystream);
                 for (std::size_t i = 0; i < 8; ++i)
                     dst[idx + i] = block[i] ^ keystream[i];
                 for (int i = 7; i >= 0; --i)
@@ -342,75 +337,77 @@ public:
         if (!is_key_valid(key, key_len) || !is_iv_valid(algorithm, iv, iv_len))
             return false;
 
-        if (!is_plain_valid(in, pad_style))
-            return false;
-
         std::vector<DES_key_schedule> key_schedules;
-        std::size_t n = multiple_key_(key_schedules, key, key_len);
-        unsigned char inbuf[DES_BLOCK_SZ] = {0};
-        unsigned char outbuf[DES_BLOCK_SZ] = {0};
+        std::size_t n = _multiple_key(key_schedules, key, key_len);
+
+        unsigned char inbuf[block_size] = {0};
+        unsigned char outbuf[block_size] = {0};
         DES_cblock iv_block;
-        if (algorithm != algo::des_ecb && algorithm != algo::des_ctr && iv && iv_len >= 8)
+        if (algorithm != algo::des_ecb && iv && iv_len >= 8)
             memcpy(iv_block, iv, 8);
 
         DES_cblock ctr_block;
-        if (algorithm == algo::des_ctr) 
-        {
-            if (!iv || iv_len < 8) 
-                return false;
-
+        if (algorithm == algo::des_ctr && iv && iv_len >= 8)
             memcpy(ctr_block, iv, 8);
-        }
 
-        while (true) 
-        {
-            in.read(reinterpret_cast<char*>(inbuf), DES_BLOCK_SZ);
+        while (true) {
+            in.read(reinterpret_cast<char*>(inbuf), block_size);
             std::streamsize read_len = in.gcount();
 
             if (read_len == 0)
                 break;
 
+            // check if this is the last block
             bool is_last_block = false;
-            if (read_len < (std::streamsize)DES_BLOCK_SZ) 
+            if (read_len < block_size) 
             {
                 is_last_block = true;
             } 
             else 
             {
-                char peek;
-                in.read(&peek, 1);
-                if (in.gcount() == 0)
+                // peek one byte to check if there's more data
+                char peek_byte;
+                if (!in.read(&peek_byte, 1))
                     is_last_block = true;
                 else
-                    in.seekg(-1, std::ios::cur);
+                    in.seekg(-1, std::ios::cur);  // rewind
             }
 
-            if (!is_last_block)
+            if (!is_last_block) 
             {
-                stream_block_encode_(key_schedules, algorithm, out, iv_block, ctr_block, inbuf, outbuf);
+                _stream_block_encode(key_schedules, algorithm, out, iv_block, ctr_block, inbuf, outbuf);
                 continue;
             }
 
-            // handle last block
-            // nopadding style all complete required
-            if (pad_style == padding::des_no_padding && read_len != DES_BLOCK_SZ) 
-                return false;
-
-            // iso_iec_7816_4_padding style all complete required
-            if (pad_style == padding::des_iso_iec_7816_4_padding && read_len == DES_BLOCK_SZ)
+            // handle the last block
+            if (pad_style == padding::des_no_padding)
             {
-                // process normal block
-                stream_block_encode_(key_schedules, algorithm, out, iv_block, ctr_block, inbuf, outbuf);
-
-                // ISO/IEC 7816-4 padding is 0x80 followed by
-                unsigned char padding_block[DES_BLOCK_SZ] = {0x80, 0, 0, 0, 0, 0, 0, 0};
-                stream_block_encode_(key_schedules, algorithm, out, iv_block, ctr_block, padding_block, outbuf);
-
+                if (read_len != block_size)
+                    return false;
+                
+                _stream_block_encode(key_schedules, algorithm, out, iv_block, ctr_block, inbuf, outbuf);
                 return true;
             }
 
-            // for other padding styles
-            last_block_stream_encode_(key_schedules, algorithm, pad_style, out, iv_block, ctr_block, inbuf, read_len, outbuf);
+            // padding for the last block
+            if (read_len == block_size) 
+            {
+                // handler current block
+                _stream_block_encode(key_schedules, algorithm, out, iv_block, ctr_block, inbuf, outbuf);
+                
+                // padding block
+                unsigned char padding_block[block_size];
+                _padding_block(padding_block, block_size, nullptr, 0, pad_style);
+                _stream_block_encode(key_schedules, algorithm, out, iv_block, ctr_block, padding_block, outbuf);
+            } 
+            else 
+            {
+                // padding for the last block
+                unsigned char padded_block[block_size];
+                _padding_block(padded_block, block_size, inbuf, read_len, pad_style);
+                _stream_block_encode(key_schedules, algorithm, out, iv_block, ctr_block, padded_block, outbuf);
+            }
+            
             break;
         }
 
@@ -473,7 +470,7 @@ public:
             return false;
 
         std::vector<DES_key_schedule> key_schedules;
-        std::size_t n = multiple_key_(key_schedules, key, key_len);
+        std::size_t n = _multiple_key(key_schedules, key, key_len);
         std::size_t idx = 0;
         dst_len = 0;
         switch (algorithm)
@@ -483,7 +480,7 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, src + idx, 8);
-                ede_decode_(key_schedules, block);
+                _ede_decode(key_schedules, block);
                 memcpy(dst + idx, block, 8);
             }
             dst_len = idx;
@@ -497,7 +494,7 @@ public:
                 DES_cblock block, tmp;
                 memcpy(block, src + idx, 8);
                 memcpy(tmp, block, 8);
-                ede_decode_(key_schedules, block);
+                _ede_decode(key_schedules, block);
                 for (int i = 0; i < 8; ++i)
                     block[i] ^= iv_block[i];
 
@@ -516,7 +513,7 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block); // same with encode
+                _ede_encode(key_schedules, block); // same with encode
                 for (int k = 0; k < 8; ++k)
                     dst[i * 8 + k] = src[i * 8 + k] ^ block[k];
 
@@ -527,7 +524,7 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block); // same with encode
+                _ede_encode(key_schedules, block); // same with encode
                 for (int k = 0; k < remain; ++k)
                     dst[idx + k] = src[idx + k] ^ block[k];
 
@@ -545,7 +542,7 @@ public:
             {
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block); // same with encode
+                _ede_encode(key_schedules, block); // same with encode
                 for (int k = 0; k < 8; ++k)
                     dst[i * 8 + k] = src[i * 8 + k] ^ block[k];
 
@@ -555,7 +552,7 @@ public:
             if (remain > 0) {
                 DES_cblock block;
                 memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block); // same with encode
+                _ede_encode(key_schedules, block); // same with encode
                 for (int k = 0; k < remain; ++k)
                     dst[idx + k] = src[idx + k] ^ block[k];
 
@@ -572,7 +569,7 @@ public:
             {
                 DES_cblock keystream;
                 memcpy(keystream, ctr_block, 8);
-                ede_encode_(key_schedules, keystream); // same with encode
+                _ede_encode(key_schedules, keystream); // same with encode
                 std::size_t chunk = (src_len - idx >= 8) ? 8 : (src_len - idx);
                 for (std::size_t i = 0; i < chunk; ++i)
                     dst[idx + i] = src[idx + i] ^ keystream[i];
@@ -587,7 +584,7 @@ public:
         }
         }
 
-        unpadding_block_(dst, dst_len, pad_style);
+        _unpadding_block(dst, dst_len, pad_style);
         return dst_len > 0;
     }
 
@@ -638,11 +635,12 @@ public:
             return false;
 
         std::vector<DES_key_schedule> key_schedules;
-        std::size_t n = multiple_key_(key_schedules, key, key_len);
+        std::size_t n = _multiple_key(key_schedules, key, key_len);
 
-        constexpr std::size_t block_size = 8;
-        char inbuf[block_size] = {0};
-        char outbuf[block_size] = {0};
+        unsigned char inbuf[block_size] = {0};
+        unsigned char outbuf[block_size] = {0};
+        unsigned char prev_outbuf[block_size] = {0};
+        
         DES_cblock iv_block;
         if (algorithm != algo::des_ecb && iv && iv_len >= 8)
             memcpy(iv_block, iv, 8);
@@ -651,150 +649,100 @@ public:
         if (algorithm == algo::des_ctr && iv && iv_len >= 8)
             memcpy(ctr_block, iv, 8);
 
-        std::streampos file_end;
-        in.seekg(0, std::ios::end);
-        file_end = in.tellg();
-        in.seekg(0, std::ios::beg);
+        bool has_previous_block = false;
+        bool is_first_block = true;
 
-        while (in.tellg() < file_end) 
+        while (in) 
         {
-            in.read(inbuf, block_size);
+            in.read(reinterpret_cast<char*>(inbuf), block_size);
             std::streamsize read_len = in.gcount();
+            
             if (read_len == 0)
                 break;
 
-            bool is_last_block = (in.tellg() == file_end);
+            if (read_len != block_size)
+                return false;
 
-            if (is_last_block) 
-            {
-                switch (algorithm) {
+            // decode the current block
+            switch (algorithm) {
                 case algo::des_ecb: {
                     DES_cblock block;
                     memcpy(block, inbuf, block_size);
-                    ede_decode_(key_schedules, block);
+                    _ede_decode(key_schedules, block);
                     memcpy(outbuf, block, block_size);
-                    std::size_t out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    out.write(outbuf, out_len);
                     break;
                 }
                 case algo::des_cbc: {
                     DES_cblock block, tmp;
                     memcpy(block, inbuf, block_size);
                     memcpy(tmp, block, block_size);
-                    ede_decode_(key_schedules, block);
-                    for (int i = 0; i < 8; ++i)
+                    _ede_decode(key_schedules, block);
+                    for (int i = 0; i < block_size; ++i)
                         block[i] ^= iv_block[i];
-
                     memcpy(outbuf, block, block_size);
-                    memcpy(iv_block, tmp, 8);
-                    std::size_t out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    out.write(outbuf, out_len);
+                    memcpy(iv_block, tmp, block_size);
                     break;
                 }
                 case algo::des_cfb: {
                     DES_cblock block;
-                    memcpy(block, iv_block, 8);
-                    ede_encode_(key_schedules, block); // same with encode
-                    for (int k = 0; k < 8; ++k)
+                    memcpy(block, iv_block, block_size);
+                    _ede_encode(key_schedules, block);
+                    for (int k = 0; k < block_size; ++k)
                         outbuf[k] = inbuf[k] ^ block[k];
-
-                    memcpy(iv_block, inbuf, 8);
-                    std::size_t out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    out.write(outbuf, out_len);
+                    memcpy(iv_block, inbuf, block_size);
                     break;
                 }
                 case algo::des_ofb: {
                     DES_cblock block;
-                    memcpy(block, iv_block, 8);
-                    ede_encode_(key_schedules, block); // same with encode
-                    for (int k = 0; k < 8; ++k)
+                    memcpy(block, iv_block, block_size);
+                    _ede_encode(key_schedules, block);
+                    for (int k = 0; k < block_size; ++k)
                         outbuf[k] = inbuf[k] ^ block[k];
-
-                    memcpy(iv_block, block, 8);
-                    std::size_t out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    out.write(outbuf, out_len);
+                    memcpy(iv_block, block, block_size);
                     break;
                 }
                 case algo::des_ctr: {
                     DES_cblock keystream;
-                    memcpy(keystream, ctr_block, 8);
-                    ede_encode_(key_schedules, keystream); // same with encode
+                    memcpy(keystream, ctr_block, block_size);
+                    _ede_encode(key_schedules, keystream);
                     for (std::size_t i = 0; i < block_size; ++i)
                         outbuf[i] = inbuf[i] ^ keystream[i];
+                    for (int i = block_size - 1; i >= 0; --i)
+                        if (++ctr_block[i] != 0) { break; }
 
-                    for (int i = 7; i >= 0; --i)
-                        if (++ctr_block[i] != 0) {break;}
-
-                    std::size_t out_len = block_size;
-                    unpadding_block_(reinterpret_cast<unsigned char*>(outbuf), out_len, pad_style);
-                    out.write(outbuf, out_len);
                     break;
                 }
-                }
-            } 
-            else 
-            {
-                switch (algorithm) {
-                case algo::des_ecb: {
-                    DES_cblock block;
-                    memcpy(block, inbuf, block_size);
-                    ede_decode_(key_schedules, block);
-                    out.write(reinterpret_cast<const char*>(block), block_size);
-                    break;
-                }
-                case algo::des_cbc: {
-                    DES_cblock block, tmp;
-                    memcpy(block, inbuf, block_size);
-                    memcpy(tmp, block, block_size);
-                    ede_decode_(key_schedules, block);
-                    for (int i = 0; i < 8; ++i)
-                        block[i] ^= iv_block[i];
-
-                    out.write(reinterpret_cast<const char*>(block), block_size);
-                    memcpy(iv_block, tmp, 8);
-                    break;
-                }
-                case algo::des_cfb: {
-                    DES_cblock block;
-                    memcpy(block, iv_block, 8);
-                    ede_encode_(key_schedules, block); // same with encode
-                    for (int k = 0; k < 8; ++k)
-                        outbuf[k] = inbuf[k] ^ block[k];
-
-                    out.write(outbuf, block_size);
-                    memcpy(iv_block, inbuf, 8);
-                    break;
-                }
-                case algo::des_ofb: {
-                    DES_cblock block;
-                    memcpy(block, iv_block, 8);
-                    ede_encode_(key_schedules, block); // same with encode
-                    for (int k = 0; k < 8; ++k)
-                        outbuf[k] = inbuf[k] ^ block[k];
-
-                    out.write(outbuf, block_size);
-                    memcpy(iv_block, block, 8);
-                    break;
-                }
-                case algo::des_ctr: {
-                    DES_cblock keystream;
-                    memcpy(keystream, ctr_block, 8);
-                    ede_encode_(key_schedules, keystream); // same with encode
-                    for (std::size_t i = 0; i < block_size; ++i)
-                        outbuf[i] = inbuf[i] ^ keystream[i];
-
-                    out.write(outbuf, block_size);
-                    for (int i = 7; i >= 0; --i)
-                        if (++ctr_block[i] != 0) {break;}
-                        
-                    break;
-                }
-                }
+                default: return false; // unsupported algorithm
             }
+
+            // check if this is the last block
+            char peek_byte;
+            bool has_next_block = false;
+            if (in.read(&peek_byte, 1)) 
+            {
+                in.seekg(-1, std::ios::cur);  // rewind
+                has_next_block = true;
+            }
+
+            // If there is a previous block, we can safely output it now (since it's not the last block)
+            if (has_previous_block)
+                out.write(reinterpret_cast<char*>(prev_outbuf), block_size);
+
+            // If this is the last block, we need to perform unpadding
+            if (!has_next_block) 
+            {
+                std::size_t final_len = block_size;
+                if (pad_style != padding::des_no_padding) 
+                    _unpadding_block(outbuf, final_len, pad_style);
+
+                out.write(reinterpret_cast<char*>(outbuf), final_len);
+                break;
+            }
+
+            // save the current block as the previous block for the next iteration
+            memcpy(prev_outbuf, outbuf, block_size);
+            has_previous_block = true;
+            is_first_block = false;
         }
 
         return true;
@@ -901,39 +849,41 @@ public:
 
 private:
     // padding block
-    static void padding_block_(unsigned char* dst, 
+    static void _padding_block(unsigned char* dst, 
                                const std::size_t dst_len,
                                const unsigned char* src, 
                                const std::size_t src_len,
                                const padding pad_style)
     {
         memset(dst, 0, dst_len);
-        // memcpy(dst, src, src_len);
         if (src && src_len > 0)
             memcpy(dst, src, std::min(src_len, dst_len));
 
         unsigned char pad_val = static_cast<unsigned char>(dst_len - src_len);
         switch (pad_style) {
         case padding::des_pkcs5_padding:
-        case padding::des_pkcs7_padding:
+        case padding::des_pkcs7_padding: {
             for (std::size_t i = src_len; i < dst_len; ++i)
                 dst[i] = pad_val;
             break;
-        case padding::des_zero_padding:
-            break;
-        case padding::des_iso10126_padding:
+        }
+        case padding::des_iso10126_padding: {
             for (std::size_t i = src_len; i < dst_len - 1; ++i)
                 dst[i] = static_cast<unsigned char>(rand() % 256);
 
             dst[dst_len - 1] = pad_val;
             break;
-        case padding::des_ansix923_padding:
+        }
+        case padding::des_ansix923_padding: {
             dst[dst_len - 1] = pad_val;
             break;
-        case padding::des_iso_iec_7816_4_padding:
+        }
+        case padding::des_iso_iec_7816_4_padding: {
             if (src_len < dst_len) 
                 dst[src_len] = 0x80;
             break;
+        }
+        case padding::des_zero_padding:
         case padding::des_no_padding:
             break;
         default:
@@ -942,7 +892,7 @@ private:
     }
 
     // unpadding block
-    static void unpadding_block_(unsigned char* buf, std::size_t& len, const padding pad_style)
+    static void _unpadding_block(unsigned char* buf, std::size_t& len, const padding pad_style)
     {
         switch (pad_style) {
         case padding::des_pkcs5_padding:
@@ -1008,7 +958,7 @@ private:
         }
     }
 
-    static bool is_need_padding_(const padding pad_style)
+    static bool _is_need_padding(const padding pad_style)
     {
         switch (pad_style)
         {
@@ -1026,7 +976,7 @@ private:
         }
     }
 
-    static std::size_t multiple_key_(std::vector<DES_key_schedule>& key_schedules, 
+    static std::size_t _multiple_key(std::vector<DES_key_schedule>& key_schedules, 
                                      const unsigned char* key, 
                                      const std::size_t key_len)
     {
@@ -1041,7 +991,7 @@ private:
         return n;
     }
 
-    static void ede_encode_(std::vector<DES_key_schedule>& key_schedules, DES_cblock& block)
+    static void _ede_encode(std::vector<DES_key_schedule>& key_schedules, DES_cblock& block)
     {
         // E(K1) -> D(K2) -> E(K3) -> ...
         if (key_schedules.size() == 1) 
@@ -1070,7 +1020,7 @@ private:
         }
     }
 
-    static void ede_decode_(std::vector<DES_key_schedule>& key_schedules, DES_cblock& block)
+    static void _ede_decode(std::vector<DES_key_schedule>& key_schedules, DES_cblock& block)
     {
         // ... -> D(K3) -> E(K2) -> D(K1)
         if (key_schedules.size() == 1) 
@@ -1099,7 +1049,7 @@ private:
         }
     }
 
-    static void stream_block_encode_(std::vector<DES_key_schedule>& key_schedules,
+    static void _stream_block_encode(std::vector<DES_key_schedule>& key_schedules,
                                      const algo algorithm,
                                      std::ostream& out,
                                      unsigned char* iv_block,
@@ -1110,126 +1060,58 @@ private:
         switch (algorithm) {
             case algo::des_ecb: {
                 DES_cblock block;
-                memcpy(block, inbuf, DES_BLOCK_SZ);
-                ede_encode_(key_schedules, block);
-                out.write(reinterpret_cast<const char*>(block), DES_BLOCK_SZ);
+                memcpy(block, inbuf, block_size);
+                _ede_encode(key_schedules, block);
+                out.write(reinterpret_cast<const char*>(block), block_size);
                 break;
             }
             case algo::des_cbc: {
                 DES_cblock block;
-                memcpy(block, inbuf, DES_BLOCK_SZ);
-                for (int i = 0; i < 8; ++i)
+                memcpy(block, inbuf, block_size);
+                for (int i = 0; i < block_size; ++i)
                     block[i] ^= iv_block[i];
 
-                ede_encode_(key_schedules, block);
-                out.write(reinterpret_cast<const char*>(block), DES_BLOCK_SZ);
-                memcpy(iv_block, block, 8);
+                _ede_encode(key_schedules, block);
+                out.write(reinterpret_cast<const char*>(block), block_size);
+                memcpy(iv_block, block, block_size);
                 break;
             }
             case algo::des_cfb: {
                 DES_cblock block;
-                memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
-                for (int k = 0; k < 8; ++k)
+                memcpy(block, iv_block, block_size);
+                _ede_encode(key_schedules, block);
+                for (int k = 0; k < block_size; ++k)
                     outbuf[k] = inbuf[k] ^ block[k];
 
-                out.write(reinterpret_cast<const char*>(outbuf), DES_BLOCK_SZ);
-                memcpy(iv_block, outbuf, 8);
+                out.write(reinterpret_cast<const char*>(outbuf), block_size);
+                memcpy(iv_block, outbuf, block_size);
                 break;
             }
             case algo::des_ofb: {
                 DES_cblock block;
-                memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
-                for (int k = 0; k < 8; ++k)
+                memcpy(block, iv_block, block_size);
+                _ede_encode(key_schedules, block);
+                for (int k = 0; k < block_size; ++k)
                     outbuf[k] = inbuf[k] ^ block[k];
 
-                out.write(reinterpret_cast<const char*>(outbuf), DES_BLOCK_SZ);
-                memcpy(iv_block, block, 8);
+                out.write(reinterpret_cast<const char*>(outbuf), block_size);
+                memcpy(iv_block, block, block_size);
                 break;
             }
             case algo::des_ctr: {
                 DES_cblock keystream;
-                memcpy(keystream, ctr_block, 8);
-                ede_encode_(key_schedules, keystream);
-                for (std::size_t i = 0; i < DES_BLOCK_SZ; ++i)
+                memcpy(keystream, ctr_block, block_size);
+                _ede_encode(key_schedules, keystream);
+                for (std::size_t i = 0; i < block_size; ++i)
                     outbuf[i] = inbuf[i] ^ keystream[i];
 
-                out.write(reinterpret_cast<const char*>(outbuf), DES_BLOCK_SZ);
-                for (int i = 7; i >= 0; --i)
+                out.write(reinterpret_cast<const char*>(outbuf), block_size);
+                for (int i = block_size - 1; i >= 0; --i)
                     if (++ctr_block[i] != 0) break;
 
                 break;
             }
-        }
-    }
-
-    static void last_block_stream_encode_(std::vector<DES_key_schedule>& key_schedules,
-                                          const algo algorithm,
-                                          const padding pad_style,
-                                          std::ostream& out,
-                                          unsigned char* iv_block,
-                                          unsigned char* ctr_block,
-                                          unsigned char* inbuf,
-                                          std::size_t read_len,
-                                          unsigned char* outbuf)
-    {
-        unsigned char last_block[DES_BLOCK_SZ];
-        padding_block_(last_block, DES_BLOCK_SZ, reinterpret_cast<unsigned char*>(inbuf), static_cast<std::size_t>(read_len), pad_style);
-        switch (algorithm) {
-            case algo::des_ecb: {
-                DES_cblock block;
-                memcpy(block, last_block, DES_BLOCK_SZ);
-                ede_encode_(key_schedules, block);
-                out.write(reinterpret_cast<const char*>(block), DES_BLOCK_SZ);
-                break;
-            }
-            case algo::des_cbc: {
-                DES_cblock block;
-                memcpy(block, last_block, DES_BLOCK_SZ);
-                for (int i = 0; i < 8; ++i)
-                    block[i] ^= iv_block[i];
-
-                ede_encode_(key_schedules, block);
-                out.write(reinterpret_cast<const char*>(block), DES_BLOCK_SZ);
-                memcpy(iv_block, block, 8);
-                break;
-            }
-            case algo::des_cfb: {
-                DES_cblock block;
-                memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
-                for (int k = 0; k < 8; ++k)
-                    outbuf[k] = last_block[k] ^ block[k];
-
-                out.write(reinterpret_cast<const char*>(outbuf), DES_BLOCK_SZ);
-                memcpy(iv_block, reinterpret_cast<unsigned char*>(outbuf), 8);
-                break;
-            }
-            case algo::des_ofb: {
-                DES_cblock block;
-                memcpy(block, iv_block, 8);
-                ede_encode_(key_schedules, block);
-                for (int k = 0; k < 8; ++k)
-                    outbuf[k] = last_block[k] ^ block[k];
-
-                out.write(reinterpret_cast<const char*>(outbuf), DES_BLOCK_SZ);
-                memcpy(iv_block, block, 8);
-                break;
-            }
-            case algo::des_ctr: {
-                DES_cblock keystream;
-                memcpy(keystream, ctr_block, 8);
-                ede_encode_(key_schedules, keystream);
-                for (std::size_t i = 0; i < DES_BLOCK_SZ; ++i)
-                    outbuf[i] = last_block[i] ^ keystream[i];
-
-                out.write(reinterpret_cast<const char*>(outbuf), DES_BLOCK_SZ);
-                for (int i = 7; i >= 0; --i)
-                    if (++ctr_block[i] != 0) {break;}
-
-                break;
-            }
+            default: break;
         }
     }
 

@@ -67,4 +67,19 @@ inline const char* _COMPILE_TIME() {
 #define DEPRECATED(msg)
 #endif
 
+
+#if defined(QT_VERSION) && defined(QT_CORE_LIB)
+    #define LIBCPP_QT_ENVIRONMENT 1
+
+    #define LIBCPP_QT_VERSION QT_VERSION
+    #define LIBCPP_QT_VERSION_MAJOR QT_VERSION_MAJOR
+    #define LIBCPP_QT_VERSION_MINOR QT_VERSION_MINOR
+    #define LIBCPP_QT_VERSION_PATCH QT_VERSION_PATCH
+
+    #define LIBCPP_QT_VERSION_CHECK(major, minor, patch) \
+        QT_VERSION_CHECK(major, minor, patch)
+#else
+    #define LIBCPP_QT_ENVIRONMENT 0
+#endif
+
 #endif

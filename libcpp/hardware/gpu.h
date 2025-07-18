@@ -1,88 +1,80 @@
-// /*
-// *  This file is part of libcpp.
-// *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
-// *
-// *  This program is free software: you can redistribute it and/or modify
-// *  it under the terms of the GNU General Public License as published by
-// *  the Free Software Foundation, either version 3 of the License, or
-// *  (at your option) any later version.
-// *
-// *  This program is distributed in the hope that it will be useful,
-// *  but WITHOUT ANY WARRANTY; without even the implied warranty of
-// *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// *  GNU General Public License for more details.
-// *
-// *  You should have received a copy of the GNU General Public License
-// *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-// */
+/*
+*  This file is part of libcpp.
+*  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
-// #ifndef GPU_H
-// #define GPU_H
+#ifndef GPU_H
+#define GPU_H
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 
-// #ifdef __cplusplus
-// extern "C" {
-// #endif
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-// typedef enum {
-//     GPU_BACKEND_NONE = 0,
-//     GPU_BACKEND_OPENCL = 1,
-//     GPU_BACKEND_CUDA = 2
-// } gpu_backend_t;
+typedef enum {
+    GPU_BACKEND_NONE = 0,
+    GPU_BACKEND_OPENCL = 1,
+    GPU_BACKEND_CUDA = 2
+} gpu_backend_t;
 
-// typedef enum {
-//     GPU_DEVICE_TYPE_ALL = 0,
-//     GPU_DEVICE_TYPE_GPU = 1,
-//     GPU_DEVICE_TYPE_CPU = 2
-// } gpu_device_type_t;
+typedef struct {
+    void* id;// （OpenCL: cl_device_id, CUDA: int
+    char name[256];
+    char vendor[128];
+    char version[128];
+    unsigned long long global_mem_sz;
+    unsigned int compute_units;
+    unsigned int work_group_sz;
+    gpu_backend_t backend;
+} gpu_device_info_t;
 
-// typedef struct {
-//     void* id;// （OpenCL: cl_device_id, CUDA: int
-//     char name[256];
-//     char vendor[128];
-//     char version[128];
-//     unsigned long long global_mem_sz;
-//     unsigned int compute_units;
-//     unsigned int work_group_sz;
-//     gpu_backend_t backend;
-//     gpu_device_type_t device_type;
-// } gpu_device_info_t;
+typedef struct {
+    void* context; // for OpenCL: 
+    void* queue;
+    void* device;
+    gpu_backend_t backend;
+} gpu_context_t;
 
-// typedef struct {
-//     void* context; // for OpenCL: 
-//     void* queue;
-//     void* device;
-//     gpu_backend_t backend;
-// } gpu_context_t;
+typedef struct {
+    void* program;
+    void* kernel;
+    gpu_backend_t backend;
+} gpu_program_t;
 
-// typedef struct {
-//     void* program;
-//     void* kernel;
-//     gpu_backend_t backend;
-// } gpu_program_t;
+typedef struct {
+    void* ptr;
+    size_t size;
+    gpu_backend_t backend;
+} gpu_buffer_t;
 
-// typedef struct {
-//     void* ptr;
-//     size_t size;
-//     gpu_backend_t backend;
-// } gpu_buffer_t;
+typedef bool (*gpu_device_callback_t)(const gpu_device_info_t* info, void* user_data);
 
-// typedef bool (*gpu_device_callback_t)(const gpu_device_info_t* info, void* user_data);
-
-// // ----------------------------- gpu API define ------------------------------------
-// // check gpu is available
+// ----------------------------- gpu API define ------------------------------------
+// check gpu is available
 // bool gpu_is_opencl_available(void);
 // bool gpu_is_cuda_available(void);
 // gpu_backend_t gpu_get_preferred_backend(void);
 
-// // get gpu device count
-// int gpu_count(void);
-// int gpu_count_by_backend(gpu_backend_t backend);
-// int gpu_count_by_type(gpu_device_type_t type);
+// get gpu device count
+int gpu_count(void);
+int gpu_count_by_backend(gpu_backend_t backend);
 
 // // get gpu device info
 // int gpu_get_devices(gpu_device_info_t** infos, int* count);
@@ -214,61 +206,61 @@
 //     return GPU_BACKEND_NONE;
 // }
 
-// int gpu_count(void) 
-// {
-//     int opencl_count = 0;
-//     int cuda_count = 0;
+int gpu_count(void) 
+{
+    int opencl_count = 0;
+    int cuda_count = 0;
     
-// #ifdef GPU_ENABLE_OPENCL
-//     opencl_count = gpu_count_by_backend(GPU_BACKEND_OPENCL);
-// #endif
+#ifdef GPU_ENABLE_OPENCL
+    opencl_count = gpu_count_by_backend(GPU_BACKEND_OPENCL);
+#endif
 
-// #ifdef GPU_ENABLE_CUDA
-//     cuda_count = gpu_count_by_backend(GPU_BACKEND_CUDA);
-// #endif
+#ifdef GPU_ENABLE_CUDA
+    cuda_count = gpu_count_by_backend(GPU_BACKEND_CUDA);
+#endif
 
-//     return opencl_count + cuda_count;
-// }
+    return opencl_count + cuda_count;
+}
 
-// int gpu_count_by_backend(gpu_backend_t backend) 
-// {
-//     switch (backend) {
-// #ifdef GPU_ENABLE_OPENCL
-//         case GPU_BACKEND_OPENCL: {
-//             cl_uint num_platforms = 0;
-//             if (clGetPlatformIDs(0, NULL, &num_platforms) != CL_SUCCESS || num_platforms == 0) 
-//                 return 0;
+int gpu_count_by_backend(gpu_backend_t backend) 
+{
+    switch (backend) {
+#ifdef GPU_ENABLE_OPENCL
+        case GPU_BACKEND_OPENCL: {
+            cl_uint num_platforms = 0;
+            if (clGetPlatformIDs(0, NULL, &num_platforms) != CL_SUCCESS || num_platforms == 0) 
+                return 0;
 
-//             cl_platform_id* platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_platforms);
-//             if (!platforms) return 0;
+            cl_platform_id* platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_platforms);
+            if (!platforms) return 0;
             
-//             clGetPlatformIDs(num_platforms, platforms, NULL);
+            clGetPlatformIDs(num_platforms, platforms, NULL);
 
-//             cl_uint total_devices = 0;
-//             for (cl_uint i = 0; i < num_platforms; ++i) 
-//             {
-//                 cl_uint num_devices_in_platform = 0;
-//                 clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices_in_platform);
-//                 total_devices += num_devices_in_platform;
-//             }
-//             free(platforms);
-//             return (int)total_devices;
-//         }
-// #endif
+            cl_uint total_devices = 0;
+            for (cl_uint i = 0; i < num_platforms; ++i) 
+            {
+                cl_uint num_devices_in_platform = 0;
+                clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices_in_platform);
+                total_devices += num_devices_in_platform;
+            }
+            free(platforms);
+            return (int)total_devices;
+        }
+#endif
 
-// #ifdef GPU_ENABLE_CUDA
-//         case GPU_BACKEND_CUDA: {
-//             int device_count = 0;
-//             if (cudaGetDeviceCount(&device_count) != cudaSuccess)
-//                 return 0;
+#ifdef GPU_ENABLE_CUDA
+        case GPU_BACKEND_CUDA: {
+            int device_count = 0;
+            if (cudaGetDeviceCount(&device_count) != cudaSuccess)
+                return 0;
 
-//             return device_count;
-//         }
-// #endif
-//         default:
-//             return 0;
-//     }
-// }
+            return device_count;
+        }
+#endif
+        default:
+            return 0;
+    }
+}
 
 // int gpu_get_devices(gpu_device_info_t** infos, int* count) 
 // {
@@ -600,8 +592,8 @@
 //     return gpu_create_context(ctx, &best_device);
 // }
 
-// #ifdef __cplusplus
-// }
-// #endif
+#ifdef __cplusplus
+}
+#endif
 
-// #endif /* GPU_H */
+#endif /* GPU_H */

@@ -11,8 +11,6 @@
 
 #include <libcpp/util/string_util.hpp>
 
-#include <libcpp/util/uuid.hpp>
-
 #include <libcpp/util/version.hpp>
 
 #endif

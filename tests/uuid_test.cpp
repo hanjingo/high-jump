@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/util/uuid.hpp>
+#include <libcpp/algo/uuid.hpp>
 
 TEST(uuid, gen)
 {

@@ -30,7 +30,13 @@
 #define ARCH "UNKNOW ARCH"
 #endif
 
-static unsigned int cpu_core_num()
+// ----------------------------- API define ------------------------------------
+unsigned int cpu_core_num();
+bool cpu_core_bind(const unsigned int core);
+void cpu_core_list(unsigned int* buf, unsigned int& len);
+
+// ------------------------ API implementation ---------------------------------
+unsigned int cpu_core_num()
 {
 #if defined(_WIN32)
     SYSTEM_INFO sysinfo;
@@ -59,7 +65,7 @@ static unsigned int cpu_core_num()
 #endif
 }
 
-static bool cpu_core_bind(const unsigned int core)
+bool cpu_core_bind(const unsigned int core)
 {
 #if defined(_WIN32)
     HANDLE hThread = GetCurrentThread();
@@ -75,7 +81,7 @@ static bool cpu_core_bind(const unsigned int core)
 #endif
 }
 
-static void cpu_core_list(unsigned int* buf, unsigned int& len)
+void cpu_core_list(unsigned int* buf, unsigned int& len)
 {
 #if defined(_WIN32)
     DWORD returnLength = 0;

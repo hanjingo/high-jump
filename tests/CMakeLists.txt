@@ -38,7 +38,6 @@ find_package(unofficial-concurrentqueue REQUIRED)
 find_package(lz4 REQUIRED)
 find_package(zstd REQUIRED)
 find_package(cityhash REQUIRED)
-find_package(OpenCL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -46,11 +45,23 @@ find_package(Boost REQUIRED COMPONENTS
     context
     thread
 )
+find_package(OpenCL QUIET)
+find_package(CUDA QUIET)
 
 if (NOT WIN32)
     # for dpdk
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(DPDK REQUIRED libdpdk)
+endif()
+
+if(OpenCL_FOUND)
+    add_definitions(-DOPENCL_ENABLE)
+    message(STATUS "OpenCL found, enabling OPENCL_ENABLE")
+elseif(CUDA_FOUND)
+    add_definitions(-DCUDA_ENABLE)
+    message(STATUS "CUDA found, enabling CUDA_ENABLE")
+else()
+    message(WARNING "Neither OpenCL nor CUDA found, GPU features will be disabled.")
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
@@ -71,7 +82,6 @@ target_link_libraries(${PROJECT_NAME}
     protobuf::libprotobuf
     pugixml
     BT::behaviortree_cpp
-    OpenCL::OpenCL
     OpenSSL::SSL 
     OpenSSL::Crypto
     pugixml
@@ -110,6 +120,17 @@ else()
 #       DPDK
         ${DPDK_LIBRARIES}
     )
+endif()
+
+if(OpenCL_FOUND)
+    target_link_libraries(${PROJECT_NAME} 
+        OpenCL::OpenCL
+    )
+elseif(CUDA_FOUND)
+    target_link_libraries(${PROJECT_NAME} 
+        ${CUDA_LIBRARIES}
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CUDA_INCLUDE_DIRS})
 endif()
 
 add_test(test ${PROJECT_NAME})

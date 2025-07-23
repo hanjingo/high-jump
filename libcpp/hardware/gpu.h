@@ -24,89 +24,70 @@
 #include <string.h>
 #include <stdbool.h>
 
+#ifdef OPENCL_ENABLE
+    #define CL_TARGET_OPENCL_VERSION 300
+    #include <CL/cl.h>
+#elif CUDA_ENABLE
+    #include <cuda_runtime.h>
+    #include <cuda.h>
+#else
+    #pragma warning unknown GPU backend, some function will be disabled
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum {
-    GPU_BACKEND_NONE = 0,
-    GPU_BACKEND_OPENCL = 1,
-    GPU_BACKEND_CUDA = 2
-} gpu_backend_t;
-
 typedef struct {
-    void* id;// （OpenCL: cl_device_id, CUDA: int
+    void* id;// （OpenCL: cl_device_id, CUDA: int)
     char name[256];
     char vendor[128];
     char version[128];
     unsigned long long global_mem_sz;
     unsigned int compute_units;
     unsigned int work_group_sz;
-    gpu_backend_t backend;
 } gpu_device_info_t;
 
 typedef struct {
     void* context; // for OpenCL: 
     void* queue;
     void* device;
-    gpu_backend_t backend;
 } gpu_context_t;
 
 typedef struct {
     void* program;
     void* kernel;
-    gpu_backend_t backend;
 } gpu_program_t;
 
 typedef struct {
     void* ptr;
     size_t size;
-    gpu_backend_t backend;
 } gpu_buffer_t;
 
 typedef bool (*gpu_device_callback_t)(const gpu_device_info_t* info, void* user_data);
+typedef void (*gpu_error_callback_t)(const char* error_msg, void* user_data);
 
 // ----------------------------- gpu API define ------------------------------------
-// check gpu is available
-// bool gpu_is_opencl_available(void);
-// bool gpu_is_cuda_available(void);
-// gpu_backend_t gpu_get_preferred_backend(void);
-
-// get gpu device count
+// device info
 int gpu_count(void);
-int gpu_count_by_backend(gpu_backend_t backend);
+int gpu_device_get(gpu_device_info_t** infos, int* count);
+void gpu_device_foreach(gpu_device_callback_t callback, void* user_data);
 
-// // get gpu device info
-// int gpu_get_devices(gpu_device_info_t** infos, int* count);
-// int gpu_get_devices_by_backend(gpu_device_info_t** infos, int* count, gpu_backend_t backend);
-// int gpu_get_devices_by_type(gpu_device_info_t** infos, int* count, gpu_device_type_t type);
-// bool gpu_get_device_info_by_index(int index, gpu_device_info_t* info);
-// bool gpu_get_best_device(gpu_device_info_t* info, gpu_backend_t preferred_backend);
+// free gpu resources
+int gpu_buffer_free(gpu_buffer_t* buffer);
+int gpu_device_free(gpu_device_info_t* infos, int count);
+int gpu_context_free(gpu_context_t* ctx);
+int gpu_program_free(gpu_program_t* program);
 
-// // range gpu device
-// void gpu_foreach_device(gpu_device_callback_t callback, void* user_data);
-// void gpu_foreach_device_by_backend(gpu_device_callback_t callback, void* user_data, gpu_backend_t backend);
+// init context
+bool gpu_context_create(gpu_context_t* ctx, const gpu_device_info_t* device_info);
 
-// // free device info
-// void gpu_free_devices(gpu_device_info_t* infos);
-
-// // init context
-// bool gpu_create_context(gpu_context_t* ctx, const gpu_device_info_t* device_info);
-// bool gpu_create_context_by_index(gpu_context_t* ctx, int device_index);
-// bool gpu_create_default_context(gpu_context_t* ctx);
-
-// // free context
-// void gpu_destroy_context(gpu_context_t* ctx);
-
-// // build program
-// bool gpu_create_program_from_source(gpu_program_t* program, gpu_context_t* ctx, const char* source);
+// build program
+bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, char* log, unsigned long* log_sz, const char* source);
 // bool gpu_create_program_from_file(gpu_program_t* program, gpu_context_t* ctx, const char* filename);
 
-// // kernel
-// bool gpu_create_kernel(gpu_program_t* program, const char* kernel_name);
-
-// // destroy program
-// void gpu_destroy_program(gpu_program_t* program);
+// kernel
+bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name);
 
 // // malloc gpu memory
 // bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
@@ -117,9 +98,6 @@ int gpu_count_by_backend(gpu_backend_t backend);
 // bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx);
 // bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
 // bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
-
-// // release gpu memory
-// void gpu_free(gpu_buffer_t* buffer);
 
 // // set kernel arg
 // bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, const void* arg_value);
@@ -133,107 +111,143 @@ int gpu_count_by_backend(gpu_backend_t backend);
 // // sync run
 // bool gpu_sync(gpu_context_t* ctx);
 
-// // get last error
-// const char* gpu_get_last_error(void);
-// void gpu_clear_last_error(void);
 
-// // set error callback
-// typedef void (*gpu_error_callback_t)(const char* error_msg, void* user_data);
-// void gpu_set_error_callback(gpu_error_callback_t callback, void* user_data);
+// ----------------------------- gpu API implement ------------------------------------
 
-// // get gpu backend
-// const char* gpu_backend_name(gpu_backend_t backend);
-// const char* gpu_device_type_name(gpu_device_type_t type);
+static int _gpu_get_devices_by_opencl(gpu_device_info_t** infos, int* count) 
+{
+#ifdef OPENCL_ENABLE
+    cl_uint num_platforms = 0;
+    if (clGetPlatformIDs(0, NULL, &num_platforms) != CL_SUCCESS || num_platforms == 0) 
+    {
+        *infos = NULL;
+        *count = 0;
+        return 0;
+    }
 
-// // performance
-// bool gpu_benchmark_memory_bandwidth(gpu_context_t* ctx, size_t buffer_size, double* bandwidth_gb_s);
-// bool gpu_benchmark_compute_performance(gpu_context_t* ctx, double* gflops);
-
-// #ifdef GPU_ENABLE_OPENCL
-//     #define CL_TARGET_OPENCL_VERSION 300
-//     #include <CL/cl.h>
-// #endif
-
-// #ifdef GPU_ENABLE_CUDA
-//     #include <cuda_runtime.h>
-//     #include <cuda.h>
-// #endif
-
-// static char gpu_last_error[512] = {0};
-// static gpu_error_callback_t gpu_error_callback = NULL;
-// static void* gpu_error_callback_user_data = NULL;
-
-// static void gpu_set_error(const char* format, ...) 
-// {
-//     va_list args;
-//     va_start(args, format);
-//     vsnprintf(g_last_error, sizeof(g_last_error), format, args);
-//     va_end(args);
+    cl_platform_id* platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_platforms);
+    if (!platforms) 
+        return -1;
     
-//     if (g_error_callback)
-//         g_error_callback(g_last_error, g_error_callback_user_data);
-// }
+    clGetPlatformIDs(num_platforms, platforms, NULL);
+    cl_uint total_devices = 0;
+    for (cl_uint i = 0; i < num_platforms; ++i) 
+    {
+        cl_uint num_devices_in_platform = 0;
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices_in_platform);
+        total_devices += num_devices_in_platform;
+    }
 
-// bool gpu_is_opencl_available(void) 
-// {
-// #ifdef GPU_ENABLE_OPENCL
-//     cl_uint num_platforms = 0;
-//     cl_int err = clGetPlatformIDs(0, NULL, &num_platforms);
-//     return (err == CL_SUCCESS && num_platforms > 0);
-// #else
-//     return false;
-// #endif
-// }
+    if (total_devices == 0) 
+    {
+        free(platforms);
+        *infos = NULL;
+        *count = 0;
+        return 0;
+    }
 
-// bool gpu_is_cuda_available(void) 
-// {
-// #ifdef GPU_ENABLE_CUDA
-//     int device_count = 0;
-//     cudaError_t err = cudaGetDeviceCount(&device_count);
-//     return (err == cudaSuccess && device_count > 0);
-// #else
-//     return false;
-// #endif
-// }
+    *infos = (gpu_device_info_t*)calloc(total_devices, sizeof(gpu_device_info_t));
+    if (!*infos) 
+    {
+        free(platforms);
+        return -1;
+    }
 
-// gpu_backend_t gpu_get_preferred_backend(void) 
-// {
-//     if (gpu_is_cuda_available())
-//         return GPU_BACKEND_CUDA;
-//     else if (gpu_is_opencl_available())
-//         return GPU_BACKEND_OPENCL;
+    cl_uint device_index = 0;
+    for (cl_uint i = 0; i < num_platforms; ++i) 
+    {
+        cl_uint num_devices_in_platform = 0;
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices_in_platform);
+        if (num_devices_in_platform <= 0) 
+            break;
 
-//     return GPU_BACKEND_NONE;
-// }
+        cl_device_id* devices = (cl_device_id*)malloc(sizeof(cl_device_id) * num_devices_in_platform);
+        clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, num_devices_in_platform, devices, NULL);
+        for (cl_uint j = 0; j < num_devices_in_platform; ++j) 
+        {
+            gpu_device_info_t* info = &(*infos)[device_index];
+            info->id = malloc(sizeof(cl_device_id));
+            memcpy(info->id, &devices[j], sizeof(cl_device_id));
+
+            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(info->name), info->name, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_VENDOR, sizeof(info->vendor), info->vendor, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, sizeof(info->version), info->version, NULL);
+            
+            cl_ulong global_mem_size;
+            clGetDeviceInfo(devices[j], CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(global_mem_size), &global_mem_size, NULL);
+            info->global_mem_sz = global_mem_size;
+            
+            cl_uint compute_units;
+            clGetDeviceInfo(devices[j], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(compute_units), &compute_units, NULL);
+            info->compute_units = compute_units;
+            
+            size_t work_group_size;
+            clGetDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(work_group_size), &work_group_size, NULL);
+            info->work_group_sz = (unsigned int)work_group_size;
+            
+            device_index++;
+        }
+
+        free(devices);
+    }
+
+    free(platforms);
+    *count = (int)total_devices;
+#endif
+    return 0;
+}
+
+static int _gpu_get_devices_by_cuda(gpu_device_info_t** infos, int* count) 
+{
+#ifdef CUDA_ENABLE
+    int device_count = 0;
+    if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0) 
+    {
+        *infos = NULL;
+        *count = 0;
+        return 0;
+    }
+
+    *infos = (gpu_device_info_t*)calloc(device_count, sizeof(gpu_device_info_t));
+    if (!*infos) 
+        return -1;
+
+    for (int i = 0; i < device_count; ++i) 
+    {
+        gpu_device_info_t* info = &(*infos)[i];
+        cudaDeviceProp prop;
+        
+        if (cudaGetDeviceProperties(&prop, i) != cudaSuccess)
+            continue;
+
+        info->id = malloc(sizeof(int));
+        *((int*)info->id) = i;
+
+        strncpy(info->name, prop.name, sizeof(info->name) - 1);
+        strncpy(info->vendor, "NVIDIA", sizeof(info->vendor) - 1);
+        snprintf(info->version, sizeof(info->version), "Compute Capability %d.%d", prop.major, prop.minor);
+
+        info->global_mem_sz = prop.totalGlobalMem;
+        info->compute_units = prop.multiProcessorCount;
+        info->work_group_sz = prop.maxThreadsPerBlock;
+    }
+
+    *count = device_count;
+#endif
+    return 0;
+}
 
 int gpu_count(void) 
 {
-    int opencl_count = 0;
-    int cuda_count = 0;
+    int total_count = 0;
     
-#ifdef GPU_ENABLE_OPENCL
-    opencl_count = gpu_count_by_backend(GPU_BACKEND_OPENCL);
-#endif
-
-#ifdef GPU_ENABLE_CUDA
-    cuda_count = gpu_count_by_backend(GPU_BACKEND_CUDA);
-#endif
-
-    return opencl_count + cuda_count;
-}
-
-int gpu_count_by_backend(gpu_backend_t backend) 
-{
-    switch (backend) {
-#ifdef GPU_ENABLE_OPENCL
-        case GPU_BACKEND_OPENCL: {
-            cl_uint num_platforms = 0;
-            if (clGetPlatformIDs(0, NULL, &num_platforms) != CL_SUCCESS || num_platforms == 0) 
-                return 0;
-
-            cl_platform_id* platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_platforms);
-            if (!platforms) return 0;
-            
+#ifdef OPENCL_ENABLE
+    cl_uint num_platforms = 0;
+    if (clGetPlatformIDs(0, NULL, &num_platforms) == CL_SUCCESS && num_platforms > 0)
+    {
+        cl_platform_id* platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_platforms);
+        if (platforms)
+        {
             clGetPlatformIDs(num_platforms, platforms, NULL);
 
             cl_uint total_devices = 0;
@@ -244,353 +258,345 @@ int gpu_count_by_backend(gpu_backend_t backend)
                 total_devices += num_devices_in_platform;
             }
             free(platforms);
-            return (int)total_devices;
+            total_count += (int)total_devices;
         }
-#endif
-
-#ifdef GPU_ENABLE_CUDA
-        case GPU_BACKEND_CUDA: {
-            int device_count = 0;
-            if (cudaGetDeviceCount(&device_count) != cudaSuccess)
-                return 0;
-
-            return device_count;
-        }
-#endif
-        default:
-            return 0;
     }
+#endif
+    
+#ifdef CUDA_ENABLE
+    int device_count = 0;
+    if (cudaGetDeviceCount(&device_count) == cudaSuccess)
+        total_count += device_count;
+#endif
+
+    return total_count;
 }
 
-// int gpu_get_devices(gpu_device_info_t** infos, int* count) 
-// {
-//     if (!infos || !count) 
-//     {
-//         gpu_set_error("Invalid parameters: infos or count is NULL");
-//         return -1;
-//     }
+int gpu_device_get(gpu_device_info_t** infos, int* count) 
+{
+    if (!infos || !count) 
+        return -1;
 
-//     int total_count = gpu_count();
-//     if (total_count == 0) 
-//     {
-//         *infos = NULL;
-//         *count = 0;
-//         return 0;
-//     }
+    int total_count = gpu_count();
+    if (total_count == 0) 
+    {
+        *infos = NULL;
+        *count = 0;
+        return 0;
+    }
 
-//     *infos = (gpu_device_info_t*)calloc(total_count, sizeof(gpu_device_info_t));
-//     if (!*infos) 
-//     {
-//         gpu_set_error("Failed to allocate memory for device infos");
-//         return -1;
-//     }
+    *infos = (gpu_device_info_t*)calloc(total_count, sizeof(gpu_device_info_t));
+    if (!(*infos)) 
+        return -1;
 
-//     int current_index = 0;
-// #ifdef GPU_ENABLE_OPENCL
-//     gpu_device_info_t* opencl_infos = NULL;
-//     int opencl_count = 0;
-//     if (gpu_get_devices_by_backend(&opencl_infos, &opencl_count, GPU_BACKEND_OPENCL) == 0) 
-//     {
-//         memcpy(*infos + current_index, opencl_infos, opencl_count * sizeof(gpu_device_info_t));
-//         current_index += opencl_count;
-//         free(opencl_infos);
-//     }
-// #endif
+    int current_index = 0;
+#ifdef OPENCL_ENABLE
+    gpu_device_info_t* opencl_infos = NULL;
+    int opencl_count = 0;
+    if (_gpu_get_devices_by_opencl(&opencl_infos, &opencl_count) == 0) 
+    {
+        memcpy(*infos + current_index, opencl_infos, opencl_count * sizeof(gpu_device_info_t));
+        current_index += opencl_count;
+        free(opencl_infos);
+    }
+#endif
 
-// #ifdef GPU_ENABLE_CUDA
-//     gpu_device_info_t* cuda_infos = NULL;
-//     int cuda_count = 0;
-//     if (gpu_get_devices_by_backend(&cuda_infos, &cuda_count, GPU_BACKEND_CUDA) == 0) 
-//     {
-//         memcpy(*infos + current_index, cuda_infos, cuda_count * sizeof(gpu_device_info_t));
-//         current_index += cuda_count;
-//         free(cuda_infos);
-//     }
-// #endif
+#ifdef CUDA_ENABLE
+    gpu_device_info_t* cuda_infos = NULL;
+    int cuda_count = 0;
+    if (_gpu_get_devices_by_cuda(&cuda_infos, &cuda_count) == 0) 
+    {
+        memcpy(*infos + current_index, cuda_infos, cuda_count * sizeof(gpu_device_info_t));
+        current_index += cuda_count;
+        free(cuda_infos);
+    }
+#endif
 
-//     *count = current_index;
-//     return 0;
-// }
+    *count = current_index;
+    return 0;
+}
 
-// #ifdef GPU_ENABLE_OPENCL
-// int gpu_get_devices_by_backend_opencl(gpu_device_info_t** infos, int* count) 
-// {
-//     cl_uint num_platforms = 0;
-//     if (clGetPlatformIDs(0, NULL, &num_platforms) != CL_SUCCESS || num_platforms == 0) 
-//     {
-//         *infos = NULL;
-//         *count = 0;
-//         return 0;
-//     }
+void gpu_device_foreach(gpu_device_callback_t callback, void* user_data) 
+{
+    if (!callback) 
+        return;
 
-//     cl_platform_id* platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * num_platforms);
-//     if (!platforms) 
-//     {
-//         gpu_set_error("Failed to allocate memory for platforms");
-//         return -1;
-//     }
+    gpu_device_info_t* infos = NULL;
+    int count = 0;
+    if (gpu_device_get(&infos, &count) != 0 || infos == NULL || count == 0) 
+        return;
+
+    for (int i = 0; i < count; ++i) 
+    {
+        if (!callback(&infos[i], user_data))
+            break;
+    }
+
+    gpu_device_free(infos, count);
+}
+
+bool gpu_context_create(gpu_context_t* ctx, const gpu_device_info_t* device_info)
+{
+    if (!ctx) 
+        return false;
+
+    memset(ctx, 0, sizeof(gpu_context_t));
+
+#ifdef OPENCL_ENABLE
+    cl_int err;
+    cl_device_id device;
     
-//     clGetPlatformIDs(num_platforms, platforms, NULL);
-//     cl_uint total_devices = 0;
-//     for (cl_uint i = 0; i < num_platforms; ++i) 
-//     {
-//         cl_uint num_devices_in_platform = 0;
-//         clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices_in_platform);
-//         total_devices += num_devices_in_platform;
-//     }
+    if (device_info && device_info->id) 
+    {
+        device = *((cl_device_id*)device_info->id);
+    } 
+    else 
+    {
+        gpu_device_info_t* infos = NULL;
+        int count = 0;
+        if (gpu_device_get(&infos, &count) != 0 || count == 0) 
+            return false;
 
-//     if (total_devices == 0) 
-//     {
-//         free(platforms);
-//         *infos = NULL;
-//         *count = 0;
-//         return 0;
-//     }
+        device = *((cl_device_id*)infos[0].id);
+        gpu_device_free(infos, count);
+    }
+    
+    cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    cl_command_queue queue = clCreateCommandQueueWithProperties(context, device, NULL, &err);
+    if (err != CL_SUCCESS) 
+    {
+        clReleaseContext(context);
+        return false;
+    }
+    
+    ctx->context = context;
+    ctx->queue = queue;
+    ctx->device = malloc(sizeof(cl_device_id));
+    memcpy(ctx->device, &device, sizeof(cl_device_id));
+    return true;
+#endif
+    
+#ifdef CUDA_ENABLE
+    int device_id;
+    
+    if (device_info && device_info->id) 
+        device_id = *((int*)device_info->id);
+    else
+        device_id = 0;
+    
+    cudaError_t err = cudaSetDevice(device_id);
+    if (err != cudaSuccess)
+        return false;
+    
+    cudaStream_t stream;
+    err = cudaStreamCreate(&stream);
+    if (err != cudaSuccess)
+        return false;
+    
+    ctx->context = NULL;
+    ctx->queue = stream;
+    ctx->device = malloc(sizeof(int));
+    *((int*)ctx->device) = device_id;
+    return true;
+#endif
 
-//     *infos = (gpu_device_info_t*)calloc(total_devices, sizeof(gpu_device_info_t));
-//     if (!*infos) 
-//     {
-//         free(platforms);
-//         gpu_set_error("Failed to allocate memory for device infos");
-//         return -1;
-//     }
+    return false;
+}
 
-//     cl_uint device_index = 0;
-//     for (cl_uint i = 0; i < num_platforms; ++i) 
-//     {
-//         cl_uint num_devices_in_platform = 0;
-//         clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices_in_platform);
-//         if (num_devices_in_platform > 0) 
-//         {
-//             cl_device_id* devices = (cl_device_id*)malloc(sizeof(cl_device_id) * num_devices_in_platform);
-//             clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, num_devices_in_platform, devices, NULL);
-//             for (cl_uint j = 0; j < num_devices_in_platform; ++j) 
-//             {
-//                 gpu_device_info_t* info = &(*infos)[device_index];
-//                 info->id = malloc(sizeof(cl_device_id));
-//                 memcpy(info->id, &devices[j], sizeof(cl_device_id));
+int gpu_device_free(gpu_device_info_t* infos, int count) 
+{
+    if (!infos) 
+        return -1;
+    
+    for (int i = 0; i < count; i++) 
+    {
+        if (infos[i].id) 
+            free(infos[i].id);
+    }
+    
+    free(infos);
+    return 0;
+}
 
-//                 clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(info->name), info->name, NULL);
-//                 clGetDeviceInfo(devices[j], CL_DEVICE_VENDOR, sizeof(info->vendor), info->vendor, NULL);
-//                 clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, sizeof(info->version), info->version, NULL);
-                
-//                 cl_ulong global_mem_size;
-//                 clGetDeviceInfo(devices[j], CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(global_mem_size), &global_mem_size, NULL);
-//                 info->global_mem_sz = global_mem_size;
-                
-//                 cl_uint compute_units;
-//                 clGetDeviceInfo(devices[j], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(compute_units), &compute_units, NULL);
-//                 info->compute_units = compute_units;
-                
-//                 size_t work_group_size;
-//                 clGetDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(work_group_size), &work_group_size, NULL);
-//                 info->work_group_sz = (unsigned int)work_group_size;
-                
-//                 info->backend = GPU_BACKEND_OPENCL;
-//                 info->device_type = GPU_DEVICE_TYPE_GPU;
-                
-//                 device_index++;
-//             }
-//             free(devices);
-//         }
-//     }
+int gpu_buffer_free(gpu_buffer_t* buffer)
+{
+    if (!buffer || !buffer->ptr) 
+        return -1;
 
-//     free(platforms);
-//     *count = (int)total_devices;
-//     return 0;
-// }
-// #endif
+#ifdef OPENCL_ENABLE
+    cl_mem mem_obj = (cl_mem)buffer->ptr;
+    cl_int err = clReleaseMemObject(mem_obj);
+    if (err != CL_SUCCESS)
+        return -1;
+#endif
 
-// #ifdef GPU_ENABLE_CUDA
-// int gpu_get_devices_by_backend_cuda(gpu_device_info_t** infos, int* count) 
-// {
-//     int device_count = 0;
-//     if (cudaGetDeviceCount(&device_count) != cudaSuccess || device_count == 0) 
-//     {
-//         *infos = NULL;
-//         *count = 0;
-//         return 0;
-//     }
+#ifdef CUDA_ENABLE
+    cudaError_t err = cudaFree(buffer->ptr);
+    if (err != cudaSuccess)
+        return -1;
+#endif
 
-//     *infos = (gpu_device_info_t*)calloc(device_count, sizeof(gpu_device_info_t));
-//     if (!*infos) 
-//     {
-//         gpu_set_error("Failed to allocate memory for CUDA device infos");
-//         return -1;
-//     }
+    buffer->ptr = NULL;
+    buffer->size = 0;
+    return 0;
+}
 
-//     for (int i = 0; i < device_count; ++i) 
-//     {
-//         gpu_device_info_t* info = &(*infos)[i];
-//         cudaDeviceProp prop;
+int gpu_context_free(gpu_context_t* ctx)
+{
+    if (!ctx) 
+        return -1;
+
+#ifdef OPENCL_ENABLE
+    if (ctx->queue)
+        clReleaseCommandQueue((cl_command_queue)ctx->queue);
+
+    if (ctx->context) 
+        clReleaseContext((cl_context)ctx->context);
+
+#elif CUDA_ENABLE
+    if (ctx->queue) 
+        cudaStreamDestroy((cudaStream_t)ctx->queue);
+
+#endif
+
+    if (ctx->device) 
+        free(ctx->device);
+    
+    memset(ctx, 0, sizeof(gpu_context_t));
+    return 0;
+}
+
+int gpu_program_free(gpu_program_t* program)
+{
+    if (!program)
+        return -1;
+
+#ifdef OPENCL_ENABLE
+    if (program->kernel) 
+        clReleaseKernel((cl_kernel)program->kernel);
+    
+    if (program->program) 
+        clReleaseProgram((cl_program)program->program);
+    
+#elif CUDA_ENABLE
+    if (program->program) 
+        cuModuleUnload((CUmodule)program->program);
+    
+#endif
+
+    memset(program, 0, sizeof(gpu_program_t));
+    return 0;
+}
+
+bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, char* log, unsigned long* log_sz, const char* source)
+{
+    if (!program || !ctx || !source) 
+        return false;
+
+    memset(program, 0, sizeof(gpu_program_t));
+
+#ifdef OPENCL_ENABLE
+    cl_int err;
+    cl_context context = (cl_context)ctx->context;
+    cl_device_id device = *((cl_device_id*)ctx->device);
+    cl_program cl_prog = clCreateProgramWithSource(context, 1, &source, NULL, &err);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    err = clBuildProgram(cl_prog, 1, &device, NULL, NULL, NULL);
+    if (err != CL_SUCCESS) 
+    {
+        size_t sz = 0;
+        clGetProgramBuildInfo(cl_prog, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &sz);
+        if (sz > 0 && log && log_sz) 
+        {
+            clGetProgramBuildInfo(cl_prog, device, CL_PROGRAM_BUILD_LOG, sz, log, NULL);
+            *log_sz = (unsigned long)sz;
+        }
+        else if (log_sz) 
+        {
+            *log_sz = 0;
+        }
+        clReleaseProgram(cl_prog);
+        return false;
+    }
+    
+    *log_sz = 0;
+    program->program = cl_prog;
+    program->kernel = NULL;
+    return true;
+    
+#elif CUDA_ENABLE
+    CUmodule module;
+    CUresult result = cuModuleLoadData(&module, source);
+    if (result != CUDA_SUCCESS) 
+    {
+        const char* error_string = NULL;
+        cuGetErrorString(result, &error_string);
         
-//         if (cudaGetDeviceProperties(&prop, i) != cudaSuccess)
-//             continue;
-
-//         info->id = malloc(sizeof(int));
-//         *((int*)info->id) = i;
-
-//         strncpy(info->name, prop.name, sizeof(info->name) - 1);
-//         strncpy(info->vendor, "NVIDIA", sizeof(info->vendor) - 1);
-//         snprintf(info->version, sizeof(info->version), "Compute Capability %d.%d", prop.major, prop.minor);
-
-//         info->global_mem_sz = prop.totalGlobalMem;
-//         info->compute_units = prop.multiProcessorCount;
-//         info->work_group_sz = prop.maxThreadsPerBlock;
-//         info->backend = GPU_BACKEND_CUDA;
-//         info->device_type = GPU_DEVICE_TYPE_GPU;
-//     }
-
-//     *count = device_count;
-//     return 0;
-// }
-// #endif
-
-// int gpu_get_devices_by_backend(gpu_device_info_t** infos, int* count, gpu_backend_t backend) 
-// {
-//     switch (backend) {
-// #ifdef GPU_ENABLE_OPENCL
-//         case GPU_BACKEND_OPENCL:
-//             return gpu_get_devices_by_backend_opencl(infos, count);
-// #endif
-
-// #ifdef GPU_ENABLE_CUDA
-//         case GPU_BACKEND_CUDA:
-//             return gpu_get_devices_by_backend_cuda(infos, count);
-// #endif
-
-//         default:
-//             gpu_set_error("Unsupported backend: %d", backend);
-//             *infos = NULL;
-//             *count = 0;
-//             return -1;
-//     }
-// }
-
-// void gpu_free_devices(gpu_device_info_t* infos) 
-// {
-//     if (infos) 
-//         free(infos);
-// }
-
-// void gpu_foreach_device(gpu_device_callback_t callback, void* user_data) 
-// {
-//     if (!callback) return;
-
-//     gpu_device_info_t* infos = NULL;
-//     int count = 0;
+        if (error_string && log && log_sz) 
+        {
+            size_t error_len = strlen(error_string);
+            size_t max_copy = (*log_sz > 0) ? *log_sz - 1 : 0;
+            size_t copy_len = (error_len < max_copy) ? error_len : max_copy;
+            
+            if (copy_len > 0) {
+                strncpy(log, error_string, copy_len);
+                log[copy_len] = '\0';
+            }
+            *log_sz = (unsigned long)copy_len;
+        }
+        else if (log_sz) 
+        {
+            *log_sz = 0;
+        }
+        
+        return false;
+    }
     
-//     if (gpu_get_devices(&infos, &count) == 0 && infos) 
-//     {
-//         for (int i = 0; i < count; ++i) 
-//         {
-//             if (!callback(&infos[i], user_data))
-//                 break;
-//         }
-//         gpu_free_devices(infos);
-//     }
-// }
-
-// bool gpu_get_best_device(gpu_device_info_t* info, gpu_backend_t preferred_backend) 
-// {
-//     if (!info) 
-//     {
-//         gpu_set_error("Invalid parameter: info is NULL");
-//         return false;
-//     }
-
-//     gpu_device_info_t* infos = NULL;
-//     int count = 0;
-//     if (gpu_get_devices(&infos, &count) != 0 || !infos || count == 0) 
-//         return false;
-
-//     int best_index = -1;
-//     unsigned long long best_score = 0;
-
-//     for (int i = 0; i < count; ++i) 
-//     {
-//         if (preferred_backend != GPU_BACKEND_NONE && infos[i].backend != preferred_backend)
-//             continue;
-
-//         unsigned long long score = infos[i].global_mem_sz / (1024 * 1024) + infos[i].compute_units * 1000;
-//         if (score > best_score) 
-//         {
-//             best_score = score;
-//             best_index = i;
-//         }
-//     }
-
-//     if (best_index >= 0) 
-//     {
-//         memcpy(info, &infos[best_index], sizeof(gpu_device_info_t));
-//         if (infos[best_index].backend == GPU_BACKEND_OPENCL) 
-//         {
-//             info->id = malloc(sizeof(cl_device_id));
-//             memcpy(info->id, infos[best_index].id, sizeof(cl_device_id));
-//         } 
-//         else if (infos[best_index].backend == GPU_BACKEND_CUDA) 
-//         {
-//             info->id = malloc(sizeof(int));
-//             memcpy(info->id, infos[best_index].id, sizeof(int));
-//         }
-
-//         gpu_free_devices(infos);
-//         return true;
-//     }
-
-//     gpu_free_devices(infos);
-//     return false;
-// }
-
-// const char* gpu_get_last_error(void) 
-// {
-//     return g_last_error;
-// }
-
-// void gpu_clear_last_error(void) 
-// {
-//     g_last_error[0] = '\0';
-// }
-
-// void gpu_set_error_callback(gpu_error_callback_t callback, void* user_data) 
-// {
-//     g_error_callback = callback;
-//     g_error_callback_user_data = user_data;
-// }
-
-// const char* gpu_backend_name(gpu_backend_t backend) 
-// {
-//     switch (backend) {
-//         case GPU_BACKEND_OPENCL: return "OpenCL";
-//         case GPU_BACKEND_CUDA: return "CUDA";
-//         case GPU_BACKEND_NONE: return "None";
-//         default: return "Unknown";
-//     }
-// }
-
-// const char* gpu_device_type_name(gpu_device_type_t type) 
-// {
-//     switch (type) {
-//         case GPU_DEVICE_TYPE_GPU: return "GPU";
-//         case GPU_DEVICE_TYPE_CPU: return "CPU";
-//         case GPU_DEVICE_TYPE_ALL: return "All";
-//         default: return "Unknown";
-//     }
-// }
-
-// bool gpu_create_default_context(gpu_context_t* ctx) 
-// {
-//     if (!ctx) return false;
+    *log_sz = 0;
+    program->program = (void*)module;
+    program->kernel = NULL;
+    return true;
     
-//     gpu_device_info_t best_device;
-//     if (!gpu_get_best_device(&best_device, GPU_BACKEND_NONE)) 
-//     {
-//         gpu_set_error("No suitable GPU device found");
-//         return false;
-//     }
+#endif
     
-//     return gpu_create_context(ctx, &best_device);
-// }
+    return false;
+}
+
+bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name)
+{
+    if (!program || !program->program || !kernel_name) 
+        return false;
+
+#ifdef GPU_ENABLE_OPENCL
+    cl_int err;
+    cl_kernel kernel = clCreateKernel((cl_program)program->program, kernel_name, &err);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    if (program->kernel)
+        clReleaseKernel((cl_kernel)program->kernel);
+    
+    program->kernel = kernel;
+    return true;
+    
+#elif GPU_ENABLE_CUDA
+    CUfunction function;
+    CUresult result = cuModuleGetFunction(&function, (CUmodule)program->program, kernel_name);
+    if (result != CUDA_SUCCESS)
+        return false;
+    
+    program->kernel = (void*)function;
+    return true;
+    
+#endif
+    
+    return false;
+}
 
 #ifdef __cplusplus
 }

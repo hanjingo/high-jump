@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <codecvt>
 #include <locale>
-#include <libcpp/hardware/device.h>
+#include <libcpp/hardware/usb.h>
 
 std::string ws2s(const wchar_t* wstr) 
 {
@@ -10,7 +10,7 @@ std::string ws2s(const wchar_t* wstr)
     return conv.to_bytes(wstr);
 }
 
-void dev_print(device_info_t* info)
+void dev_print(usb_info_t* info)
 {
     std::cout << "{"
               << "path=" << info->path
@@ -28,13 +28,13 @@ void dev_print(device_info_t* info)
               << std::endl;
 }
 
-bool dev_range(device_info_t* info)
+bool dev_range(usb_info_t* info)
 {
     dev_print(info);
     return true;
 }
 
-TEST(device, device_range)
+TEST(usb, usb_device_range)
 {
-    device_range(dev_range);
+    usb_device_range(dev_range);
 }

@@ -1,5 +1,18 @@
 #include <gtest/gtest.h>
 #include <libcpp/hardware/gpu.h>
+#include <iostream>
+
+bool device_foreach_cb(const gpu_device_info_t* info, void* user_data)
+{
+    std::cout << "GPU name=" << info->name 
+              << ", vendor=" << info->vendor 
+              << ", version=" << info->version 
+              << ", global_mem_sz=" << info->global_mem_sz
+              << ", compute_units=" << info->compute_units
+              << ", work_group_sz=" << info->work_group_sz
+              << std::endl;
+    return true;
+}
 
 TEST(gpu, gpu_count)
 {
@@ -7,13 +20,165 @@ TEST(gpu, gpu_count)
     ASSERT_GE(count, 0) << "No GPU devices found";
 }
 
-TEST(gpu, gpu_count_by_backend)
+TEST(gpu, gpu_device_get)
 {
-    uint32_t count = gpu_count_by_backend(GPU_BACKEND_OPENCL);
-    ASSERT_GE(count, 0) << "No OpenCL GPU devices found";
+    if (gpu_count() == 0)
+        return;
+
+    gpu_device_info_t* infos = NULL;
+    int count = 0;
+    gpu_device_get(&infos, &count);
+    ASSERT_NE(infos, nullptr) << "Failed to retrieve GPU device information";
+    ASSERT_GT(count, 0);
 }
 
-// TEST(gpu, gpu_example)
+TEST(gpu, gpu_device_foreach)
+{
+    gpu_device_foreach(device_foreach_cb, nullptr);
+}
+
+TEST(gpu, gpu_device_free)
+{
+    gpu_device_info_t* infos = NULL;
+    int count = 0;
+    ASSERT_TRUE(gpu_device_free(infos, count) != 0);
+
+    gpu_device_get(&infos, &count);
+    if (infos != nullptr && count > 0)
+        ASSERT_TRUE(gpu_device_free(infos, count) == 0);
+}
+
+TEST(gpu, gpu_buffer_free)
+{
+    gpu_buffer_t buffer;
+    memset(&buffer, 0, sizeof(gpu_buffer_t));
+    ASSERT_TRUE(gpu_buffer_free(&buffer) != 0);
+}
+
+TEST(gpu, gpu_context_free)
+{
+
+}
+
+TEST(gpu, gpu_program_free)
+{
+
+}
+
+TEST(gpu, gpu_context_create)
+{
+    if (gpu_count() == 0)
+        return;
+
+    gpu_context_t ctx;
+    ASSERT_TRUE(gpu_context_create(&ctx, NULL) != 0);
+
+    gpu_device_info_t* devices = NULL;
+    int device_count = 0;
+    if (gpu_device_get(&devices, &device_count) == 0 && device_count > 0) 
+    {
+        gpu_context_t ctx;
+        if (gpu_context_create(&ctx, &devices[0])) 
+            gpu_context_free(&ctx);
+
+        gpu_device_free(devices, device_count);
+    }
+}
+
+TEST(gpu, gpu_program_create_from_source)
+{
+    if (gpu_count() == 0) 
+    {
+        GTEST_SKIP() << "No GPU devices available, skipping test";
+        return;
+    }
+
+    // OpenCL kernel
+    const char* opencl_source = R"CLC(
+__kernel void vector_add(__global const float* a, __global const float* b, __global float* c) {
+    int id = get_global_id(0);
+    c[id] = a[id] + b[id];
+}
+)CLC";
+
+    // CUDA PTX
+    const char* cuda_ptx_source = R"PTX(
+.version 6.4
+.target sm_50
+.address_size 64
+
+.visible .entry vector_add(
+    .param .u64 vector_add_param_0,
+    .param .u64 vector_add_param_1,
+    .param .u64 vector_add_param_2
+)
+{
+    .reg .u32   %r<4>;
+    .reg .u64   %rd<10>;
+    .reg .f32   %f<4>;
+
+    ld.param.u64    %rd1, [vector_add_param_0];
+    ld.param.u64    %rd2, [vector_add_param_1];
+    ld.param.u64    %rd3, [vector_add_param_2];
+    
+    mov.u32         %r1, %tid.x;
+    mul.wide.u32    %rd4, %r1, 4;
+    add.u64         %rd5, %rd1, %rd4;
+    add.u64         %rd6, %rd2, %rd4;
+    add.u64         %rd7, %rd3, %rd4;
+    
+    ld.global.f32   %f1, [%rd5];
+    ld.global.f32   %f2, [%rd6];
+    add.f32         %f3, %f1, %f2;
+    st.global.f32   [%rd7], %f3;
+    
+    ret;
+}
+)PTX";
+
+    gpu_context_t ctx;
+    ASSERT_TRUE(gpu_context_create(&ctx, nullptr)) << "Failed to create GPU context";
+
+    char log[2048];
+    unsigned long log_sz = 2048;
+    gpu_program_t program;
+    ASSERT_TRUE(gpu_program_create_from_source(&program, &ctx, log, &log_sz, opencl_source));
+    if (log_sz > 0)
+        std::cout << "GPU log: " << std::string(log, log_sz) << std::endl;
+
+    bool kernel_created = gpu_kernel_create(&program, "vector_add");
+    if (kernel_created) {
+        std::cout << "Successfully created kernel 'vector_add'" << std::endl;
+    } else {
+        std::cout << "Failed to create kernel 'vector_add'" << std::endl;
+    }
+    gpu_program_free(&program);
+
+    char log1[2048];
+    unsigned long log1_sz = 2048;
+    ASSERT_FALSE(gpu_program_create_from_source(nullptr, &ctx, log1, &log1_sz, opencl_source)) 
+        << "Should fail with null program pointer";
+    
+    char log2[2048];
+    unsigned long log2_sz = 2048;
+    ASSERT_FALSE(gpu_program_create_from_source(&program, nullptr, log2, &log2_sz, opencl_source)) 
+        << "Should fail with null context pointer";
+    
+    unsigned long log3_sz = 2048;
+    ASSERT_TRUE(gpu_program_create_from_source(&program, &ctx, nullptr, &log3_sz, opencl_source)) 
+        << "Should not fail with null log pointer";
+
+    const char* invalid_source = "this is not valid GPU code";
+    gpu_program_t invalid_program;
+    char log4[2048];
+    unsigned long log4_sz = 2048;
+    ASSERT_FALSE(gpu_program_create_from_source(&invalid_program, &ctx, log4, &log4_sz, invalid_source)) 
+        << "Should fail with invalid source code";
+
+    gpu_context_free(&ctx);
+}
+
+// TEST(gpu, gpu_opencl_example)
 // {
 //     const char* kernelSource = R"CLC(
 // __kernel void vec_add(__global const float* A, __global const float* B, __global float* C) {

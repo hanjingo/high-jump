@@ -75,6 +75,8 @@ endif()
 
 # add_subdirectory(mux)
 
+add_subdirectory(multi_index)
+
 # add_subdirectory(once)
 
 # add_subdirectory(optional)

@@ -708,9 +708,37 @@ public:
         {
             case algo::ecb:
                 return iv == nullptr;
+                
             case algo::gcm:
+                return iv != nullptr && iv_len >= 1;
+                
             case algo::ccm:
-                return iv != nullptr && iv_len >= 12;
+                return iv != nullptr && iv_len >= 7 && iv_len <= 13;
+                
+            case algo::xts:
+                return iv != nullptr && iv_len == 16;
+                
+            case algo::cfb1:
+            case algo::cfb8:
+                return iv != nullptr && iv_len > 0;
+                
+            case algo::wrap:
+            case algo::wrap_pad:
+                return iv == nullptr;
+                
+            case algo::cbc_hmac_sha1:
+            case algo::cbc_hmac_sha256:
+                return iv != nullptr && iv_len == 16;
+                
+    #ifndef OPENSSL_NO_OCB
+            case algo::ocb:
+                return iv != nullptr && iv_len >= 1 && iv_len <= 15;
+    #endif
+            
+            case algo::cbc:
+            case algo::cfb128:
+            case algo::ofb:
+            case algo::ctr:
             default:
                 return iv != nullptr && iv_len == 16;
         }

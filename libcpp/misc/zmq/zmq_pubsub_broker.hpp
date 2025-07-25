@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <iostream>
 
-#include <libcpp/net/zmq/zmq_chan.hpp>
+#include <libcpp/misc/zmq/zmq_chan.hpp>
 
 namespace libcpp
 {

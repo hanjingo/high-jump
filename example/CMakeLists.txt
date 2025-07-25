@@ -75,13 +75,15 @@ endif()
 
 # add_subdirectory(mux)
 
-add_subdirectory(multi_index)
+# add_subdirectory(multi_index)
 
 # add_subdirectory(once)
 
 # add_subdirectory(optional)
 
 # add_subdirectory(os)
+
+# add_subdirectory(pdf)
 
 # add_subdirectory(process)
 
@@ -136,3 +138,5 @@ add_subdirectory(multi_index)
 # add_subdirectory(xml)
 
 # add_subdirectory(zmq)
+
+add_subdirectory(zip)

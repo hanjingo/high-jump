@@ -9,6 +9,4 @@
 
 #include <libcpp/net/websocket.hpp>
 
-#include <libcpp/net/zmq.hpp>
-
 #endif

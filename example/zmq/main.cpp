@@ -2,12 +2,12 @@
 #include <iostream>
 #include <thread>
 
-#include <libcpp/net/zmq/zmq_chan.hpp>
-#include <libcpp/net/zmq/zmq_publisher.hpp>
-#include <libcpp/net/zmq/zmq_subscriber.hpp>
-#include <libcpp/net/zmq/zmq_pubsub_broker.hpp>
-#include <libcpp/net/zmq/zmq_producer.hpp>
-#include <libcpp/net/zmq/zmq_consumer.hpp>
+#include <libcpp/misc/zmq/zmq_chan.hpp>
+#include <libcpp/misc/zmq/zmq_publisher.hpp>
+#include <libcpp/misc/zmq/zmq_subscriber.hpp>
+#include <libcpp/misc/zmq/zmq_pubsub_broker.hpp>
+#include <libcpp/misc/zmq/zmq_producer.hpp>
+#include <libcpp/misc/zmq/zmq_consumer.hpp>
 
 static void* ctx = zmq_ctx_new();
 

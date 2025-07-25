@@ -122,3 +122,5 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - benchmark: https://github.com/google/benchmark
 - clickhouse-cpp: https://github.com/ClickHouse/clickhouse-cpp
 - cuda: https://developer.nvidia.com/cuda-toolkit
+- libharu: https://github.com/libharu/libharu
+- opencl: https://github.com/KhronosGroup/OpenCL-SDK

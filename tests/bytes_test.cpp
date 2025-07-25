@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/bytes.hpp>
+#include <libcpp/types/bytes.hpp>
 
 TEST(bytes, bytes_to_bool)
 {

@@ -37,7 +37,9 @@ find_package(unofficial-breakpad REQUIRED)
 find_package(unofficial-concurrentqueue REQUIRED)
 find_package(lz4 REQUIRED)
 find_package(zstd REQUIRED)
+find_package(ZLIB REQUIRED)
 find_package(cityhash REQUIRED)
+find_package(unofficial-libharu REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -87,6 +89,7 @@ target_link_libraries(${PROJECT_NAME}
     pugixml
     fmt::fmt
     TBB::tbb
+    ZLIB::ZLIB
     nlohmann_json::nlohmann_json
 
 #    breakpad_client
@@ -95,6 +98,8 @@ target_link_libraries(${PROJECT_NAME}
 
 #    concurrentqueue
     unofficial::concurrentqueue::concurrentqueue # for unofficial concurrentqueue cmake config
+
+    unofficial::libharu::hpdf
 )
 
 if (WIN32)

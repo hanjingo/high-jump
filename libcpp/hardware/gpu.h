@@ -57,6 +57,12 @@ typedef struct {
 typedef struct {
     void* program;
     void* kernel;
+
+#ifdef CUDA_ENABLE
+    void** kernel_params;
+    int param_count;
+    int param_capacity;
+#endif
 } gpu_program_t;
 
 typedef struct {
@@ -68,6 +74,10 @@ typedef bool (*gpu_device_callback_t)(const gpu_device_info_t* info, void* user_
 typedef void (*gpu_error_callback_t)(const char* error_msg, void* user_data);
 
 // ----------------------------- gpu API define ------------------------------------
+// platform info
+bool is_opencl_available(void);
+bool is_cuda_available(void);
+
 // device info
 int gpu_count(void);
 int gpu_device_get(gpu_device_info_t** infos, int* count);
@@ -89,27 +99,32 @@ bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, 
 // kernel
 bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name);
 
-// // malloc gpu memory
-// bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
-// bool gpu_malloc_read_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
-// bool gpu_malloc_write_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
+// malloc gpu memory
+bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
+bool gpu_malloc_read_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
+bool gpu_malloc_write_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
+bool gpu_malloc_pinned(gpu_buffer_t* buffer, size_t size);
+bool gpu_malloc_unified(gpu_buffer_t* buffer, size_t size);
 
-// // copy gpu memory
-// bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx);
-// bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
-// bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
+// copy gpu memory
+bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx);
+bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
+bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
+bool gpu_memcpy_to_device_async(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx);
+bool gpu_memcpy_from_device_async(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
+bool gpu_memcpy_device_to_device_async(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
 
-// // set kernel arg
-// bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, const void* arg_value);
-// bool gpu_set_kernel_arg_buffer(gpu_program_t* program, int arg_index, const gpu_buffer_t* buffer);
+// set kernel arg
+bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, const void* arg_value);
+bool gpu_set_kernel_arg_buffer(gpu_program_t* program, int arg_index, const gpu_buffer_t* buffer);
 
-// // exec kernel
-// bool gpu_execute_kernel_1d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size, size_t local_work_size);
-// bool gpu_execute_kernel_2d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[2], size_t local_work_size[2]);
-// bool gpu_execute_kernel_3d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[3], size_t local_work_size[3]);
+// exec kernel
+bool gpu_execute_kernel_1d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size, size_t local_work_size);
+bool gpu_execute_kernel_2d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[2], size_t local_work_size[2]);
+bool gpu_execute_kernel_3d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[3], size_t local_work_size[3]);
 
-// // sync run
-// bool gpu_sync(gpu_context_t* ctx);
+// sync run
+bool gpu_sync(gpu_context_t* ctx);
 
 
 // ----------------------------- gpu API implement ------------------------------------
@@ -235,6 +250,28 @@ static int _gpu_get_devices_by_cuda(gpu_device_info_t** infos, int* count)
     *count = device_count;
 #endif
     return 0;
+}
+
+bool is_opencl_available(void)
+{
+#ifdef OPENCL_ENABLE
+    cl_uint num_platforms = 0;
+    if (clGetPlatformIDs(0, NULL, &num_platforms) == CL_SUCCESS && num_platforms > 0)
+        return true;
+#endif
+
+    return false;
+}
+
+bool is_cuda_available(void)
+{
+#ifdef CUDA_ENABLE
+    int device_count = 0;
+    if (cudaGetDeviceCount(&device_count) == cudaSuccess && device_count > 0)
+        return true;
+#endif
+
+    return false;
 }
 
 int gpu_count(void) 
@@ -592,6 +629,556 @@ bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name)
     
     program->kernel = (void*)function;
     return true;
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
+{
+    if (!buffer || !ctx || size == 0) 
+        return false;
+
+    memset(buffer, 0, sizeof(gpu_buffer_t));
+
+#ifdef OPENCL_ENABLE
+    cl_int err;
+    cl_context context = (cl_context)ctx->context;
+    
+    cl_mem mem_obj = clCreateBuffer(context, CL_MEM_READ_WRITE, size, NULL, &err);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    buffer->ptr = mem_obj;
+    buffer->size = size;
+    return true;
+    
+#elif CUDA_ENABLE
+    void* dev_ptr = NULL;
+    cudaError_t err = cudaMalloc(&dev_ptr, size);
+    if (err != cudaSuccess) 
+        return false;
+    
+    buffer->ptr = dev_ptr;
+    buffer->size = size;
+    return true;
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_malloc_read_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
+{
+    if (!buffer || !ctx || size == 0) 
+        return false;
+
+    memset(buffer, 0, sizeof(gpu_buffer_t));
+
+#ifdef OPENCL_ENABLE
+    cl_int err;
+    cl_context context = (cl_context)ctx->context;
+    
+    // 分配只读内存
+    cl_mem mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, size, NULL, &err);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    buffer->ptr = mem_obj;
+    buffer->size = size;
+    return true;
+    
+#elif CUDA_ENABLE
+    void* dev_ptr = NULL;
+    cudaError_t err = cudaMalloc(&dev_ptr, size);
+    if (err != cudaSuccess) 
+        return false;
+    
+    buffer->ptr = dev_ptr;
+    buffer->size = size;
+    return true;
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_malloc_write_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
+{
+    if (!buffer || !ctx || size == 0) 
+        return false;
+
+    memset(buffer, 0, sizeof(gpu_buffer_t));
+
+#ifdef OPENCL_ENABLE
+    cl_int err;
+    cl_context context = (cl_context)ctx->context;
+    
+    cl_mem mem_obj = clCreateBuffer(context, CL_MEM_WRITE_ONLY, size, NULL, &err);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    buffer->ptr = mem_obj;
+    buffer->size = size;
+    return true;
+    
+#elif CUDA_ENABLE
+    void* dev_ptr = NULL;
+    cudaError_t err = cudaMalloc(&dev_ptr, size);
+    if (err != cudaSuccess) 
+        return false;
+    
+    buffer->ptr = dev_ptr;
+    buffer->size = size;
+    return true;
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_malloc_pinned(gpu_buffer_t* buffer, size_t size)
+{
+    if (!buffer || size == 0) 
+        return false;
+
+    memset(buffer, 0, sizeof(gpu_buffer_t));
+
+#ifdef CUDA_ENABLE
+    void* host_ptr = NULL;
+    cudaError_t err = cudaMallocHost(&host_ptr, size);
+    if (err != cudaSuccess) 
+        return false;
+    
+    buffer->ptr = host_ptr;
+    buffer->size = size;
+    return true;
+#endif
+
+    return true;
+}
+
+bool gpu_malloc_unified(gpu_buffer_t* buffer, size_t size)
+{
+    if (!buffer || size == 0) 
+        return false;
+
+    memset(buffer, 0, sizeof(gpu_buffer_t));
+    
+#ifdef CUDA_ENABLE
+    void* unified_ptr = NULL;
+    cudaError_t err = cudaMallocManaged(&unified_ptr, size);
+    if (err != cudaSuccess) 
+        return false;
+    
+    buffer->ptr = unified_ptr;
+    buffer->size = size;
+    return true;
+#endif
+
+    return true;
+}
+
+bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx)
+{
+    if (!dst || !dst->ptr || !src || !ctx || size == 0) 
+        return false;
+
+    if (size > dst->size) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_mem mem_obj = (cl_mem)dst->ptr;
+    
+    cl_int err = clEnqueueWriteBuffer(queue, mem_obj, CL_TRUE, 0, size, src, 0, NULL, NULL);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    return true;
+    
+#elif CUDA_ENABLE
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    cudaError_t err = cudaMemcpyAsync(dst->ptr, src, size, cudaMemcpyHostToDevice, stream);
+    if (err != cudaSuccess) 
+        return false;
+    
+    err = cudaStreamSynchronize(stream);
+    if (err != cudaSuccess) 
+        return false;
+    
+    return true;
+    
+#endif
+
+    return false;
+}
+
+bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+{
+    if (!dst || !src || !src->ptr || !ctx || size == 0) 
+        return false;
+
+    if (size > src->size) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_mem mem_obj = (cl_mem)src->ptr;
+    
+    cl_int err = clEnqueueReadBuffer(queue, mem_obj, CL_TRUE, 0, size, dst, 0, NULL, NULL);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    return true;
+    
+#elif CUDA_ENABLE
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    cudaError_t err = cudaMemcpyAsync(dst, src->ptr, size, cudaMemcpyDeviceToHost, stream);
+    if (err != cudaSuccess) 
+        return false;
+    
+    err = cudaStreamSynchronize(stream);
+    if (err != cudaSuccess) 
+        return false;
+    
+    return true;
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+{
+    if (!dst || !dst->ptr || !src || !src->ptr || !ctx || size == 0) 
+        return false;
+
+    if (size > dst->size || size > src->size) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_mem src_mem = (cl_mem)src->ptr;
+    cl_mem dst_mem = (cl_mem)dst->ptr;
+    
+    cl_int err = clEnqueueCopyBuffer(queue, src_mem, dst_mem, 0, 0, size, 0, NULL, NULL);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    err = clFinish(queue);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    return true;
+    
+#elif CUDA_ENABLE
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    cudaError_t err = cudaMemcpyAsync(dst->ptr, src->ptr, size, cudaMemcpyDeviceToDevice, stream);
+    if (err != cudaSuccess) 
+        return false;
+    
+    err = cudaStreamSynchronize(stream);
+    if (err != cudaSuccess) 
+        return false;
+    
+    return true;
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_memcpy_to_device_async(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx)
+{
+    if (!dst || !dst->ptr || !src || !ctx || size == 0) 
+        return false;
+
+    if (size > dst->size) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_mem mem_obj = (cl_mem)dst->ptr;
+    
+    cl_int err = clEnqueueWriteBuffer(queue, mem_obj, CL_FALSE, 0, size, src, 0, NULL, NULL);
+    return (err == CL_SUCCESS);
+    
+#elif CUDA_ENABLE
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    cudaError_t err = cudaMemcpyAsync(dst->ptr, src, size, cudaMemcpyHostToDevice, stream);
+    return (err == cudaSuccess);
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_memcpy_from_device_async(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+{
+    if (!dst || !src || !src->ptr || !ctx || size == 0) 
+        return false;
+
+    if (size > src->size) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_mem mem_obj = (cl_mem)src->ptr;
+    
+    cl_int err = clEnqueueReadBuffer(queue, mem_obj, CL_FALSE, 0, size, dst, 0, NULL, NULL);
+    return (err == CL_SUCCESS);
+    
+#elif CUDA_ENABLE
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    cudaError_t err = cudaMemcpyAsync(dst, src->ptr, size, cudaMemcpyDeviceToHost, stream);
+    return (err == cudaSuccess);
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_memcpy_device_to_device_async(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+{
+    if (!dst || !dst->ptr || !src || !src->ptr || !ctx || size == 0) 
+        return false;
+
+    if (size > dst->size || size > src->size) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_mem src_mem = (cl_mem)src->ptr;
+    cl_mem dst_mem = (cl_mem)dst->ptr;
+    cl_int err = clEnqueueCopyBuffer(queue, src_mem, dst_mem, 0, 0, size, 0, NULL, NULL);
+    return (err == CL_SUCCESS);
+    
+#elif CUDA_ENABLE
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    cudaError_t err = cudaMemcpyAsync(dst->ptr, src->ptr, size, cudaMemcpyDeviceToDevice, stream);
+    return (err == cudaSuccess);
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, const void* arg_value)
+{
+    if (!program || !program->kernel || arg_index < 0) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_kernel kernel = (cl_kernel)program->kernel;
+    cl_int err = clSetKernelArg(kernel, (cl_uint)arg_index, arg_size, arg_value);
+    return (err == CL_SUCCESS);
+    
+#elif CUDA_ENABLE
+    if (arg_index >= program->param_capacity) 
+    {
+        int new_capacity = arg_index + 8;
+        void** new_params = (void**)realloc(program->kernel_params, 
+                                           new_capacity * sizeof(void*));
+        if (!new_params) 
+            return false;
+        
+        for (int i = program->param_capacity; i < new_capacity; i++)
+            new_params[i] = NULL;
+        
+        program->kernel_params = new_params;
+        program->param_capacity = new_capacity;
+    }
+    
+    if (program->kernel_params[arg_index])
+        free(program->kernel_params[arg_index]);
+    
+    program->kernel_params[arg_index] = malloc(arg_size);
+    if (!program->kernel_params[arg_index]) 
+        return false;
+    
+    memcpy(program->kernel_params[arg_index], arg_value, arg_size);
+    
+    if (arg_index >= program->param_count)
+        program->param_count = arg_index + 1;
+    
+    return true;
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_set_kernel_arg_buffer(gpu_program_t* program, int arg_index, const gpu_buffer_t* buffer)
+{
+    if (!program || !program->kernel || !buffer || !buffer->ptr || arg_index < 0) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_kernel kernel = (cl_kernel)program->kernel;
+    cl_mem mem_obj = (cl_mem)buffer->ptr;
+    
+    cl_int err = clSetKernelArg(kernel, (cl_uint)arg_index, sizeof(cl_mem), &mem_obj);
+    return (err == CL_SUCCESS);
+    
+#elif CUDA_ENABLE
+    return gpu_set_kernel_arg(program, arg_index, sizeof(void*), &buffer->ptr);
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_execute_kernel_1d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size, size_t local_work_size)
+{
+    if (!program || !program->kernel || !ctx || global_work_size == 0) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_kernel kernel = (cl_kernel)program->kernel;
+    
+    size_t* local_ptr = (local_work_size > 0) ? &local_work_size : NULL;
+    
+    cl_int err = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &global_work_size, local_ptr, 0, NULL, NULL);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    return true;
+    
+#elif CUDA_ENABLE
+    CUfunction function = (CUfunction)program->kernel;
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    unsigned int block_size = (local_work_size > 0) ? (unsigned int)local_work_size : 256;
+    unsigned int grid_size = (unsigned int)((global_work_size + block_size - 1) / block_size);
+    CUresult result = cuLaunchKernel(function,
+                                     grid_size, 1, 1,        // grid dimensions
+                                     block_size, 1, 1,       // block dimensions
+                                     0,                      // shared memory size
+                                     stream,                 // stream
+                                     program->kernel_params, // parameters
+                                     NULL);                  // extra options
+    
+    return (result == CUDA_SUCCESS);
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_execute_kernel_2d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[2], size_t local_work_size[2])
+{
+    if (!program || !program->kernel || !ctx || !global_work_size || 
+        global_work_size[0] == 0 || global_work_size[1] == 0) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_kernel kernel = (cl_kernel)program->kernel;
+    
+    size_t* local_ptr = NULL;
+    if (local_work_size && local_work_size[0] > 0 && local_work_size[1] > 0) 
+        local_ptr = local_work_size;
+    
+    cl_int err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_work_size, local_ptr, 0, NULL, NULL);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    return true;
+    
+#elif CUDA_ENABLE
+    CUfunction function = (CUfunction)program->kernel;
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    unsigned int block_x = (local_work_size && local_work_size[0] > 0) ? (unsigned int)local_work_size[0] : 16;
+    unsigned int block_y = (local_work_size && local_work_size[1] > 0) ? (unsigned int)local_work_size[1] : 16;
+    
+    unsigned int grid_x = (unsigned int)((global_work_size[0] + block_x - 1) / block_x);
+    unsigned int grid_y = (unsigned int)((global_work_size[1] + block_y - 1) / block_y);
+    
+    CUresult result = cuLaunchKernel(function,
+                                     grid_x, grid_y, 1,      // grid dimensions
+                                     block_x, block_y, 1,    // block dimensions
+                                     0,                      // shared memory size
+                                     stream,                 // stream
+                                     program->kernel_params, // parameters
+                                     NULL);                  // extra options
+    
+    return (result == CUDA_SUCCESS);
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_execute_kernel_3d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[3], size_t local_work_size[3])
+{
+    if (!program || !program->kernel || !ctx || !global_work_size || 
+        global_work_size[0] == 0 || global_work_size[1] == 0 || global_work_size[2] == 0) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_kernel kernel = (cl_kernel)program->kernel;
+    
+    size_t* local_ptr = NULL;
+    if (local_work_size && local_work_size[0] > 0 && local_work_size[1] > 0 && local_work_size[2] > 0) 
+        local_ptr = local_work_size;
+    
+    cl_int err = clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global_work_size, local_ptr, 0, NULL, NULL);
+    if (err != CL_SUCCESS) 
+        return false;
+    
+    return true;
+    
+#elif CUDA_ENABLE
+    CUfunction function = (CUfunction)program->kernel;
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    
+    unsigned int block_x = (local_work_size && local_work_size[0] > 0) ? (unsigned int)local_work_size[0] : 8;
+    unsigned int block_y = (local_work_size && local_work_size[1] > 0) ? (unsigned int)local_work_size[1] : 8;
+    unsigned int block_z = (local_work_size && local_work_size[2] > 0) ? (unsigned int)local_work_size[2] : 8;
+    
+    unsigned int grid_x = (unsigned int)((global_work_size[0] + block_x - 1) / block_x);
+    unsigned int grid_y = (unsigned int)((global_work_size[1] + block_y - 1) / block_y);
+    unsigned int grid_z = (unsigned int)((global_work_size[2] + block_z - 1) / block_z);
+    
+    CUresult result = cuLaunchKernel(function,
+                                     grid_x, grid_y, grid_z,    // grid dimensions
+                                     block_x, block_y, block_z, // block dimensions
+                                     0,                         // shared memory size
+                                     stream,                    // stream
+                                     program->kernel_params,    // parameters
+                                     NULL);                     // extra options
+    
+    return (result == CUDA_SUCCESS);
+    
+#endif
+    
+    return false;
+}
+
+bool gpu_sync(gpu_context_t* ctx)
+{
+    if (!ctx) 
+        return false;
+
+#ifdef OPENCL_ENABLE
+    cl_command_queue queue = (cl_command_queue)ctx->queue;
+    cl_int err = clFinish(queue);
+    return (err == CL_SUCCESS);
+    
+#elif CUDA_ENABLE
+    cudaStream_t stream = (cudaStream_t)ctx->queue;
+    cudaError_t err = cudaStreamSynchronize(stream);
+    return (err == cudaSuccess);
     
 #endif
     

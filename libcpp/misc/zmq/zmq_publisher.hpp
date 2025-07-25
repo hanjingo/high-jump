@@ -2,7 +2,7 @@
 #define ZMQ_PUBLISHER_HPP
 
 #include <zmq.h>
-#include <libcpp/net/zmq/zmqch_an.hpp>
+#include <libcpp/misc/zmq/zmq_chan.hpp>
 
 namespace libcpp
 {

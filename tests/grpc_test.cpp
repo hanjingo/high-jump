@@ -1,3 +1,3 @@
 #include <gtest/gtest.h>
-#include <libcpp/net/grpc.hpp>
+#include <libcpp/misc/grpc.hpp>
 

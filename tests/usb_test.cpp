@@ -10,8 +10,11 @@ std::string ws2s(const wchar_t* wstr)
     return conv.to_bytes(wstr);
 }
 
-void dev_print(usb_info_t* info)
+bool dev_range(usb_info_t* info)
 {
+    if (!info) 
+        return false;
+
     std::cout << "{"
               << "path=" << info->path
               << ", vendor_id=" << info->vendor_id
@@ -26,15 +29,16 @@ void dev_print(usb_info_t* info)
               << ", bus_type=" << (int)(info->bus_type)
               << "}"
               << std::endl;
-}
-
-bool dev_range(usb_info_t* info)
-{
-    dev_print(info);
     return true;
 }
 
 TEST(usb, usb_device_range)
 {
-    usb_device_range(dev_range);
+    usb_device_range(dev_range, default_usb_device_filter);
+}
+
+TEST(usb, usb_device_count)
+{
+    int count = usb_device_count(default_usb_device_filter);
+    std::cout << "USB device count: " << count << std::endl;
 }

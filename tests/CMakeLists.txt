@@ -38,6 +38,7 @@ find_package(unofficial-concurrentqueue REQUIRED)
 find_package(lz4 REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
 find_package(cityhash REQUIRED)
 find_package(unofficial-libharu REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
@@ -90,6 +91,7 @@ target_link_libraries(${PROJECT_NAME}
     fmt::fmt
     TBB::tbb
     ZLIB::ZLIB
+    yaml-cpp::yaml-cpp
     nlohmann_json::nlohmann_json
 
 #    breakpad_client

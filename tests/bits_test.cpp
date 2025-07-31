@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 #include <libcpp/types/bits.hpp>
+#include <cstdint>
+
+using libcpp::bits;
 
 TEST(bits, get)
 {
@@ -37,4 +40,24 @@ TEST(bits, to_string)
     char buf[sizeof(unsigned short) * 8 + 1];
     libcpp::bits::to_string(n, buf);
     ASSERT_STREQ(buf, result.c_str());
+}
+
+TEST(BitsTest, CountLeadingZeros32) {
+    EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0), 32);
+    EXPECT_EQ(bits::count_leading_zeros<uint32_t>(1), 31);
+    EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0x80000000), 0);
+    EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0xF0000000), 0);
+    EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0x0F000000), 4);
+    EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0x00F00000), 8);
+    EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0x00000010), 27);
+}
+
+TEST(BitsTest, CountLeadingZeros64) {
+    EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0), 64);
+    EXPECT_EQ(bits::count_leading_zeros<uint64_t>(1), 63);
+    EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0x8000000000000000ULL), 0);
+    EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0xF000000000000000ULL), 0);
+    EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0x0F00000000000000ULL), 4);
+    EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0x00F0000000000000ULL), 8);
+    EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0x0000000000000010ULL), 59);
 }

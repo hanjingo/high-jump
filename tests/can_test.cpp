@@ -1,3 +1,3 @@
 #include <gtest/gtest.h>
-#include <libcpp/net/can.hpp>
+#include <libcpp/hardware/can.h>
 

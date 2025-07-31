@@ -82,4 +82,36 @@ inline const char* _COMPILE_TIME() {
     #define LIBCPP_QT_ENVIRONMENT 0
 #endif
 
+
+#if defined(_MSC_VER)
+    #define FORCE_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    #define FORCE_INLINE __attribute__((always_inline)) inline
+#else
+    #define FORCE_INLINE inline
+#endif
+
+#if defined(_MSC_VER)
+    #define NO_INLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+    #define NO_INLINE __attribute__((noinline))
+#else
+    #define NO_INLINE
+#endif
+
+
+// branch prediction hints (GCC only)
+#if defined(__GNUC__) || defined(__clang__)
+    #define LIKELY(x)   __builtin_expect(!!(x), 1)
+    #define UNLIKELY(x) __builtin_expect(!!(x), 0)
+    #define HOT         __attribute__((hot))
+    #define COLD        __attribute__((cold))
+#else
+    #define LIKELY(x)   (x)
+    #define UNLIKELY(x) (x)
+    #define HOT
+    #define COLD
+#endif
+
+
 #endif

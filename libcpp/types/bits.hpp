@@ -69,6 +69,12 @@ public:
     //     std::bitset<sizeof(src) * 8> buf;
     //     return buf.to_string();
     // }
+
+    template<typename T>
+    static int count_leading_zeros(const T& src)
+    {
+        // TODO
+    }
 };
 
 }

@@ -1,6 +1,8 @@
 #ifndef MISC_HPP
 #define MISC_HPP
 
+#include <libcpp/misc/fix.hpp>
+
 #include <libcpp/misc/grpc.hpp>
 
 #include <libcpp/misc/pdf.hpp>

@@ -5,6 +5,8 @@
 
 #include <libcpp/algo/behavior_tree.hpp>
 
+#include <libcpp/algo/crc.h>
+
 #include <libcpp/algo/fill.hpp>
 
 #include <libcpp/algo/multi_index.hpp>

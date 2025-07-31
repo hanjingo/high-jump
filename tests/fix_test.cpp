@@ -1,3 +1,3 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/fix.hpp>
+#include <libcpp/misc/fix.hpp>
 

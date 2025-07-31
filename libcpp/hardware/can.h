@@ -1,6 +1,6 @@
-#ifndef CAN_HPP
-#define CAN_HPP
+#ifndef CAN_H
+#define CAN_H
 
 // TODO: Implement Controller Area Network (CAN) related functionalities
 
-#endif // CAN_HPP
+#endif // CAN_H

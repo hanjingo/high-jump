@@ -124,3 +124,10 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - cuda: https://developer.nvidia.com/cuda-toolkit
 - libharu: https://github.com/libharu/libharu
 - opencl: https://github.com/KhronosGroup/OpenCL-SDK
+- zlib: https://github.com/madler/zlib
+- yaml-cpp: https://github.com/jbeder/yaml-cpp
+- opencv: https://github.com/opencv/opencv
+- grpc: https://github.com/grpc/grpc
+- hffix: https://jamesdbrock.github.io/hffix
+- libpqxx: https://pqxx.org/libpqxx/
+- libnice: https://nice.freedesktop.org

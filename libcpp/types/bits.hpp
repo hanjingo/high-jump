@@ -73,7 +73,37 @@ public:
     template<typename T>
     static int count_leading_zeros(const T& src)
     {
-        // TODO
+        // Handle zero input: all bits are zero
+        if (src == 0)
+            return sizeof(T) * 8;
+
+#if defined(__GNUC__) || defined(__clang__)
+        if constexpr (sizeof(T) == 4) {
+            return __builtin_clz(static_cast<uint32_t>(src));
+        } else if constexpr (sizeof(T) == 8) {
+            return __builtin_clzll(static_cast<uint64_t>(src));
+        }
+#elif defined(_MSC_VER)
+        unsigned long index;
+        if constexpr (sizeof(T) == 4) {
+            _BitScanReverse(&index, static_cast<uint32_t>(src));
+            return 31 - index;
+        } else if constexpr (sizeof(T) == 8) {
+            unsigned long index64;
+            _BitScanReverse64(&index64, static_cast<uint64_t>(src));
+            return 63 - index64;
+        }
+#else
+        // Portable fallback
+        int count = 0;
+        int bits = sizeof(T) * 8;
+        for (int i = bits - 1; i >= 0; --i) {
+            if ((src >> i) & 1)
+                break;
+            ++count;
+        }
+        return count;
+#endif
     }
 };
 

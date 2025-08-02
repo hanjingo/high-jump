@@ -1,0 +1,385 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_VERSION: '2024.01.12'
+
+jobs:
+  # ================================ Code Quality Checks ================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install code quality tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format clang-tidy
+        pip install cpplint
+
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
+          --error-exitcode=1 --xml libcpp/ 2> cppcheck-result.xml || true
+        
+    - name: Run clang-format check
+      run: |
+        find libcpp tests -name "*.cpp" -o -name "*.hpp" | \
+        xargs clang-format --dry-run --Werror
+
+    - name: Run cpplint
+      run: |
+        find libcpp tests -name "*.cpp" -o -name "*.hpp" | \
+        xargs cpplint --filter=-legal/copyright,-build/include_subdir
+
+    - name: Upload code quality reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: code-quality-reports
+        path: |
+          cppcheck-result.xml
+        retention-days: 30
+
+  # ================================ Multi-Platform Build Matrix ================================
+  build-test:
+    name: Build & Test
+    needs: code-quality
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Debug, Release]
+        compiler:
+          - { os: ubuntu-latest, cc: gcc, cxx: g++ }
+          - { os: ubuntu-latest, cc: clang, cxx: clang++ }
+          - { os: windows-latest, cc: cl, cxx: cl }
+          - { os: macos-latest, cc: clang, cxx: clang++ }
+        exclude:
+          - os: ubuntu-latest
+            compiler: { os: windows-latest, cc: cl, cxx: cl }
+          - os: ubuntu-latest
+            compiler: { os: macos-latest, cc: clang, cxx: clang++ }
+          - os: windows-latest
+            compiler: { os: ubuntu-latest, cc: gcc, cxx: g++ }
+          - os: windows-latest
+            compiler: { os: ubuntu-latest, cc: clang, cxx: clang++ }
+          - os: windows-latest
+            compiler: { os: macos-latest, cc: clang, cxx: clang++ }
+          - os: macos-latest
+            compiler: { os: ubuntu-latest, cc: gcc, cxx: g++ }
+          - os: macos-latest
+            compiler: { os: ubuntu-latest, cc: clang, cxx: clang++ }
+          - os: macos-latest
+            compiler: { os: windows-latest, cc: cl, cxx: cl }
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    # ======================== Setup Build Environment ========================
+    
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: '3.25'
+
+    - name: Setup vcpkg (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
+
+    - name: Setup vcpkg (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git
+        cd vcpkg
+        git checkout ${{ env.VCPKG_VERSION }}
+        ./bootstrap-vcpkg.sh
+        echo "VCPKG_ROOT=$PWD" >> $GITHUB_ENV
+
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          ninja-build \
+          pkg-config \
+          libgtest-dev \
+          libgmock-dev
+
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install ninja googletest
+
+    - name: Setup MSVC (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: ilammy/msvc-dev-cmd@v1
+
+    # ======================== Configure and Build ========================
+    
+    - name: Configure CMake (Unix)
+      if: matrix.os != 'windows-latest'
+      env:
+        CC: ${{ matrix.compiler.cc }}
+        CXX: ${{ matrix.compiler.cxx }}
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake \
+          -G Ninja
+
+    - name: Configure CMake (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cmake -B build `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake `
+          -G "Visual Studio 17 2022" `
+          -A x64
+
+    - name: Build project
+      run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
+
+    # ======================== Testing ========================
+    
+    - name: Run unit tests
+      working-directory: build
+      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure --parallel 4
+
+    - name: Run integration tests
+      if: matrix.build_type == 'Release'
+      working-directory: build
+      run: |
+        # Add your integration test commands here
+        echo "Running integration tests..."
+
+    # ======================== Code Coverage (Linux Debug only) ========================
+    
+    - name: Generate coverage report
+      if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'Debug' && matrix.compiler.cc == 'gcc'
+      run: |
+        sudo apt-get install -y lcov
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/build/*' --output-file coverage_filtered.info
+        lcov --list coverage_filtered.info
+
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.build_type == 'Debug' && matrix.compiler.cc == 'gcc'
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage_filtered.info
+        flags: unittests
+        name: codecov-umbrella
+
+    # ======================== Artifacts ========================
+    
+    - name: Package artifacts
+      run: |
+        cmake --build build --config ${{ matrix.build_type }} --target package
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libcpp-${{ matrix.os }}-${{ matrix.compiler.cc }}-${{ matrix.build_type }}
+        path: |
+          build/lib*
+          build/*.dll
+          build/*.exe
+          build/tests/
+          build/*.zip
+          build/*.tar.gz
+        retention-days: 7
+
+    # ======================== Performance Benchmarks ========================
+    
+    - name: Run benchmarks
+      if: matrix.build_type == 'Release' && matrix.os == 'ubuntu-latest'
+      working-directory: build
+      run: |
+        # Add benchmark commands here
+        echo "Running performance benchmarks..."
+        # ./benchmarks/benchmark_main --benchmark_format=json > benchmark_results.json
+
+  # ================================ Memory and Sanitizer Tests ================================
+  sanitizer-tests:
+    name: Sanitizer Tests
+    needs: code-quality
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        sanitizer: [address, thread, undefined, memory]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang ninja-build libgtest-dev
+
+    - name: Configure with sanitizer
+      env:
+        CC: clang
+        CXX: clang++
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}" \
+          -G Ninja
+
+    - name: Build with sanitizer
+      run: cmake --build build --parallel 4
+
+    - name: Run tests with sanitizer
+      working-directory: build
+      run: ctest --output-on-failure
+
+  # ================================ Documentation Generation ================================
+  documentation:
+    name: Generate Documentation
+    needs: build-test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Doxygen
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz
+
+    - name: Generate documentation
+      run: |
+        doxygen Doxyfile
+
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/html
+
+  # ================================ Release Management ================================
+  release:
+    name: Create Release
+    needs: [build-test, sanitizer-tests]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Create release packages
+      run: |
+        cd artifacts
+        for dir in libcpp-*; do
+          if [ -d "$dir" ]; then
+            tar -czf "${dir}.tar.gz" "$dir"
+          fi
+        done
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Simple changelog generation
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 HEAD~1)..HEAD >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Changes in this release
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## Download
+          Download the appropriate package for your platform below.
+        files: |
+          artifacts/*.tar.gz
+          artifacts/*.zip
+        draft: false
+        prerelease: ${{ contains(github.ref_name, '-') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ================================ Container Build ================================
+  docker:
+    name: Build Docker Image
+    needs: build-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: yourusername/libcpp
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

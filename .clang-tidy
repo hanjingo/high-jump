@@ -1,0 +1,14 @@
+---
+Checks: >
+  *,
+  -fuchsia-*,
+  -google-build-using-namespace,
+  -google-readability-namespace-comments,
+  -llvm-namespace-comment,
+  -modernize-use-trailing-return-type,
+  -readability-named-parameter,
+  -readability-redundant-declaration
+WarningsAsErrors: ''
+HeaderFilterRegex: 'libcpp/.*\.hpp'
+AnalyzeTemporaryDtors: false
+FormatStyle: file

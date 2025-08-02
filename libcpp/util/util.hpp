@@ -13,4 +13,6 @@
 
 #include <libcpp/util/version.hpp>
 
+#include <libcpp/util/wasm.hpp>
+
 #endif

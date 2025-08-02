@@ -7,6 +7,8 @@
 
 #include <libcpp/misc/pdf.hpp>
 
+#include <libcpp/misc/ros.hpp>
+
 #include <libcpp/misc/zmq.hpp>
 
 #endif // MISC_HPP

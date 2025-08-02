@@ -1,16 +1,25 @@
 cmake_minimum_required(VERSION 3.19.2)
 
+# set environment param
+project(libcpp 
+    VERSION 1.0.0
+    DESCRIPTION "Modern C++ Library for C++17 and above"
+    LANGUAGES CXX
+)
+
+# set options
+option(ASAN "Enable AddressSanitizer" OFF)
+option(BUILD_TEST "Build the tests and benchmarks" OFF)
+option(BUILD_LIB "Build the libcpp library" OFF)
+option(BUILD_EXAMPLE "Build the example application" OFF)
+
 # import vcpkg module
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     if(DEFINED ENV{VCPKG_ROOT})
-        set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+        set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+        message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
     endif()
 endif()
-
-project(libcpp)
-
-# set environment param
-set(LIBCPP_VERSION 1.0.0)
 
 # set c++ version
 set(CMAKE_CXX_STANDARD 17)

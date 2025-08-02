@@ -13,11 +13,11 @@
 
 #include <libcpp/types/optional.hpp>
 
+#include <libcpp/types/reflect.hpp>
+
 #include <libcpp/types/singleton.hpp>
 
 #include <libcpp/types/string_view.hpp>
-
-#include <libcpp/types/reflect.hpp>
 
 #include <libcpp/types/variant.hpp>
 

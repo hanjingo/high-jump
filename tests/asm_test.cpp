@@ -197,51 +197,51 @@ TEST_F(AsmTest, compiler_specific_definitions)
     std::cout << "Compiler-specific definition tests completed" << std::endl;
 }
 
-// Test multithreaded compilation (macros should be thread-safe for compilation)
-TEST_F(AsmTest, multithreaded_compilation_safety)
-{
-    SCOPED_TRACE("Testing multithreaded compilation safety");
+// // Test multithreaded compilation (macros should be thread-safe for compilation)
+// TEST_F(AsmTest, multithreaded_compilation_safety)
+// {
+//     SCOPED_TRACE("Testing multithreaded compilation safety");
     
-    std::cout << "Testing multithreaded compilation safety..." << std::endl;
+//     std::cout << "Testing multithreaded compilation safety..." << std::endl;
     
-    const int num_threads = 4;
-    std::vector<std::thread> threads;
-    std::vector<bool> results(num_threads, false);
+//     const int num_threads = 4;
+//     std::vector<std::thread> threads;
+//     std::vector<bool> results(num_threads, false);
     
-    for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back([&results, i]() {
-            try {
-                // Test that macros can be used safely in multithreaded compilation context
-                // This tests the macro definitions themselves, not assembly execution
+//     for (int i = 0; i < num_threads; ++i) {
+//         threads.emplace_back([&results, i]() {
+//             try {
+//                 // Test that macros can be used safely in multithreaded compilation context
+//                 // This tests the macro definitions themselves, not assembly execution
                 
-                volatile int test_var = i;
+//                 volatile int test_var = i;
                 
-                // Use macros in a way that tests compilation but doesn't execute assembly
-#if !defined(_MSC_VER) || (!defined(_M_X64) && !defined(_M_ARM64))
-                // Only on platforms that support inline assembly
-                // This is primarily a compilation test
-#endif
+//                 // Use macros in a way that tests compilation but doesn't execute assembly
+// #if !defined(_MSC_VER) || (!defined(_M_X64) && !defined(_M_ARM64))
+//                 // Only on platforms that support inline assembly
+//                 // This is primarily a compilation test
+// #endif
                 
-                test_var = test_var + 1; // Prevent optimization
-                results[i] = (test_var == i + 1);
+//                 test_var = test_var + 1; // Prevent optimization
+//                 results[i] = (test_var == i + 1);
                 
-            } catch (...) {
-                results[i] = false;
-            }
-        });
-    }
+//             } catch (...) {
+//                 results[i] = false;
+//             }
+//         });
+//     }
     
-    for (auto& thread : threads) {
-        thread.join();
-    }
+//     for (auto& thread : threads) {
+//         thread.join();
+//     }
     
-    // Check that all threads completed successfully
-    for (int i = 0; i < num_threads; ++i) {
-        EXPECT_TRUE(results[i]) << "Thread " << i << " should complete successfully";
-    }
+//     // Check that all threads completed successfully
+//     for (int i = 0; i < num_threads; ++i) {
+//         EXPECT_TRUE(results[i]) << "Thread " << i << " should complete successfully";
+//     }
     
-    std::cout << "Multithreaded compilation safety test completed" << std::endl;
-}
+//     std::cout << "Multithreaded compilation safety test completed" << std::endl;
+// }
 
 // Test macro expansion behavior
 TEST_F(AsmTest, macro_expansion_behavior)

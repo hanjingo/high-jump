@@ -1,0 +1,6 @@
+#ifndef BLOOM_FILTER_HPP
+#define BLOOM_FILTER_HPP
+
+// TODO
+
+#endif // BLOOM_FILTER_HPP

@@ -21,7 +21,6 @@ void fill(Container& ct, const Fn&& fn, const unsigned long n)
     for (auto& v : ct)
     {
         v = fn(idx++);
-
         if (idx >= n)
             return;
     }

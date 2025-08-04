@@ -7,12 +7,8 @@ using namespace libcpp;
 void doDefer()
 {
     std::cout << "defer before" << std::endl;
-    DEFER(
-        std::cout << "step1. do defer1" << std::endl;
-    );
-    DEFER(
-        std::cout << "step2. do defer2" << std::endl;
-    );
+    DEFER(std::cout << "step1. do defer1" << std::endl;);
+    DEFER(std::cout << "step2. do defer2" << std::endl;);
     std::cout << "defer after" << std::endl;
 }
 

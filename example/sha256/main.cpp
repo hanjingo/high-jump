@@ -10,7 +10,8 @@ int main(int argc, char* argv[])
     std::size_t sz = 0;
     while (true)
     {
-        std::cout << libcpp::sha256::encode(std::cin.getline(buf, sz)) << std::endl;
+        std::cout << libcpp::sha256::encode(std::cin.getline(buf, sz))
+                  << std::endl;
     }
 
     return 0;

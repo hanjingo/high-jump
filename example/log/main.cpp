@@ -16,8 +16,8 @@ int main(int argc, char* argv[])
     // do sync logging by user defined rotate file logger
     auto lg1 = std::make_shared<libcpp::logger>("lg1");
     lg1->add_sink(libcpp::logger::create_stdout_sink());
-    lg1->add_sink(libcpp::logger::create_rotate_file_sink("logs/libcpp.log", 
-                                                          2 * 1024 * 1024, 
+    lg1->add_sink(libcpp::logger::create_rotate_file_sink("logs/libcpp.log",
+                                                          2 * 1024 * 1024,
                                                           2,
                                                           false));
     lg1->set_pattern("%Y-%m-%d %H:%M:%S.%e [%-8l] %v");
@@ -33,9 +33,8 @@ int main(int argc, char* argv[])
     auto lg2 = std::make_shared<libcpp::logger>("lg2", true);
     lg2->add_sink(libcpp::logger::create_stdout_sink());
     lg2->clear_sink();
-    lg2->add_sink(libcpp::logger::create_daily_file_sink("logs/libcpp.log", 
-                                                         0, 
-                                                         1));
+    lg2->add_sink(
+        libcpp::logger::create_daily_file_sink("logs/libcpp.log", 0, 1));
     while (true)
     {
         lg2->trace("lg2 LOG_TRACE {}", "hello");

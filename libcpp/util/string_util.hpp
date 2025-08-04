@@ -19,20 +19,18 @@
 #ifndef STRING_UTIL_HPP
 #define STRING_UTIL_HPP
 
-#include <string>
-#include <regex>
-#include <vector>
-#include <sstream>
-#include <locale>
 #include <codecvt>
+#include <locale>
+#include <regex>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include <fmt/core.h>
 
-namespace libcpp
-{
+namespace libcpp {
 
-namespace string_util
-{
+namespace string_util {
 
 bool contains(const std::string& src, const std::string& sub)
 {
@@ -46,18 +44,21 @@ std::string search(const std::string& src, const std::string& regex)
     return match[0];
 }
 
-std::vector<std::string> search_n(const std::string& src, const std::string& regex)
+std::vector<std::string> search_n(const std::string& src,
+                                  const std::string& regex)
 {
     std::regex pattern(regex);
     std::sregex_iterator begin(src.begin(), src.end(), pattern), end;
     std::vector<std::string> results;
-    for (auto it = begin; it != end; ++it) 
+    for (auto it = begin; it != end; ++it)
         results.push_back(it->str());
 
     return results;
 }
 
-void search(const std::string& src, std::smatch& match, const std::string& regex)
+void search(const std::string& src,
+            std::smatch& match,
+            const std::string& regex)
 {
     std::regex_search(src, match, std::regex(regex));
 }
@@ -65,11 +66,14 @@ void search(const std::string& src, std::smatch& match, const std::string& regex
 std::vector<std::string> split(const std::string& str, const std::string& regex)
 {
     std::regex patten(regex);
-    std::sregex_token_iterator first{str.begin(), str.end(), patten, -1}, last;
-    return {first, last};
+    std::sregex_token_iterator first{ str.begin(), str.end(), patten, -1 },
+        last;
+    return { first, last };
 }
 
-std::string& replace(std::string& str, const std::string& from, const std::string& to)
+std::string& replace(std::string& str,
+                     const std::string& from,
+                     const std::string& to)
 {
     str = std::regex_replace(str, std::regex(from), to);
     return str;
@@ -104,7 +108,7 @@ std::wstring to_wstring(const std::string& src)
 
 std::string from_wchar(const wchar_t* src)
 {
-    if (!src) 
+    if (!src)
         return std::string();
 
 #if defined(_MSC_VER)
@@ -140,10 +144,11 @@ std::string from_ptr_addr(const void* ptr, bool is_hex = true)
 template <typename... Args>
 std::string fmt(const char* style, Args&&... args)
 {
-    return fmt::vformat(style, fmt::make_format_args(std::forward<Args>(args)...));
+    return fmt::vformat(style,
+                        fmt::make_format_args(std::forward<Args>(args)...));
 }
 
-}
-}
+}  // namespace string_util
+}  // namespace libcpp
 
 #endif

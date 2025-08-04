@@ -1,16 +1,11 @@
 #include <iostream>
 
-#include <libcpp/util/init.hpp>
-
 #include "hello.hpp"
 #include "world.hpp"
+#include <libcpp/util/init.hpp>
 
-INIT(
-    std::cout << "init 1" << std::endl;
-);
-INIT(
-    std::cout << "init 2" << std::endl;
-);
+INIT(std::cout << "init 1" << std::endl;);
+INIT(std::cout << "init 2" << std::endl;);
 
 int main(int argc, char* argv[])
 {

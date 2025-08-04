@@ -2,25 +2,23 @@
 #define ZMQ_PRODUCER_HPP
 
 #include <zmq.h>
+
 #include <libcpp/misc/zmq/zmq_chan.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
 class zmq_producer
 {
-public:
+  public:
     zmq_producer(void* ctx)
-        : ctx_{ctx}
-        , sock_{zmqsock_et(ctx, ZMQ_PUSH)}
-        , ch_{zmqch_an(ctx)}
+        : ctx_{ ctx }, sock_{ zmqsock_et(ctx, ZMQ_PUSH) }, ch_{ zmqch_an(ctx) }
     {
         zmq_msg_init(&buf_);
     }
     ~zmq_producer()
     {
         zmq_close(sock_);
-		sock_ = nullptr;
+        sock_ = nullptr;
 
         zmq_msg_close(&buf_);
     }
@@ -59,13 +57,13 @@ public:
         return zmq_msg_send(&buf_, sock_, flags);
     }
 
-private:
-    void*               ctx_;
-    void*               sock_;
-    libcpp::zmqch_an    ch_;
-    zmq_msg_t           buf_;
+  private:
+    void* ctx_;
+    void* sock_;
+    libcpp::zmqch_an ch_;
+    zmq_msg_t buf_;
 };
 
-}
+}  // namespace libcpp
 
 #endif

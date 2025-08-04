@@ -1,6 +1,7 @@
 #include <libcpp/os/cpu.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "cpu.h"
 }
 

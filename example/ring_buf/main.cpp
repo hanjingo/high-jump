@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[])
 {
-    libcpp::ring_buffer<int> buf{3};
+    libcpp::ring_buffer<int> buf{ 3 };
     buf.push_back(1);
     buf.push_back(2);
     buf.push_back(3);
@@ -17,7 +17,8 @@ int main(int argc, char* argv[])
     std::cout << "*(buf.begin()) = " << *(buf.begin()) << std::endl;
 
     std::cout << "range buf: ";
-    for (auto itr = buf.begin(); itr != buf.end(); itr++) {
+    for (auto itr = buf.begin(); itr != buf.end(); itr++)
+    {
         std::cout << *itr << ", ";
     }
     std::cout << std::endl;

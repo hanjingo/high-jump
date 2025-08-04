@@ -4,8 +4,7 @@
 #if (__cplusplus >= 201703L)
 #include <any>
 
-namespace libcpp
-{
+namespace libcpp {
 
 using any = std::any;
 
@@ -33,14 +32,13 @@ constexpr T any_cast(const any& operand)
     return std::any_cast<T>(operand);
 }
 
-}
+}  // namespace libcpp
 #endif
 
 #if (__cplusplus < 201703L)
 #include <boost/any.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
 using any = boost::any;
 
@@ -68,7 +66,7 @@ constexpr T any_cast(const any& operand)
     return boost::any_cast<T>(operand);
 }
 
-}
+}  // namespace libcpp
 #endif
 
 #endif

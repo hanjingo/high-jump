@@ -2,10 +2,10 @@
 #define JSON_HPP
 
 #include <fstream>
+
 #include <nlohmann/json.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
 using json = nlohmann::json;
 

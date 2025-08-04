@@ -3,10 +3,9 @@
 
 #include <boost/leaf.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
-template<typename T>
+template <typename T>
 using result = boost::leaf::result<T>;
 
 }

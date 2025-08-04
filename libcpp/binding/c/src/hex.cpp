@@ -1,6 +1,7 @@
 #include <libcpp/encoding/hex.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "hex.h"
 }
 

@@ -2,22 +2,26 @@
 #define DBUFFER_HPP
 
 #include <atomic>
-#include <mutex>
-#include <iostream>
 #include <functional>
+#include <iostream>
+#include <mutex>
 
-namespace libcpp
-{
+namespace libcpp {
 
 template <typename Container>
 class dbuffer
 {
-public:
+  public:
     using copy_fn = std::function<bool(Container& src, Container& dst)>;
 
-public:
-    dbuffer(copy_fn&& copy = [](Container& src, Container& dst)->bool{ dst = src; return true; })
-        : _back{&_back_data}, _front{&_front_data}, _copy{std::move(copy)} {}
+  public:
+    dbuffer(copy_fn&& copy = [](Container& src, Container& dst) -> bool {
+        dst = src;
+        return true;
+    })
+        : _back{ &_back_data }, _front{ &_front_data }, _copy{ std::move(copy) }
+    {
+    }
     ~dbuffer() {}
 
     bool write(Container& value)
@@ -45,7 +49,7 @@ public:
         _back.store(tmp);
     }
 
-private:
+  private:
     Container _back_data;
     Container _front_data;
     std::atomic<Container*> _back;
@@ -54,6 +58,6 @@ private:
     std::mutex _mu;
 };
 
-}
+}  // namespace libcpp
 
 #endif

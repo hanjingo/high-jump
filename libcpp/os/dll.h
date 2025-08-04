@@ -2,10 +2,11 @@
 #define DLL_H
 
 // export/import dll
-#if defined(_MSC_VER) // Microsoft
+#if defined(_MSC_VER)  // Microsoft
 #define DLL_EXPORT __declspec(dllexport)
 #define DLL_IMPORT __declspec(dllimport)
-#elif defined(__GNUC__) || defined(__clang__) // GCC/Clang (Linux, macOS, Android)
+#elif defined(__GNUC__) || \
+    defined(__clang__)  // GCC/Clang (Linux, macOS, Android)
 #if defined(__APPLE__)
 #define DLL_EXPORT __attribute__((visibility("default")))
 #define DLL_IMPORT
@@ -16,10 +17,10 @@
 #define DLL_EXPORT __attribute__((visibility("default")))
 #define DLL_IMPORT
 #endif
-#else // Unknown compiler/platform
+#else  // Unknown compiler/platform
 #define DLL_EXPORT
 #define DLL_IMPORT
-#pragma WARNING UNKNOWN DYNAMIC LINK IMPORT/EXPORT SEMANTICS.
+#pragma WARNING UNKNOWN DYNAMIC LINK IMPORT / EXPORT SEMANTICS.
 #endif
 
 // export/import c style dll
@@ -34,25 +35,25 @@
 
 #if defined(_WIN32)
 #include <windows.h>
-#define DLL_RTLD_LAZY         0
-#define DLL_RTLD_NOW          0
+#define DLL_RTLD_LAZY 0
+#define DLL_RTLD_NOW 0
 #define DLL_RTLD_BINDING_MASK 0
-#define DLL_RTLD_NOLOAD       0
-#define DLL_RTLD_DEEPBIND     0
-#define DLL_RTLD_GLOBAL       0
-#define DLL_RTLD_LOCAL        0
-#define DLL_RTLD_NODELETE     0
+#define DLL_RTLD_NOLOAD 0
+#define DLL_RTLD_DEEPBIND 0
+#define DLL_RTLD_GLOBAL 0
+#define DLL_RTLD_LOCAL 0
+#define DLL_RTLD_NODELETE 0
 
 #else
 #include <dlfcn.h>
-#define DLL_RTLD_LAZY         RTLD_LAZY
-#define DLL_RTLD_NOW          RTLD_NOW
+#define DLL_RTLD_LAZY RTLD_LAZY
+#define DLL_RTLD_NOW RTLD_NOW
 #define DLL_RTLD_BINDING_MASK RTLD_BINDING_MASK
-#define DLL_RTLD_NOLOAD       RTLD_NOLOAD
-#define DLL_RTLD_DEEPBIND     RTLD_DEEPBIND
-#define DLL_RTLD_GLOBAL       RTLD_GLOBAL
-#define DLL_RTLD_LOCAL        RTLD_LOCAL
-#define DLL_RTLD_NODELETE     RTLD_NODELETE
+#define DLL_RTLD_NOLOAD RTLD_NOLOAD
+#define DLL_RTLD_DEEPBIND RTLD_DEEPBIND
+#define DLL_RTLD_GLOBAL RTLD_GLOBAL
+#define DLL_RTLD_LOCAL RTLD_LOCAL
+#define DLL_RTLD_NODELETE RTLD_NODELETE
 #endif
 
 #if defined(_WIN32)

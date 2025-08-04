@@ -1,14 +1,12 @@
 #ifndef UNICODE_HPP
 #define UNICODE_HPP
 
-#include <string>
 #include <codecvt>
 #include <locale>
+#include <string>
 
-namespace libcpp
-{
-namespace unicode
-{
+namespace libcpp {
+namespace unicode {
 
 std::wstring from_utf8(const std::string& str)
 {
@@ -22,7 +20,7 @@ std::string to_utf8(const std::wstring& str)
     return cvt.to_bytes(str);
 }
 
-} // namespace unicode
-} // namespace libcpp
+}  // namespace unicode
+}  // namespace libcpp
 
 #endif

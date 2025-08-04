@@ -7,8 +7,7 @@
 #include <Windows.h>
 #endif
 
-namespace libcpp
-{
+namespace libcpp {
 
 using http_request = httplib::Request;
 using http_content_reader = httplib::ContentReader;
@@ -18,6 +17,6 @@ using http_params = httplib::Params;
 using http_multipart_form_data_items = httplib::MultipartFormDataItems;
 using http_multipart_form_data = httplib::MultipartFormData;
 
-}
+}  // namespace libcpp
 
 #endif

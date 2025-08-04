@@ -1,8 +1,7 @@
 #include <iostream>
 
-#include <libcpp/encoding/endian.hpp>
-
 #include <boost/endian/conversion.hpp>
+#include <libcpp/encoding/endian.hpp>
 
 int main(int argc, char* argv[])
 {
@@ -10,20 +9,24 @@ int main(int argc, char* argv[])
 
     int n = 0x01020304;
 
-    std::cout << "big_endian::covert(int(0x01020304)) = 0x"
-              << std::hex << libcpp::big_endian::covert(int(0x01020304)) << std::endl;
+    std::cout << "big_endian::covert(int(0x01020304)) = 0x" << std::hex
+              << libcpp::big_endian::covert(int(0x01020304)) << std::endl;
     std::cout << "boost::endian::native_to_big(int(0x01020304)) = 0x"
-              << std::hex << boost::endian::native_to_big(int(0x01020304)) << std::endl;
+              << std::hex << boost::endian::native_to_big(int(0x01020304))
+              << std::endl;
 
-    std::cout << "little_endian::covert(int(0x01020304)) = 0x"
-              << std::hex << libcpp::little_endian::covert(int(0x01020304)) << std::endl;
-    std::cout << "boost::endian::big_tonative(int(0x01020304)) = 0x"
-              << std::hex << boost::endian::big_to_native(int(0x01020304)) << std::endl;
+    std::cout << "little_endian::covert(int(0x01020304)) = 0x" << std::hex
+              << libcpp::little_endian::covert(int(0x01020304)) << std::endl;
+    std::cout << "boost::endian::big_tonative(int(0x01020304)) = 0x" << std::hex
+              << boost::endian::big_to_native(int(0x01020304)) << std::endl;
 
-    std::cout << "BE<<int(0x01020304) = 0x" << std::hex << (libcpp::BE << int(0x01020304)) << std::endl;
-    std::cout << "LE<<int(0x01020304) = 0x" << (libcpp::LE << int(0x01020304)) << std::endl;
+    std::cout << "BE<<int(0x01020304) = 0x" << std::hex
+              << (libcpp::BE << int(0x01020304)) << std::endl;
+    std::cout << "LE<<int(0x01020304) = 0x" << (libcpp::LE << int(0x01020304))
+              << std::endl;
 
-    std::cout << "LE<<int(0x0A01) = 0x" << (libcpp::LE << int(0x0A01)) << std::endl;
+    std::cout << "LE<<int(0x0A01) = 0x" << (libcpp::LE << int(0x0A01))
+              << std::endl;
 
     std::cin.get();
     return 0;

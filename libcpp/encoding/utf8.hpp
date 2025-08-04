@@ -19,20 +19,18 @@
 #ifndef UTF8_HPP
 #define UTF8_HPP
 
-#include <string>
 #include <codecvt>
-#include <locale>
 #include <iostream>
+#include <locale>
+#include <string>
 
 #ifndef UTF8_BUF_SZ
 #define UTF8_BUF_SZ 4096
 #endif
 
-namespace libcpp
-{
+namespace libcpp {
 
-namespace utf8
-{
+namespace utf8 {
 
 bool is_valid(const std::string& str)
 {
@@ -40,11 +38,16 @@ bool is_valid(const std::string& str)
     for (i = 0, ix = str.length(); i < ix; i++)
     {
         c = (unsigned char)str[i];
-        if (0x00 <= c && c <= 0x7F) n = 0;
-        else if ((c & 0xE0) == 0xC0) n = 1;
-        else if ((c & 0xF0) == 0xE0) n = 2;
-        else if ((c & 0xF8) == 0xF0) n = 3;
-        else return false;
+        if (0x00 <= c && c <= 0x7F)
+            n = 0;
+        else if ((c & 0xE0) == 0xC0)
+            n = 1;
+        else if ((c & 0xF0) == 0xE0)
+            n = 2;
+        else if ((c & 0xF8) == 0xF0)
+            n = 3;
+        else
+            return false;
         for (j = 0; j < n && i < ix; j++)
             if ((++i == ix) || ((str[i] & 0xC0) != 0x80))
                 return false;
@@ -58,14 +61,17 @@ std::ostream& decode(std::ostream& out, std::wistream& in)
     wchar_t wc;
     while (in.get(wc))
     {
-        try {
+        try
+        {
             std::string utf8 = converter.to_bytes(wc);
             out << utf8;
-        } catch (...) {
-            out << "?"; // bad char
+        }
+        catch (...)
+        {
+            out << "?";  // bad char
         }
     }
-    
+
     out.flush();
     return out;
 }
@@ -82,7 +88,7 @@ unsigned char* decode(unsigned char* out, const wchar_t* in)
     std::wstring wstr(in);
     std::string str = converter.to_bytes(wstr);
     memcpy(out, str.data(), str.size());
-    out[str.size()] = '\0'; // null-terminate
+    out[str.size()] = '\0';  // null-terminate
     return out;
 }
 
@@ -91,13 +97,16 @@ std::wostream& encode(std::wostream& out, std::istream& in)
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     std::string buffer;
     char temp[UTF8_BUF_SZ];
-    while (in.read(temp, UTF8_BUF_SZ) || in.gcount() > 0) 
+    while (in.read(temp, UTF8_BUF_SZ) || in.gcount() > 0)
     {
         buffer.assign(temp, static_cast<size_t>(in.gcount()));
-        try {
+        try
+        {
             std::wstring wstr = converter.from_bytes(buffer);
             out.write(wstr.data(), wstr.size());
-        } catch (...) {
+        }
+        catch (...)
+        {
             wchar_t bad = L'?';
             out.write(&bad, 1);
         }
@@ -118,22 +127,25 @@ wchar_t* encode(wchar_t* out, const unsigned char* in)
     std::string str(reinterpret_cast<const char*>(in));
     std::wstring wstr = converter.from_bytes(str);
     memcpy(out, wstr.data(), wstr.size() * sizeof(wchar_t));
-    out[wstr.size()] = L'\0'; // null-terminate
+    out[wstr.size()] = L'\0';  // null-terminate
     return out;
 }
 
 inline std::ios_base& cvt(std::ios_base& ios)
 {
-    try {
+    try
+    {
         ios.imbue(std::locale(std::locale(), new std::codecvt_utf8<wchar_t>));
-    } catch (...) {
+    }
+    catch (...)
+    {
         throw "not support this stream type";
     }
 
     return ios;
 }
 
-}
-}
+}  // namespace utf8
+}  // namespace libcpp
 
 #endif

@@ -8,7 +8,9 @@ int main(int argc, char* argv[])
               << libcpp::md5::calc("hehehunanchina@live.com") << std::endl;
 
     std::cout << "md5::calc(\"hehehunanchina@live.com\"):"
-              << libcpp::md5::calc("hehehunanchina@live.com", libcpp::md5::upper_case) << std::endl;
+              << libcpp::md5::calc("hehehunanchina@live.com",
+                                   libcpp::md5::upper_case)
+              << std::endl;
 
     std::cin.get();
     return 0;

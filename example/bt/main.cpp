@@ -17,10 +17,12 @@ static const char* xml_text = R"(
 
 class say_something : public libcpp::sync_action_node
 {
-public:
-    say_something(const std::string& name, const libcpp::node_configuration& config) :
-        libcpp::sync_action_node(name, config)
-    {}
+  public:
+    say_something(const std::string& name,
+                  const libcpp::node_configuration& config)
+        : libcpp::sync_action_node(name, config)
+    {
+    }
 
     libcpp::node_status tick() override
     {
@@ -32,16 +34,18 @@ public:
 
     static libcpp::ports_list provided_ports()
     {
-        return {libcpp::input_port<std::string>("message")};
+        return { libcpp::input_port<std::string>("message") };
     }
 };
 
 class think_what_to_say : public libcpp::sync_action_node
 {
-public:
-    think_what_to_say(const std::string& name, const libcpp::node_configuration& config) :
-        libcpp::sync_action_node(name, config)
-    {}
+  public:
+    think_what_to_say(const std::string& name,
+                      const libcpp::node_configuration& config)
+        : libcpp::sync_action_node(name, config)
+    {
+    }
 
     libcpp::node_status tick() override
     {
@@ -51,7 +55,7 @@ public:
 
     static libcpp::ports_list provided_ports()
     {
-        return {libcpp::output_port<std::string>("text")};
+        return { libcpp::output_port<std::string>("text") };
     }
 };
 

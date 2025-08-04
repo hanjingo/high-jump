@@ -1,6 +1,7 @@
 #include <libcpp/io/filepath.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "filepath.h"
 }
 

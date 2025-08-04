@@ -22,13 +22,14 @@
 //     {
 //         // Initialize GMainLoop and NiceAgent
 //         loop_ = g_main_loop_new(nullptr, FALSE);
-//         agent_ = nice_agent_new(g_main_loop_get_context(loop_), NICE_COMPATIBILITY_RFC5245);
-//         if (!agent_)
+//         agent_ = nice_agent_new(g_main_loop_get_context(loop_),
+//         NICE_COMPATIBILITY_RFC5245); if (!agent_)
 //             throw std::runtime_error("Failed to create NiceAgent");
 
 //         // Set STUN server
-//         g_object_set(G_OBJECT(agent_), "stun-server", stun_server_.c_str(), nullptr);
-//         g_object_set(G_OBJECT(agent_), "stun-server-port", stun_port_, nullptr);
+//         g_object_set(G_OBJECT(agent_), "stun-server", stun_server_.c_str(),
+//         nullptr); g_object_set(G_OBJECT(agent_), "stun-server-port",
+//         stun_port_, nullptr);
 
 //         // Add a stream (1 component)
 //         stream_id_ = nice_agent_add_stream(agent_, 1);
@@ -36,7 +37,8 @@
 //             throw std::runtime_error("Failed to add stream to NiceAgent");
 
 //         // Attach to main context (required for signals)
-//         nice_agent_attach_recv(agent_, stream_id_, 1, g_main_loop_get_context(loop_), nullptr, nullptr);
+//         nice_agent_attach_recv(agent_, stream_id_, 1,
+//         g_main_loop_get_context(loop_), nullptr, nullptr);
 //     }
 
 //     ~stun_client() {
@@ -56,8 +58,8 @@
 //         int max_wait = 100; // 10s max
 //         while (max_wait-- > 0) {
 //             g_main_context_iteration(g_main_loop_get_context(loop_), FALSE);
-//             GSList* lcands = nice_agent_get_local_candidates(agent_, stream_id_, 1);
-//             if (lcands) {
+//             GSList* lcands = nice_agent_get_local_candidates(agent_,
+//             stream_id_, 1); if (lcands) {
 //                 for (GSList* l = lcands; l; l = l->next) {
 //                     NiceCandidate* cand = (NiceCandidate*)l->data;
 //                     if (cand->type == NICE_CANDIDATE_TYPE_SERVER_REFLEXIVE ||
@@ -87,4 +89,4 @@
 
 // } // namespace libcpp
 
-#endif // STUN_HPP
+#endif  // STUN_HPP

@@ -3,20 +3,107 @@ BasedOnStyle: Google
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-ColumnLimit: 100
+ColumnLimit: 80
 AccessModifierOffset: -2
+
+# Alignment settings
 AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
-AllowShortFunctionsOnASingleLine: Empty
+AlignConsecutiveAssignments: false  # Set to false to avoid excessive alignment
+AlignConsecutiveDeclarations: false # Set to false to maintain natural formatting
+AlignEscapedNewlines: Left
+AlignOperands: true
+AlignTrailingComments: true
+
+# Function and control statement formatting
+AllowShortFunctionsOnASingleLine: Inline   # Changed from Empty to Inline
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-BreakBeforeBraces: Allman
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortBlocksOnASingleLine: false
+
+# Function parameter formatting
+BinPackParameters: false                    # Don't pack parameters on same line
+BinPackArguments: false                     # Don't pack arguments on same line
+AllowAllParametersOfDeclarationOnNextLine: false  # Force parameter line breaks
+AllowAllArgumentsOnNextLine: false         # Force argument line breaks
+
+# C++11 braced list formatting - NEW SETTINGS
+Cpp11BracedListStyle: false                # Use traditional brace style for arrays
+BreakBeforeBraces: Custom                   # Use custom brace style
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: false
+  AfterObjCDeclaration: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+
+# Array and initializer list formatting
+AlignArrayOfStructures: Left               # Align array elements to left
+BreakArrays: true                          # Break arrays across multiple lines
+
+# Line breaking settings
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: Yes
+
+# Indentation settings
+IndentCaseLabels: true
+IndentPPDirectives: None
+IndentWrappedFunctionNames: false
+ContinuationIndentWidth: 4                 # Indent for continued lines
+
+# Spacing settings
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 2
+SpacesInAngles: false
+SpacesInContainerLiterals: true
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Pointer and reference alignment
+PointerAlignment: Left  # Based on const EVP_CIPHER* cipher style in aes.hpp
+ReferenceAlignment: Left
+
+# Include file sorting - Based on include order in aes.hpp
 IncludeCategories:
-  - Regex: '^<.*\.h>'
+  - Regex: '^<[[:alnum:]_]+\.h>'  # C standard library headers
     Priority: 1
-  - Regex: '^<.*'
+  - Regex: '^<[[:alnum:]_]+>'     # C++ standard library headers
     Priority: 2
-  - Regex: '.*'
+  - Regex: '.*'                   # Other headers
     Priority: 3
+
 SortIncludes: true
+SortUsingDeclarations: true
+
+# Other settings
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 2
+ReflowComments: true
+CompactNamespaces: false
+
+# C++11 features
+FixNamespaceComments: true

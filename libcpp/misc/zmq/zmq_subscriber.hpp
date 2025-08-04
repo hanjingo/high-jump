@@ -2,25 +2,24 @@
 #define ZMQ_SUBSCRIBER_HPP
 
 #include <zmq.h>
+
 #include <iostream>
+
 #include <libcpp/misc/zmq/zmq_chan.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
 class zmq_subscriber
 {
-public:
-    zmq_subscriber(void* ctx)
-        : ctx_{ctx}
-        , sock_{zmqsock_et(ctx, ZMQ_SUB)}
+  public:
+    zmq_subscriber(void* ctx) : ctx_{ ctx }, sock_{ zmqsock_et(ctx, ZMQ_SUB) }
     {
         zmq_msg_init(&buf_);
     }
     ~zmq_subscriber()
     {
         zmq_close(sock_);
-		sock_ = nullptr;
+        sock_ = nullptr;
 
         zmq_msg_close(&buf_);
     }
@@ -42,7 +41,10 @@ public:
 
     inline int sub(const std::string& topic)
     {
-        return zmq_setsockopt(sock_, ZMQ_SUBSCRIBE, topic.c_str(), topic.length());
+        return zmq_setsockopt(sock_,
+                              ZMQ_SUBSCRIBE,
+                              topic.c_str(),
+                              topic.length());
     }
 
     int recv(std::string& dst, int flags = 0)
@@ -62,12 +64,12 @@ public:
         return zmq_msg_recv(&data, sock_, flags);
     }
 
-private:
-    void*            ctx_;
-    void*            sock_;
-    zmq_msg_t        buf_;
+  private:
+    void* ctx_;
+    void* sock_;
+    zmq_msg_t buf_;
 };
 
-}
+}  // namespace libcpp
 
 #endif

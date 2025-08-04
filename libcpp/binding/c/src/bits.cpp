@@ -1,6 +1,7 @@
 #include <libcpp/encoding/bits.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "bits.h"
 }
 

@@ -2,28 +2,31 @@
 #define INI_HPP
 
 #include <string>
-#include <boost/filesystem.hpp>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/ini_parser.hpp>
 
-namespace libcpp
-{
+#include <boost/filesystem.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+
+namespace libcpp {
 
 class ini : public boost::property_tree::ptree
 {
-public:
+  public:
     ini() {}
     ini(const ini& rhs) : boost::property_tree::ptree(rhs) {}
-    ini(const boost::property_tree::ptree& tree) : boost::property_tree::ptree(tree) {}
+    ini(const boost::property_tree::ptree& tree)
+        : boost::property_tree::ptree(tree)
+    {
+    }
     ~ini() {}
 
-    ini& operator=(const ini& rhs) 
+    ini& operator=(const ini& rhs)
     {
         boost::property_tree::ptree::operator=(rhs);
         return *this;
     }
 
-    ini& operator=(const boost::property_tree::ptree& rhs) 
+    ini& operator=(const boost::property_tree::ptree& rhs)
     {
         boost::property_tree::ptree::operator=(rhs);
         return *this;
@@ -61,6 +64,6 @@ public:
     }
 };
 
-}
+}  // namespace libcpp
 
 #endif

@@ -1,5 +1,6 @@
 #include <libcpp/sync/chan.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "chan.h"
 }

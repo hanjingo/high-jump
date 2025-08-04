@@ -1,45 +1,49 @@
 #ifndef STRIPED_MAP_HPP
 #define STRIPED_MAP_HPP
 
-#include <vector>
-#include <unordered_map>
 #include <functional>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 #if (__cplusplus >= 201703L)
 #include <shared_mutex>
 
 using shared_mutex_t = std::shared_mutex;
-using unique_lock_t  = std::unique_lock<shared_mutex_t>;
-using shared_lock_t  = std::shared_lock<shared_mutex_t>;
+using unique_lock_t = std::unique_lock<shared_mutex_t>;
+using shared_lock_t = std::shared_lock<shared_mutex_t>;
 #else
 #include <boost/thread.hpp>
 
 using shared_mutex_t = boost::shared_mutex;
-using unique_lock_t  = boost::unique_lock<shared_mutex_t>;
-using shared_lock_t  = boost::shared_lock<shared_mutex_t>;
+using unique_lock_t = boost::unique_lock<shared_mutex_t>;
+using shared_lock_t = boost::shared_lock<shared_mutex_t>;
 #endif
 
-// NOTE: This container was implemented by stl and boost, suit to the scene of read more write less, 
+// NOTE: This container was implemented by stl and boost, suit to the scene of
+// read more write less,
 //          if you need a higher performance thread safe map, find it here:
-// folly: https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h
-// tbb: https://github.com/uxlfoundation/oneTBB/blob/master/include/tbb/concurrent_hash_map.h
-namespace libcpp
-{
+// folly:
+// https://github.com/facebook/folly/blob/main/folly/concurrency/ConcurrentHashMap.h
+// tbb:
+// https://github.com/uxlfoundation/oneTBB/blob/master/include/tbb/concurrent_hash_map.h
+namespace libcpp {
 
-template<typename Key, typename Value>
+template <typename Key, typename Value>
 class striped_map
 {
-public:
-    using range_handler_t     = std::function<bool(const Key&, const Value&)>;
+  public:
+    using range_handler_t = std::function<bool(const Key&, const Value&)>;
     using strip_key_handler_t = std::function<int(const Key&)>;
 
-public:
-    explicit striped_map(std::size_t capa) 
-        : striped_map([capa](const Key& k){ return std::hash<Key>{}(k) % capa; }, capa)
+  public:
+    explicit striped_map(std::size_t capa)
+        : striped_map(
+              [capa](const Key& k) { return std::hash<Key>{}(k) % capa; },
+              capa)
     {
     }
-    striped_map(strip_key_handler_t fn, std::size_t capa) 
+    striped_map(strip_key_handler_t fn, std::size_t capa)
         : strip_fn_(std::move(fn))
     {
         buckets_.reserve(capa);
@@ -60,7 +64,8 @@ public:
             throw std::out_of_range("bucket index out of range");
 
         unique_lock_t lock(*locks_[bucket]);
-        buckets_[bucket].emplace(std::forward<Key>(key), std::forward<Value>(value));
+        buckets_[bucket].emplace(std::forward<Key>(key),
+                                 std::forward<Value>(value));
     }
 
     void replace(const Key& key, Value&& value)
@@ -81,7 +86,7 @@ public:
 
         shared_lock_t lock(*locks_[bucket]);
         auto itr = buckets_[bucket].find(key);
-        if (itr == buckets_[bucket].end()) 
+        if (itr == buckets_[bucket].end())
             return false;
 
         value = itr->second;
@@ -106,7 +111,9 @@ public:
             // lock begin
             {
                 shared_lock_t lock(*locks_[bucket]);
-                for (auto itr = buckets_[bucket].begin(); itr != buckets_[bucket].end(); ++itr)
+                for (auto itr = buckets_[bucket].begin();
+                     itr != buckets_[bucket].end();
+                     ++itr)
                 {
                     auto k = itr->first;
                     auto v = itr->second;
@@ -148,18 +155,18 @@ public:
         }
     }
 
-private:
+  private:
     striped_map(const striped_map&) = delete;
     striped_map& operator=(const striped_map&) = delete;
     striped_map(const striped_map&&) = delete;
     striped_map& operator=(const striped_map&&) = delete;
 
-private:
-    std::vector<std::unordered_map<Key, Value> >          buckets_;
+  private:
+    std::vector<std::unordered_map<Key, Value> > buckets_;
     mutable std::vector<std::unique_ptr<shared_mutex_t> > locks_;
-    strip_key_handler_t                                   strip_fn_;
+    strip_key_handler_t strip_fn_;
 };
 
-}
+}  // namespace libcpp
 
 #endif

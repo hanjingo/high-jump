@@ -3,8 +3,7 @@
 
 #include <stdexcept>
 
-namespace libcpp
-{
+namespace libcpp {
 
 static void throw_if_false(bool target, const char* memo = "false")
 {
@@ -18,52 +17,57 @@ static void throw_if_not_false(bool target, const char* memo = "not false")
         throw std::logic_error(memo);
 }
 
-template<typename T>
+template <typename T>
 static void throw_if_equal(T target1, T target2, const char* memo = "equal")
 {
     if (target1 == target2)
         throw std::logic_error(memo);
 }
 
-template<typename T>
-static void throw_if_not_equal(T target1, T target2, const char* memo = "not equal")
+template <typename T>
+static void throw_if_not_equal(T target1,
+                               T target2,
+                               const char* memo = "not equal")
 {
     if (target1 != target2)
         throw std::logic_error(memo);
 }
 
-template<typename T>
+template <typename T>
 static void throw_if_empty(T target, const char* memo = "empty")
 {
     if (target.empty())
         throw std::logic_error(memo);
 }
 
-template<typename T>
+template <typename T>
 static void throw_if_not_empty(T target, const char* memo = "not empty")
 {
     if (!target.empty())
         throw std::logic_error(memo);
 }
 
-template<typename T>
+template <typename T>
 static void throw_if_null(T target, const char* memo = "null")
 {
     if (target == nullptr || target == NULL)
         throw std::logic_error(memo);
 }
 
-template<typename T>
+template <typename T>
 static void throw_if_not_null(T target, const char* memo = "not null")
 {
     if (target != nullptr && target != NULL)
         throw std::logic_error(memo);
 }
 
-template<typename Container, typename T>
-static void throw_if_exists(Container container, T target, const char* memo = "already exist")
+template <typename Container, typename T>
+static void throw_if_exists(Container container,
+                            T target,
+                            const char* memo = "already exist")
 {
-    for (auto &elem : container) {
+    for (auto& elem : container)
+    {
         if (elem != target)
             continue;
 
@@ -71,10 +75,13 @@ static void throw_if_exists(Container container, T target, const char* memo = "a
     }
 }
 
-template<typename Container, typename T>
-static void throw_if_not_exists(Container container, T target, const char* memo = "not exist")
+template <typename Container, typename T>
+static void throw_if_not_exists(Container container,
+                                T target,
+                                const char* memo = "not exist")
 {
-    for (auto &elem : container) {
+    for (auto& elem : container)
+    {
         if (elem == target)
             return;
     }
@@ -82,6 +89,6 @@ static void throw_if_not_exists(Container container, T target, const char* memo 
     throw std::logic_error(memo);
 }
 
-}
+}  // namespace libcpp
 
 #endif

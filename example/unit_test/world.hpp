@@ -3,16 +3,13 @@
 
 #include <string>
 
-namespace libcpp
-{
+namespace libcpp {
 
-struct World {
-    std::string Name()
-    {
-        return "World";
-    }
+struct World
+{
+    std::string Name() { return "World"; }
 };
 
-}
+}  // namespace libcpp
 
 #endif

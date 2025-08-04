@@ -1,20 +1,15 @@
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
 
 #include <libcpp/sync/chan.hpp>
-struct Num {
-public:
-    inline void Do()
-    {
-        n_++;
-    }
-    inline long Value()
-    {
-        return n_;
-    }
+struct Num
+{
+  public:
+    inline void Do() { n_++; }
+    inline long Value() { return n_; }
 
-private:
+  private:
     long n_ = 1;
 };
 
@@ -32,10 +27,14 @@ int main(int argc, char* argv[])
 
     // unsafe multi thread operation
     std::thread([]() {
-        for (; n1.Value() < max; n1.Do()) {}
+        for (; n1.Value() < max; n1.Do())
+        {
+        }
     }).detach();
     std::thread([]() {
-        for (; n1.Value() < max; n1.Do())  {}
+        for (; n1.Value() < max; n1.Do())
+        {
+        }
     }).detach();
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     std::cout << "n1.Value() = " << n1.Value() << std::endl;
@@ -43,13 +42,15 @@ int main(int argc, char* argv[])
     // safe multi thread operation with chan
     std::thread([&]() {
         Num* p;
-        for (chan >> p; p->Value() < max; chan << p) {
+        for (chan >> p; p->Value() < max; chan << p)
+        {
             p->Do();
         }
     }).detach();
     std::thread([&]() {
         Num* p;
-        for (chan >> p; p->Value() < max; chan << p) {
+        for (chan >> p; p->Value() < max; chan << p)
+        {
             p->Do();
         }
     }).detach();
@@ -58,11 +59,15 @@ int main(int argc, char* argv[])
 
     // safe multi thread operation with mutex
     std::thread([]() {
-        for (; true;) {
+        for (; true;)
+        {
             mu.lock();
-            if (n3.Value() < max) {
+            if (n3.Value() < max)
+            {
                 n3.Do();
-            } else {
+            }
+            else
+            {
                 mu.unlock();
                 return;
             }
@@ -70,11 +75,15 @@ int main(int argc, char* argv[])
         }
     }).detach();
     std::thread([]() {
-        for (; true;) {
+        for (; true;)
+        {
             mu.lock();
-            if (n3.Value() < max) {
+            if (n3.Value() < max)
+            {
                 n3.Do();
-            } else {
+            }
+            else
+            {
                 mu.unlock();
                 return;
             }

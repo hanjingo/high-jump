@@ -2,23 +2,26 @@
 #define STACKTRACE_HPP
 
 #include <iostream>
+
 #include <boost/stacktrace.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
 inline auto stacktrace()
 {
     return boost::stacktrace::stacktrace();
 }
 
-}
+}  // namespace libcpp
 
-#define RECOVER(cmd) \
-    try { \
-        cmd \
-    } catch(...) { \
+#define RECOVER(cmd)                                    \
+    try                                                 \
+    {                                                   \
+        cmd                                             \
+    }                                                   \
+    catch (...)                                         \
+    {                                                   \
         std::cerr << libcpp::stacktrace() << std::endl; \
-    } \
+    }
 
 #endif

@@ -15,13 +15,16 @@
 // // Simple wrapper for hffix FIX message building and parsing
 // class fix_message {
 // public:
-//     fix_message() : buffer_(1024), writer_(&buffer_[0], &buffer_[0] + buffer_.size()) {}
+//     fix_message() : buffer_(1024), writer_(&buffer_[0], &buffer_[0] +
+//     buffer_.size()) {}
 
 //     // Start a new FIX message
-//     void start_message(uint8_t begin_string_major = 4, uint8_t begin_string_minor = 2) {
+//     void start_message(uint8_t begin_string_major = 4, uint8_t
+//     begin_string_minor = 2) {
 //         writer_.reset(&buffer_[0], &buffer_[0] + buffer_.size());
-//         writer_.push_back_begin_string(begin_string_major, begin_string_minor);
-//         writer_.push_back_msgtype("D"); // Default to NewOrderSingle
+//         writer_.push_back_begin_string(begin_string_major,
+//         begin_string_minor); writer_.push_back_msgtype("D"); // Default to
+//         NewOrderSingle
 //     }
 
 //     // Add a field to the message
@@ -38,13 +41,15 @@
 
 //     // Parse a FIX message from string
 //     void parse(const std::string& fix_str) {
-//         message_ = hffix::message(fix_str.data(), fix_str.data() + fix_str.size());
+//         message_ = hffix::message(fix_str.data(), fix_str.data() +
+//         fix_str.size());
 //     }
 
 //     // Get field value by tag as string
 //     std::string get_field(int tag) const {
 //         if (!message_.is_valid()) return "";
-//         for (hffix::field_iterator i = message_.begin(); i != message_.end(); ++i) {
+//         for (hffix::field_iterator i = message_.begin(); i != message_.end();
+//         ++i) {
 //             if (i->tag() == tag) {
 //                 return std::string(i->value().begin(), i->value().end());
 //             }
@@ -63,4 +68,4 @@
 
 // } // namespace libcpp
 
-#endif // FIX_HPP
+#endif  // FIX_HPP

@@ -57,8 +57,8 @@
 
 //     // Create a channel to the given address
 //     bool connect(const std::string& address) {
-//         channel_ = grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
-//         return (channel_ != nullptr);
+//         channel_ = grpc::CreateChannel(address,
+//         grpc::InsecureChannelCredentials()); return (channel_ != nullptr);
 //     }
 
 //     std::shared_ptr<grpc::Channel> get() const { return channel_; }
@@ -69,4 +69,4 @@
 
 // } // namespace libcpp
 
-#endif // GRPC_HPP
+#endif  // GRPC_HPP

@@ -1,6 +1,5 @@
-#include <libcpp/testing/unit_test.hpp>
-
 #include <example/unit_test/world.hpp>
+#include <libcpp/testing/unit_test.hpp>
 
 TEST(test_world, Name)
 {

@@ -5,25 +5,21 @@
 
 #include <boost/pool/object_pool.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
 template <typename T>
 class object_pool
 {
-public:
-    object_pool()
-    {
-    }
-    ~object_pool() 
-    {
-    }
+  public:
+    object_pool() {}
+    ~object_pool() {}
 
-    template<typename ... Args>
-    void construct(Args&& ... args)
+    template <typename... Args>
+    void construct(Args&&... args)
     {
         auto ptr = pool_.malloc();
-        new(ptr) typename boost::object_pool<T>::element_type(std::forward<Args>(args)...);
+        new (ptr) typename boost::object_pool<T>::element_type(
+            std::forward<Args>(args)...);
         push(ptr);
     }
 
@@ -42,22 +38,19 @@ public:
         container_.push(obj);
     }
 
-    inline std::size_t size()
-    {
-        return container_.size();
-    }
+    inline std::size_t size() { return container_.size(); }
 
-private:
+  private:
     object_pool(const object_pool&) = delete;
     object_pool& operator=(const object_pool&) = delete;
     object_pool(const object_pool&&) = delete;
     object_pool& operator=(const object_pool&&) = delete;
 
-private:
-    boost::object_pool<T>                                     pool_;
+  private:
+    boost::object_pool<T> pool_;
     std::queue<typename boost::object_pool<T>::element_type*> container_;
 };
 
-}
+}  // namespace libcpp
 
 #endif

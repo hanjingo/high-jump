@@ -7,8 +7,7 @@
 #include <Windows.h>
 #endif
 
-namespace libcpp
-{
+namespace libcpp {
 
 using http_client = httplib::Client;
 

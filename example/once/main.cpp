@@ -5,37 +5,30 @@
 void hello()
 {
     std::cout << "hello once before" << std::endl;
-    ONCE(
-        std::cout << "hello" << std::endl;
-    );
+    ONCE(std::cout << "hello" << std::endl;);
     std::cout << "hello once after" << std::endl;
 }
 
 class C
 {
-public:
+  public:
     void hello()
     {
         std::cout << "C.hello once before" << std::endl;
-        ONCE(
-            std::cout << "C.hello" << std::endl;
-        );
+        ONCE(std::cout << "C.hello" << std::endl;);
         std::cout << "C.hello once after" << std::endl;
     }
 };
 
-namespace tmp
-{
+namespace tmp {
 void hello()
 {
     std::cout << "tmp.hello once before" << std::endl;
-    ONCE(
-        std::cout << "tmp.hello" << std::endl;
-    );
+    ONCE(std::cout << "tmp.hello" << std::endl;);
     std::cout << "tmp.hello once after" << std::endl;
 }
 
-}
+}  // namespace tmp
 
 int main(int argc, char* argv[])
 {
@@ -58,11 +51,7 @@ int main(int argc, char* argv[])
     tmp::hello();
     std::cout << std::endl;
 
-    auto fn = []() {
-        ONCE(
-            std::cout << "main.hello" << std::endl;
-        )
-    };
+    auto fn = []() { ONCE(std::cout << "main.hello" << std::endl;) };
 
     fn();
     fn();

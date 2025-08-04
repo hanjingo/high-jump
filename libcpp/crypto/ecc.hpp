@@ -3,4 +3,4 @@
 
 // TODO: Implement Elliptic Curve Cryptography (ECC) related functionalities
 
-#endif // ECC_HPP
+#endif  // ECC_HPP

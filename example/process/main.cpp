@@ -1,4 +1,5 @@
 #include <iostream>
+
 #include <libcpp/os/process.hpp>
 
 int main(int argc, char* argv[])
@@ -17,7 +18,8 @@ int main(int argc, char* argv[])
     auto child = libcpp::process::child("child", libcpp::process::std_out > p);
     std::string ret;
     p >> ret;
-    std::cout << "child(\"child\", libcpp::process::std_out > ret); ret = " << ret << std::endl;
+    std::cout << "child(\"child\", libcpp::process::std_out > ret); ret = "
+              << ret << std::endl;
     child.wait();
 
     std::cout << "\nrun spawn>>" << std::endl;
@@ -33,13 +35,13 @@ int main(int argc, char* argv[])
         std::cout << "list()> " << pid << std::endl;
 
     vec.clear();
-    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool {
         if (arg.size() < 2)
             return false;
 
         if (arg[0] != "daemon")
             return false;
-            
+
         return true;
     });
     if (vec.empty())
@@ -48,7 +50,8 @@ int main(int argc, char* argv[])
     }
     else
     {
-        for (auto var : vec) {
+        for (auto var : vec)
+        {
             libcpp::process::kill(var);
             std::cout << "kill(" << var << ")" << std::endl;
         }

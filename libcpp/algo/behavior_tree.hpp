@@ -3,8 +3,7 @@
 
 #include <behaviortree_cpp/bt_factory.h>
 
-namespace libcpp
-{
+namespace libcpp {
 
 using behavior_tree_factory = BT::BehaviorTreeFactory;
 
@@ -22,23 +21,29 @@ using port_info = BT::PortInfo;
 using string_view = BT::StringView;
 
 template <typename T = void>
-inline std::pair<std::string, port_info> input_port(string_view name, string_view description = {})
+inline std::pair<std::string, port_info> input_port(
+    string_view name,
+    string_view description = {})
 {
     return BT::InputPort(name, description);
 }
 
 template <typename T = void>
-inline std::pair<std::string, port_info> input_port(string_view name, const T& default_value, string_view description)
+inline std::pair<std::string, port_info> input_port(string_view name,
+                                                    const T& default_value,
+                                                    string_view description)
 {
     return BT::InputPort(name, default_value, description);
 }
 
 template <typename T = void>
-inline std::pair<std::string, port_info> output_port(string_view name, string_view description = {})
+inline std::pair<std::string, port_info> output_port(
+    string_view name,
+    string_view description = {})
 {
     return BT::OutputPort(name, description);
 }
 
-}
+}  // namespace libcpp
 
 #endif

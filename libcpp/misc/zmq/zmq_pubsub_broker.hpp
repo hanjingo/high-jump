@@ -1,25 +1,25 @@
 #ifndef ZMQ_PUBSUB_BROKER_HPP
 #define ZMQ_PUBSUB_BROKER_HPP
 
-#include <string>
-#include <vector>
 #include <functional>
-#include <unordered_map>
 #include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <libcpp/misc/zmq/zmq_chan.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 
 class zmq_pubsub_broker
 {
-public:
+  public:
     zmq_pubsub_broker(void* ctx)
-        : ctx_{ctx}
-        , back_{zmq_socket(ctx, ZMQ_XPUB)}
-        , front_{zmq_socket(ctx, ZMQ_XSUB)}
-    {}
+        : ctx_{ ctx },
+          back_{ zmq_socket(ctx, ZMQ_XPUB) },
+          front_{ zmq_socket(ctx, ZMQ_XSUB) }
+    {
+    }
     virtual ~zmq_pubsub_broker()
     {
         if (back_ != nullptr)
@@ -47,17 +47,17 @@ public:
         return 0;
     }
 
-    inline int proxy(void *capture = nullptr)
+    inline int proxy(void* capture = nullptr)
     {
         return zmq_proxy(front_, back_, capture);
     }
 
-private:
-    void*     ctx_;
-    void*     back_;
-    void*     front_;
+  private:
+    void* ctx_;
+    void* back_;
+    void* front_;
 };
 
-}
+}  // namespace libcpp
 
 #endif

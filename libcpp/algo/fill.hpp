@@ -3,8 +3,7 @@
 
 #include <functional>
 
-namespace libcpp
-{
+namespace libcpp {
 
 template <typename Container, typename Fn>
 void fill(Container& ct, const Fn&& fn)
@@ -34,6 +33,6 @@ void fill(Iterator begin, Iterator end, const Fn&& fn)
         *itr = fn(idx++);
 }
 
-}
+}  // namespace libcpp
 
 #endif

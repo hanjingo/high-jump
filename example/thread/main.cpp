@@ -1,6 +1,6 @@
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
 
 #include <libcpp/sync/thread_pool.hpp>
 
@@ -14,9 +14,7 @@ int main(int argc, char* argv[])
     });
     pool.clear();
 
-    auto ret = pool.enqueue([]() {
-        return 1;
-    });
+    auto ret = pool.enqueue([]() { return 1; });
     std::cout << "thread1 ret = " << ret.get() << std::endl;
 
     pool.enqueue([]() {

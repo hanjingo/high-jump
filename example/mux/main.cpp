@@ -18,22 +18,22 @@ int OnFail()
 float OnFatal(std::string name)
 {
     float f = 2.1;
-    std::cout << "on error code FATAL with name = " << name << ", return " << f << std::endl;
+    std::cout << "on error code FATAL with name = " << name << ", return " << f
+              << std::endl;
     return f;
 }
 
-MUX(100, {
-    std::cout << "on 1" << std::endl;
-})
+MUX(100, { std::cout << "on 1" << std::endl; })
 
-MUX(std::string("hello"), {
-    std::cout << "on hello" << std::endl;
-})
+MUX(std::string("hello"), { std::cout << "on hello" << std::endl; })
 
-MUX(std::string("world"), {
-    num++;
-    std::cout << "on world with num = " << num << std::endl;
-}, int& num)
+MUX(
+    std::string("world"),
+    {
+        num++;
+        std::cout << "on world with num = " << num << std::endl;
+    },
+    int& num)
 
 int main(int argc, char* argv[])
 {
@@ -55,10 +55,10 @@ int main(int argc, char* argv[])
     std::cout << "iret2 = " << iret2 << std::endl;
 
     hm.reg(std::string("FATAL"), &OnFatal);
-    float fret2 = hm.on<float>(std::string("FATAL"), std::string("hello")); 
+    float fret2 = hm.on<float>(std::string("FATAL"), std::string("hello"));
     std::cout << "fret2 = " << fret2 << std::endl;
 
-    hm.reg<void(*)()>(std::string("CRITAL"), []() {
+    hm.reg<void (*)()>(std::string("CRITAL"), []() {
         std::cout << "on error code CRITAL" << std::endl;
     });
     hm.on(std::string("CRITAL"));
@@ -74,10 +74,12 @@ int main(int argc, char* argv[])
     std::cout << "iret1 = " << iret1 << std::endl;
 
     libcpp::multiplexer<int>::instance()->reg(3, &OnFatal);
-    float fret1 = libcpp::multiplexer<int>::instance()->on<float>(3, std::string("hello"));
+    float fret1 =
+        libcpp::multiplexer<int>::instance()->on<float>(3,
+                                                        std::string("hello"));
     std::cout << "fret1 = " << fret1 << std::endl;
 
-    libcpp::multiplexer<int>::instance()->reg<void(*)()>(4, []() {
+    libcpp::multiplexer<int>::instance()->reg<void (*)()>(4, []() {
         std::cout << "on error code CRITAL" << std::endl;
     });
     libcpp::multiplexer<int>::instance()->on(4);

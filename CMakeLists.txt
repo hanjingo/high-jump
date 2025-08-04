@@ -9,7 +9,7 @@ project(libcpp
 
 # set options
 option(ASAN "Enable AddressSanitizer" OFF)
-option(BUILD_TEST "Build the tests and benchmarks" OFF)
+option(BUILD_TEST "Build the test and benchmarks" OFF)
 option(BUILD_LIB "Build the libcpp library" OFF)
 option(BUILD_EXAMPLE "Build the example application" OFF)
 
@@ -67,7 +67,7 @@ endif()
 
 # build benmark
 if (BUILD_TEST)
-    add_subdirectory(tests)
+    add_subdirectory(test)
     add_subdirectory(bench)
 endif()
 
@@ -81,7 +81,7 @@ target_include_directories(libcpp INTERFACE
 )
 
 configure_package_config_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmakes/libcppConfig.cmake.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/libcppConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/libcppConfig.cmake
     INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/libcpp
     # Passes the includedir install path

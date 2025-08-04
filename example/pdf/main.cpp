@@ -4,7 +4,8 @@
 
 int main(int argc, char* argv[])
 {
-    try{
+    try
+    {
         libcpp::pdf::document doc;
         doc.set_title("my PDF Document");
         doc.set_author("libcpp");
@@ -14,12 +15,14 @@ int main(int argc, char* argv[])
         doc.set_password("hello", "world");
 
         auto& page = doc.add_page();
-        page.set_size(libcpp::pdf::page::size::a4, libcpp::pdf::page_orientation::portrait);
+        page.set_size(libcpp::pdf::page::size::a4,
+                      libcpp::pdf::page_orientation::portrait);
 
         page.set_font(libcpp::pdf::font_name::helvetica_bold, 18);
         page.set_text_color(libcpp::pdf::color::blue());
         page.begin_text();
-        page.show_text_at("PDF example using libcpp", libcpp::pdf::point(50, 750));
+        page.show_text_at("PDF example using libcpp",
+                          libcpp::pdf::point(50, 750));
         page.end_text();
 
         page.set_font(libcpp::pdf::font_name::helvetica, 12);
@@ -37,13 +40,16 @@ int main(int argc, char* argv[])
         page.draw_circle(libcpp::pdf::point(150, 500), 30, true);
 
         doc.save_to_file("example.pdf");
-        
+
         std::cout << "PDF create succ with example.pdf" << std::endl;
-        
-    } catch (const libcpp::pdf::exception& e) {
+    }
+    catch (const libcpp::pdf::exception& e)
+    {
         std::cerr << "PDF exception: " << e.what() << std::endl;
         return 1;
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e)
+    {
         std::cerr << "exception: " << e.what() << std::endl;
         return 1;
     }

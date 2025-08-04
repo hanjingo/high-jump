@@ -3,16 +3,16 @@
 
 #include <functional>
 
-namespace libcpp
-{
+namespace libcpp {
 
 class defer final
 {
-public:
+  public:
     defer() {}
     ~defer()
     {
-        if (cb_) {
+        if (cb_)
+        {
             cb_();
         }
     }
@@ -23,21 +23,22 @@ public:
     defer(defer&& other) = delete;
     defer& operator=(defer&& other) = delete;
 
-    explicit defer(std::function<void()>&& cb)
-    {
-        cb_ = std::move(cb);
-    }
+    explicit defer(std::function<void()>&& cb) { cb_ = std::move(cb); }
 
-private:
+  private:
     std::function<void()> cb_;
 };
 
-}
+}  // namespace libcpp
 
 #define __defer_cat(a, b) a##b
 #define _defer_cat(a, b) __defer_cat(a, b)
 
-#define DEFER(cmd) ::libcpp::defer _defer_cat(__simulate_go_defer__, __COUNTER__)([&]() { cmd; });
-#define DEFER_CLASS(cmd) ::libcpp::::defer _defer_cat(__simulate_go_defer_class__, __COUNTER__)([&, this]() { cmd; });
+#define DEFER(cmd)                                    \
+    ::libcpp::defer _defer_cat(__simulate_go_defer__, \
+                               __COUNTER__)([&]() { cmd; });
+#define DEFER_CLASS(cmd)                                       \
+    ::libcpp:: ::defer _defer_cat(__simulate_go_defer_class__, \
+                                  __COUNTER__)([&, this]() { cmd; });
 
-#endif // DEFER_HPP
+#endif  // DEFER_HPP

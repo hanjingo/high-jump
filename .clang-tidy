@@ -7,8 +7,74 @@ Checks: >
   -llvm-namespace-comment,
   -modernize-use-trailing-return-type,
   -readability-named-parameter,
-  -readability-redundant-declaration
+  -readability-redundant-declaration,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -hicpp-vararg,
+  -cppcoreguidelines-pro-type-vararg,
+  -cert-err58-cpp,
+  -misc-non-private-member-variables-in-classes,
+  -cppcoreguidelines-avoid-c-arrays,
+  -hicpp-avoid-c-arrays,
+  -modernize-avoid-c-arrays,
+  -readability-convert-member-functions-to-static,
+  -performance-no-int-to-ptr,
+  -bugprone-easily-swappable-parameters,
+  -readability-identifier-length,
+  -altera-unroll-loops,
+  -altera-id-dependent-backward-branch
+
 WarningsAsErrors: ''
 HeaderFilterRegex: 'libcpp/.*\.hpp'
 AnalyzeTemporaryDtors: false
 FormatStyle: file
+
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: lower_case
+  - key: readability-identifier-naming.EnumCase
+    value: lower_case
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.MethodCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: '_'
+  - key: readability-identifier-naming.ProtectedMemberSuffix
+    value: '_'
+  - key: readability-identifier-naming.MacroCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: lower_case
+
+  # function size limits
+  - key: readability-function-size.LineThreshold
+    value: 200
+  - key: readability-function-size.ParameterThreshold
+    value: 10
+
+  # complexity limits
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 50
+
+  # other settings
+  - key: performance-for-range-copy.WarnOnAllAutoCopies
+    value: true
+  - key: modernize-use-nullptr.NullMacros
+    value: 'NULL'
+  - key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value: true
+  - key: cppcoreguidelines-special-member-functions.AllowMissingMoveFunctions
+    value: true

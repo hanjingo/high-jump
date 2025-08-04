@@ -3,15 +3,13 @@
 
 #include <random>
 
-namespace libcpp
-{
+namespace libcpp {
 
 static std::random_device default_seed;
 
 class random
 {
-
-public:
+  public:
     random() {}
     ~random() {}
 
@@ -34,6 +32,6 @@ public:
     }
 };
 
-}
+}  // namespace libcpp
 
 #endif

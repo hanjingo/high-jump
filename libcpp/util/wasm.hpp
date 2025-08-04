@@ -3,4 +3,4 @@
 
 // TODO: Implement WebAssembly (WASM) related functionalities
 
-#endif // WASM_HPP
+#endif  // WASM_HPP

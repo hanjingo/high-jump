@@ -36,15 +36,16 @@
 //     }
 
 //     // Connect to a WebSocket server (blocking)
-//     bool connect(const std::string& host, const std::string& port, const std::string& target = "/")
+//     bool connect(const std::string& host, const std::string& port, const
+//     std::string& target = "/")
 //     {
 //         err_t ec;
 //         tcp_t::resolver resolver(io_);
 //         auto const results = resolver.resolve(host, port, ec);
 //         if (ec) return false;
 
-//         boost::asio::connect(ws_->next_layer(), results.begin(), results.end(), ec);
-//         if (ec) return false;
+//         boost::asio::connect(ws_->next_layer(), results.begin(),
+//         results.end(), ec); if (ec) return false;
 
 //         ws_->handshake(host, target, ec);
 //         if (ec) return false;
@@ -54,15 +55,19 @@
 //     }
 
 //     // Asynchronously connect to a WebSocket server
-//     void async_connect(const std::string& host, const std::string& port, const std::string& target,
+//     void async_connect(const std::string& host, const std::string& port,
+//     const std::string& target,
 //                       std::function<void(const err_t&)> handler)
 //     {
 //         auto resolver = std::make_shared<tcp_t::resolver>(io_);
 //         resolver->async_resolve(host, port,
-//             [this, resolver, host, target, handler](const err_t& ec, tcp_t::resolver::results_type results) {
+//             [this, resolver, host, target, handler](const err_t& ec,
+//             tcp_t::resolver::results_type results) {
 //                 if (ec) { handler(ec); return; }
-//                 boost::asio::async_connect(ws_->next_layer(), results.begin(), results.end(),
-//                     [this, host, target, handler](const err_t& ec, const tcp_t::endpoint&) {
+//                 boost::asio::async_connect(ws_->next_layer(),
+//                 results.begin(), results.end(),
+//                     [this, host, target, handler](const err_t& ec, const
+//                     tcp_t::endpoint&) {
 //                         if (ec) { handler(ec); return; }
 //                         ws_->async_handshake(host, target,
 //                             [this, handler](const err_t& ec) {
@@ -83,7 +88,8 @@
 //     }
 
 //     // Asynchronously send a text message
-//     void async_send(const std::string& msg, std::function<void(const err_t&, std::size_t)> handler)
+//     void async_send(const std::string& msg, std::function<void(const err_t&,
+//     std::size_t)> handler)
 //     {
 //         if (!connected_) {
 //             handler(boost::asio::error::not_connected, 0);
@@ -112,7 +118,8 @@
 //             return;
 //         }
 //         auto buffer = std::make_shared<boost::beast::flat_buffer>();
-//         ws_->async_read(*buffer, [buffer, handler](const err_t& ec, std::size_t) {
+//         ws_->async_read(*buffer, [buffer, handler](const err_t& ec,
+//         std::size_t) {
 //             std::string msg;
 //             if (!ec)
 //                 msg = boost::beast::buffers_to_string(buffer->data());
@@ -142,4 +149,4 @@
 
 // } // namespace libcpp
 
-#endif // WEBSOCKET_HPP
+#endif  // WEBSOCKET_HPP

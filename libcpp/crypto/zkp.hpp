@@ -3,4 +3,4 @@
 
 // TODO: Implement Zero-Knowledge Proof (ZKP) related functionalities
 
-#endif // ZKP_HPP
+#endif  // ZKP_HPP

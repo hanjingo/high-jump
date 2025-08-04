@@ -4,8 +4,7 @@
 #if (__cplusplus >= 201703L)
 #include <string_view>
 
-namespace libcpp
-{
+namespace libcpp {
 using string_view = std::string_view;
 }
 #endif
@@ -14,8 +13,7 @@ using string_view = std::string_view;
 #if (__cplusplus < 201703L)
 #include <boost/utility/string_view.hpp>
 
-namespace libcpp
-{
+namespace libcpp {
 using string_view = boost::string_view;
 }
 #endif

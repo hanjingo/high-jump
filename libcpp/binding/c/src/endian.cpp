@@ -1,6 +1,7 @@
 #include <libcpp/encoding/endian.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "endian.h"
 }
 

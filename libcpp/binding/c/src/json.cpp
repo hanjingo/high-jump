@@ -1,5 +1,6 @@
 // #include <libcpp/encoding/json.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "json.h"
 }

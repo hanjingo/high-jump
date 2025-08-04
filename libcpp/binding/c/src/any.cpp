@@ -1,6 +1,7 @@
 #include <libcpp/types/any.hpp>
 
-extern "C" {
+extern "C"
+{
 #include "any.h"
 }
 

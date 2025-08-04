@@ -72,7 +72,6 @@ using member_type_t = std::remove_cv_t<
 
 }  // namespace detail
 
-
 template <typename MemberType, auto MemberPtr, typename Tag>
 using unique_index = detail::unique_index_impl<MemberType, MemberPtr, Tag>;
 
@@ -85,7 +84,6 @@ using multi_index = boost::multi_index::multi_index_container<
     Class,
     boost::multi_index::indexed_by<
         typename detail::make_index<IndexConfigs, Class>::type...>>;
-
 
 #define LIBCPP_UNIQUE_INDEX(member_type, member_ptr, tag) \
     libcpp::unique_index<member_type, member_ptr, tag>,
@@ -185,6 +183,7 @@ using multi_index = boost::multi_index::multi_index_container<
                                    NAME, \
                                    ...)  \
     NAME
+
 #define LIBCPP_INDEX_TAGS(...)                       \
     LIBCPP_GET_MAKE_TAGS_MACRO(__VA_ARGS__,          \
                                LIBCPP_INDEX_TAGS_10, \

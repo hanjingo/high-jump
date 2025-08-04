@@ -39,7 +39,13 @@ cpp library framework implementationed by c++17.
 .\script\format.ps1
 ```
 
-2. **CI/CD**: The pipeline automatically checks and fixes formatting for main branches.
+2. **Code FFormatting Check**: Check code style before commit:
+
+```powershell
+.\script\format.ps1 -Check
+```
+
+3. **CI/CD**: The pipeline automatically checks and fixes formatting for main branches.
 
 
 ## Build

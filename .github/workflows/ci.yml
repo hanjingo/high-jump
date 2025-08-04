@@ -35,6 +35,24 @@ jobs:
         sudo apt-get install -y cppcheck clang-format clang-tidy
         pip install cpplint
 
+    # Add step to verify .clang-format file
+    - name: Verify .clang-format configuration
+      run: |
+        echo "Checking for .clang-format file..."
+        if [ -f ".clang-format" ]; then
+          echo ".clang-format file found:"
+          head -20 .clang-format
+        else
+          echo "ERROR: .clang-format file not found!"
+          exit 1
+        fi
+        
+        # Test clang-format with our configuration
+        echo "Testing clang-format configuration..."
+        clang-format --style=file --dump-config > clang-format-config.yaml
+        echo "Current clang-format configuration:"
+        head -10 clang-format-config.yaml
+
     - name: Run cppcheck
       run: |
         cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
@@ -43,7 +61,7 @@ jobs:
     - name: Check code formatting
       id: format-check
       run: |
-        echo "Checking code formatting..."
+        echo "Checking code formatting with project .clang-format..."
         
         # Find files to format
         FORMAT_FILES=$(find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null || true)
@@ -54,8 +72,8 @@ jobs:
           exit 0
         fi
 
-        # Check if formatting is needed
-        echo "$FORMAT_FILES" | xargs clang-format --dry-run --Werror > format_check.log 2>&1
+        # Check if formatting is needed using --style=file to use .clang-format
+        echo "$FORMAT_FILES" | xargs clang-format --style=file --dry-run --Werror > format_check.log 2>&1
         FORMAT_EXIT_CODE=$?
         
         if [ $FORMAT_EXIT_CODE -ne 0 ]; then
@@ -67,35 +85,25 @@ jobs:
           echo "format_needed=false" >> $GITHUB_OUTPUT
         fi
 
-    # Auto-fix formatting for all specified branches on push events
-    - name: Auto-fix code formatting
-      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'push' && contains(fromJSON('["refs/heads/master", "refs/heads/main", "refs/heads/dev", "refs/heads/v1.x", "refs/heads/cicd-test"]'), github.ref)
+    # Auto-fix formatting for regular pushes (not tags or PRs)
+    - name: Auto-fix formatting
+      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
       run: |
-        echo "Auto-fixing code formatting for branch: ${GITHUB_REF#refs/heads/}"
+        echo "Auto-fixing code formatting..."
         
-        # Configure Git user information
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
+        # Apply formatting using project .clang-format
+        find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | xargs clang-format --style=file -i
         
-        # Apply code formatting
-        find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | xargs clang-format -i
-        
-        # Check if there are any changes
-        if git diff --quiet; then
-          echo "No formatting changes needed after all"
-        else
+        # Check if there are changes to commit
+        if [ -n "$(git diff --name-only)" ]; then
           echo "Committing formatting fixes..."
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           git add -A
-          git commit -m "Auto-fix code formatting [skip ci]
-
-          - Fixed formatting issues detected by CI
-          - Branch: ${GITHUB_REF#refs/heads/}
-          - Commit: ${{ github.sha }}"
-          
-          echo "Pushing formatting fixes..."
+          git commit -m "style: auto-fix code formatting [skip ci]"
           git push
-          
-          echo "Code formatting fixes committed and pushed successfully"
+        else
+          echo "No formatting changes needed after applying fixes"
         fi
 
     # Check formatting for tags (no auto-fix since tags should be immutable)
@@ -117,7 +125,7 @@ jobs:
         echo "Code formatting issues detected in Pull Request!"
         echo ""
         echo "Please run the following command locally to fix formatting:"
-        echo "  find libcpp test -name \"*.cpp\" -o -name \"*.hpp\" -o -name \"*.h\" | xargs clang-format -i"
+        echo "  find libcpp test -name \"*.cpp\" -o -name \"*.hpp\" -o -name \"*.h\" | xargs clang-format --style=file -i"
         echo ""
         echo "Or on Windows PowerShell:"
         echo "  .\script\format.ps1"
@@ -144,4 +152,5 @@ jobs:
         path: |
           cppcheck-result.xml
           format_check.log
+          clang-format-config.yaml
         retention-days: 30

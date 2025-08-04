@@ -4,38 +4,40 @@
 #ifdef BOOST_FOUND
 #include <boost/noncopyable.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 
 using noncopyable = boost::noncopyable;
 
 }
 
 #else
-namespace libcpp {
+namespace libcpp
+{
 
 class noncopyable
 {
   public:
-    noncopyable() = default;
-    noncopyable(const noncopyable &) = delete;
-    noncopyable &operator=(const noncopyable &) = delete;
+    noncopyable () = default;
+    noncopyable (const noncopyable &) = delete;
+    noncopyable &operator= (const noncopyable &) = delete;
 };
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #endif
 
 
-#define DISABLE_COPY(Class)        \
-    Class(const Class &) = delete; \
-    Class &operator=(const Class &) = delete;
+#define DISABLE_COPY(Class)                                                    \
+    Class (const Class &) = delete;                                            \
+    Class &operator= (const Class &) = delete;
 
-#define DISABLE_MOVE(Class)   \
-    Class(Class &&) = delete; \
-    Class &operator=(Class &&) = delete;
+#define DISABLE_MOVE(Class)                                                    \
+    Class (Class &&) = delete;                                                 \
+    Class &operator= (Class &&) = delete;
 
-#define DISABLE_COPY_MOVE(Class) \
-    DISABLE_COPY(Class)          \
-    DISABLE_MOVE(Class)
+#define DISABLE_COPY_MOVE(Class)                                               \
+    DISABLE_COPY (Class)                                                       \
+    DISABLE_MOVE (Class)
 
 #endif

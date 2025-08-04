@@ -60,4 +60,4 @@
 // }
 // #endif
 
-#endif  // CAMERA_H
+#endif // CAMERA_H

@@ -3,15 +3,15 @@
 
 static int once_num = 0;
 
-void inc()
+void inc ()
 {
-    ONCE(once_num += 1;)
+    ONCE (once_num += 1;)
 }
 
-TEST(once, once)
+TEST (once, once)
 {
-    inc();
-    inc();
-    inc();
-    ASSERT_EQ(once_num, 1);
+    inc ();
+    inc ();
+    inc ();
+    ASSERT_EQ (once_num, 1);
 }

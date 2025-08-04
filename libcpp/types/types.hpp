@@ -12,4 +12,4 @@
 #include <libcpp/types/string_view.hpp>
 #include <libcpp/types/variant.hpp>
 
-#endif  // TYPES_HPP
+#endif // TYPES_HPP

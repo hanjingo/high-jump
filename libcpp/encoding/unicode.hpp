@@ -5,22 +5,24 @@
 #include <locale>
 #include <string>
 
-namespace libcpp {
-namespace unicode {
-
-std::wstring from_utf8(const std::string& str)
+namespace libcpp
 {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
-    return cvt.from_bytes(str);
+namespace unicode
+{
+
+std::wstring from_utf8 (const std::string &str)
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t> > cvt;
+    return cvt.from_bytes (str);
 }
 
-std::string to_utf8(const std::wstring& str)
+std::string to_utf8 (const std::wstring &str)
 {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
-    return cvt.to_bytes(str);
+    std::wstring_convert<std::codecvt_utf8<wchar_t> > cvt;
+    return cvt.to_bytes (str);
 }
 
-}  // namespace unicode
-}  // namespace libcpp
+} // namespace unicode
+} // namespace libcpp
 
 #endif

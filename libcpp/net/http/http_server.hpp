@@ -11,7 +11,8 @@
 #include <Windows.h>
 #endif
 
-namespace libcpp {
+namespace libcpp
+{
 
 using http_server = httplib::Server;
 
@@ -19,6 +20,6 @@ using http_server = httplib::Server;
 using http_ssl_server = httplib::SSLServer;
 #endif
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #endif

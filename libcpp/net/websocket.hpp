@@ -149,4 +149,4 @@
 
 // } // namespace libcpp
 
-#endif  // WEBSOCKET_HPP
+#endif // WEBSOCKET_HPP

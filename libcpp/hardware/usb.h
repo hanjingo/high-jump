@@ -25,73 +25,70 @@
 #include <hidapi/hidapi.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-    typedef hid_device_info usb_info_t;
-    typedef bool (*usb_device_range_fn)(usb_info_t* device);
-    typedef bool (*usb_device_filter_fn)(const usb_info_t* device);
+typedef hid_device_info usb_info_t;
+typedef bool (*usb_device_range_fn) (usb_info_t *device);
+typedef bool (*usb_device_filter_fn) (const usb_info_t *device);
 
-    static bool default_usb_device_filter(const usb_info_t* device)
-    {
-        if (!device)
-            return false;
-
-        if (device->bus_type == HID_API_BUS_USB)
-            return true;
-
+static bool default_usb_device_filter (const usb_info_t *device)
+{
+    if (!device)
         return false;
-    }
 
-    /* ----------------------------- USB API define
+    if (device->bus_type == HID_API_BUS_USB)
+        return true;
+
+    return false;
+}
+
+/* ----------------------------- USB API define
      * ------------------------------------ */
-    void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter);
-    int usb_device_count(usb_device_filter_fn filter);
+void usb_device_range (usb_device_range_fn fn, usb_device_filter_fn filter);
+int usb_device_count (usb_device_filter_fn filter);
 
-    /* ----------------------------- USB API implement
+/* ----------------------------- USB API implement
      * ------------------------------------ */
-    void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter)
-    {
-        usb_info_t* info;
+void usb_device_range (usb_device_range_fn fn, usb_device_filter_fn filter)
+{
+    usb_info_t *info;
 
-        if (!fn)
-            return;
+    if (!fn)
+        return;
 
-        usb_info_t* head = hid_enumerate(0x00, 0x00);
-        if (!head)
-            return;
+    usb_info_t *head = hid_enumerate (0x00, 0x00);
+    if (!head)
+        return;
 
-        for (usb_info_t* info = head; info; info = info->next)
-        {
-            if (filter && !filter(info))
-                continue;
+    for (usb_info_t *info = head; info; info = info->next) {
+        if (filter && !filter (info))
+            continue;
 
-            if (!fn(info))
-                break;
-        }
-
-        hid_free_enumeration(head);
+        if (!fn (info))
+            break;
     }
 
-    int usb_device_count(usb_device_filter_fn filter)
-    {
-        usb_info_t* head = hid_enumerate(0x00, 0x00);
-        if (!head)
-            return 0;
+    hid_free_enumeration (head);
+}
 
-        int count = 0;
-        for (usb_info_t* info = head; info; info = info->next)
-        {
-            if (filter && !filter(info))
-                continue;
+int usb_device_count (usb_device_filter_fn filter)
+{
+    usb_info_t *head = hid_enumerate (0x00, 0x00);
+    if (!head)
+        return 0;
 
-            count++;
-        }
+    int count = 0;
+    for (usb_info_t *info = head; info; info = info->next) {
+        if (filter && !filter (info))
+            continue;
 
-        hid_free_enumeration(head);
-        return count;
+        count++;
     }
+
+    hid_free_enumeration (head);
+    return count;
+}
 
 #ifdef __cplusplus
 }

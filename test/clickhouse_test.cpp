@@ -5,25 +5,25 @@
 #ifndef _WIN32
 #include <libcpp/db/clickhouse.hpp>
 
-std::time_t now()
+std::time_t now ()
 {
-    return std::time(nullptr);
+    return std::time (nullptr);
 }
 
 // please install & run clickhouse database before run this testing file
 
-TEST(clickhouse, connect)
+TEST (clickhouse, connect)
 {
     libcpp::ck::client_options opts;
-    opts.SetHost("localhost")
-        .SetPort(9000)
-        .SetUser("default")
-        .SetPassword("livermore")
-        .SetDefaultDatabase("default");
-    libcpp::ck::client cli{ opts };
-    if (!cli.GetCurrentEndpoint())
+    opts.SetHost ("localhost")
+      .SetPort (9000)
+      .SetUser ("default")
+      .SetPassword ("livermore")
+      .SetDefaultDatabase ("default");
+    libcpp::ck::client cli{opts};
+    if (!cli.GetCurrentEndpoint ())
         return;
-    ASSERT_EQ(cli.GetCurrentEndpoint().has_value(), true);
+    ASSERT_EQ (cli.GetCurrentEndpoint ().has_value (), true);
 }
 
 // TEST(clickhouse, create_table)

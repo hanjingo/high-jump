@@ -5,7 +5,8 @@
 
 #include <nlohmann/json.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 
 using json = nlohmann::json;
 

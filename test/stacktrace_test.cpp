@@ -3,19 +3,17 @@
 #include <gtest/gtest.h>
 #include <libcpp/testing/stacktrace.hpp>
 
-TEST(stacktrace, stacktrace)
+TEST (stacktrace, stacktrace)
 {
-    try
-    {
+    try {
         throw "stacktrace exception";
     }
-    catch (...)
-    {
-        std::cout << libcpp::stacktrace() << std::endl;
+    catch (...) {
+        std::cout << libcpp::stacktrace () << std::endl;
     }
 }
 
-TEST(stacktrace, recover)
+TEST (stacktrace, recover)
 {
-    RECOVER(throw "throw exception";);
+    RECOVER (throw "throw exception";);
 }

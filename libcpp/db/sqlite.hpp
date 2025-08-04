@@ -3,9 +3,13 @@
 
 #include <sqlite3.h>
 
-namespace libcpp {
+namespace libcpp
+{
 
-typedef int (*sqlite_exec_cb)(void* in, int argc, char** argv, char** col_name);
+typedef int (*sqlite_exec_cb) (void *in,
+                               int argc,
+                               char **argv,
+                               char **col_name);
 
 }
 

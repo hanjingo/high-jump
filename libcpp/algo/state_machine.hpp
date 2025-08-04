@@ -339,4 +339,4 @@
 
 // } // namespace libcpp
 
-#endif  // STATE_MACHINE_HPP
+#endif // STATE_MACHINE_HPP

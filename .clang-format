@@ -1,109 +1,55 @@
----
-BasedOnStyle: Google
+# libzmq format style; see:
+# https://github.com/zeromq/libzmq/blob/master/.clang-format
+BasedOnStyle: LLVM
 IndentWidth: 4
-TabWidth: 4
 UseTab: Never
-ColumnLimit: 80
-AccessModifierOffset: -2
+BreakBeforeBraces: Custom
+BraceWrapping: 
+    AfterClass: true
+    AfterControlStatement: false
+    AfterEnum: true 
+    AfterFunction: true 
+    AfterNamespace: true
+    AfterObjCDeclaration: true 
+    AfterStruct: true 
+    AfterUnion: true 
+    BeforeCatch: true 
+    BeforeElse: false 
+    IndentBraces: false
 
-# Alignment settings
-AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: false  # Set to false to avoid excessive alignment
-AlignConsecutiveDeclarations: false # Set to false to maintain natural formatting
-AlignEscapedNewlines: Left
-AlignOperands: true
-AlignTrailingComments: true
-
-# Function and control statement formatting
-AllowShortFunctionsOnASingleLine: Inline   # Changed from Empty to Inline
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
 AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
-AllowShortCaseLabelsOnASingleLine: false
-AllowShortBlocksOnASingleLine: false
-
-# Function parameter formatting
-BinPackParameters: false                    # Don't pack parameters on same line
-BinPackArguments: false                     # Don't pack arguments on same line
-AllowAllParametersOfDeclarationOnNextLine: false  # Force parameter line breaks
-AllowAllArgumentsOnNextLine: false         # Force argument line breaks
-
-# C++11 braced list formatting - NEW SETTINGS
-Cpp11BracedListStyle: false                # Use traditional brace style for arrays
-BreakBeforeBraces: Custom                   # Use custom brace style
-BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: true
-  AfterControlStatement: true
-  AfterEnum: true
-  AfterFunction: true
-  AfterNamespace: false
-  AfterObjCDeclaration: true
-  AfterStruct: true
-  AfterUnion: true
-  AfterExternBlock: true
-  BeforeCatch: true
-  BeforeElse: true
-  BeforeLambdaBody: false
-  BeforeWhile: false
-  IndentBraces: false
-  SplitEmptyFunction: true
-  SplitEmptyRecord: true
-  SplitEmptyNamespace: true
-
-# Array and initializer list formatting
-AlignArrayOfStructures: Left               # Align array elements to left
-BreakArrays: true                          # Break arrays across multiple lines
-
-# Line breaking settings
-AlwaysBreakAfterReturnType: None
-AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: Yes
-
-# Indentation settings
 IndentCaseLabels: true
-IndentPPDirectives: None
-IndentWrappedFunctionNames: false
-ContinuationIndentWidth: 4                 # Indent for continued lines
-
-# Spacing settings
-SpaceAfterCStyleCast: false
-SpaceAfterLogicalNot: false
-SpaceAfterTemplateKeyword: true
+BinPackArguments: true
+BinPackParameters: false
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: false
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortFunctionsOnASingleLine: InlineOnly
+AlwaysBreakTemplateDeclarations: false
+ColumnLimit: 80
+MaxEmptyLinesToKeep: 2
+KeepEmptyLinesAtTheStartOfBlocks: false
+ContinuationIndentWidth: 2
+PointerAlignment: Right
+ReflowComments: false
 SpaceBeforeAssignmentOperators: true
-SpaceBeforeCpp11BracedList: false
-SpaceBeforeCtorInitializerColon: true
-SpaceBeforeInheritanceColon: true
-SpaceBeforeParens: ControlStatements
-SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeParens: Always
 SpaceInEmptyParentheses: false
-SpacesBeforeTrailingComments: 2
 SpacesInAngles: false
-SpacesInContainerLiterals: true
-SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
+Standard: Cpp03
 
-# Pointer and reference alignment
-PointerAlignment: Left  # Based on const EVP_CIPHER* cipher style in aes.hpp
-ReferenceAlignment: Left
+SortIncludes: false
 
-# Include file sorting - Based on include order in aes.hpp
-IncludeCategories:
-  - Regex: '^<[[:alnum:]_]+\.h>'  # C standard library headers
-    Priority: 1
-  - Regex: '^<[[:alnum:]_]+>'     # C++ standard library headers
-    Priority: 2
-  - Regex: '.*'                   # Other headers
-    Priority: 3
-
-SortIncludes: true
-SortUsingDeclarations: true
-
-# Other settings
-KeepEmptyLinesAtTheStartOfBlocks: false
-MaxEmptyLinesToKeep: 2
-ReflowComments: true
-CompactNamespaces: false
-
-# C++11 features
-FixNamespaceComments: true
+FixNamespaceComments: false
+BreakBeforeBinaryOperators: NonAssignment
+SpaceAfterTemplateKeyword: true
+AlignAfterOpenBracket: Align
+AlignOperands: true
+BreakConstructorInitializers: AfterColon
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+SpaceAfterCStyleCast: true
+BreakBeforeTernaryOperators: true

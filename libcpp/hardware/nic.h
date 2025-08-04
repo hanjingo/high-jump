@@ -787,4 +787,4 @@
 // }
 // #endif
 
-#endif  // NIC_H
+#endif // NIC_H

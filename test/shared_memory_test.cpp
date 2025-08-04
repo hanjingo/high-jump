@@ -4,37 +4,37 @@
 #include <libcpp/os/process.hpp>
 #include <libcpp/sync/shared_memory.hpp>
 
-TEST(shared_memory, size)
+TEST (shared_memory, size)
 {
-    libcpp::shared_memory::remove("mem");
-    libcpp::shared_memory shm{ "mem", 256 };
-    ASSERT_EQ(shm.size(), 256);
+    libcpp::shared_memory::remove ("mem");
+    libcpp::shared_memory shm{"mem", 256};
+    ASSERT_EQ (shm.size (), 256);
 }
 
-TEST(shared_memory, addr)
+TEST (shared_memory, addr)
 {
-    libcpp::shared_memory::remove("mem");
-    libcpp::shared_memory shm{ "mem", 256 };
-    ASSERT_EQ(shm.addr() == nullptr, true);
+    libcpp::shared_memory::remove ("mem");
+    libcpp::shared_memory shm{"mem", 256};
+    ASSERT_EQ (shm.addr () == nullptr, true);
 }
 
-TEST(shared_memory, remove)
+TEST (shared_memory, remove)
 {
-    libcpp::shared_memory::remove("mem");
-    libcpp::shared_memory shm{ "mem", 256 };
-    libcpp::shared_memory::remove("mem");
+    libcpp::shared_memory::remove ("mem");
+    libcpp::shared_memory shm{"mem", 256};
+    libcpp::shared_memory::remove ("mem");
 }
 
-TEST(shared_memory, map)
+TEST (shared_memory, map)
 {
-    libcpp::shared_memory::remove("mem");
-    libcpp::shared_memory shm{ "mem", 256 };
-    ASSERT_EQ(shm.addr() == nullptr, true);
+    libcpp::shared_memory::remove ("mem");
+    libcpp::shared_memory shm{"mem", 256};
+    ASSERT_EQ (shm.addr () == nullptr, true);
 
-    auto ptr = shm.map();
-    ASSERT_EQ(ptr != nullptr, true);
-    ASSERT_EQ(shm.addr() != nullptr, true);
-    ASSERT_EQ(shm.addr() == ptr, true);
+    auto ptr = shm.map ();
+    ASSERT_EQ (ptr != nullptr, true);
+    ASSERT_EQ (shm.addr () != nullptr, true);
+    ASSERT_EQ (shm.addr () == ptr, true);
 }
 
 // TEST(shared_memory, producer_1_consume_n)

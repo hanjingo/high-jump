@@ -3,4 +3,4 @@
 
 // TODO
 
-#endif  // BLOOM_FILTER_HPP
+#endif // BLOOM_FILTER_HPP

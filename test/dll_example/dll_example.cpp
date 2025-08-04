@@ -2,13 +2,13 @@
 
 #include <iostream>
 
-int hello()
+int hello ()
 {
     std::cout << "dll hello" << std::endl;
     return 1;
 }
 
-int world()
+int world ()
 {
     std::cout << "dll world" << std::endl;
     return 2;

@@ -9,4 +9,4 @@
 #include <libcpp/testing/stacktrace.hpp>
 #include <libcpp/testing/unit_test.hpp>
 
-#endif  // TESTING_HPP
+#endif // TESTING_HPP

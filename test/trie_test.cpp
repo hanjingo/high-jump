@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <libcpp/algo/trie.hpp>
 
-TEST(trie, insert)
+TEST (trie, insert)
 {
     // libcpp::htrie_map<char, std::int64_t> map;
     // map.insert("hello", 1);

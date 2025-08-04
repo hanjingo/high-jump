@@ -8,10 +8,10 @@ enum error1 : int
     unknow
 };
 
-TEST(result, result)
+TEST (result, result)
 {
-    auto fn = []() -> libcpp::result<error1> { return error1::fail; };
+    auto fn = [] () -> libcpp::result<error1> { return error1::fail; };
 
-    error1 ret = fn().value();
-    ASSERT_EQ(ret == error1::fail, true);
+    error1 ret = fn ().value ();
+    ASSERT_EQ (ret == error1::fail, true);
 }

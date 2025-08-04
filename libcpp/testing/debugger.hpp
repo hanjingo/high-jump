@@ -7,43 +7,43 @@
 
 #include <boost/asio.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 
 class debugger
 {
   public:
-    static std::string to_string(const boost::asio::streambuf& buf,
-                                 bool hex = true)
+    static std::string to_string (const boost::asio::streambuf &buf,
+                                  bool hex = true)
     {
 #ifdef DEBUG
-        std::string str(boost::asio::buffers_begin(buf.data()),
-                        boost::asio::buffers_end(buf.data()));
+        std::string str (boost::asio::buffers_begin (buf.data ()),
+                         boost::asio::buffers_end (buf.data ()));
         if (!hex)
             return str;
 
         std::ostringstream oss;
-        oss << std::hex << std::setfill('0');
-        for (unsigned char c : str)
-        {
+        oss << std::hex << std::setfill ('0');
+        for (unsigned char c : str) {
             if (c == '\0' || c == '\n')
-                break;  // stop at null or newline character
+                break; // stop at null or newline character
 
-            oss << std::setw(2) << static_cast<int>(c) << " ";
+            oss << std::setw (2) << static_cast<int> (c) << " ";
         }
 
-        return oss.str();
+        return oss.str ();
 #else
-        return std::string();
+        return std::string ();
 #endif
     }
 };
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #ifdef DEBUG
 // Macro to print buffer contents
-#define BUF_PRINT(buf, ...) \
-    std::cout << libcpp::debugger::to_string(buf, ##__VA_ARGS__) << std::endl;
+#define BUF_PRINT(buf, ...)                                                    \
+    std::cout << libcpp::debugger::to_string (buf, ##__VA_ARGS__) << std::endl;
 
 #else
 #define BUF_PRINT(buf, ...)

@@ -19,7 +19,8 @@
 #include <sys/types.h>
 #endif
 
-namespace libcpp {
+namespace libcpp
+{
 
 class shared_memory
 {
@@ -59,38 +60,34 @@ class shared_memory
 #endif
 
   public:
-    shared_memory(const char* name,
-                  const std::size_t sz = 0,
-                  const int op = flag::create | flag::read_write,
-                  const int arg = 0666)
-        : name_{ name }, sz_{ sz }, fd_{ invalid_fd }
+    shared_memory (const char *name,
+                   const std::size_t sz = 0,
+                   const int op = flag::create | flag::read_write,
+                   const int arg = 0666) :
+        name_{name}, sz_{sz}, fd_{invalid_fd}
     {
 #if defined(_WIN32)
-        fd_ = CreateFileMappingA(INVALID_HANDLE_VALUE,
-                                 NULL,
-                                 (DWORD)op,
-                                 static_cast<DWORD>((sz >> 32) & 0xFFFFFFFF),
-                                 static_cast<DWORD>(sz & 0xFFFFFFFF),
-                                 name);
+        fd_ = CreateFileMappingA (INVALID_HANDLE_VALUE, NULL, (DWORD) op,
+                                  static_cast<DWORD> ((sz >> 32) & 0xFFFFFFFF),
+                                  static_cast<DWORD> (sz & 0xFFFFFFFF), name);
 #else
-        fd_ = shm_open(name, op, arg);
+        fd_ = shm_open (name, op, arg);
         if (fd_ != -1)
-            ftruncate(fd_, sz_);
+            ftruncate (fd_, sz_);
 #endif
 
-        if (!is_fd_valid())
-            throw std::runtime_error("shared memory open failed");
+        if (!is_fd_valid ())
+            throw std::runtime_error ("shared memory open failed");
     }
-    ~shared_memory()
+    ~shared_memory ()
     {
-        unmap();
-        if (is_fd_valid())
-        {
+        unmap ();
+        if (is_fd_valid ()) {
 #if defined(_WIN32)
-            CloseHandle(fd_);
+            CloseHandle (fd_);
             fd_ = nullptr;
 #else
-            close(fd_);
+            close (fd_);
             fd_ = -1;
 #endif
         }
@@ -98,16 +95,16 @@ class shared_memory
         ptr_ = nullptr;
     }
 
-    static int remove(const char* name)
+    static int remove (const char *name)
     {
 #if defined(_WIN32)
-        return 0;  // auto recycle
+        return 0; // auto recycle
 #else
-        return shm_unlink(name);
+        return shm_unlink (name);
 #endif
     }
 
-    inline bool is_fd_valid()
+    inline bool is_fd_valid ()
     {
 #if defined(_WIN32)
         return fd_ != nullptr;
@@ -115,27 +112,24 @@ class shared_memory
         return fd_ != -1;
 #endif
     }
-    inline void* addr() { return ptr_; }
-    inline std::size_t size() { return sz_; }
+    inline void *addr () { return ptr_; }
+    inline std::size_t size () { return sz_; }
 
-    void* map(std::size_t offset = 0,
-              const int prot = access::all,
-              void* addr = nullptr)
+    void *map (std::size_t offset = 0,
+               const int prot = access::all,
+               void *addr = nullptr)
     {
-        if (!is_fd_valid())
+        if (!is_fd_valid ())
             return nullptr;
 
 #if defined(_WIN32)
-        ptr_ = MapViewOfFileEx(fd_,
-                               prot,
-                               static_cast<DWORD>((offset >> 32) & 0xFFFFFFFF),
-                               static_cast<DWORD>(offset & 0xFFFFFFFF),
-                               sz_,
-                               addr);
+        ptr_ = MapViewOfFileEx (
+          fd_, prot, static_cast<DWORD> ((offset >> 32) & 0xFFFFFFFF),
+          static_cast<DWORD> (offset & 0xFFFFFFFF), sz_, addr);
 
         return ptr_;
 #else
-        ptr_ = mmap(addr, size(), prot, MAP_SHARED, fd_, offset);
+        ptr_ = mmap (addr, size (), prot, MAP_SHARED, fd_, offset);
         if (ptr_ == MAP_FAILED)
             return nullptr;
 
@@ -143,16 +137,16 @@ class shared_memory
 #endif
     }
 
-    bool unmap()
+    bool unmap ()
     {
         if (ptr_ == nullptr)
             return true;
 
 #if defined(_WIN32)
-        if (!UnmapViewOfFile(ptr_))
+        if (!UnmapViewOfFile (ptr_))
             return false;
 #else
-        if (munmap(ptr_, size()) < 0)
+        if (munmap (ptr_, size ()) < 0)
             return false;
 #endif
 
@@ -164,9 +158,9 @@ class shared_memory
     const std::string name_ = "";
     std::size_t sz_ = 0;
     fd_t fd_;
-    void* ptr_ = nullptr;
+    void *ptr_ = nullptr;
 };
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #endif

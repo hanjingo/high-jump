@@ -78,4 +78,4 @@
 
 // } // namespace libcpp
 
-#endif  // POSTGRESQL_HPP
+#endif // POSTGRESQL_HPP

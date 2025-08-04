@@ -4,7 +4,8 @@
 #include <pugiconfig.hpp>
 #include <pugixml.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 using namespace pugi;
 }
 

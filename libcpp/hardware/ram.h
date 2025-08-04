@@ -850,4 +850,4 @@
 // }
 // #endif
 
-#endif  // RAM_H
+#endif // RAM_H

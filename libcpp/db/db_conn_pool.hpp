@@ -14,85 +14,82 @@
 #include <mutex>
 #include <queue>
 
-namespace libcpp {
+namespace libcpp
+{
 
-template <typename Conn>
-class db_conn_pool
+template <typename Conn> class db_conn_pool
 {
   public:
     using conn_ptr_t = std::shared_ptr<Conn>;
-    using make_conn_t = std::function<conn_ptr_t()>;
-    using check_conn_t = std::function<bool(conn_ptr_t)>;
+    using make_conn_t = std::function<conn_ptr_t ()>;
+    using check_conn_t = std::function<bool (conn_ptr_t)>;
 
   public:
-    explicit db_conn_pool(const std::size_t sz, make_conn_t&& make)
-        : pool_{},
-          cond_{},
-          mu_{},
-          capa_{ sz },
-          make_{ std::move(make) },
-          check_{ [](conn_ptr_t) -> bool { return true; } }
+    explicit db_conn_pool (const std::size_t sz, make_conn_t &&make) :
+        pool_{},
+        cond_{},
+        mu_{},
+        capa_{sz},
+        make_{std::move (make)},
+        check_{[] (conn_ptr_t) -> bool { return true; }}
     {
         for (std::size_t i = 0; i < sz; ++i)
-            pool_.push(make_());
+            pool_.push (make_ ());
     }
-    explicit db_conn_pool(const std::size_t sz,
-                          make_conn_t&& make,
-                          check_conn_t&& check)
-        : pool_{},
-          cond_{},
-          mu_{},
-          capa_{ sz },
-          make_{ std::move(make) },
-          check_{ std::move(check) }
+    explicit db_conn_pool (const std::size_t sz,
+                           make_conn_t &&make,
+                           check_conn_t &&check) :
+        pool_{},
+        cond_{},
+        mu_{},
+        capa_{sz},
+        make_{std::move (make)},
+        check_{std::move (check)}
     {
         for (std::size_t i = 0; i < sz; ++i)
-            pool_.push(make_());
+            pool_.push (make_ ());
     }
-    ~db_conn_pool() { cond_.notify_all(); }
+    ~db_conn_pool () { cond_.notify_all (); }
 
-    inline std::size_t capa() { return capa_; }
+    inline std::size_t capa () { return capa_; }
 
-    conn_ptr_t acquire(const int timeout_ms = 0)
+    conn_ptr_t acquire (const int timeout_ms = 0)
     {
-        if (timeout_ms > 0)
-        {
-            std::unique_lock<std::mutex> lock{ mu_ };
-            bool ok = cond_.wait_for(lock,
-                                     std::chrono::milliseconds(timeout_ms),
-                                     [this] { return !this->pool_.empty(); });
+        if (timeout_ms > 0) {
+            std::unique_lock<std::mutex> lock{mu_};
+            bool ok =
+              cond_.wait_for (lock, std::chrono::milliseconds (timeout_ms),
+                              [this] { return !this->pool_.empty (); });
             if (!ok)
                 return nullptr;
         }
 
-        std::unique_lock<std::mutex> lock{ mu_ };
-        if (pool_.empty())
+        std::unique_lock<std::mutex> lock{mu_};
+        if (pool_.empty ())
             return nullptr;
 
-        do
-        {
-            conn_ptr_t conn_ptr = pool_.front();
-            pool_.pop();
-            if (!check_(conn_ptr))
-            {
-                pool_.push(make_());
+        do {
+            conn_ptr_t conn_ptr = pool_.front ();
+            pool_.pop ();
+            if (!check_ (conn_ptr)) {
+                pool_.push (make_ ());
                 continue;
             }
 
             // auto give_back
-            return conn_ptr_t(conn_ptr.get(), [this, conn_ptr](Conn*) {
-                this->release_(conn_ptr);
+            return conn_ptr_t (conn_ptr.get (), [this, conn_ptr] (Conn *) {
+                this->release_ (conn_ptr);
             });
             break;
         } while (true);
     }
 
   private:
-    void release_(conn_ptr_t conn)
+    void release_ (conn_ptr_t conn)
     {
-        std::lock_guard<std::mutex> lock{ mu_ };
-        pool_.push(conn);
-        cond_.notify_one();
+        std::lock_guard<std::mutex> lock{mu_};
+        pool_.push (conn);
+        cond_.notify_one ();
     }
 
   private:
@@ -105,6 +102,6 @@ class db_conn_pool
     check_conn_t check_;
 };
 
-};  // namespace libcpp
+}; // namespace libcpp
 
 #endif

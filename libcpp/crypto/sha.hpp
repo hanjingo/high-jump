@@ -36,73 +36,72 @@
 #include <openssl/sha.h>
 
 #ifndef SHA_BUF_SIZE
-#define SHA_BUF_SIZE 131072  // 128 KiB
+#define SHA_BUF_SIZE 131072 // 128 KiB
 #endif
 
-namespace libcpp {
+namespace libcpp
+{
 
 class sha
 {
   public:
     enum class algorithm
     {
-        sha1,    // SHA-1
-        sha224,  // SHA-224
-        sha256,  // SHA-256
-        sha384,  // SHA-384
-        sha512,  // SHA-512
+        sha1,   // SHA-1
+        sha224, // SHA-224
+        sha256, // SHA-256
+        sha384, // SHA-384
+        sha512, // SHA-512
     };
 
-    static std::size_t get_digest_length(algorithm algo)
+    static std::size_t get_digest_length (algorithm algo)
     {
-        switch (algo)
-        {
+        switch (algo) {
             case algorithm::sha1:
-                return SHA_DIGEST_LENGTH;  // 20byte
+                return SHA_DIGEST_LENGTH; // 20byte
             case algorithm::sha224:
-                return SHA224_DIGEST_LENGTH;  // 28byte
+                return SHA224_DIGEST_LENGTH; // 28byte
             case algorithm::sha256:
-                return SHA256_DIGEST_LENGTH;  // 32byte
+                return SHA256_DIGEST_LENGTH; // 32byte
             case algorithm::sha384:
-                return SHA384_DIGEST_LENGTH;  // 48byte
+                return SHA384_DIGEST_LENGTH; // 48byte
             case algorithm::sha512:
-                return SHA512_DIGEST_LENGTH;  // 64byte
+                return SHA512_DIGEST_LENGTH; // 64byte
             default:
-                return SHA256_DIGEST_LENGTH;  // default SHA-256
+                return SHA256_DIGEST_LENGTH; // default SHA-256
         }
     }
 
-    static bool encode(unsigned char* dst,
-                       std::size_t& dst_len,
-                       const unsigned char* src,
-                       const std::size_t src_len,
-                       const algorithm algo = algorithm::sha256)
+    static bool encode (unsigned char *dst,
+                        std::size_t &dst_len,
+                        const unsigned char *src,
+                        const std::size_t src_len,
+                        const algorithm algo = algorithm::sha256)
     {
-        std::size_t required_len = get_digest_length(algo);
+        std::size_t required_len = get_digest_length (algo);
         if (dst_len < required_len)
             return false;
 
         bool result = false;
-        switch (algo)
-        {
+        switch (algo) {
             case algorithm::sha1:
-                SHA1(src, src_len, dst);
+                SHA1 (src, src_len, dst);
                 result = true;
                 break;
             case algorithm::sha224:
-                SHA224(src, src_len, dst);
+                SHA224 (src, src_len, dst);
                 result = true;
                 break;
             case algorithm::sha256:
-                SHA256(src, src_len, dst);
+                SHA256 (src, src_len, dst);
                 result = true;
                 break;
             case algorithm::sha384:
-                SHA384(src, src_len, dst);
+                SHA384 (src, src_len, dst);
                 result = true;
                 break;
             case algorithm::sha512:
-                SHA512(src, src_len, dst);
+                SHA512 (src, src_len, dst);
                 result = true;
                 break;
             default:
@@ -115,39 +114,38 @@ class sha
         return result;
     }
 
-    static bool encode(std::string& dst,
-                       const std::string& src,
-                       const algorithm algo = algorithm::sha256)
+    static bool encode (std::string &dst,
+                        const std::string &src,
+                        const algorithm algo = algorithm::sha256)
     {
-        std::size_t digest_len = get_digest_length(algo);
-        dst.resize(digest_len);
+        std::size_t digest_len = get_digest_length (algo);
+        dst.resize (digest_len);
 
         bool result = false;
-        unsigned char* dst_ptr =
-            reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data()));
-        const unsigned char* src_ptr =
-            reinterpret_cast<const unsigned char*>(src.c_str());
+        unsigned char *dst_ptr =
+          reinterpret_cast<unsigned char *> (const_cast<char *> (dst.data ()));
+        const unsigned char *src_ptr =
+          reinterpret_cast<const unsigned char *> (src.c_str ());
 
-        switch (algo)
-        {
+        switch (algo) {
             case algorithm::sha1:
-                SHA1(src_ptr, src.size(), dst_ptr);
+                SHA1 (src_ptr, src.size (), dst_ptr);
                 result = true;
                 break;
             case algorithm::sha224:
-                SHA224(src_ptr, src.size(), dst_ptr);
+                SHA224 (src_ptr, src.size (), dst_ptr);
                 result = true;
                 break;
             case algorithm::sha256:
-                SHA256(src_ptr, src.size(), dst_ptr);
+                SHA256 (src_ptr, src.size (), dst_ptr);
                 result = true;
                 break;
             case algorithm::sha384:
-                SHA384(src_ptr, src.size(), dst_ptr);
+                SHA384 (src_ptr, src.size (), dst_ptr);
                 result = true;
                 break;
             case algorithm::sha512:
-                SHA512(src_ptr, src.size(), dst_ptr);
+                SHA512 (src_ptr, src.size (), dst_ptr);
                 result = true;
                 break;
             default:
@@ -157,33 +155,32 @@ class sha
         return result;
     }
 
-    static bool encode(std::string& dst,
-                       std::istream& in,
-                       const algorithm algo = algorithm::sha256)
+    static bool encode (std::string &dst,
+                        std::istream &in,
+                        const algorithm algo = algorithm::sha256)
     {
-        if (!in.good())
+        if (!in.good ())
             return false;
 
-        std::size_t digest_len = get_digest_length(algo);
-        dst.resize(digest_len);
+        std::size_t digest_len = get_digest_length (algo);
+        dst.resize (digest_len);
 
         bool result = false;
-        switch (algo)
-        {
+        switch (algo) {
             case algorithm::sha1:
-                result = _encode_stream_sha1(dst, in);
+                result = _encode_stream_sha1 (dst, in);
                 break;
             case algorithm::sha224:
-                result = _encode_stream_sha224(dst, in);
+                result = _encode_stream_sha224 (dst, in);
                 break;
             case algorithm::sha256:
-                result = _encode_stream_sha256(dst, in);
+                result = _encode_stream_sha256 (dst, in);
                 break;
             case algorithm::sha384:
-                result = _encode_stream_sha384(dst, in);
+                result = _encode_stream_sha384 (dst, in);
                 break;
             case algorithm::sha512:
-                result = _encode_stream_sha512(dst, in);
+                result = _encode_stream_sha512 (dst, in);
                 break;
             default:
                 return false;
@@ -192,133 +189,133 @@ class sha
         return result;
     }
 
-    static bool encode(std::ostream& out,
-                       std::istream& in,
-                       const algorithm algo = algorithm::sha256)
+    static bool encode (std::ostream &out,
+                        std::istream &in,
+                        const algorithm algo = algorithm::sha256)
     {
-        if (!in.good() || !out.good())
+        if (!in.good () || !out.good ())
             return false;
 
         std::string hash_result;
-        if (!encode(hash_result, in, algo))
+        if (!encode (hash_result, in, algo))
             return false;
 
-        out.write(hash_result.data(), hash_result.size());
-        out.flush();
+        out.write (hash_result.data (), hash_result.size ());
+        out.flush ();
         return true;
     }
 
-    static std::size_t encode_len_reserve(
-        const algorithm algo = algorithm::sha256)
+    static std::size_t
+    encode_len_reserve (const algorithm algo = algorithm::sha256)
     {
-        return get_digest_length(algo);
+        return get_digest_length (algo);
     }
 
-    static bool sha1(std::string& dst, const std::string& src)
+    static bool sha1 (std::string &dst, const std::string &src)
     {
-        return encode(dst, src, algorithm::sha1);
+        return encode (dst, src, algorithm::sha1);
     }
 
-    static bool sha224(std::string& dst, const std::string& src)
+    static bool sha224 (std::string &dst, const std::string &src)
     {
-        return encode(dst, src, algorithm::sha224);
+        return encode (dst, src, algorithm::sha224);
     }
 
-    static bool sha256(std::string& dst, const std::string& src)
+    static bool sha256 (std::string &dst, const std::string &src)
     {
-        return encode(dst, src, algorithm::sha256);
+        return encode (dst, src, algorithm::sha256);
     }
 
-    static bool sha384(std::string& dst, const std::string& src)
+    static bool sha384 (std::string &dst, const std::string &src)
     {
-        return encode(dst, src, algorithm::sha384);
+        return encode (dst, src, algorithm::sha384);
     }
 
-    static bool sha512(std::string& dst, const std::string& src)
+    static bool sha512 (std::string &dst, const std::string &src)
     {
-        return encode(dst, src, algorithm::sha512);
+        return encode (dst, src, algorithm::sha512);
     }
 
   private:
-    static bool _encode_stream_sha1(std::string& dst, std::istream& in)
+    static bool _encode_stream_sha1 (std::string &dst, std::istream &in)
     {
         SHA_CTX ctx;
-        SHA1_Init(&ctx);
+        SHA1_Init (&ctx);
 
-        std::vector<char> buf(SHA_BUF_SIZE);
+        std::vector<char> buf (SHA_BUF_SIZE);
         std::streamsize sz;
-        while ((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA1_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
+        while ((sz = in.read (buf.data (), SHA_BUF_SIZE).gcount ()) > 0)
+            SHA1_Update (&ctx, buf.data (), static_cast<std::size_t> (sz));
 
-        SHA1_Final(reinterpret_cast<unsigned char*>(&dst[0]), &ctx);
+        SHA1_Final (reinterpret_cast<unsigned char *> (&dst[0]), &ctx);
         return true;
     }
 
-    static bool _encode_stream_sha224(std::string& dst, std::istream& in)
+    static bool _encode_stream_sha224 (std::string &dst, std::istream &in)
     {
         SHA256_CTX ctx;
-        SHA224_Init(&ctx);
+        SHA224_Init (&ctx);
 
-        std::vector<char> buf(SHA_BUF_SIZE);
+        std::vector<char> buf (SHA_BUF_SIZE);
         std::streamsize sz;
-        while ((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA224_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
+        while ((sz = in.read (buf.data (), SHA_BUF_SIZE).gcount ()) > 0)
+            SHA224_Update (&ctx, buf.data (), static_cast<std::size_t> (sz));
 
-        SHA224_Final(reinterpret_cast<unsigned char*>(&dst[0]), &ctx);
+        SHA224_Final (reinterpret_cast<unsigned char *> (&dst[0]), &ctx);
         return true;
     }
 
-    static bool _encode_stream_sha256(std::string& dst, std::istream& in)
+    static bool _encode_stream_sha256 (std::string &dst, std::istream &in)
     {
         SHA256_CTX ctx;
-        SHA256_Init(&ctx);
+        SHA256_Init (&ctx);
 
-        std::vector<char> buf(SHA_BUF_SIZE);
+        std::vector<char> buf (SHA_BUF_SIZE);
         std::streamsize sz;
-        while ((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA256_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
+        while ((sz = in.read (buf.data (), SHA_BUF_SIZE).gcount ()) > 0)
+            SHA256_Update (&ctx, buf.data (), static_cast<std::size_t> (sz));
 
-        SHA256_Final(reinterpret_cast<unsigned char*>(&dst[0]), &ctx);
+        SHA256_Final (reinterpret_cast<unsigned char *> (&dst[0]), &ctx);
         return true;
     }
 
-    static bool _encode_stream_sha384(std::string& dst, std::istream& in)
+    static bool _encode_stream_sha384 (std::string &dst, std::istream &in)
     {
         SHA512_CTX ctx;
-        SHA384_Init(&ctx);
+        SHA384_Init (&ctx);
 
-        std::vector<char> buf(SHA_BUF_SIZE);
+        std::vector<char> buf (SHA_BUF_SIZE);
         std::streamsize sz;
-        while ((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA384_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
+        while ((sz = in.read (buf.data (), SHA_BUF_SIZE).gcount ()) > 0)
+            SHA384_Update (&ctx, buf.data (), static_cast<std::size_t> (sz));
 
-        SHA384_Final(reinterpret_cast<unsigned char*>(&dst[0]), &ctx);
+        SHA384_Final (reinterpret_cast<unsigned char *> (&dst[0]), &ctx);
         return true;
     }
 
-    static bool _encode_stream_sha512(std::string& dst, std::istream& in)
+    static bool _encode_stream_sha512 (std::string &dst, std::istream &in)
     {
         SHA512_CTX ctx;
-        SHA512_Init(&ctx);
+        SHA512_Init (&ctx);
 
-        std::vector<char> buf(SHA_BUF_SIZE);
+        std::vector<char> buf (SHA_BUF_SIZE);
         std::streamsize sz;
-        while ((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA512_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
+        while ((sz = in.read (buf.data (), SHA_BUF_SIZE).gcount ()) > 0)
+            SHA512_Update (&ctx, buf.data (), static_cast<std::size_t> (sz));
 
-        SHA512_Final(reinterpret_cast<unsigned char*>(&dst[0]), &ctx);
+        SHA512_Final (reinterpret_cast<unsigned char *> (&dst[0]), &ctx);
         return true;
     }
 
   private:
-    sha() = default;
-    ~sha() = default;
-    sha(const sha&) = delete;
-    sha& operator=(const sha&) = delete;
-    sha(sha&&) = delete;
-    sha& operator=(sha&&) = delete;
+    sha () = default;
+    ~sha () = default;
+    sha (const sha &) = delete;
+    sha &operator= (const sha &) = delete;
+    sha (sha &&) = delete;
+    sha &operator= (sha &&) = delete;
 };
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #endif

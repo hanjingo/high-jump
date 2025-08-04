@@ -2,8 +2,7 @@
 #define ASM_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 #if defined(_MSC_VER)
@@ -21,8 +20,8 @@ extern "C"
 #define ASM_INLINE asm
 #define ASM_VOLATILE asm volatile
 
-#define ASM(code) asm(code)
-#define ASM_V(code) asm volatile(code)
+#define ASM(code) asm (code)
+#define ASM_V(code) asm volatile (code)
 
 #else
 #define ASM_BEGIN
@@ -37,4 +36,4 @@ extern "C"
 }
 #endif
 
-#endif  // ASM_H
+#endif // ASM_H

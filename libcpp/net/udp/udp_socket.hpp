@@ -3,7 +3,8 @@
 
 #include <boost/asio.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 
 class udp_socket
 {
@@ -19,123 +20,122 @@ class udp_socket
     using sock_t = boost::asio::ip::udp::socket;
     using endpoint_t = boost::asio::ip::udp::endpoint;
 
-    using send_handler_t = std::function<void(const err_t&, std::size_t)>;
-    using recv_handler_t = std::function<void(const err_t&, std::size_t)>;
+    using send_handler_t = std::function<void (const err_t &, std::size_t)>;
+    using recv_handler_t = std::function<void (const err_t &, std::size_t)>;
 
   public:
-    udp_socket() {}
+    udp_socket () {}
 
-    udp_socket(const uint16_t port)
-        : sock_{ new sock_t(io_, endpoint_v4(port)) }
+    udp_socket (const uint16_t port) :
+        sock_{new sock_t (io_, endpoint_v4 (port))}
     {
     }
 
-    virtual ~udp_socket() { close(); }
+    virtual ~udp_socket () { close (); }
 
-    inline void poll() { io_.run(); }
+    inline void poll () { io_.run (); }
 
-    inline void loop_start()
+    inline void loop_start ()
     {
-        io_work_t work{ io_ };
-        io_.run();
+        io_work_t work{io_};
+        io_.run ();
     }
 
-    inline void loop_end() { io_.stop(); }
+    inline void loop_end () { io_.stop (); }
 
-    void bind(const uint16_t port)
+    void bind (const uint16_t port)
     {
-        if (sock_ != nullptr)
-        {
-            sock_->close();
+        if (sock_ != nullptr) {
+            sock_->close ();
             sock_ = nullptr;
             return;
         }
 
-        sock_ = new sock_t(io_, endpoint_v4(port));
+        sock_ = new sock_t (io_, endpoint_v4 (port));
     }
 
-    size_t send(const const_buffer_t& buf, endpoint_t& ep)
+    size_t send (const const_buffer_t &buf, endpoint_t &ep)
     {
-        return sock_->send_to(buf, ep);
+        return sock_->send_to (buf, ep);
     }
 
-    size_t send(const char* data, size_t len, endpoint_t& ep)
+    size_t send (const char *data, size_t len, endpoint_t &ep)
     {
-        auto buf = boost::asio::buffer(data, len);
-        return send(buf, ep);
+        auto buf = boost::asio::buffer (data, len);
+        return send (buf, ep);
     }
 
-    void async_send(const const_buffer_t& buf,
-                    endpoint_t& ep,
-                    send_handler_t&& fn)
+    void
+    async_send (const const_buffer_t &buf, endpoint_t &ep, send_handler_t &&fn)
     {
-        sock_->async_send_to(buf, ep, std::move(fn));
+        sock_->async_send_to (buf, ep, std::move (fn));
     }
 
-    void async_send(const char* data,
-                    size_t len,
-                    endpoint_t& ep,
-                    send_handler_t&& fn)
+    void async_send (const char *data,
+                     size_t len,
+                     endpoint_t &ep,
+                     send_handler_t &&fn)
     {
-        auto buf = boost::asio::buffer(data, len);
-        async_send(buf, ep, std::move(fn));
+        auto buf = boost::asio::buffer (data, len);
+        async_send (buf, ep, std::move (fn));
     }
 
-    size_t recv(multi_buffer_t& buf, endpoint_t& ep)
+    size_t recv (multi_buffer_t &buf, endpoint_t &ep)
     {
-        return sock_->receive_from(buf, ep);
+        return sock_->receive_from (buf, ep);
     }
 
-    size_t recv(char* data, size_t len, endpoint_t& ep)
+    size_t recv (char *data, size_t len, endpoint_t &ep)
     {
-        multi_buffer_t buf{ data, len };
-        return recv(buf, ep);
+        multi_buffer_t buf{data, len};
+        return recv (buf, ep);
     }
 
-    void async_recv(multi_buffer_t& buf, endpoint_t& ep, recv_handler_t&& fn)
+    void async_recv (multi_buffer_t &buf, endpoint_t &ep, recv_handler_t &&fn)
     {
-        sock_->async_receive_from(buf, ep, std::move(fn));
+        sock_->async_receive_from (buf, ep, std::move (fn));
     }
 
-    void async_recv(char* data, size_t len, endpoint_t& ep, recv_handler_t&& fn)
+    void
+    async_recv (char *data, size_t len, endpoint_t &ep, recv_handler_t &&fn)
     {
-        multi_buffer_t buf{ data, len };
-        async_recv(buf, ep, std::move(fn));
+        multi_buffer_t buf{data, len};
+        async_recv (buf, ep, std::move (fn));
     }
 
-    void close()
+    void close ()
     {
         if (sock_ == nullptr)
             return;
 
-        sock_->close();
+        sock_->close ();
         delete sock_;
         sock_ = nullptr;
 
-        loop_end();
+        loop_end ();
     }
 
   public:
-    static endpoint_t end_point(const char* ip, const uint16_t port)
+    static endpoint_t end_point (const char *ip, const uint16_t port)
     {
-        return endpoint_t(address_t::from_string(ip), port);
+        return endpoint_t (address_t::from_string (ip), port);
     }
 
-    static endpoint_t endpoint_v4(const uint16_t port)
+    static endpoint_t endpoint_v4 (const uint16_t port)
     {
-        return endpoint_t(boost::asio::ip::udp::v4(), port);
+        return endpoint_t (boost::asio::ip::udp::v4 (), port);
     }
 
-    static endpoint_t end_point_v6(const uint16_t port)
+    static endpoint_t end_point_v6 (const uint16_t port)
     {
-        return endpoint_t(boost::asio::ip::udp::v6(), port);
+        return endpoint_t (boost::asio::ip::udp::v6 (), port);
     }
 
   private:
     io_t io_;
-    sock_t* sock_ = nullptr;
+    sock_t *sock_ = nullptr;
 };
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #endif

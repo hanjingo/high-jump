@@ -7,4 +7,4 @@
 #include <libcpp/misc/ros.hpp>
 #include <libcpp/misc/zmq.hpp>
 
-#endif  // MISC_HPP
+#endif // MISC_HPP

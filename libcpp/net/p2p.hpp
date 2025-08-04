@@ -3,4 +3,4 @@
 
 // TODO - Add necessary includes and declarations for P2P networking
 
-#endif  // P2P_HPP
+#endif // P2P_HPP

@@ -1,26 +1,38 @@
 #include <gtest/gtest.h>
 #include <libcpp/sync/counter.hpp>
 
-TEST(counter, operator) {}
-
-TEST(counter, inc)
+TEST (counter, operator)
 {
-    libcpp::counter<int> ct(0);
-    ASSERT_EQ(ct.inc().value(), 1);
 }
 
-TEST(counter, dec)
+TEST (counter, inc)
 {
-    libcpp::counter<int> ct(1);
-    ASSERT_EQ(ct.dec().value(), 0);
+    libcpp::counter<int> ct (0);
+    ASSERT_EQ (ct.inc ().value (), 1);
 }
 
-TEST(counter, step) {}
+TEST (counter, dec)
+{
+    libcpp::counter<int> ct (1);
+    ASSERT_EQ (ct.dec ().value (), 0);
+}
 
-TEST(counter, value) {}
+TEST (counter, step)
+{
+}
 
-TEST(counter, max) {}
+TEST (counter, value)
+{
+}
 
-TEST(counter, min) {}
+TEST (counter, max)
+{
+}
 
-TEST(counter, reset) {}
+TEST (counter, min)
+{
+}
+
+TEST (counter, reset)
+{
+}

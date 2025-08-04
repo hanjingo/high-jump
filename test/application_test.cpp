@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/application.hpp>
 
-TEST(application, sleep)
+TEST (application, sleep)
 {
-    libcpp::application::sleep(1);
+    libcpp::application::sleep (1);
 }
 
-TEST(application, msleep)
+TEST (application, msleep)
 {
-    libcpp::application::msleep(1);
+    libcpp::application::msleep (1);
 }

@@ -3,10 +3,10 @@
 
 #include <boost/circular_buffer.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 
-template <typename T>
-using ring_buffer = boost::circular_buffer<T>;
+template <typename T> using ring_buffer = boost::circular_buffer<T>;
 
 }
 

@@ -4,69 +4,63 @@
 #if (__cplusplus >= 201703L)
 #include <any>
 
-namespace libcpp {
+namespace libcpp
+{
 
 using any = std::any;
 
-template <class T>
-constexpr T* any_cast(any* operand)
+template <class T> constexpr T *any_cast (any *operand)
 {
-    return std::any_cast<T>(operand);
+    return std::any_cast<T> (operand);
 }
 
-template <class T>
-constexpr const T* any_cast(const any* operand)
+template <class T> constexpr const T *any_cast (const any *operand)
 {
-    return std::any_cast<T>(operand);
+    return std::any_cast<T> (operand);
 }
 
-template <class T>
-constexpr T any_cast(any& operand)
+template <class T> constexpr T any_cast (any &operand)
 {
-    return std::any_cast<T>(operand);
+    return std::any_cast<T> (operand);
 }
 
-template <class T>
-constexpr T any_cast(const any& operand)
+template <class T> constexpr T any_cast (const any &operand)
 {
-    return std::any_cast<T>(operand);
+    return std::any_cast<T> (operand);
 }
 
-}  // namespace libcpp
+} // namespace libcpp
 #endif
 
 #if (__cplusplus < 201703L)
 #include <boost/any.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 
 using any = boost::any;
 
-template <class T>
-constexpr T* any_cast(any* operand)
+template <class T> constexpr T *any_cast (any *operand)
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T> (operand);
 }
 
-template <class T>
-constexpr const T* any_cast(const any* operand)
+template <class T> constexpr const T *any_cast (const any *operand)
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T> (operand);
 }
 
-template <class T>
-constexpr T any_cast(any& operand)
+template <class T> constexpr T any_cast (any &operand)
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T> (operand);
 }
 
-template <class T>
-constexpr T any_cast(const any& operand)
+template <class T> constexpr T any_cast (const any &operand)
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T> (operand);
 }
 
-}  // namespace libcpp
+} // namespace libcpp
 #endif
 
 #endif

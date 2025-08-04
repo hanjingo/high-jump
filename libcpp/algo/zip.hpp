@@ -6,4 +6,4 @@
 // zip(...)
 // unzip(...)
 
-#endif  // ZIP_HPP
+#endif // ZIP_HPP

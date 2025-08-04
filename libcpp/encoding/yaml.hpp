@@ -64,4 +64,4 @@
 
 // }
 
-#endif  // YAML_HPP
+#endif // YAML_HPP

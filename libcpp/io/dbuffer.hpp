@@ -6,58 +6,57 @@
 #include <iostream>
 #include <mutex>
 
-namespace libcpp {
+namespace libcpp
+{
 
-template <typename Container>
-class dbuffer
+template <typename Container> class dbuffer
 {
   public:
-    using copy_fn = std::function<bool(Container& src, Container& dst)>;
+    using copy_fn = std::function<bool (Container &src, Container &dst)>;
 
   public:
-    dbuffer(copy_fn&& copy = [](Container& src, Container& dst) -> bool {
+    dbuffer (copy_fn &&copy = [] (Container &src, Container &dst) -> bool {
         dst = src;
         return true;
-    })
-        : _back{ &_back_data }, _front{ &_front_data }, _copy{ std::move(copy) }
+    }) :
+        _back{&_back_data}, _front{&_front_data}, _copy{std::move (copy)}
     {
     }
-    ~dbuffer() {}
+    ~dbuffer () {}
 
-    bool write(Container& value)
+    bool write (Container &value)
     {
-        Container* back = _back.load();
-        if (!_copy(value, *back))
-        {
+        Container *back = _back.load ();
+        if (!_copy (value, *back)) {
             return false;
         }
 
-        swap();
+        swap ();
         return true;
     }
 
-    bool read(Container& value)
+    bool read (Container &value)
     {
-        Container* front = _front.load();
-        return _copy(*front, value);
+        Container *front = _front.load ();
+        return _copy (*front, value);
     }
 
-    void swap()
+    void swap ()
     {
-        auto tmp = _front.load();
-        _front.store(_back.load());
-        _back.store(tmp);
+        auto tmp = _front.load ();
+        _front.store (_back.load ());
+        _back.store (tmp);
     }
 
   private:
     Container _back_data;
     Container _front_data;
-    std::atomic<Container*> _back;
-    std::atomic<Container*> _front;
+    std::atomic<Container *> _back;
+    std::atomic<Container *> _front;
     copy_fn _copy;
     std::mutex _mu;
 };
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #endif

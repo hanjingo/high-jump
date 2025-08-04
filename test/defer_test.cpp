@@ -3,14 +3,14 @@
 
 static int num = 0;
 
-void defer_test()
+void defer_test ()
 {
-    DEFER(num += 1; ASSERT_EQ(num, 3););
-    DEFER(num += 1; ASSERT_EQ(num, 2););
-    DEFER(num += 1; ASSERT_EQ(num, 1););
+    DEFER (num += 1; ASSERT_EQ (num, 3););
+    DEFER (num += 1; ASSERT_EQ (num, 2););
+    DEFER (num += 1; ASSERT_EQ (num, 1););
 }
 
-TEST(defer, defer)
+TEST (defer, defer)
 {
-    defer_test();
+    defer_test ();
 }

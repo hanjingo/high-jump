@@ -5,10 +5,10 @@
 
 #include <optional>
 
-namespace libcpp {
+namespace libcpp
+{
 
-template <class T>
-using optional = std::optional<T>;
+template <class T> using optional = std::optional<T>;
 
 }
 
@@ -17,10 +17,10 @@ using optional = std::optional<T>;
 #if (__cplusplus < 201703L)
 #include <boost/optional.hpp>
 
-namespace libcpp {
+namespace libcpp
+{
 
-template <class T>
-using optional = boost::optional<T>;
+template <class T> using optional = boost::optional<T>;
 
 }
 #endif

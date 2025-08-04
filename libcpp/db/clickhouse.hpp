@@ -3,9 +3,11 @@
 
 #include <clickhouse/client.h>
 
-namespace libcpp {
+namespace libcpp
+{
 
-namespace ck {
+namespace ck
+{
 
 using client = clickhouse::Client;
 using client_options = clickhouse::ClientOptions;
@@ -27,8 +29,8 @@ using column_date_time = clickhouse::ColumnDateTime;
 using column_array = clickhouse::ColumnArray;
 using column_decimal = clickhouse::ColumnDecimal;
 
-}  // namespace ck
+} // namespace ck
 
-}  // namespace libcpp
+} // namespace libcpp
 
 #endif

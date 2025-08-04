@@ -68,4 +68,4 @@
 
 // } // namespace libcpp
 
-#endif  // FIX_HPP
+#endif // FIX_HPP

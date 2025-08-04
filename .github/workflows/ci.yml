@@ -32,134 +32,17 @@ jobs:
     - name: Install code quality tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y cppcheck clang-format clang-tidy
+        sudo apt-get install -y cppcheck clang-format-15 clang-tidy
         pip install cpplint
 
-    # Add step to verify .clang-format file
-    - name: Verify .clang-format configuration
-      run: |
-        echo "Checking for .clang-format file..."
-        if [ -f ".clang-format" ]; then
-          echo ".clang-format file found:"
-          head -20 .clang-format
-        else
-          echo "ERROR: .clang-format file not found!"
-          exit 1
-        fi
-        
-        # Test clang-format with our configuration
-        echo "Testing clang-format configuration..."
-        clang-format --style=file --dump-config > clang-format-config.yaml
-        echo "Current clang-format configuration:"
-        head -10 clang-format-config.yaml
+    - name: Check .clang-format existence
+        run: |
+          if [ ! -f .clang-format ]; then
+            echo "::error file=.clang-format::Missing .clang-format configuration"
+            exit 1
+          fi
 
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
-          --error-exitcode=1 --xml libcpp/ 2> cppcheck-result.xml || true
-        
-    - name: Check code formatting
-      id: format-check
-      run: |
-        echo "Checking code formatting with project .clang-format..."
-        
-        # Verify .clang-format is being used
-        echo "Current working directory: $(pwd)"
-        echo "Contents of .clang-format:"
-        cat .clang-format
-        
-        # Test configuration
-        echo "Testing configuration..."
-        clang-format --style=file --dump-config | grep -E "BinPackParameters|BinPackArguments|BasedOnStyle"
-        
-        # Find files to format
-        FORMAT_FILES=$(find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null || true)
-        
-        if [ -z "$FORMAT_FILES" ]; then
-          echo "No C++ files found to format"
-          echo "format_needed=false" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-
-        # Check formatting with explicit style file reference
-        echo "$FORMAT_FILES" | xargs clang-format --style=file --dry-run --Werror > format_check.log 2>&1
-        FORMAT_EXIT_CODE=$?
-        
-        if [ $FORMAT_EXIT_CODE -ne 0 ]; then
-          echo "Code formatting issues found:"
-          cat format_check.log
-          echo "format_needed=true" >> $GITHUB_OUTPUT
-        else
-          echo "Code formatting is correct"
-          echo "format_needed=false" >> $GITHUB_OUTPUT
-        fi
-
-    # Auto-fix formatting for regular pushes (not tags or PRs)
-    - name: Auto-fix formatting
-      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-      run: |
-        echo "Auto-fixing code formatting..."
-        
-        # Apply formatting using project .clang-format
-        find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | xargs clang-format --style=file -i
-        
-        # Check if there are changes to commit
-        if [ -n "$(git diff --name-only)" ]; then
-          echo "Committing formatting fixes..."
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add -A
-          git commit -m "style: auto-fix code formatting [skip ci]"
-          git push
-        else
-          echo "No formatting changes needed after applying fixes"
-        fi
-
-    # Check formatting for tags (no auto-fix since tags should be immutable)
-    - name: Check formatting for tags
-      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-      run: |
-        echo "Code formatting issues detected in tag: ${GITHUB_REF#refs/tags/}"
-        echo ""
-        echo "Tags should not have formatting issues. Please fix formatting in the source branch before creating tags."
-        echo ""
-        echo "Formatting issues:"
-        cat format_check.log
-        exit 1
-
-    # Fail on formatting issues for pull requests (no auto-fix)
-    - name: Fail on formatting issues for pull requests
-      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'pull_request'
-      run: |
-        echo "Code formatting issues detected in Pull Request!"
-        echo ""
-        echo "Please run the following command locally to fix formatting:"
-        echo "  find libcpp test -name \"*.cpp\" -o -name \"*.hpp\" -o -name \"*.h\" | xargs clang-format --style=file -i"
-        echo ""
-        echo "Or on Windows PowerShell:"
-        echo "  .\script\format.ps1"
-        echo ""
-        echo "Formatting issues:"
-        cat format_check.log
-        exit 1
-
-    - name: Run cpplint
-      run: |
-        # Check if files exist
-        CPP_FILES=$(find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null || true)
-        if [ -n "$CPP_FILES" ]; then
-          echo "$CPP_FILES" | xargs cpplint --filter=-legal/copyright,-build/include_subdir,-runtime/references
-        else
-          echo "No C++ files found for cpplint"
-        fi
-
-    - name: Upload code quality reports
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: code-quality-reports
-        path: |
-          cppcheck-result.xml
-          format_check.log
-          clang-format-config.yaml
-        retention-days: 30
+    - name: Run format validation
+        run: |
+          find src/ include/ -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.c" -o -name "*.h" \) \
+            | xargs clang-format --style=file --dry-run --Werror

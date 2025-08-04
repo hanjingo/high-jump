@@ -16,7 +16,7 @@ option(BUILD_EXAMPLE "Build the example application" OFF)
 # import vcpkg module
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     if(DEFINED ENV{VCPKG_ROOT})
-        set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+        set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/script/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
         message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
     endif()
 endif()

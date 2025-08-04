@@ -30,6 +30,27 @@ cpp library framework implementationed by c++17.
 ---
 
 
+## Rules
+
+1. for warning model, run: 
+
+```sh
+.\script\setup-hooks.ps1 -Mode warning
+```
+
+or
+
+```sh
+
+```
+
+2. for strict model, run:
+
+```sh
+.\script\setup-hooks.ps1 -Mode strict
+```
+
+
 
 ## Build
 
@@ -78,7 +99,7 @@ cmake .. -DBUILD_TEST=ON
 or
 
 ```sh
-cmake .. -DBUILD_TEST=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake -DASAN=ON
+cmake .. -DBUILD_TEST=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/script/buildsystems/vcpkg.cmake -DASAN=ON
 ```
 
 | option     | default | description                     |

@@ -22,6 +22,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -39,15 +40,101 @@ jobs:
         cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
           --error-exitcode=1 --xml libcpp/ 2> cppcheck-result.xml || true
         
-    - name: Run clang-format check
+    - name: Check code formatting
+      id: format-check
       run: |
-        find libcpp test -name "*.cpp" -o -name "*.hpp" | \
-        xargs clang-format --dry-run --Werror
+        echo "Checking code formatting..."
+        
+        # Find files to format
+        FORMAT_FILES=$(find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null || true)
+        
+        if [ -z "$FORMAT_FILES" ]; then
+          echo "No C++ files found to format"
+          echo "format_needed=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Check if formatting is needed
+        echo "$FORMAT_FILES" | xargs clang-format --dry-run --Werror > format_check.log 2>&1
+        FORMAT_EXIT_CODE=$?
+        
+        if [ $FORMAT_EXIT_CODE -ne 0 ]; then
+          echo "Code formatting issues found:"
+          cat format_check.log
+          echo "format_needed=true" >> $GITHUB_OUTPUT
+        else
+          echo "Code formatting is correct"
+          echo "format_needed=false" >> $GITHUB_OUTPUT
+        fi
+
+    # Auto-fix formatting for all specified branches on push events
+    - name: Auto-fix code formatting
+      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'push' && contains(fromJSON('["refs/heads/master", "refs/heads/main", "refs/heads/dev", "refs/heads/v1.x", "refs/heads/cicd-test"]'), github.ref)
+      run: |
+        echo "Auto-fixing code formatting for branch: ${GITHUB_REF#refs/heads/}"
+        
+        # Configure Git user information
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Apply code formatting
+        find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | xargs clang-format -i
+        
+        # Check if there are any changes
+        if git diff --quiet; then
+          echo "No formatting changes needed after all"
+        else
+          echo "Committing formatting fixes..."
+          git add -A
+          git commit -m "Auto-fix code formatting [skip ci]
+
+          - Fixed formatting issues detected by CI
+          - Branch: ${GITHUB_REF#refs/heads/}
+          - Commit: ${{ github.sha }}"
+          
+          echo "Pushing formatting fixes..."
+          git push
+          
+          echo "Code formatting fixes committed and pushed successfully"
+        fi
+
+    # Check formatting for tags (no auto-fix since tags should be immutable)
+    - name: Check formatting for tags
+      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "Code formatting issues detected in tag: ${GITHUB_REF#refs/tags/}"
+        echo ""
+        echo "Tags should not have formatting issues. Please fix formatting in the source branch before creating tags."
+        echo ""
+        echo "Formatting issues:"
+        cat format_check.log
+        exit 1
+
+    # Fail on formatting issues for pull requests (no auto-fix)
+    - name: Fail on formatting issues for pull requests
+      if: steps.format-check.outputs.format_needed == 'true' && github.event_name == 'pull_request'
+      run: |
+        echo "Code formatting issues detected in Pull Request!"
+        echo ""
+        echo "Please run the following command locally to fix formatting:"
+        echo "  find libcpp test -name \"*.cpp\" -o -name \"*.hpp\" -o -name \"*.h\" | xargs clang-format -i"
+        echo ""
+        echo "Or on Windows PowerShell:"
+        echo "  .\script\format.ps1"
+        echo ""
+        echo "Formatting issues:"
+        cat format_check.log
+        exit 1
 
     - name: Run cpplint
       run: |
-        find libcpp test -name "*.cpp" -o -name "*.hpp" | \
-        xargs cpplint --filter=-legal/copyright,-build/include_subdir
+        # Check if files exist
+        CPP_FILES=$(find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null || true)
+        if [ -n "$CPP_FILES" ]; then
+          echo "$CPP_FILES" | xargs cpplint --filter=-legal/copyright,-build/include_subdir,-runtime/references
+        else
+          echo "No C++ files found for cpplint"
+        fi
 
     - name: Upload code quality reports
       uses: actions/upload-artifact@v4
@@ -56,4 +143,5 @@ jobs:
         name: code-quality-reports
         path: |
           cppcheck-result.xml
+          format_check.log
         retention-days: 30

@@ -63,6 +63,15 @@ jobs:
       run: |
         echo "Checking code formatting with project .clang-format..."
         
+        # Verify .clang-format is being used
+        echo "Current working directory: $(pwd)"
+        echo "Contents of .clang-format:"
+        cat .clang-format
+        
+        # Test configuration
+        echo "Testing configuration..."
+        clang-format --style=file --dump-config | grep -E "BinPackParameters|BinPackArguments|BasedOnStyle"
+        
         # Find files to format
         FORMAT_FILES=$(find libcpp test -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null || true)
         
@@ -72,7 +81,7 @@ jobs:
           exit 0
         fi
 
-        # Check if formatting is needed using --style=file to use .clang-format
+        # Check formatting with explicit style file reference
         echo "$FORMAT_FILES" | xargs clang-format --style=file --dry-run --Werror > format_check.log 2>&1
         FORMAT_EXIT_CODE=$?
         

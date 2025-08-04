@@ -30,26 +30,16 @@ cpp library framework implementationed by c++17.
 ---
 
 
-## Rules
+## Development Rules
 
-1. for warning model, run: 
+1. **Code Formatting**: Format code style before commit:
 
-```sh
-.\script\setup-hooks.ps1 -Mode warning
+```powershell
+# Format all files
+.\script\format.ps1
 ```
 
-or
-
-```sh
-
-```
-
-2. for strict model, run:
-
-```sh
-.\script\setup-hooks.ps1 -Mode strict
-```
-
+2. **CI/CD**: The pipeline automatically checks and fixes formatting for main branches.
 
 
 ## Build

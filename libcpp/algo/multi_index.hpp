@@ -100,32 +100,44 @@ using multi_index = boost::multi_index::multi_index_container<
 
 #define LIBCPP_INDEX_TAGS_1(_1) LIBCPP_INDEX_TAG(_1)
 
-#define LIBCPP_INDEX_TAGS_2(_1, _2) LIBCPP_INDEX_TAG(_1) LIBCPP_INDEX_TAG(_2)
+#define LIBCPP_INDEX_TAGS_2(_1, _2) \
+    LIBCPP_INDEX_TAG(_1)            \
+    LIBCPP_INDEX_TAG(_2)
 
 #define LIBCPP_INDEX_TAGS_3(_1, _2, _3) \
-    LIBCPP_INDEX_TAG(_1) LIBCPP_INDEX_TAG(_2) LIBCPP_INDEX_TAG(_3)
+    LIBCPP_INDEX_TAG(_1)                \
+    LIBCPP_INDEX_TAG(_2)                \
+    LIBCPP_INDEX_TAG(_3)
 
 #define LIBCPP_INDEX_TAGS_4(_1, _2, _3, _4) \
     LIBCPP_INDEX_TAG(_1)                    \
-    LIBCPP_INDEX_TAG(_2) LIBCPP_INDEX_TAG(_3) LIBCPP_INDEX_TAG(_4)
+    LIBCPP_INDEX_TAG(_2)                    \
+    LIBCPP_INDEX_TAG(_3)                    \
+    LIBCPP_INDEX_TAG(_4)
 
 #define LIBCPP_INDEX_TAGS_5(_1, _2, _3, _4, _5) \
     LIBCPP_INDEX_TAG(_1)                        \
     LIBCPP_INDEX_TAG(_2)                        \
-    LIBCPP_INDEX_TAG(_3) LIBCPP_INDEX_TAG(_4) LIBCPP_INDEX_TAG(_5)
+    LIBCPP_INDEX_TAG(_3)                        \
+    LIBCPP_INDEX_TAG(_4)                        \
+    LIBCPP_INDEX_TAG(_5)
 
 #define LIBCPP_INDEX_TAGS_6(_1, _2, _3, _4, _5, _6) \
     LIBCPP_INDEX_TAG(_1)                            \
     LIBCPP_INDEX_TAG(_2)                            \
     LIBCPP_INDEX_TAG(_3)                            \
-    LIBCPP_INDEX_TAG(_4) LIBCPP_INDEX_TAG(_5) LIBCPP_INDEX_TAG(_6)
+    LIBCPP_INDEX_TAG(_4)                            \
+    LIBCPP_INDEX_TAG(_5)                            \
+    LIBCPP_INDEX_TAG(_6)
 
 #define LIBCPP_INDEX_TAGS_7(_1, _2, _3, _4, _5, _6, _7) \
     LIBCPP_INDEX_TAG(_1)                                \
     LIBCPP_INDEX_TAG(_2)                                \
     LIBCPP_INDEX_TAG(_3)                                \
     LIBCPP_INDEX_TAG(_4)                                \
-    LIBCPP_INDEX_TAG(_5) LIBCPP_INDEX_TAG(_6) LIBCPP_INDEX_TAG(_7)
+    LIBCPP_INDEX_TAG(_5)                                \
+    LIBCPP_INDEX_TAG(_6)                                \
+    LIBCPP_INDEX_TAG(_7)
 
 #define LIBCPP_INDEX_TAGS_8(_1, _2, _3, _4, _5, _6, _7, _8) \
     LIBCPP_INDEX_TAG(_1)                                    \
@@ -133,7 +145,9 @@ using multi_index = boost::multi_index::multi_index_container<
     LIBCPP_INDEX_TAG(_3)                                    \
     LIBCPP_INDEX_TAG(_4)                                    \
     LIBCPP_INDEX_TAG(_5)                                    \
-    LIBCPP_INDEX_TAG(_6) LIBCPP_INDEX_TAG(_7) LIBCPP_INDEX_TAG(_8)
+    LIBCPP_INDEX_TAG(_6)                                    \
+    LIBCPP_INDEX_TAG(_7)                                    \
+    LIBCPP_INDEX_TAG(_8)
 
 #define LIBCPP_INDEX_TAGS_9(_1, _2, _3, _4, _5, _6, _7, _8, _9) \
     LIBCPP_INDEX_TAG(_1)                                        \
@@ -142,7 +156,9 @@ using multi_index = boost::multi_index::multi_index_container<
     LIBCPP_INDEX_TAG(_4)                                        \
     LIBCPP_INDEX_TAG(_5)                                        \
     LIBCPP_INDEX_TAG(_6)                                        \
-    LIBCPP_INDEX_TAG(_7) LIBCPP_INDEX_TAG(_8) LIBCPP_INDEX_TAG(_9)
+    LIBCPP_INDEX_TAG(_7)                                        \
+    LIBCPP_INDEX_TAG(_8)                                        \
+    LIBCPP_INDEX_TAG(_9)
 
 #define LIBCPP_INDEX_TAGS_10(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
     LIBCPP_INDEX_TAG(_1)                                              \
@@ -152,7 +168,9 @@ using multi_index = boost::multi_index::multi_index_container<
     LIBCPP_INDEX_TAG(_5)                                              \
     LIBCPP_INDEX_TAG(_6)                                              \
     LIBCPP_INDEX_TAG(_7)                                              \
-    LIBCPP_INDEX_TAG(_8) LIBCPP_INDEX_TAG(_9) LIBCPP_INDEX_TAG(_10)
+    LIBCPP_INDEX_TAG(_8)                                              \
+    LIBCPP_INDEX_TAG(_9)                                              \
+    LIBCPP_INDEX_TAG(_10)
 
 #define LIBCPP_GET_MAKE_TAGS_MACRO(_1,   \
                                    _2,   \

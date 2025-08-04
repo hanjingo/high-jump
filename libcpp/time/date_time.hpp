@@ -153,6 +153,7 @@ class date_time
         tm_{boost::posix_time::from_time_t (time)
             + boost::posix_time::time_duration (0, 0, 0, int64_t (ms) * 1000)} {
         };
+
     date_time (unsigned short year,
                unsigned short month,
                unsigned short day,

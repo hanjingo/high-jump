@@ -41,12 +41,12 @@ jobs:
         
     - name: Run clang-format check
       run: |
-        find libcpp tests -name "*.cpp" -o -name "*.hpp" | \
+        find libcpp test -name "*.cpp" -o -name "*.hpp" | \
         xargs clang-format --dry-run --Werror
 
     - name: Run cpplint
       run: |
-        find libcpp tests -name "*.cpp" -o -name "*.hpp" | \
+        find libcpp test -name "*.cpp" -o -name "*.hpp" | \
         xargs cpplint --filter=-legal/copyright,-build/include_subdir
 
     - name: Upload code quality reports

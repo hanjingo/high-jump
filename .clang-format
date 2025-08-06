@@ -1,0 +1,141 @@
+---
+# Allman Style Configuration for libcpp project
+Language: Cpp
+Standard: c++17
+BasedOnStyle: None
+
+# Basic formatting settings
+DisableFormat: true
+# IndentWidth: 4
+# TabWidth: 4
+# UseTab: Never
+# ColumnLimit: 80
+# AccessModifierOffset: -4
+
+# # Allman style bracing - key characteristic
+# BreakBeforeBraces: Allman
+# BraceWrapping:
+#   AfterCaseLabel: true
+#   AfterClass: true
+#   AfterControlStatement: Always
+#   AfterEnum: true
+#   AfterFunction: true
+#   AfterNamespace: true
+#   AfterObjCDeclaration: true
+#   AfterStruct: true
+#   AfterUnion: true
+#   AfterExternBlock: true
+#   BeforeCatch: true
+#   BeforeElse: true
+#   BeforeLambdaBody: true
+#   BeforeWhile: true
+#   IndentBraces: false
+#   SplitEmptyFunction: true
+#   SplitEmptyRecord: true
+#   SplitEmptyNamespace: true
+
+# # Function parameter settings
+# BinPackArguments: true
+# BinPackParameters: true
+# AllowAllParametersOfDeclarationOnNextLine: true
+# AllowAllArgumentsOnNextLine: true
+
+# # Alignment settings
+# AlignAfterOpenBracket: Align
+# AlignArrayOfStructures: None
+# AlignConsecutiveAssignments: None
+# AlignConsecutiveBitFields: None
+# AlignConsecutiveDeclarations: None
+# AlignConsecutiveMacros: None
+# AlignOperands: Align
+# AlignTrailingComments: true
+
+# # Spacing - Allman style preferences
+# SpaceAfterCStyleCast: true
+# SpaceAfterLogicalNot: false
+# SpaceAfterTemplateKeyword: true
+# SpaceBeforeAssignmentOperators: true
+# SpaceBeforeCaseColon: false
+# SpaceBeforeCpp11BracedList: false
+# SpaceBeforeCtorInitializerColon: true
+# SpaceBeforeInheritanceColon: true
+# SpaceBeforeParens: ControlStatements
+# SpaceBeforeRangeBasedForLoopColon: true
+# SpaceBeforeSquareBrackets: false
+# SpaceInEmptyBlock: false
+# SpaceInEmptyParentheses: false
+# SpacesBeforeTrailingComments: 1
+# SpacesInAngles: Never
+# SpacesInConditionalStatement: false
+# SpacesInContainerLiterals: true
+# SpacesInCStyleCastParentheses: false
+# SpacesInParentheses: false
+# SpacesInSquareBrackets: false
+
+# # Short constructs - Allman typically prefers expanded format
+# AllowShortBlocksOnASingleLine: Never
+# AllowShortCaseLabelsOnASingleLine: false
+# AllowShortFunctionsOnASingleLine: None
+# AllowShortIfStatementsOnASingleLine: Never
+# AllowShortLambdasOnASingleLine: None
+# AllowShortLoopsOnASingleLine: false
+
+# # Return type and template declarations
+# AlwaysBreakAfterDefinitionReturnType: None
+# AlwaysBreakAfterReturnType: None
+# AlwaysBreakBeforeMultilineStrings: false
+# AlwaysBreakTemplateDeclarations: Yes
+
+# # Line breaking
+# BreakBeforeBinaryOperators: None
+# BreakBeforeConceptDeclarations: true
+# BreakBeforeTernaryOperators: true
+# BreakConstructorInitializers: BeforeColon
+# BreakInheritanceList: BeforeColon
+# BreakStringLiterals: true
+
+# # Constructor and initializer formatting
+# ConstructorInitializerIndentWidth: 4
+# ContinuationIndentWidth: 4
+# PackConstructorInitializers: Never
+
+# # Pointer and reference alignment
+# PointerAlignment: Left
+# ReferenceAlignment: Pointer
+
+# # Indentation settings
+# IndentCaseLabels: true
+# IndentCaseBlocks: false
+# IndentGotoLabels: true
+# IndentPPDirectives: None
+# IndentExternBlock: AfterExternBlock
+# IndentRequiresClause: true
+# IndentWrappedFunctionNames: false
+
+# # Include sorting
+# SortIncludes: CaseSensitive
+# IncludeBlocks: Preserve
+
+# # Comments
+# ReflowComments: true
+# FixNamespaceComments: true
+
+# # Empty lines
+# MaxEmptyLinesToKeep: 2
+# KeepEmptyLinesAtTheStartOfBlocks: true
+
+# # Standards
+# 
+
+# # Penalties to discourage unwanted line breaks
+# PenaltyBreakAssignment: 2
+# PenaltyBreakBeforeFirstCallParameter: 19
+# PenaltyBreakComment: 300
+# PenaltyBreakFirstLessLess: 120
+# PenaltyBreakString: 1000
+# PenaltyBreakTemplateDeclaration: 10
+# PenaltyExcessCharacter: 1000000
+# PenaltyReturnTypeOnItsOwnLine: 60
+
+# # Other settings
+# SortUsingDeclarations: true

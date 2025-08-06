@@ -3,6 +3,8 @@
     "behaviortree-cpp",
     "benchmark",
     "bext-sml",
+    "boost-math",
+    "boost-algorithm",
     "boost-asio",
     "boost-circular-buffer",
     "boost-filesystem",
@@ -219,6 +221,14 @@
     },
     {
       "name": "boost-multi-index",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-math",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-algorithm",
       "version": "1.76.0"
     }
   ]

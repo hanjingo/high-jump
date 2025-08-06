@@ -1,0 +1,282 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, main, dev, v1.x, cicd, cicd-test ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ================================ Code Quality Checks ================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Setup LLVM 20.x (for clang-format only)
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: "20"
+        directory: ${{ runner.temp }}/llvm
+
+    - name: Add LLVM to PATH
+      run: |
+        echo "${{ runner.temp }}/llvm/bin" >> $GITHUB_PATH
+        
+    - name: Install other tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck
+        pip install cpplint
+
+    - name: Verify tool versions
+      run: |
+        echo "=== Tool Versions ==="
+        clang-format --version
+        cppcheck --version
+        cpplint --version || echo "cpplint version check not available"
+        echo "====================="
+
+    - name: Run cppcheck
+      run: |
+        echo "Running cppcheck static analysis..."
+        cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
+          --error-exitcode=1 --xml libcpp/ 2> cppcheck-result.xml || true
+        
+    - name: Run clang-format check
+      run: |
+        echo "Checking code formatting with clang-format..."
+        find libcpp -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+        xargs clang-format --style=file --dry-run --Werror
+
+    - name: Upload code quality reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: code-quality-reports
+        path: |
+          cppcheck-result.xml
+        retention-days: 30
+
+  # ================================ Build(Linux) ================================
+  build-linux:
+    name: Build and Test (Linux)
+    runs-on: ubuntu-22.04
+    needs: code-quality
+    strategy:
+      matrix:
+        build_type: [Release]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Free disk space
+      run: |
+        echo "=== Initial disk usage ==="
+        df -h
+        echo "=========================="
+        
+        # Remove unnecessary packages to free up space
+        sudo apt-get remove -y \
+          firefox \
+          google-chrome-stable \
+          microsoft-edge-stable \
+          mysql-server* \
+          postgresql* \
+          mongodb* \
+          dotnet* \
+          powershell \
+          azure-cli \
+          google-cloud-sdk
+        
+        # Clean package cache
+        sudo apt-get autoremove -y
+        sudo apt-get autoclean
+        
+        # Remove snap packages
+        sudo snap remove lxd --purge || true
+        sudo snap remove core18 --purge || true
+        sudo snap remove core20 --purge || true
+        sudo snap remove snapd --purge || true
+        
+        # Remove Docker images
+        docker system prune -af || true
+        
+        echo "=== After cleanup disk usage ==="
+        df -h
+        echo "================================="
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          pkg-config \
+          curl \
+          zip \
+          unzip \
+          tar \
+          git \
+          autoconf \
+          libtool \
+          autoconf-archive \
+          automake \
+          software-properties-common \
+          libudev-dev \
+          libx11-dev \
+          libxtst-dev \
+          libxrandr-dev \
+          libxinerama-dev \
+          libxcursor-dev \
+          libxi-dev \
+          libxext-dev \
+          libxfixes-dev \
+          libxdamage-dev \
+          libxcomposite-dev \
+          libxrender-dev \
+          libxss-dev \
+          libxmu-dev \
+          libxpm-dev \
+          libxaw7-dev \
+          libatk1.0-dev \
+          libatk-bridge2.0-dev \
+          libatspi2.0-dev
+
+    - name: Setup virtual display
+      run: |
+        export DISPLAY=:99.0
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        echo "DISPLAY=:99.0" >> $GITHUB_ENV
+
+    - name: Install GCC 11
+      run: |
+        # install GCC 11
+        sudo apt-get install -y gcc-11 g++-11
+        
+        # link GCC 11
+        sudo ln -sf /usr/bin/gcc-11 /usr/local/bin/gcc
+        sudo ln -sf /usr/bin/g++-11 /usr/local/bin/g++
+        
+        # add to PATH
+        echo "/usr/local/bin" >> $GITHUB_PATH
+
+    - name: Verify build tools
+      run: |
+        echo "=== Build Tools ==="
+        which cmake
+        cmake --version
+        echo ""
+        echo "Ninja check:"
+        which ninja
+        ninja --version
+        echo ""
+        echo "Compiler check:"
+        which gcc-11
+        gcc-11 --version
+        which g++-11
+        g++-11 --version
+        echo ""
+        echo "GCC version details:"
+        gcc --version
+        g++ --version
+        echo "==================="
+
+    - name: Setup vcpkg (Git)
+      run: |
+        echo "Installing vcpkg from Git..."
+        cd ${{ github.workspace }}
+        git clone https://github.com/Microsoft/vcpkg.git --depth 1
+        cd vcpkg
+        ./bootstrap-vcpkg.sh
+        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
+        echo "${{ github.workspace }}/vcpkg" >> $GITHUB_PATH
+        
+        # Configure vcpkg to use binary caching and reduce build artifacts
+        export VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
+        echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
+
+    - name: Verify vcpkg installation
+      run: |
+        echo "=== vcpkg Information ==="
+        echo "VCPKG_ROOT: $VCPKG_ROOT"
+        $VCPKG_ROOT/vcpkg version
+        echo "========================="
+
+    - name: Configure CMake
+      env:
+        CC: gcc-11
+        CXX: g++-11
+        CMAKE_MAKE_PROGRAM: /usr/bin/ninja
+        VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      run: |
+        echo "=== Pre-configure disk usage ==="
+        df -h
+        echo "================================="
+        
+        export PATH="/usr/local/bin:/usr/bin:$PATH"
+        NINJA_PATH=$(which ninja)
+        echo "Using ninja at: $NINJA_PATH"
+        
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TEST=ON \
+          -DBUILD_LIB=OFF \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DASAN=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }} \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DCMAKE_C_COMPILER=gcc-11 \
+          -DCMAKE_CXX_COMPILER=g++-11 \
+          -DCMAKE_MAKE_PROGRAM=$NINJA_PATH
+        
+        echo "=== Post-configure disk usage ==="
+        df -h
+        echo "=================================="
+
+    - name: Build
+      run: |
+        echo "=== Pre-build disk usage ==="
+        df -h
+        echo "============================="
+        
+        cmake --build build --config ${{ matrix.build_type }} --parallel $(nproc)
+        
+        echo "=== Post-build disk usage ==="
+        df -h
+        echo "=============================="
+
+    - name: Run tests
+      working-directory: build
+      run: |
+        ctest --output-on-failure --parallel $(nproc) -C ${{ matrix.build_type }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: build-logs-linux-gcc11-${{ matrix.build_type }}
+        path: |
+          build/CMakeFiles/CMakeOutput.log
+          build/CMakeFiles/CMakeError.log
+          build/compile_commands.json
+          build/vcpkg-manifest-install.log
+        retention-days: 7

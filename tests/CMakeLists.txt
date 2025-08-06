@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(tests)
 
+option(COVERAGE "Enable code coverage support" OFF)
+
 # utf-8 support
 if (MSVC)
     add_compile_options(/utf-8)
@@ -12,12 +14,28 @@ if (NOT EXECUTABLE_OUTPUT_PATH)
     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
 
-# set windows version macro
+# windows specific settings
 if (WIN32)
-    add_definitions(-D_WIN32_WINNT=0x0A00) # Windows 10
+    add_definitions(
+        -DWIN32_LEAN_AND_MEAN
+        -DNOMINMAX
+        -D_WIN32_WINNT=0x0A00     # Windows 10
+        -D_WINSOCK_DEPRECATED_NO_WARNINGS
+    )
 endif()
 
 enable_testing()
+
+if(COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
+    add_link_options(--coverage -fprofile-arcs -ftest-coverage)
+    
+    # Find gcov
+    find_program(GCOV_PATH gcov)
+    if(NOT GCOV_PATH)
+        message(WARNING "gcov not found! Coverage reports will not be generated.")
+    endif()
+endif()
 
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)

@@ -3,6 +3,8 @@
 
 #include <libcpp/algo/algo.hpp>
 
+#include <libcpp/compress/compress.hpp>
+
 #include <libcpp/crypto/crypto.hpp>
 
 #include <libcpp/db/db.hpp>

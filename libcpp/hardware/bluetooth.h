@@ -65,12 +65,8 @@ static bool default_bluetooth_device_filter(const bluetooth_info_t* device)
     return false;
 }
 
-// ----------------------------- Bluetooth API define ------------------------------------
-void bluetooth_device_range(bluetooth_device_range_fn fn, bluetooth_device_filter_fn filter);
-int bluetooth_device_count(bluetooth_device_filter_fn filter);
-
-// ----------------------------- Bluetooth API implement ------------------------------------
-void bluetooth_device_range(bluetooth_device_range_fn fn, bluetooth_device_filter_fn filter)
+// --------------------------------- Bluetooth API ----------------------------------------
+static void bluetooth_device_range(bluetooth_device_range_fn fn, bluetooth_device_filter_fn filter)
 {
     if (!fn)
         return;
@@ -91,7 +87,7 @@ void bluetooth_device_range(bluetooth_device_range_fn fn, bluetooth_device_filte
     hid_free_enumeration(head);
 }
 
-int bluetooth_device_count(bluetooth_device_filter_fn filter)
+static int bluetooth_device_count(bluetooth_device_filter_fn filter)
 {
     bluetooth_info_t* head = hid_enumerate(0x00, 0x00);
     if (!head)

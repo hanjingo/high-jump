@@ -26,25 +26,25 @@ public:
     // template<typename T>
     // static T copy()
     // {
-
+    //  TODO
     // }
 
     // template<typename T>
     // static T clone()
     // {
-
+    //  TODO
     // }
 
     // template <typename T>
     // unsigned char* serialize()
     // {
-
+    //  TODO
     // }
 
     // template <typename T>
     // T unserialize(const unsigned char* buf)
     // {
-
+    //  TODO
     // }
 
     template<typename T1, typename T2>
@@ -90,6 +90,8 @@ public:
                std::is_same<T1, T4>::value && std::is_same<T1, T5>::value &&
                std::is_same<T1, T6>::value && std::is_same<T1, T7>::value;
     }
+
+    // TODO offset_of, size_of, align_of
 };
 
 }

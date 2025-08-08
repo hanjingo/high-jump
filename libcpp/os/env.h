@@ -114,4 +114,6 @@ inline const char* _COMPILE_TIME() {
 #endif
 
 
+// TODO sysconf,fpathconf,pathconf: os resources limit
+
 #endif

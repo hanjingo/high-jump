@@ -44,7 +44,8 @@
     "grpc",
     "hffix",
     "libpqxx",
-    "libnice"
+    "libnice",
+    "libiconv"
   ],
   "overrides": [
     {
@@ -154,6 +155,10 @@
     {
       "name": "libnice",
       "version": "0.1.22"
+    },
+    {
+      "name": "libiconv",
+      "version": "1.18#1"
     },
     {
       "name": "zstd",

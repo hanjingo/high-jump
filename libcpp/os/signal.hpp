@@ -53,14 +53,14 @@ static std::function<void(sig_t)> _sigcatch(sig_t sig, const std::function<void(
     return old;  
 }  
 
-static bool sigcatch(  
-    const std::initializer_list<sig_t>& sigs,   
-    const std::function<void(sig_t)>& cb,   
-    const bool one_shoot = false)  
+static bool sigcatch(const std::initializer_list<sig_t>& sigs,
+                     const std::function<void(sig_t)>& cb,
+                     const bool one_shoot = false)  
 {  
-    for (sig_t sig : sigs) {  
-        std::function<void(sig_t)> copy_cb = cb;  
-        _sigcatch(sig, std::move(cb), one_shoot);  
+    for (sig_t sig : sigs) 
+    {  
+        std::function<void(sig_t)> copy_cb = cb;
+        _sigcatch(sig, std::move(copy_cb), one_shoot);
     }  
     return true;  
 }  

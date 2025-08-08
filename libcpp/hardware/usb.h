@@ -42,15 +42,9 @@ static bool default_usb_device_filter(const usb_info_t* device)
     return false;
 }
 
-/* ----------------------------- USB API define ------------------------------------ */
-void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter);
-int usb_device_count(usb_device_filter_fn filter);
-
-/* ----------------------------- USB API implement ------------------------------------ */
-void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter)
+// ----------------------------- USB API ------------------------------------
+static void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter)
 {
-    usb_info_t* info;
-
     if (!fn)
         return;
 
@@ -58,7 +52,8 @@ void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter)
     if (!head)
         return;
 
-    for (usb_info_t* info = head; info; info = info->next) 
+    usb_info_t* info;
+    for (info = head; info; info = info->next) 
     {
         if (filter && !filter(info))
             continue;
@@ -70,14 +65,15 @@ void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter)
     hid_free_enumeration(head);
 }
 
-int usb_device_count(usb_device_filter_fn filter)
+static int usb_device_count(usb_device_filter_fn filter)
 {
     usb_info_t* head = hid_enumerate(0x00, 0x00);
     if (!head)
         return 0;
 
     int count = 0;
-    for (usb_info_t* info = head; info; info = info->next) 
+    usb_info_t* info;
+    for (info = head; info; info = info->next) 
     {
         if (filter && !filter(info)) 
             continue;

@@ -15,6 +15,8 @@
 
 #include <libcpp/types/reflect.hpp>
 
+#include <libcpp/types/result.hpp>
+
 #include <libcpp/types/singleton.hpp>
 
 #include <libcpp/types/string_view.hpp>

@@ -2,35 +2,45 @@
 #include <libcpp/os/kernel.h>
 #include <string>
 
-using libcpp::kernel;
-
-TEST(KernelTest, Name) {
-    std::string n = kernel::name();
-    EXPECT_FALSE(n.empty());
-    EXPECT_TRUE(n == "Linux" || n == "Darwin" || n == "Windows" || n == "Unknown");
+TEST(kernel, kernel_name) 
+{
+    const char* name = kernel_name();
+    EXPECT_TRUE(strcmp(name, "Linux") == 0 ||
+                strcmp(name, "Darwin") == 0 ||
+                strcmp(name, "Windows") == 0 ||
+                strcmp(name, "Unknown") == 0);
 }
 
-TEST(KernelTest, Version) {
-    std::string v = kernel::version();
-    EXPECT_FALSE(v.empty());
-    EXPECT_NE(v, "Unknown");
+TEST(kernel, kernel_version) 
+{
+    char version[128];
+    const char* v = kernel_version(version, sizeof(version));
+    EXPECT_FALSE(v == nullptr);
+    EXPECT_FALSE(std::string(v).empty());
 }
 
-TEST(KernelTest, Arch) {
-    std::string a = kernel::arch();
-    EXPECT_FALSE(a.empty());
-    EXPECT_NE(a, "Unknown");
-}
-
-TEST(KernelTest, CpuCount) {
-    int count = kernel::cpu_count();
-    EXPECT_GT(count, 0);
-    EXPECT_LT(count, 1024);
-}
-
-TEST(KernelTest, Uptime) {
-    uint64_t up = kernel::uptime();
+TEST(kernel, kernel_uptime) 
+{
+    uint64_t up = kernel_uptime();
     // Uptime may be zero on some platforms, but should not be negative
     EXPECT_GE(up, 0);
+
+    char buffer[64];
+    const char* uptime_str = kernel_uptime_str(buffer, sizeof(buffer), "%llu days, %llu hours, %llu minutes, %llu seconds");
+    EXPECT_FALSE(uptime_str == nullptr);
 }
 
+TEST(kernel, kernel_info)
+{
+    kernel_info_t info;
+    EXPECT_TRUE(kernel_info(&info)) << "kernel_info should succeed";
+    EXPECT_GT(strlen(info.name), 0) << "Name should not be empty";
+    EXPECT_GT(strlen(info.version), 0) << "Version should not be empty";
+    EXPECT_GE(info.uptime_seconds, 0) << "Uptime should not be negative";
+    EXPECT_EQ(info.name[sizeof(info.name) - 1], '\0') 
+        << "Name should be null-terminated";
+    EXPECT_EQ(info.version[sizeof(info.version) - 1], '\0') 
+        << "Version should be null-terminated";
+    
+    EXPECT_FALSE(kernel_info(nullptr)) << "kernel_info should fail with null pointer";
+}

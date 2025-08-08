@@ -18,10 +18,7 @@ extern "C" {
     #define CRC32_ALGO CRC32_ISO_HDLC
 #endif
 
-/* ----------------------------- CRC32 API define ------------------------------------ */
-uint32_t crc32(const void* buf, const size_t len, const uint32_t start);
-
-/* ----------------------------- CRC32 API implement ------------------------------------ */
+/* ----------------------------- CRC32 API ------------------------------------ */
 #if CRC32_ALGO == CRC32_ISO_HDLC
 /* 
  * CRC32 implementation according to ISO/IEC 3309 standards.
@@ -73,7 +70,7 @@ static const uint32_t crc32_table[256] = {
     0xBDBDF21CL, 0xCABAC28AL,  0x53B39330L, 0x24B4A3A6L, 0xBAD03605L, 0xCDD70693L,  0x54DE5729L, 0x23D967BF,
     0xB3667A2EL, 0xC4614AB8L,  0x5D681B02L, 0x2A6F2B94L, 0xB40BBE37L, 0xC30C8EA1L,  0x5A05DF1BL, 0x2D02EF8D
 };
-uint32_t crc32(const void* buf, const size_t len, const uint32_t start) 
+static uint32_t crc32(const void* buf, const size_t len, const uint32_t start) 
 {
     if (!buf && len > 0)
         return start;

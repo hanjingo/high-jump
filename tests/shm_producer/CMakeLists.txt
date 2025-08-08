@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(shm_producer)
 
+if (WIN32)
+    add_definitions(
+        -DWIN32_LEAN_AND_MEAN
+        -DNOMINMAX
+        -D_WINSOCK_DEPRECATED_NO_WARNINGS
+    )
+endif()
+
 find_package(Boost REQUIRED COMPONENTS
     program_options
 )

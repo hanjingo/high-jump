@@ -27,6 +27,4 @@
 
 #include <libcpp/algo/uuid.hpp>
 
-#include <libcpp/algo/zip.hpp>
-
 #endif // ALGO_HPP

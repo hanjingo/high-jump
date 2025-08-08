@@ -3,6 +3,8 @@
 
 #include <libcpp/util/defer.hpp>
 
+#include <libcpp/util/i18n.hpp>
+
 #include <libcpp/util/init.hpp>
 
 #include <libcpp/util/multiplexer.hpp>

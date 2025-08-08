@@ -28,27 +28,27 @@ static inline void rom_init(rom_t* rom) {
     }
 }
 
-/* ----------------------------- API define ------------------------------------ */
-bool rom_load(rom_t* rom, const char* filename);
-size_t rom_read(const rom_t* rom, size_t offset, void* buf, size_t len);
-void rom_free(rom_t* rom);
-
-/* ----------------------------- implement ------------------------------------ */
-// Load ROM data from file
-bool rom_load(rom_t* rom, const char* filename) 
+// ----------------------------- ROM API define ------------------------------------
+static bool rom_load(rom_t* rom, const char* filename) 
 {
-    if (!rom || !filename) return false;
+    if (!rom || !filename) 
+        return false;
+
     FILE* fp = fopen(filename, "rb");
-    if (!fp) return false;
+    if (!fp) 
+        return false;
+        
     fseek(fp, 0, SEEK_END);
     size_t sz = ftell(fp);
     fseek(fp, 0, SEEK_SET);
     void* buf = malloc(sz);
-    if (!buf) {
+    if (!buf) 
+    {
         fclose(fp);
         return false;
     }
-    if (fread(buf, 1, sz, fp) != sz) {
+    if (fread(buf, 1, sz, fp) != sz) 
+    {
         free(buf);
         fclose(fp);
         return false;
@@ -60,12 +60,14 @@ bool rom_load(rom_t* rom, const char* filename)
     return true;
 }
 
-// Read data from ROM
-// Returns number of bytes read
-size_t rom_read(const rom_t* rom, size_t offset, void* buf, size_t len) 
+static size_t rom_read(const rom_t* rom, size_t offset, void* buf, size_t len) 
 {
-    if (!rom || !rom->loaded || !buf) return 0;
-    if (offset >= rom->size) return 0;
+    if (!rom || !rom->loaded || !buf) 
+        return 0;
+
+    if (offset >= rom->size) 
+        return 0;
+
     size_t to_read = len;
     if (offset + len > rom->size)
         to_read = rom->size - offset;
@@ -73,15 +75,15 @@ size_t rom_read(const rom_t* rom, size_t offset, void* buf, size_t len)
     return to_read;
 }
 
-// Free ROM resources
-void rom_free(rom_t* rom) 
+static void rom_free(rom_t* rom) 
 {
-    if (rom && rom->data) {
-        free(rom->data);
-        rom->data = NULL;
-        rom->size = 0;
-        rom->loaded = false;
-    }
+    if (!rom || !rom->data) 
+        return;
+
+    free(rom->data);
+    rom->data = NULL;
+    rom->size = 0;
+    rom->loaded = false;
 }
 
 #ifdef __cplusplus

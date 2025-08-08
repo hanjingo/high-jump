@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/testing/result.hpp>
+#include <libcpp/types/result.hpp>
 
 enum error1 : int 
 {

@@ -35,23 +35,8 @@
 extern "C" {
 #endif
 
-// ----------------------------- API define ------------------------------------
-unsigned int cpu_core_num(void);
-bool cpu_core_bind(const unsigned int core);
-void cpu_core_list(unsigned int* buf, unsigned int* len);
-uint32_t cpu_id(void);
-void cpu_pause(void);
-void cpu_nop(void);
-void cpu_delay(uint64_t cycles);
-void cpu_cache_flush(const void* addr);
-void cpu_prefetch_read(const void* addr);
-void cpu_prefetch_write(const void* addr);
-uint64_t cpu_tsc_read(void);
-uint64_t cpu_tscp_read(uint32_t* aux);
-uint64_t cpu_pmu_cycle_counter_read(void);
-
-// ------------------------ API implementation ---------------------------------
-unsigned int cpu_core_num(void)
+// ------------------------ CPU API ---------------------------------
+static unsigned int cpu_core_num(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     SYSTEM_INFO sysinfo;
@@ -81,10 +66,11 @@ unsigned int cpu_core_num(void)
 
 #else
     return 1;
+
 #endif
 }
 
-bool cpu_core_bind(const unsigned int core)
+static bool cpu_core_bind(const unsigned int core)
 {
 #if defined(_WIN32) || defined(_WIN64)
     HANDLE hThread = GetCurrentThread();
@@ -104,12 +90,14 @@ bool cpu_core_bind(const unsigned int core)
 #else
     (void)core;
     return false;
+
 #endif
 }
 
-void cpu_core_list(unsigned int* buf, unsigned int* len)
+static void cpu_core_list(unsigned int* buf, unsigned int* len)
 {
-    if (!buf || !len) {
+    if (!buf || !len) 
+    {
         if (len) *len = 0;
         return;
     }
@@ -180,7 +168,6 @@ void cpu_core_list(unsigned int* buf, unsigned int* len)
     int nm[2];
     size_t len_cpu = sizeof(unsigned int);
     unsigned int ncpu = 0;
-    
     nm[0] = CTL_HW; 
     nm[1] = HW_NCPU;
     if (sysctl(nm, 2, &ncpu, &len_cpu, NULL, 0) != 0 || ncpu == 0) 
@@ -204,7 +191,7 @@ void cpu_core_list(unsigned int* buf, unsigned int* len)
 #endif
 }
 
-uint32_t cpu_id(void)
+static uint32_t cpu_id(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     return GetCurrentProcessorNumber();
@@ -259,7 +246,7 @@ uint32_t cpu_id(void)
 #endif
 }
 
-void cpu_pause(void)
+static void cpu_pause(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     #if defined(_M_IX86) || defined(_M_X64)
@@ -280,7 +267,7 @@ void cpu_pause(void)
 #endif
 }
 
-void cpu_nop(void)
+static void cpu_nop(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     #if defined(_M_IX86) || defined(_M_X64)
@@ -304,13 +291,13 @@ void cpu_nop(void)
 #endif
 }
 
-void cpu_delay(uint64_t cycles)
+static void cpu_delay(uint64_t cycles)
 {
-    if (cycles == 0) return;
+    if (cycles == 0) 
+        return;
 
 #if defined(_WIN32) || defined(_WIN64)
     LARGE_INTEGER frequency, start, current;
-    
     if (QueryPerformanceFrequency(&frequency) && QueryPerformanceCounter(&start)) 
     {
         // if cpu frequency is 3GHz, 1 cycle is about 0.33 nanoseconds
@@ -340,9 +327,7 @@ void cpu_delay(uint64_t cycles)
     }
 
 #elif defined(__linux__) || defined(__APPLE__)
-    
     struct timespec start, current;
-    
     if (clock_gettime(CLOCK_MONOTONIC, &start) == 0) 
     {
         uint64_t target_nanoseconds = (cycles * 1000) / 3000;
@@ -361,7 +346,6 @@ void cpu_delay(uint64_t cycles)
             cpu_pause();
             clock_gettime(CLOCK_MONOTONIC, &current);
         } while (current.tv_sec < target_sec || (current.tv_sec == target_sec && (uint64_t)current.tv_nsec < target_ns));
-        
     } 
     else 
     {
@@ -378,7 +362,6 @@ void cpu_delay(uint64_t cycles)
     }
 
 #else
-
     volatile uint64_t i;
     for (i = 0; i < cycles; ++i)
         cpu_nop();
@@ -386,7 +369,7 @@ void cpu_delay(uint64_t cycles)
 #endif
 }
 
-void cpu_cache_flush(const void* addr)
+static void cpu_cache_flush(const void* addr)
 {
     if (!addr) 
         return;
@@ -428,9 +411,10 @@ void cpu_cache_flush(const void* addr)
 #endif
 }
 
-void cpu_prefetch_read(const void* addr)
+static void cpu_prefetch_read(const void* addr)
 {
-    if (!addr) return;
+    if (!addr) 
+        return;
 
 #if defined(_WIN32) || defined(_WIN64)
     #if defined(_M_IX86) || defined(_M_X64)
@@ -443,16 +427,15 @@ void cpu_prefetch_read(const void* addr)
     __builtin_prefetch(addr, 0, 3);
 
 #else
-    {
-        volatile const char* ptr = (const char*)addr;
-        (void)*ptr;
-    }
+    volatile const char* ptr = (const char*)addr;
+    (void)*ptr;
 #endif
 }
 
-void cpu_prefetch_write(const void* addr)
+static void cpu_prefetch_write(const void* addr)
 {
-    if (!addr) return;
+    if (!addr) 
+        return;
 
 #if defined(_WIN32) || defined(_WIN64)
     #if defined(_M_IX86) || defined(_M_X64)
@@ -465,14 +448,13 @@ void cpu_prefetch_write(const void* addr)
     __builtin_prefetch(addr, 1, 3);
 
 #else
-    {
-        volatile char* ptr = (char*)addr;
-        *ptr = *ptr;
-    }
+    volatile char* ptr = (char*)addr;
+    *ptr = *ptr;
+
 #endif
 }
 
-uint64_t cpu_tsc_read(void)
+static uint64_t cpu_tsc_read(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     #if defined(_M_IX86) || defined(_M_X64)
@@ -490,50 +472,43 @@ uint64_t cpu_tsc_read(void)
         #if defined(__i386__) || defined(__x86_64__)
             return __builtin_ia32_rdtsc();
         #else
-            {
-                struct timespec ts;
-                if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0)
-                    return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
-
-                return 0;
-            }
-        #endif
-    #else
-        {
             struct timespec ts;
             if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0)
                 return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 
             return 0;
-        }
+        #endif
+    #else
+        struct timespec ts;
+        if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0)
+            return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+
+        return 0;
     #endif
 
 #elif defined(__APPLE__)
     return mach_absolute_time();
 
 #else
-    {
-        clock_t c = clock();
-        return (uint64_t)c;
-    }
+    clock_t c = clock();
+    return (uint64_t)c;
 
 #endif
 }
 
-uint64_t cpu_tscp_read(uint32_t* aux)
+static uint64_t cpu_tscp_read(uint32_t* aux)
 {
 #if defined(_WIN32) || defined(_WIN64)
+    // win + x86/x64
     #if defined(_M_IX86) || defined(_M_X64)
-        if (aux) 
-        {
-            return __rdtscp(aux);
-        }
-        else 
+        if (!aux) 
         {
             uint32_t dummy;
             return __rdtscp(&dummy);
         }
 
+        return __rdtscp(aux);
+    // win + other arch
     #else
         if (aux) 
             *aux = GetCurrentProcessorNumber();
@@ -543,15 +518,15 @@ uint64_t cpu_tscp_read(uint32_t* aux)
 
 #elif defined(__linux__)
     #if defined(__GNUC__) || defined(__clang__)
+        // Linux + x86/x64
         #if defined(__i386__) || defined(__x86_64__)
-            {
-                uint32_t lo, hi, cpu_id;
-                __asm__ volatile("rdtscp" : "=a"(lo), "=d"(hi), "=c"(cpu_id) :: "memory");
-                if (aux)
-                    *aux = cpu_id;
+            uint32_t lo, hi, cpu_id;
+            __asm__ volatile("rdtscp" : "=a"(lo), "=d"(hi), "=c"(cpu_id) :: "memory");
+            if (aux)
+                *aux = cpu_id;
 
-                return ((uint64_t)hi << 32) | lo;
-            }
+            return ((uint64_t)hi << 32) | lo;
+        // Linux + other arch
         #else
             if (aux) 
                 *aux = cpu_id();
@@ -579,9 +554,10 @@ uint64_t cpu_tscp_read(uint32_t* aux)
 #endif
 }
 
-uint64_t cpu_pmu_cycle_counter_read(void)
+static uint64_t cpu_pmu_cycle_counter_read(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
+    // win + x86/x64
     #if defined(_M_IX86) || defined(_M_X64)
         return __rdtsc();
     #else
@@ -594,25 +570,23 @@ uint64_t cpu_pmu_cycle_counter_read(void)
 
 #elif defined(__linux__)
     #if defined(__i386__) || defined(__x86_64__)
+        // Linux + x86/x64
         #if defined(__GNUC__) || defined(__clang__)
             return __builtin_ia32_rdtsc();
+        // Linux + other arch
         #else
-            {
-                struct timespec ts;
-                if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0) 
-                    return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
-
-                return 0;
-            }
-        #endif
-    #else
-        {
             struct timespec ts;
             if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0) 
                 return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
 
             return 0;
-        }
+        #endif
+    #else
+        struct timespec ts;
+        if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0) 
+            return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+
+        return 0;
     #endif
 
 #elif defined(__APPLE__)

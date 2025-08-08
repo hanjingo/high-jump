@@ -123,9 +123,11 @@ jobs:
         df -h
         echo "================================="
 
-    - name: Install system dependencies
+    - name: Install system dependencies and DPDK
       run: |
         sudo apt-get update
+        
+        # Install basic build dependencies
         sudo apt-get install -y \
           build-essential \
           cmake \
@@ -160,6 +162,96 @@ jobs:
           libatk1.0-dev \
           libatk-bridge2.0-dev \
           libatspi2.0-dev
+        
+        # Install DPDK dependencies
+        sudo apt-get install -y \
+          python3-pyelftools \
+          libnuma-dev \
+          libpcap-dev \
+          rdma-core \
+          libibverbs-dev \
+          librdmacm-dev \
+          libmlx4-dev \
+          libmlx5-dev \
+          meson \
+          python3-pip \
+          python3-setuptools \
+          libssl-dev \
+          zlib1g-dev \
+          libbsd-dev \
+          libjansson-dev \
+          libbpf-dev
+        
+        # Install Python packages needed for DPDK
+        pip3 install pyelftools meson ninja
+        
+        echo "=== System dependencies installed ==="
+        echo "Meson version: $(meson --version)"
+        echo "Python3 version: $(python3 --version)"
+
+    - name: Build and Install DPDK
+      run: |
+        echo "=== Building DPDK from source ==="
+        cd /tmp
+        
+        # Download DPDK LTS version
+        wget -q https://fast.dpdk.org/rel/dpdk-22.11.4.tar.xz
+        tar xf dpdk-22.11.4.tar.xz
+        cd dpdk-22.11.4
+        
+        # Configure build with minimal drivers to save space and time
+        meson setup build \
+          -Dplatform=generic \
+          -Dcpu_instruction_set=corei7 \
+          -Ddisable_drivers=crypto/*,compress/*,vdpa/*,regex/* \
+          -Denable_drivers=net/ring,net/null,mempool/ring,mempool/stack \
+          -Dexamples= \
+          -Dtests=false \
+          -Ddisable_libs=flow_classify,pipeline,port,table,fib,rib,graph,node,dmadev \
+          -Dwerror=false \
+          --prefix=/usr/local \
+          --libdir=lib \
+          --buildtype=release
+        
+        # Build DPDK
+        cd build
+        ninja -j$(nproc)
+        
+        # Install DPDK
+        sudo ninja install
+        
+        # Update library cache
+        sudo ldconfig
+        
+        echo "=== DPDK installation completed ==="
+        pkg-config --modversion libdpdk || echo "DPDK pkg-config not found"
+        ls -la /usr/local/lib/libdpdk* || echo "DPDK libraries not found in expected location"
+        
+        # Create pkg-config file if it doesn't exist
+        if [ ! -f "/usr/local/lib/pkgconfig/libdpdk.pc" ]; then
+          echo "Creating DPDK pkg-config file..."
+          sudo mkdir -p /usr/local/lib/pkgconfig
+          sudo tee /usr/local/lib/pkgconfig/libdpdk.pc > /dev/null <<EOF
+        prefix=/usr/local
+        exec_prefix=\${prefix}
+        libdir=\${prefix}/lib
+        includedir=\${prefix}/include
+        
+        Name: DPDK
+        Description: Data Plane Development Kit
+        Version: 22.11.4
+        Libs: -L\${libdir} -ldpdk
+        Cflags: -I\${includedir}/dpdk
+        EOF
+        fi
+        
+        # Update PKG_CONFIG_PATH
+        echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:\$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+        
+        echo "=== Verifying DPDK installation ==="
+        pkg-config --exists libdpdk && echo "DPDK pkg-config found" || echo "DPDK pkg-config NOT found"
+        pkg-config --modversion libdpdk || echo "Could not get DPDK version"
 
     - name: Setup virtual display
       run: |
@@ -198,6 +290,13 @@ jobs:
         echo "GCC version details:"
         gcc --version
         g++ --version
+        echo ""
+        echo "=== DPDK Verification ==="
+        export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+        pkg-config --exists libdpdk && echo "✓ DPDK pkg-config found" || echo "✗ DPDK pkg-config NOT found"
+        pkg-config --modversion libdpdk 2>/dev/null || echo "Could not get DPDK version"
+        pkg-config --libs libdpdk 2>/dev/null || echo "Could not get DPDK libs"
+        pkg-config --cflags libdpdk 2>/dev/null || echo "Could not get DPDK cflags"
         echo "==================="
 
     - name: Setup vcpkg (Git)
@@ -227,14 +326,20 @@ jobs:
         CXX: g++-11
         CMAKE_MAKE_PROGRAM: /usr/bin/ninja
         VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+        PKG_CONFIG_PATH: "/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
       run: |
         echo "=== Pre-configure disk usage ==="
         df -h
         echo "================================="
         
         export PATH="/usr/local/bin:/usr/bin:$PATH"
+        export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
         NINJA_PATH=$(which ninja)
         echo "Using ninja at: $NINJA_PATH"
+        
+        # Verify DPDK is available before configuring
+        echo "=== Final DPDK check before CMake ==="
+        pkg-config --exists libdpdk && echo "✓ DPDK available" || echo "✗ DPDK not available"
         
         cmake -B build \
           -G Ninja \
@@ -246,7 +351,8 @@ jobs:
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
           -DCMAKE_C_COMPILER=gcc-11 \
           -DCMAKE_CXX_COMPILER=g++-11 \
-          -DCMAKE_MAKE_PROGRAM=$NINJA_PATH
+          -DCMAKE_MAKE_PROGRAM=$NINJA_PATH \
+          -DENABLE_DPDK=ON
         
         echo "=== Post-configure disk usage ==="
         df -h

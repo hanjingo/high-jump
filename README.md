@@ -10,17 +10,18 @@ cpp library framework implementationed by c++17.
 
 | module   | description                                                  |
 | -------- | ------------------------------------------------------------ |
-| binding  | -                                                            |
+| algo     | -                                                            |
+| compress | -                                                            |
+| crypto   | -                                                            |
 | db       | -                                                            |
 | encoding | The module includes functions for processing **hex**, **xml**, and other formats. |
-| file     | The module includes functions for processing **files**, **paths**, and other related operations. |
+| hardware | -                                                            |
 | io       | The module includes functions for processing **tasks** and other related operations. |
 | log      | This module encapsulates the **spdlog** project.             |
 | math     | This module provides support for **matrix** operations and other related functionalities. |
 | misc     | This module includes miscellaneous components, such as **error codes**, **callback hash tables**, and others. |
 | net      | This module provides support for **TCP**, **ZeroMQ,** and other related functionalities. |
 | os       | -                                                            |
-| strings  | This module provides support for **character** and **text**-related operations. |
 | sync     | This module provides some thread-safe functions and data structures, including **chan**, **once**, **safe list**, and others. |
 | testing  | This module encapsulates **Google Test**, **Google breakpad**. |
 | time     | This module includes functions for handling **date** and **time** operations. |
@@ -131,3 +132,4 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - hffix: https://jamesdbrock.github.io/hffix
 - libpqxx: https://pqxx.org/libpqxx/
 - libnice: https://nice.freedesktop.org
+- libiconv: https://www.gnu.org/software/libiconv/

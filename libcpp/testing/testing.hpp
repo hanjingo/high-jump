@@ -9,8 +9,6 @@
 
 #include <libcpp/testing/exception.hpp>
 
-#include <libcpp/testing/result.hpp>
-
 #include <libcpp/testing/stacktrace.hpp>
 
 #include <libcpp/testing/unit_test.hpp>

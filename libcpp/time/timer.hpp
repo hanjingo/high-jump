@@ -1,3 +1,8 @@
+// for more information, please see:
+// https://blog.51cto.com/u_15346415/5109520
+// https://blog.51cto.com/u_15346415/5109505
+// https://blog.51cto.com/u_15346415/5109502
+// https://blog.51cto.com/u_15346415/5109245
 #ifndef TIMER_HPP
 #define TIMER_HPP
 

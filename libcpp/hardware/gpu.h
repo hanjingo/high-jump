@@ -73,62 +73,7 @@ typedef struct {
 typedef bool (*gpu_device_callback_t)(const gpu_device_info_t* info, void* user_data);
 typedef void (*gpu_error_callback_t)(const char* error_msg, void* user_data);
 
-// ----------------------------- gpu API define ------------------------------------
-// platform info
-bool is_opencl_available(void);
-bool is_cuda_available(void);
-
-// device info
-int gpu_count(void);
-int gpu_device_get(gpu_device_info_t** infos, int* count);
-void gpu_device_foreach(gpu_device_callback_t callback, void* user_data);
-
-// free gpu resources
-int gpu_buffer_free(gpu_buffer_t* buffer);
-int gpu_device_free(gpu_device_info_t* infos, int count);
-int gpu_context_free(gpu_context_t* ctx);
-int gpu_program_free(gpu_program_t* program);
-
-// init context
-bool gpu_context_create(gpu_context_t* ctx, const gpu_device_info_t* device_info);
-
-// build program
-bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, char* log, unsigned long* log_sz, const char* source);
-// bool gpu_create_program_from_file(gpu_program_t* program, gpu_context_t* ctx, const char* filename);
-
-// kernel
-bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name);
-
-// malloc gpu memory
-bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
-bool gpu_malloc_read_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
-bool gpu_malloc_write_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size);
-bool gpu_malloc_pinned(gpu_buffer_t* buffer, size_t size);
-bool gpu_malloc_unified(gpu_buffer_t* buffer, size_t size);
-
-// copy gpu memory
-bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx);
-bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
-bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
-bool gpu_memcpy_to_device_async(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx);
-bool gpu_memcpy_from_device_async(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
-bool gpu_memcpy_device_to_device_async(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx);
-
-// set kernel arg
-bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, const void* arg_value);
-bool gpu_set_kernel_arg_buffer(gpu_program_t* program, int arg_index, const gpu_buffer_t* buffer);
-
-// exec kernel
-bool gpu_execute_kernel_1d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size, size_t local_work_size);
-bool gpu_execute_kernel_2d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[2], size_t local_work_size[2]);
-bool gpu_execute_kernel_3d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[3], size_t local_work_size[3]);
-
-// sync run
-bool gpu_sync(gpu_context_t* ctx);
-
-
-// ----------------------------- gpu API implement ------------------------------------
-
+// ------------------------- GPU API ---------------------------------------
 static int _gpu_get_devices_by_opencl(gpu_device_info_t** infos, int* count) 
 {
 #ifdef OPENCL_ENABLE
@@ -252,7 +197,7 @@ static int _gpu_get_devices_by_cuda(gpu_device_info_t** infos, int* count)
     return 0;
 }
 
-bool is_opencl_available(void)
+static bool is_opencl_available(void)
 {
 #ifdef OPENCL_ENABLE
     cl_uint num_platforms = 0;
@@ -263,7 +208,7 @@ bool is_opencl_available(void)
     return false;
 }
 
-bool is_cuda_available(void)
+static bool is_cuda_available(void)
 {
 #ifdef CUDA_ENABLE
     int device_count = 0;
@@ -274,7 +219,7 @@ bool is_cuda_available(void)
     return false;
 }
 
-int gpu_count(void) 
+static int gpu_count(void) 
 {
     int total_count = 0;
     
@@ -309,7 +254,7 @@ int gpu_count(void)
     return total_count;
 }
 
-int gpu_device_get(gpu_device_info_t** infos, int* count) 
+static int gpu_device_get(gpu_device_info_t** infos, int* count) 
 {
     if (!infos || !count) 
         return -1;
@@ -353,7 +298,22 @@ int gpu_device_get(gpu_device_info_t** infos, int* count)
     return 0;
 }
 
-void gpu_device_foreach(gpu_device_callback_t callback, void* user_data) 
+static int gpu_device_free(gpu_device_info_t* infos, int count) 
+{
+    if (!infos) 
+        return -1;
+    
+    for (int i = 0; i < count; i++) 
+    {
+        if (infos[i].id) 
+            free(infos[i].id);
+    }
+    
+    free(infos);
+    return 0;
+}
+
+static void gpu_device_foreach(gpu_device_callback_t callback, void* user_data) 
 {
     if (!callback) 
         return;
@@ -372,13 +332,12 @@ void gpu_device_foreach(gpu_device_callback_t callback, void* user_data)
     gpu_device_free(infos, count);
 }
 
-bool gpu_context_create(gpu_context_t* ctx, const gpu_device_info_t* device_info)
+static bool gpu_context_create(gpu_context_t* ctx, const gpu_device_info_t* device_info)
 {
     if (!ctx) 
         return false;
 
     memset(ctx, 0, sizeof(gpu_context_t));
-
 #ifdef OPENCL_ENABLE
     cl_int err;
     cl_device_id device;
@@ -443,22 +402,7 @@ bool gpu_context_create(gpu_context_t* ctx, const gpu_device_info_t* device_info
     return false;
 }
 
-int gpu_device_free(gpu_device_info_t* infos, int count) 
-{
-    if (!infos) 
-        return -1;
-    
-    for (int i = 0; i < count; i++) 
-    {
-        if (infos[i].id) 
-            free(infos[i].id);
-    }
-    
-    free(infos);
-    return 0;
-}
-
-int gpu_buffer_free(gpu_buffer_t* buffer)
+static int gpu_buffer_free(gpu_buffer_t* buffer)
 {
     if (!buffer || !buffer->ptr) 
         return -1;
@@ -481,7 +425,7 @@ int gpu_buffer_free(gpu_buffer_t* buffer)
     return 0;
 }
 
-int gpu_context_free(gpu_context_t* ctx)
+static int gpu_context_free(gpu_context_t* ctx)
 {
     if (!ctx) 
         return -1;
@@ -506,7 +450,7 @@ int gpu_context_free(gpu_context_t* ctx)
     return 0;
 }
 
-int gpu_program_free(gpu_program_t* program)
+static int gpu_program_free(gpu_program_t* program)
 {
     if (!program)
         return -1;
@@ -528,13 +472,16 @@ int gpu_program_free(gpu_program_t* program)
     return 0;
 }
 
-bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, char* log, unsigned long* log_sz, const char* source)
+static bool gpu_program_create_from_source(gpu_program_t* program, 
+                                           gpu_context_t* ctx, 
+                                           char* log, 
+                                           unsigned long* log_sz, 
+                                           const char* source)
 {
     if (!program || !ctx || !source) 
         return false;
 
     memset(program, 0, sizeof(gpu_program_t));
-
 #ifdef OPENCL_ENABLE
     cl_int err;
     cl_context context = (cl_context)ctx->context;
@@ -560,7 +507,7 @@ bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, 
         clReleaseProgram(cl_prog);
         return false;
     }
-    
+
     *log_sz = 0;
     program->program = cl_prog;
     program->kernel = NULL;
@@ -580,7 +527,8 @@ bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, 
             size_t max_copy = (*log_sz > 0) ? *log_sz - 1 : 0;
             size_t copy_len = (error_len < max_copy) ? error_len : max_copy;
             
-            if (copy_len > 0) {
+            if (copy_len > 0) 
+            {
                 strncpy(log, error_string, copy_len);
                 log[copy_len] = '\0';
             }
@@ -604,7 +552,7 @@ bool gpu_program_create_from_source(gpu_program_t* program, gpu_context_t* ctx, 
     return false;
 }
 
-bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name)
+static bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name)
 {
     if (!program || !program->program || !kernel_name) 
         return false;
@@ -635,7 +583,7 @@ bool gpu_kernel_create(gpu_program_t* program, const char* kernel_name)
     return false;
 }
 
-bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
+static bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
 {
     if (!buffer || !ctx || size == 0) 
         return false;
@@ -669,13 +617,12 @@ bool gpu_malloc(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
     return false;
 }
 
-bool gpu_malloc_read_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
+static bool gpu_malloc_read_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
 {
     if (!buffer || !ctx || size == 0) 
         return false;
 
     memset(buffer, 0, sizeof(gpu_buffer_t));
-
 #ifdef OPENCL_ENABLE
     cl_int err;
     cl_context context = (cl_context)ctx->context;
@@ -704,7 +651,7 @@ bool gpu_malloc_read_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
     return false;
 }
 
-bool gpu_malloc_write_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
+static bool gpu_malloc_write_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size)
 {
     if (!buffer || !ctx || size == 0) 
         return false;
@@ -738,13 +685,12 @@ bool gpu_malloc_write_only(gpu_buffer_t* buffer, gpu_context_t* ctx, size_t size
     return false;
 }
 
-bool gpu_malloc_pinned(gpu_buffer_t* buffer, size_t size)
+static bool gpu_malloc_pinned(gpu_buffer_t* buffer, size_t size)
 {
     if (!buffer || size == 0) 
         return false;
 
     memset(buffer, 0, sizeof(gpu_buffer_t));
-
 #ifdef CUDA_ENABLE
     void* host_ptr = NULL;
     cudaError_t err = cudaMallocHost(&host_ptr, size);
@@ -759,13 +705,12 @@ bool gpu_malloc_pinned(gpu_buffer_t* buffer, size_t size)
     return true;
 }
 
-bool gpu_malloc_unified(gpu_buffer_t* buffer, size_t size)
+static bool gpu_malloc_unified(gpu_buffer_t* buffer, size_t size)
 {
     if (!buffer || size == 0) 
         return false;
 
     memset(buffer, 0, sizeof(gpu_buffer_t));
-    
 #ifdef CUDA_ENABLE
     void* unified_ptr = NULL;
     cudaError_t err = cudaMallocManaged(&unified_ptr, size);
@@ -780,7 +725,7 @@ bool gpu_malloc_unified(gpu_buffer_t* buffer, size_t size)
     return true;
 }
 
-bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx)
+static bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx)
 {
     if (!dst || !dst->ptr || !src || !ctx || size == 0) 
         return false;
@@ -816,7 +761,7 @@ bool gpu_memcpy_to_device(gpu_buffer_t* dst, const void* src, size_t size, gpu_c
     return false;
 }
 
-bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+static bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
 {
     if (!dst || !src || !src->ptr || !ctx || size == 0) 
         return false;
@@ -852,7 +797,7 @@ bool gpu_memcpy_from_device(void* dst, const gpu_buffer_t* src, size_t size, gpu
     return false;
 }
 
-bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+static bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
 {
     if (!dst || !dst->ptr || !src || !src->ptr || !ctx || size == 0) 
         return false;
@@ -893,7 +838,7 @@ bool gpu_memcpy_device_to_device(gpu_buffer_t* dst, const gpu_buffer_t* src, siz
     return false;
 }
 
-bool gpu_memcpy_to_device_async(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx)
+static bool gpu_memcpy_to_device_async(gpu_buffer_t* dst, const void* src, size_t size, gpu_context_t* ctx)
 {
     if (!dst || !dst->ptr || !src || !ctx || size == 0) 
         return false;
@@ -919,7 +864,7 @@ bool gpu_memcpy_to_device_async(gpu_buffer_t* dst, const void* src, size_t size,
     return false;
 }
 
-bool gpu_memcpy_from_device_async(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+static bool gpu_memcpy_from_device_async(void* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
 {
     if (!dst || !src || !src->ptr || !ctx || size == 0) 
         return false;
@@ -945,7 +890,7 @@ bool gpu_memcpy_from_device_async(void* dst, const gpu_buffer_t* src, size_t siz
     return false;
 }
 
-bool gpu_memcpy_device_to_device_async(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
+static bool gpu_memcpy_device_to_device_async(gpu_buffer_t* dst, const gpu_buffer_t* src, size_t size, gpu_context_t* ctx)
 {
     if (!dst || !dst->ptr || !src || !src->ptr || !ctx || size == 0) 
         return false;
@@ -970,7 +915,7 @@ bool gpu_memcpy_device_to_device_async(gpu_buffer_t* dst, const gpu_buffer_t* sr
     return false;
 }
 
-bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, const void* arg_value)
+static bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, const void* arg_value)
 {
     if (!program || !program->kernel || arg_index < 0) 
         return false;
@@ -1015,7 +960,7 @@ bool gpu_set_kernel_arg(gpu_program_t* program, int arg_index, size_t arg_size, 
     return false;
 }
 
-bool gpu_set_kernel_arg_buffer(gpu_program_t* program, int arg_index, const gpu_buffer_t* buffer)
+static bool gpu_set_kernel_arg_buffer(gpu_program_t* program, int arg_index, const gpu_buffer_t* buffer)
 {
     if (!program || !program->kernel || !buffer || !buffer->ptr || arg_index < 0) 
         return false;
@@ -1035,7 +980,7 @@ bool gpu_set_kernel_arg_buffer(gpu_program_t* program, int arg_index, const gpu_
     return false;
 }
 
-bool gpu_execute_kernel_1d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size, size_t local_work_size)
+static bool gpu_execute_kernel_1d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size, size_t local_work_size)
 {
     if (!program || !program->kernel || !ctx || global_work_size == 0) 
         return false;
@@ -1073,7 +1018,10 @@ bool gpu_execute_kernel_1d(gpu_program_t* program, gpu_context_t* ctx, size_t gl
     return false;
 }
 
-bool gpu_execute_kernel_2d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[2], size_t local_work_size[2])
+static bool gpu_execute_kernel_2d(gpu_program_t* program, 
+                                  gpu_context_t* ctx, 
+                                  size_t global_work_size[2], 
+                                  size_t local_work_size[2])
 {
     if (!program || !program->kernel || !ctx || !global_work_size || 
         global_work_size[0] == 0 || global_work_size[1] == 0) 
@@ -1118,7 +1066,10 @@ bool gpu_execute_kernel_2d(gpu_program_t* program, gpu_context_t* ctx, size_t gl
     return false;
 }
 
-bool gpu_execute_kernel_3d(gpu_program_t* program, gpu_context_t* ctx, size_t global_work_size[3], size_t local_work_size[3])
+static bool gpu_execute_kernel_3d(gpu_program_t* program, 
+                                  gpu_context_t* ctx, 
+                                  size_t global_work_size[3], 
+                                  size_t local_work_size[3])
 {
     if (!program || !program->kernel || !ctx || !global_work_size || 
         global_work_size[0] == 0 || global_work_size[1] == 0 || global_work_size[2] == 0) 
@@ -1165,7 +1116,7 @@ bool gpu_execute_kernel_3d(gpu_program_t* program, gpu_context_t* ctx, size_t gl
     return false;
 }
 
-bool gpu_sync(gpu_context_t* ctx)
+static bool gpu_sync(gpu_context_t* ctx)
 {
     if (!ctx) 
         return false;

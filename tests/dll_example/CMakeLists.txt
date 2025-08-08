@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.19.2)
 
 project(tests)
 
+if (WIN32)
+    add_definitions(
+        -DWIN32_LEAN_AND_MEAN
+        -DNOMINMAX
+        -D_WINSOCK_DEPRECATED_NO_WARNINGS
+    )
+endif()
+
 # set binary output path
 if (NOT LIBRARY_OUTPUT_PATH)
     set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)

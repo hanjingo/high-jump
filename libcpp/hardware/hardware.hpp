@@ -5,8 +5,6 @@
 
 #include <libcpp/hardware/camera.h>
 
-#include <libcpp/hardware/can.h>
-
 #include <libcpp/hardware/cpu.h>
 
 #include <libcpp/hardware/disk.h>

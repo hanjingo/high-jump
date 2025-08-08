@@ -20,10 +20,7 @@ extern "C" {
     #define CRC16_ALGO CRC16_MODBUS
 #endif
 
-/* ----------------------------- CRC16 API define ------------------------------------ */
-uint16_t crc16(const void* buf, const size_t len, const uint16_t start);
-
-/* ----------------------------- CRC16 API implement ------------------------------------ */
+/* ----------------------------- CRC16 API ------------------------------------ */
 #if CRC16_ALGO == CRC16_MODBUS
 /* 
  * CRC16 implementation according to MODBUS standards.
@@ -76,7 +73,7 @@ static uint16_t crc16_table[256] = {
     0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040
 };
 
-uint16_t crc16(const void* buf, const size_t len, const uint16_t start)
+static uint16_t crc16(const void* buf, const size_t len, const uint16_t start)
 {
     if (!buf && len > 0)
         return start;
@@ -150,7 +147,7 @@ uint16_t crc16(const void* buf, const size_t len, const uint16_t start)
     0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0
 };
 
-uint16_t crc16(const void* buf, const size_t len, const uint16_t start)
+static uint16_t crc16(const void* buf, const size_t len, const uint16_t start)
 {
     if (!buf && len > 0)
         return start;

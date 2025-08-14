@@ -1,6 +1,8 @@
 #ifndef HARDWARE_HPP
 #define HARDWARE_HPP
 
+#include <libcpp/hardware/bios.h>
+
 #include <libcpp/hardware/bluetooth.h>
 
 #include <libcpp/hardware/camera.h>
@@ -12,6 +14,8 @@
 #include <libcpp/hardware/dpdk.h>
 
 #include <libcpp/hardware/gpu.h>
+
+#include <libcpp/hardware/motherboard.h>
 
 #include <libcpp/hardware/nic.h>
 

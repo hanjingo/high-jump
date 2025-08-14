@@ -211,11 +211,6 @@ static disk_err_t disk_init(void)
 #endif
 }
 
-static void disk_cleanup(void)
-{
-    // TODO
-}
-
 static uint32_t disk_count(void)
 {
     uint32_t disk_count = 0;

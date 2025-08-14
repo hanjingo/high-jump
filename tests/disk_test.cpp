@@ -15,7 +15,6 @@ protected:
 
     void TearDown() override
     {
-        disk_cleanup();
     }
 };
 
@@ -29,10 +28,6 @@ TEST_F(DiskTest, initialization_and_cleanup)
     // Test multiple initializations (should be safe)
     EXPECT_EQ(disk_init(), DISK_SUCCESS)
         << "Multiple initialization should be safe";
-
-    // Test cleanup (should be safe to call multiple times)
-    disk_cleanup();
-    disk_cleanup(); // Should not crash
 
     // Re-initialize for other tests
     EXPECT_EQ(disk_init(), DISK_SUCCESS) << "Re-initialization should work";

@@ -59,6 +59,7 @@ find_package(ZLIB REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(cityhash REQUIRED)
 find_package(unofficial-libharu REQUIRED)
+find_package(ICU REQUIRED COMPONENTS uc i18n io)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -100,6 +101,7 @@ target_link_libraries(${PROJECT_NAME}
     ${SQLite3_LIBRARIES} 
     ${Eigen_LIBRARIES} 
     ${ODBC_LIBRARIES}
+    ${ICU_LIBRARIES}
     protobuf::libprotobuf
     pugixml
     BT::behaviortree_cpp

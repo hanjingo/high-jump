@@ -5,6 +5,8 @@
 
 #include <libcpp/encoding/hex.hpp>
 
+#include <libcpp/encoding/i18n.hpp>
+
 #include <libcpp/encoding/ini.hpp>
 
 #include <libcpp/encoding/json.hpp>

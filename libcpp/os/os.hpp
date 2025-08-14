@@ -1,7 +1,7 @@
 #ifndef OS_HPP
 #define OS_HPP
 
-#include <libcpp/os/application.hpp>
+#include <libcpp/os/options.hpp>
 
 #include <libcpp/os/asm.h>
 

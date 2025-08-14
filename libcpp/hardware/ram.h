@@ -825,3 +825,9 @@
 // #endif
 
 #endif // RAM_H
+
+
+    // ENV_RES_MEMORY_TOTAL,           // 总内存大小 (字节)
+    // ENV_RES_MEMORY_AVAILABLE,       // 可用内存大小 (字节)
+    // ENV_RES_MEMORY_PAGE_SIZE,       // 内存页大小 (字节)
+    // ENV_RES_OPEN_FILES_MAX,         // 最大打开文件数

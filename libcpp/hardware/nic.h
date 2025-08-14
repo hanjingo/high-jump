@@ -751,6 +751,11 @@
 // #endif
 // }
 
+// void nic_mac_addr(char* buf, const uint8_t* mac)
+// {
+//    TODO: implement this
+// }
+
 // #ifdef __cplusplus
 // }
 // #endif

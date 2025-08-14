@@ -1,7 +1,7 @@
 #include <iostream>
 #include <thread>
 #include <libcpp/sync/shared_memory.hpp>
-#include <libcpp/os/application.hpp>
+#include <libcpp/os/options.hpp>
 
 int main(int argc, char* argv[])
 {

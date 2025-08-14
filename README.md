@@ -133,3 +133,4 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - libpqxx: https://pqxx.org/libpqxx/
 - libnice: https://nice.freedesktop.org
 - libiconv: https://www.gnu.org/software/libiconv/
+- ICU: https://icu.unicode.org/home

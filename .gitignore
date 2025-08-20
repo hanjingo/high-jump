@@ -34,6 +34,7 @@
 
 # cmake
 build
+build-*
 bin
 bins
 lib
@@ -50,7 +51,9 @@ CMakeSettings.json
 .vs
 
 # vcpkg
+vcpkg
 vcpkg_installed
+tools/vcpkg
 
 # vim
 *.swo

@@ -17,12 +17,20 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
+#include <errno.h>
+#include <time.h>
 #elif defined(__APPLE__)
 #define DISK_PLATFORM_MACOS 1
+#include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
+#include <IOKit/storage/IOMedia.h>
 #include <IOKit/storage/IOBlockStorageDriver.h>
+#include <IOKit/IOBSD.h>
 #include <sys/disk.h>
 #include <sys/mount.h>
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>
 #else
 #define DISK_PLATFORM_UNKNOWN 1
 #endif
@@ -213,8 +221,8 @@ static disk_err_t disk_init(void)
 
 static uint32_t disk_count(void)
 {
-    uint32_t disk_count = 0;
 #if defined(DISK_PLATFORM_WINDOWS)
+    uint32_t disk_count = 0;
     DWORD drives = GetLogicalDrives();
     for (int i = 0; i < 26; i++)
     {
@@ -543,7 +551,7 @@ static disk_err_t disk_get_partition_by_mount(const char* mount_point, partition
         if (strcmp(mountpoint, mount_point) == 0)
         {
             strncpy(info->device_name, device, sizeof(info->device_name) - 1);
-            info->filesystem = filesystem_type_from_string(fstype);
+            info->filesystem = disk_filesystem_type_from_string(fstype);
             break;
         }
     }
@@ -559,7 +567,7 @@ static disk_err_t disk_get_partition_by_mount(const char* mount_point, partition
         info->read_only = (fs.f_flags & MNT_RDONLY) != 0;
 
         strncpy(info->device_name, fs.f_mntfromname, sizeof(info->device_name) - 1);
-        info->filesystem = filesystem_type_from_string(fs.f_fstypename);
+        info->filesystem = disk_filesystem_type_from_string(fs.f_fstypename);
     }
 
 #else
@@ -658,7 +666,7 @@ static bool disk_is_ready(const char* device_name)
     while ((disk_obj = IOIteratorNext(disk_list)) != 0)
     {
         CFTypeRef path_ref = IORegistryEntryCreateCFProperty(
-            disk_obj, CFSTR(kIOBSDNameKey), kCFAllocatorDefault, 0);
+            disk_obj, CFSTR("BSD Name"), kCFAllocatorDefault, 0);
         
         if (path_ref)
         {
@@ -668,7 +676,10 @@ static bool disk_is_ready(const char* device_name)
             char full_device_path[256];
             snprintf(full_device_path, sizeof(full_device_path), "/dev/%s", bsd_name);
             if (strcmp(device_name, bsd_name) != 0 && strcmp(device_name, full_device_path) != 0)
+            {
+                IOObjectRelease(disk_obj);
                 continue;
+            }
 
             CFTypeRef size_ref = IORegistryEntryCreateCFProperty(
                 disk_obj, CFSTR(kIOMediaSizeKey), kCFAllocatorDefault, 0);
@@ -733,7 +744,7 @@ static disk_err_t disk_enumerate(disk_info_t* disks, uint32_t max_disks, uint32_
         if (access(disk_patterns[i], F_OK) != 0)
             continue;
 
-        disk_err_t result = disk_get_info(disk_patterns[i], &disks[*actual_count]);
+        disk_err_t result = disk_info(disk_patterns[i], &disks[*actual_count]);
         if (result == DISK_SUCCESS)
             (*actual_count)++;
     }
@@ -741,7 +752,7 @@ static disk_err_t disk_enumerate(disk_info_t* disks, uint32_t max_disks, uint32_
 #elif defined(DISK_PLATFORM_MACOS)
     if (max_disks > 0)
     {
-        disk_err_t result = disk_get_info("/dev/disk0", &disks[0]);
+        disk_err_t result = disk_info("/dev/disk0", &disks[0]);
         if (result == DISK_SUCCESS)
             *actual_count = 1;
     }

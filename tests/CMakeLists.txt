@@ -70,10 +70,21 @@ find_package(Boost REQUIRED COMPONENTS
 find_package(OpenCL QUIET)
 find_package(CUDA QUIET)
 
-if (NOT WIN32)
-    # for dpdk
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(DPDK REQUIRED libdpdk)
+# DPDK support - optional and only on non-Windows platforms
+if(NOT WIN32)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(DPDK QUIET libdpdk)
+        if(DPDK_FOUND)
+            message(STATUS "DPDK found, enabling DPDK")
+        else()
+            message(WARNING "DPDK requested but not found")
+        endif()
+    else()
+        message(WARNING "PkgConfig not found, cannot search for DPDK")
+    endif()
+elseif(ENABLE_DPDK AND WIN32)
+    message(WARNING "DPDK is not supported on Windows, disabling DPDK support")
 endif()
 
 if(OpenCL_FOUND)
@@ -90,8 +101,8 @@ include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
 add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
 
-if (NOT WIN32)
-    # for dpdk
+# Add DPDK include directories if found
+if(DPDK_FOUND)
     target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
 endif()
 
@@ -138,15 +149,18 @@ else()
 
         hidapi::hidapi
 
-#       clickhouse-cpp
-        clickhouse-cpp-lib
-        lz4::lz4
-        zstd::libzstd
-        cityhash
-
-#       DPDK
-        ${DPDK_LIBRARIES}
+# #       clickhouse-cpp
+#         clickhouse-cpp-lib
+#         lz4::lz4
+#         zstd::libzstd
+#         cityhash
     )
+    
+    # Link DPDK libraries if found
+    if(DPDK_FOUND)
+        target_link_libraries(${PROJECT_NAME} ${DPDK_LIBRARIES})
+        message(STATUS "Linking DPDK libraries: ${DPDK_LIBRARIES}")
+    endif()
 endif()
 
 if(OpenCL_FOUND)

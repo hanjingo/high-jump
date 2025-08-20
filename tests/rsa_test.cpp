@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <libcpp/crypto/rsa.hpp>
 #include <libcpp/crypto/base64.hpp>
+#include <cstring>
 
 TEST(rsa, encode)
 {
@@ -52,7 +53,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     const int key_size = 64;
     std::vector<unsigned char> plain_data(key_size);
     std::string original_msg = "hello world";
-    std::memcpy(plain_data.data(), original_msg.data(), original_msg.size());
+    memcpy(plain_data.data(), original_msg.data(), original_msg.size());
     unsigned char encoded[4096];
     std::size_t encoded_len = 4096;
     ASSERT_EQ(libcpp::rsa::encode(encoded,
@@ -74,8 +75,8 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                                   libcpp::rsa::padding::no_padding), 
               true);
     ASSERT_EQ(decoded_len, key_size);
-    ASSERT_EQ(std::memcmp(decoded, plain_data.data(), key_size), 0);
-    ASSERT_EQ(std::memcmp(decoded, original_msg.data(), original_msg.size()), 0);
+    ASSERT_EQ(memcmp(decoded, plain_data.data(), key_size), 0);
+    ASSERT_EQ(memcmp(decoded, original_msg.data(), original_msg.size()), 0);
 
     // for stream test
     std::istringstream in(plain);

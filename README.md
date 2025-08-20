@@ -42,6 +42,14 @@ cpp library framework implementationed by c++17.
 | Clang    | 16              |
 | MSVC     | 2019            |
 
+for *nix/macos run cmd(if you have already installed this dependencies, skip it!):
+
+```sh
+python3 scripts/configure.py
+```
+
+### Install 3RD Library
+
 For vcpkg run cmd (reference from: https://learn.microsoft.com/zh-cn/vcpkg/consume/boost-versions):
 
 ```cmd

@@ -14,28 +14,31 @@ protected:
 
     void TearDown() override {
         opts.reset();
-        
         for (auto ptr : allocated_args) {
             delete[] ptr;
         }
-        allocated_args.clear();
+        // allocated_args.clear();
+        for (auto arr : allocated_argv_arrays) {
+            delete[] arr;
+        }
+        allocated_argv_arrays.clear();
     }
 
     char** create_argv(const std::vector<std::string>& args) {
         char** argv = new char*[args.size()];
-        allocated_args.clear();
-        
+        // allocated_args.clear();
         for (size_t i = 0; i < args.size(); ++i) {
             argv[i] = new char[args[i].length() + 1];
             std::strcpy(argv[i], args[i].c_str());
             allocated_args.push_back(argv[i]);
         }
-        
+        allocated_argv_arrays.push_back(argv); // 跟踪 argv 指针数组
         return argv;
     }
 
     std::unique_ptr<options> opts;
     std::vector<char*> allocated_args;
+    std::vector<char**> allocated_argv_arrays; // 新增
 };
 
 TEST_F(OptionsTest, ParseIntegerOption) {
@@ -46,8 +49,6 @@ TEST_F(OptionsTest, ParseIntegerOption) {
     
     int result = opts->parse<int>(static_cast<int>(args.size()), argv, "port");
     EXPECT_EQ(result, 9000);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseIntegerOptionWithDefault) {
@@ -58,8 +59,6 @@ TEST_F(OptionsTest, ParseIntegerOptionWithDefault) {
     
     int result = opts->parse<int>(static_cast<int>(args.size()), argv, "port");
     EXPECT_EQ(result, 8080);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseStringOption) {
@@ -70,8 +69,6 @@ TEST_F(OptionsTest, ParseStringOption) {
     
     std::string result = opts->parse<std::string>(static_cast<int>(args.size()), argv, "host");
     EXPECT_EQ(result, "example.com");
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseStringOptionWithDefault) {
@@ -82,8 +79,6 @@ TEST_F(OptionsTest, ParseStringOptionWithDefault) {
     
     std::string result = opts->parse<std::string>(static_cast<int>(args.size()), argv, "host");
     EXPECT_EQ(result, "localhost");
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseFloatOption) {
@@ -94,8 +89,6 @@ TEST_F(OptionsTest, ParseFloatOption) {
     
     float result = opts->parse<float>(static_cast<int>(args.size()), argv, "timeout");
     EXPECT_FLOAT_EQ(result, 45.25f);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseDoubleOption) {
@@ -106,8 +99,6 @@ TEST_F(OptionsTest, ParseDoubleOption) {
     
     double result = opts->parse<double>(static_cast<int>(args.size()), argv, "precision");
     EXPECT_DOUBLE_EQ(result, 0.0001);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseBoolOption) {
@@ -118,8 +109,6 @@ TEST_F(OptionsTest, ParseBoolOption) {
     
     bool result = opts->parse<bool>(static_cast<int>(args.size()), argv, "verbose");
     EXPECT_TRUE(result);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseBoolOptionVariations) {
@@ -130,15 +119,12 @@ TEST_F(OptionsTest, ParseBoolOptionVariations) {
     
     bool result = opts->parse<bool>(static_cast<int>(args.size()), argv, "debug");
     EXPECT_FALSE(result);
-    
-    delete[] argv;
+
     std::vector<std::string> args2 = {"program", "--debug", "1"};
     char** argv2 = create_argv(args2);
     
     bool result2 = opts->parse<bool>(static_cast<int>(args2.size()), argv2, "debug");
     EXPECT_TRUE(result2);
-    
-    delete[] argv2;
 }
 
 TEST_F(OptionsTest, ParseMultipleOptions) {
@@ -158,8 +144,6 @@ TEST_F(OptionsTest, ParseMultipleOptions) {
     EXPECT_EQ(host, "example.com");
     EXPECT_EQ(port, 9000);
     EXPECT_TRUE(verbose);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseNonExistentKey) {
@@ -172,8 +156,6 @@ TEST_F(OptionsTest, ParseNonExistentKey) {
 
     int result2 = opts->parse<int>(static_cast<int>(args.size()), argv, "timeout");
     EXPECT_EQ(result2, 0);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseInvalidValue) {
@@ -184,8 +166,6 @@ TEST_F(OptionsTest, ParseInvalidValue) {
 
     int result = opts->parse<int>(static_cast<int>(args.size()), argv, "port", 9999);
     EXPECT_EQ(result, 9999);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseSuccessIgnoresDefault) {
@@ -196,8 +176,6 @@ TEST_F(OptionsTest, ParseSuccessIgnoresDefault) {
     
     int result = opts->parse<int>(static_cast<int>(args.size()), argv, "port", 1234);
     EXPECT_EQ(result, 9000);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseWithDifferentTypeDefaults) {
@@ -216,8 +194,6 @@ TEST_F(OptionsTest, ParseWithDifferentTypeDefaults) {
 
     double ratio = opts->parse<double>(static_cast<int>(args.size()), argv, "ratio", 0.75);
     EXPECT_DOUBLE_EQ(ratio, 0.75);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ExplicitValueIgnoresParseDefault) {
@@ -241,8 +217,6 @@ TEST_F(OptionsTest, ExplicitValueIgnoresParseDefault) {
     
     double ratio = opts->parse<double>(static_cast<int>(args.size()), argv, "ratio", 0.75);
     EXPECT_DOUBLE_EQ(ratio, 0.25);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, AddDefaultVsParseDefault) {
@@ -257,8 +231,6 @@ TEST_F(OptionsTest, AddDefaultVsParseDefault) {
     
     EXPECT_EQ(port1, 8080);
     EXPECT_EQ(host1, "localhost");
-    
-    delete[] argv1;
 
     std::vector<std::string> args2 = {"program"};
     char** argv2 = create_argv(args2);
@@ -268,8 +240,6 @@ TEST_F(OptionsTest, AddDefaultVsParseDefault) {
     
     EXPECT_EQ(port2, 9000);
     EXPECT_EQ(host2, "example.com");
-    
-    delete[] argv2;
 }
 
 TEST_F(OptionsTest, ParseComplexScenarioWithDefaults) {
@@ -295,8 +265,6 @@ TEST_F(OptionsTest, ParseComplexScenarioWithDefaults) {
 
     int timeout = opts->parse<int>(static_cast<int>(args.size()), argv, "timeout", 30);
     EXPECT_EQ(timeout, 30);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, BackwardCompatibilityAndEdgeCases) {
@@ -316,8 +284,6 @@ TEST_F(OptionsTest, BackwardCompatibilityAndEdgeCases) {
     
     int new_missing = opts->parse<int>(static_cast<int>(args.size()), argv, "missing", 777);
     EXPECT_EQ(new_missing, 777);
-    
-    delete[] argv;
 }
 
 TEST_F(OptionsTest, ParseBoundaryValues) {
@@ -329,15 +295,13 @@ TEST_F(OptionsTest, ParseBoundaryValues) {
     
     int int_result = opts->parse<int>(static_cast<int>(args1.size()), argv1, "int_val");
     EXPECT_EQ(int_result, 2147483647);
-    
-    delete[] argv1;
+
+
     std::vector<std::string> args2 = {"program", "--int_val", "-2147483648"};  // INT_MIN
     char** argv2 = create_argv(args2);
     
     int int_result2 = opts->parse<int>(static_cast<int>(args2.size()), argv2, "int_val");
     EXPECT_EQ(int_result2, -2147483648);
-    
-    delete[] argv2;
 }
 
 TEST_F(OptionsTest, TypeSafety) {
@@ -351,6 +315,4 @@ TEST_F(OptionsTest, TypeSafety) {
 
     int correct_type = opts->parse<int>(static_cast<int>(args.size()), argv, "number");
     EXPECT_EQ(correct_type, 123);
-    
-    delete[] argv;
 }

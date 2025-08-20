@@ -41,7 +41,6 @@
     "zlib",
     "yaml-cpp",
     "opencv",
-    "grpc",
     "hffix",
     "libpqxx",
     "libnice",
@@ -140,10 +139,6 @@
     {
       "name": "opencv",
       "version": "4.11.0"
-    },
-    {
-      "name": "grpc",
-      "version": "1.71.0#2"
     },
     {
       "name": "hffix",

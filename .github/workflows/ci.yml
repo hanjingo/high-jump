@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ master, main, dev, v1.x, cicd, cicd-test ]
+    branches: [ master, main, dev, v1.x, ci ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ master, main ]
@@ -27,41 +27,29 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Setup LLVM 20.x (for clang-format only)
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: "20"
-        directory: ${{ runner.temp }}/llvm
-
-    - name: Add LLVM to PATH
+    - name: Configure environment and install tools
       run: |
-        echo "${{ runner.temp }}/llvm/bin" >> $GITHUB_PATH
+        echo "=== Running environment configuration script ==="
+        python3 scripts/configure.py --platform=linux --code-quality
         
-    - name: Install other tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cppcheck
-        pip install cpplint
+        echo "=== Verifying code quality tools ==="
+        clang-format --version || echo "clang-format not found"
+        cppcheck --version || echo "cppcheck not found"
+        cpplint --version || echo "cpplint not found"
 
-    - name: Verify tool versions
+    - name: Run code quality checks
       run: |
-        echo "=== Tool Versions ==="
-        clang-format --version
-        cppcheck --version
-        cpplint --version || echo "cpplint version check not available"
-        echo "====================="
-
-    - name: Run cppcheck
-      run: |
-        echo "Running cppcheck static analysis..."
+        echo "=== Running cppcheck static analysis ==="
         cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
           --error-exitcode=1 --xml libcpp/ 2> cppcheck-result.xml || true
         
-    - name: Run clang-format check
-      run: |
-        echo "Checking code formatting with clang-format..."
+        echo "=== Running clang-format check ==="
         find libcpp -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
         xargs clang-format --style=file --dry-run --Werror
+        
+        echo "=== Running cpplint check ==="
+        find libcpp -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+        xargs cpplint --filter=-build/c++11,-whitespace/braces || true
 
     - name: Upload code quality reports
       uses: actions/upload-artifact@v4
@@ -72,7 +60,7 @@ jobs:
           cppcheck-result.xml
         retention-days: 30
 
-  # ================================ Build(Linux) ================================
+  # ================================ Build (Linux) ================================
   build-linux:
     name: Build and Test (Linux)
     runs-on: ubuntu-22.04
@@ -87,171 +75,10 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Free disk space
-      run: |
-        echo "=== Initial disk usage ==="
-        df -h
-        echo "=========================="
-        
-        # Remove unnecessary packages to free up space
-        sudo apt-get remove -y \
-          firefox \
-          google-chrome-stable \
-          microsoft-edge-stable \
-          mysql-server* \
-          postgresql* \
-          mongodb* \
-          dotnet* \
-          powershell \
-          azure-cli \
-          google-cloud-sdk
-        
-        # Clean package cache
-        sudo apt-get autoremove -y
-        sudo apt-get autoclean
-        
-        # Remove snap packages
-        sudo snap remove lxd --purge || true
-        sudo snap remove core18 --purge || true
-        sudo snap remove core20 --purge || true
-        sudo snap remove snapd --purge || true
-        
-        # Remove Docker images
-        docker system prune -af || true
-        
-        echo "=== After cleanup disk usage ==="
-        df -h
-        echo "================================="
-
-    - name: Install system dependencies and DPDK
-      run: |
-        sudo apt-get update
-        
-        # Install basic build dependencies
-        sudo apt-get install -y \
-          build-essential \
-          cmake \
-          ninja-build \
-          pkg-config \
-          curl \
-          zip \
-          unzip \
-          tar \
-          git \
-          autoconf \
-          libtool \
-          autoconf-archive \
-          automake \
-          software-properties-common \
-          libudev-dev \
-          libx11-dev \
-          libxtst-dev \
-          libxrandr-dev \
-          libxinerama-dev \
-          libxcursor-dev \
-          libxi-dev \
-          libxext-dev \
-          libxfixes-dev \
-          libxdamage-dev \
-          libxcomposite-dev \
-          libxrender-dev \
-          libxss-dev \
-          libxmu-dev \
-          libxpm-dev \
-          libxaw7-dev \
-          libatk1.0-dev \
-          libatk-bridge2.0-dev \
-          libatspi2.0-dev
-        
-        # Install DPDK dependencies
-        sudo apt-get install -y \
-          python3-pyelftools \
-          libnuma-dev \
-          libpcap-dev \
-          rdma-core \
-          libibverbs-dev \
-          librdmacm-dev \
-          libmlx4-dev \
-          libmlx5-dev \
-          meson \
-          python3-pip \
-          python3-setuptools \
-          libssl-dev \
-          zlib1g-dev \
-          libbsd-dev \
-          libjansson-dev \
-          libbpf-dev
-        
-        # Install Python packages needed for DPDK
-        pip3 install pyelftools meson ninja
-        
-        echo "=== System dependencies installed ==="
-        echo "Meson version: $(meson --version)"
-        echo "Python3 version: $(python3 --version)"
-
-    - name: Build and Install DPDK
-      run: |
-        echo "=== Building DPDK from source ==="
-        cd /tmp
-        
-        # Download DPDK LTS version
-        wget -q https://fast.dpdk.org/rel/dpdk-22.11.4.tar.xz
-        tar xf dpdk-22.11.4.tar.xz
-        cd dpdk-22.11.4
-        
-        # Configure build with minimal drivers to save space and time
-        meson setup build \
-          -Dplatform=generic \
-          -Dcpu_instruction_set=corei7 \
-          -Ddisable_drivers=crypto/*,compress/*,vdpa/*,regex/* \
-          -Denable_drivers=net/ring,net/null,mempool/ring,mempool/stack \
-          -Dexamples= \
-          -Dtests=false \
-          -Ddisable_libs=flow_classify,pipeline,port,table,fib,rib,graph,node,dmadev \
-          -Dwerror=false \
-          --prefix=/usr/local \
-          --libdir=lib \
-          --buildtype=release
-        
-        # Build DPDK
-        cd build
-        ninja -j$(nproc)
-        
-        # Install DPDK
-        sudo ninja install
-        
-        # Update library cache
-        sudo ldconfig
-        
-        echo "=== DPDK installation completed ==="
-        pkg-config --modversion libdpdk || echo "DPDK pkg-config not found"
-        ls -la /usr/local/lib/libdpdk* || echo "DPDK libraries not found in expected location"
-        
-        # Create pkg-config file if it doesn't exist
-        if [ ! -f "/usr/local/lib/pkgconfig/libdpdk.pc" ]; then
-          echo "Creating DPDK pkg-config file..."
-          sudo mkdir -p /usr/local/lib/pkgconfig
-          sudo tee /usr/local/lib/pkgconfig/libdpdk.pc > /dev/null <<EOF
-        prefix=/usr/local
-        exec_prefix=\${prefix}
-        libdir=\${prefix}/lib
-        includedir=\${prefix}/include
-        
-        Name: DPDK
-        Description: Data Plane Development Kit
-        Version: 22.11.4
-        Libs: -L\${libdir} -ldpdk
-        Cflags: -I\${includedir}/dpdk
-        EOF
-        fi
-        
-        # Update PKG_CONFIG_PATH
-        echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:\$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
-        
-        echo "=== Verifying DPDK installation ==="
-        pkg-config --exists libdpdk && echo "DPDK pkg-config found" || echo "DPDK pkg-config NOT found"
-        pkg-config --modversion libdpdk || echo "Could not get DPDK version"
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
     - name: Setup virtual display
       run: |
@@ -259,87 +86,45 @@ jobs:
         Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
         echo "DISPLAY=:99.0" >> $GITHUB_ENV
 
-    - name: Install GCC 11
+    - name: Configure build environment
       run: |
-        # install GCC 11
-        sudo apt-get install -y gcc-11 g++-11
+        echo "=== Running environment configuration script ==="
+        python3 scripts/configure.py --platform=linux
         
-        # link GCC 11
-        sudo ln -sf /usr/bin/gcc-11 /usr/local/bin/gcc
-        sudo ln -sf /usr/bin/g++-11 /usr/local/bin/g++
+        echo "=== Verifying environment setup ==="
+        # Source environment variables for current session
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc
+        fi
         
-        # add to PATH
-        echo "/usr/local/bin" >> $GITHUB_PATH
-
-    - name: Verify build tools
-      run: |
-        echo "=== Build Tools ==="
-        which cmake
-        cmake --version
-        echo ""
-        echo "Ninja check:"
-        which ninja
-        ninja --version
-        echo ""
-        echo "Compiler check:"
-        which gcc-11
-        gcc-11 --version
-        which g++-11
-        g++-11 --version
-        echo ""
-        echo "GCC version details:"
-        gcc --version
-        g++ --version
-        echo ""
-        echo "=== DPDK Verification ==="
-        export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
-        pkg-config --exists libdpdk && echo "✓ DPDK pkg-config found" || echo "✗ DPDK pkg-config NOT found"
-        pkg-config --modversion libdpdk 2>/dev/null || echo "Could not get DPDK version"
-        pkg-config --libs libdpdk 2>/dev/null || echo "Could not get DPDK libs"
-        pkg-config --cflags libdpdk 2>/dev/null || echo "Could not get DPDK cflags"
-        echo "==================="
-
-    - name: Setup vcpkg (Git)
-      run: |
-        echo "Installing vcpkg from Git..."
-        cd ${{ github.workspace }}
-        git clone https://github.com/Microsoft/vcpkg.git --depth 1
-        cd vcpkg
-        ./bootstrap-vcpkg.sh
-        echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
-        echo "${{ github.workspace }}/vcpkg" >> $GITHUB_PATH
+        # Verify tools are available
+        echo "Tool verification:"
+        echo "  CMake: $(cmake --version | head -1)"
+        echo "  Ninja: $(ninja --version)"
+        echo "  GCC: $(gcc --version | head -1)"
+        echo "  G++: $(g++ --version | head -1)"
         
-        # Configure vcpkg to use binary caching and reduce build artifacts
+        # Check vcpkg
+        if [ -d "tools/vcpkg" ]; then
+          echo "  vcpkg: $(./tools/vcpkg/vcpkg version | head -1)"
+          echo "VCPKG_ROOT=${{ github.workspace }}/tools/vcpkg" >> $GITHUB_ENV
+          echo "${{ github.workspace }}/tools/vcpkg" >> $GITHUB_PATH
+        fi
+        
+        # Configure vcpkg binary caching
         export VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
         echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
 
-    - name: Verify vcpkg installation
-      run: |
-        echo "=== vcpkg Information ==="
-        echo "VCPKG_ROOT: $VCPKG_ROOT"
-        $VCPKG_ROOT/vcpkg version
-        echo "========================="
-
     - name: Configure CMake
       env:
-        CC: gcc-11
-        CXX: g++-11
-        CMAKE_MAKE_PROGRAM: /usr/bin/ninja
+        CMAKE_MAKE_PROGRAM: ninja
         VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-        PKG_CONFIG_PATH: "/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
       run: |
         echo "=== Pre-configure disk usage ==="
         df -h
         echo "================================="
         
-        export PATH="/usr/local/bin:/usr/bin:$PATH"
-        export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
-        NINJA_PATH=$(which ninja)
-        echo "Using ninja at: $NINJA_PATH"
-        
-        # Verify DPDK is available before configuring
-        echo "=== Final DPDK check before CMake ==="
-        pkg-config --exists libdpdk && echo "✓ DPDK available" || echo "✗ DPDK not available"
+        echo "=== Running CMake configuration ==="
         
         cmake -B build \
           -G Ninja \
@@ -348,11 +133,7 @@ jobs:
           -DBUILD_LIB=OFF \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
           -DASAN=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }} \
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-          -DCMAKE_C_COMPILER=gcc-11 \
-          -DCMAKE_CXX_COMPILER=g++-11 \
-          -DCMAKE_MAKE_PROGRAM=$NINJA_PATH \
-          -DENABLE_DPDK=ON
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         
         echo "=== Post-configure disk usage ==="
         df -h
@@ -379,10 +160,353 @@ jobs:
       uses: actions/upload-artifact@v4
       if: failure()
       with:
-        name: build-logs-linux-gcc11-${{ matrix.build_type }}
+        name: build-logs-linux-${{ matrix.build_type }}
         path: |
           build/CMakeFiles/CMakeOutput.log
           build/CMakeFiles/CMakeError.log
           build/compile_commands.json
           build/vcpkg-manifest-install.log
         retention-days: 7
+
+  # ================================ Build (macOS) ================================
+  build-macos:
+    name: Build and Test (macOS)
+    runs-on: macos-13
+    needs: code-quality
+    strategy:
+      matrix:
+        build_type: [Release]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check system info
+      run: |
+        echo "=== System Information ==="
+        uname -a
+        sysctl hw.model
+        sysctl machdep.cpu.brand_string 2>/dev/null || echo "CPU info not available"
+        echo "=== Initial disk usage ==="
+        df -h
+        echo "=========================="
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Configure build environment (macOS)
+      run: |
+        echo "=== Setting up macOS build environment ==="
+        
+        # Set environment variables for macOS
+        echo "Setting macOS deployment target..."
+        echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
+        export MACOSX_DEPLOYMENT_TARGET=10.15
+        
+        # Install required packages including autoconf-archive
+        echo "=== Installing required packages ==="
+        brew install automake autoconf-archive || true
+        brew unlink automake autoconf 2>/dev/null || true
+        brew link --force --overwrite automake autoconf autoconf-archive || true
+        
+        # Find and fix aclocal - multiple strategies
+        echo "=== Finding and fixing aclocal ==="
+        
+        # Strategy 1: Direct symlink from opt to bin
+        if [ -f "/usr/local/opt/automake/bin/aclocal" ] && [ ! -f "/usr/local/bin/aclocal" ]; then
+          sudo ln -sf /usr/local/opt/automake/bin/aclocal /usr/local/bin/aclocal
+          echo "✓ Created symlink: /usr/local/bin/aclocal -> /usr/local/opt/automake/bin/aclocal"
+        fi
+        
+        # Strategy 2: Find in Cellar and link
+        if [ ! -f "/usr/local/bin/aclocal" ]; then
+          ACLOCAL_PATH=$(find /usr/local/Cellar/automake*/bin -name aclocal 2>/dev/null | head -1)
+          if [ -n "$ACLOCAL_PATH" ] && [ -f "$ACLOCAL_PATH" ]; then
+            sudo ln -sf "$ACLOCAL_PATH" /usr/local/bin/aclocal
+            echo "✓ Created symlink from Cellar: /usr/local/bin/aclocal -> $ACLOCAL_PATH"
+          fi
+        fi
+        
+        # Strategy 3: Copy instead of symlink if symlink fails
+        if [ ! -f "/usr/local/bin/aclocal" ]; then
+          for ACLOCAL_SOURCE in "/usr/local/opt/automake/bin/aclocal" $(find /usr/local/Cellar/automake*/bin -name aclocal 2>/dev/null); do
+            if [ -f "$ACLOCAL_SOURCE" ]; then
+              sudo cp "$ACLOCAL_SOURCE" /usr/local/bin/aclocal
+              sudo chmod +x /usr/local/bin/aclocal
+              echo "✓ Copied aclocal: $ACLOCAL_SOURCE -> /usr/local/bin/aclocal"
+              break
+            fi
+          done
+        fi
+        
+        # Strategy 4: Add automake bin directory to PATH
+        export PATH="/usr/local/opt/automake/bin:$PATH"
+        echo "PATH=/usr/local/opt/automake/bin:$PATH" >> $GITHUB_ENV
+        
+        # Strategy 5: Set ACLOCAL environment variable directly
+        if [ -f "/usr/local/opt/automake/bin/aclocal" ]; then
+          echo "ACLOCAL=/usr/local/opt/automake/bin/aclocal" >> $GITHUB_ENV
+          export ACLOCAL="/usr/local/opt/automake/bin/aclocal"
+        fi
+        
+        # Verify aclocal is now accessible
+        echo "=== Verifying aclocal ==="
+        if command -v aclocal >/dev/null 2>&1; then
+          echo "✓ aclocal found at: $(which aclocal)"
+          aclocal --version | head -1 || echo "aclocal version check failed"
+        else
+          echo "✗ aclocal still not found in PATH"
+          echo "Listing automake installation:"
+          ls -la /usr/local/opt/automake/bin/ 2>/dev/null || echo "automake opt dir not found"
+          ls -la /usr/local/Cellar/automake*/bin/ 2>/dev/null || echo "automake cellar dir not found"
+        fi
+        
+        # Also fix other autotools
+        echo "=== Fixing other autotools ==="
+        for tool in autoconf autoheader autom4te autoreconf libtool libtoolize m4; do
+          if [ ! -f "/usr/local/bin/$tool" ]; then
+            # Try to find in opt
+            if [ -f "/usr/local/opt/autoconf/bin/$tool" ]; then
+              sudo ln -sf "/usr/local/opt/autoconf/bin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
+            elif [ -f "/usr/local/opt/libtool/bin/$tool" ]; then
+              sudo ln -sf "/usr/local/opt/libtool/bin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
+            elif [ -f "/usr/local/opt/m4/bin/$tool" ]; then
+              sudo ln -sf "/usr/local/opt/m4/bin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
+            fi
+          fi
+        done
+        
+        # Verify autoconf-archive is available
+        echo "=== Verifying autoconf-archive ==="
+        if brew list autoconf-archive >/dev/null 2>&1; then
+          echo "✓ autoconf-archive is installed"
+          
+          # Make sure autoconf-archive macros are available to aclocal
+          AUTOCONF_ARCHIVE_DIR="/usr/local/share/aclocal"
+          if [ -d "$AUTOCONF_ARCHIVE_DIR" ]; then
+            echo "✓ autoconf-archive macros found at: $AUTOCONF_ARCHIVE_DIR"
+          else
+            echo "✗ autoconf-archive macros not found"
+          fi
+        else
+          echo "✗ autoconf-archive not installed"
+        fi
+        
+        # Run environment configuration script
+        echo "=== Running environment configuration script ==="
+        python3 scripts/configure.py --platform=macos
+        
+        echo "=== Verifying environment setup ==="
+        # Set up critical autotools paths explicitly
+        export PATH="/usr/local/bin:/usr/local/opt/autoconf/bin:/usr/local/opt/automake/bin:/usr/local/opt/libtool/bin:/usr/local/opt/m4/bin:/usr/local/opt/gettext/bin:$PATH"
+        export ACLOCAL_PATH="/usr/local/share/aclocal:/usr/local/opt/autoconf/share/aclocal:/usr/local/opt/automake/share/aclocal:/usr/local/opt/libtool/share/aclocal:/usr/local/opt/gettext/share/aclocal"
+        
+        # Add to GitHub ENV for later steps
+        echo "PATH=$PATH" >> $GITHUB_ENV
+        echo "ACLOCAL_PATH=$ACLOCAL_PATH" >> $GITHUB_ENV
+        
+        # Final verification of critical autotools
+        echo "=== Final autotools verification ==="
+        for tool in autoconf automake aclocal autoreconf libtool m4; do
+          if command -v $tool >/dev/null 2>&1; then
+            echo "✓ $tool: $(which $tool)"
+          else
+            echo "✗ $tool: not found"
+          fi
+        done
+        
+        # Test autoreconf specifically (this is what fails)
+        echo "=== Testing autoreconf ==="
+        if command -v autoreconf >/dev/null 2>&1; then
+          echo "✓ autoreconf found at: $(which autoreconf)"
+          # Test in a temporary directory
+          mkdir -p /tmp/autotools_test
+          cd /tmp/autotools_test
+          echo "AC_INIT([test], [1.0])" > configure.ac
+          echo "AC_OUTPUT" >> configure.ac
+          autoreconf -i 2>/dev/null && echo "✓ autoreconf test passed" || echo "✗ autoreconf test failed"
+          cd - >/dev/null
+          rm -rf /tmp/autotools_test
+        else
+          echo "✗ autoreconf not found"
+        fi
+        
+        # Set compiler environment variables
+        echo "CC=$(which clang)" >> $GITHUB_ENV
+        echo "CXX=$(which clang++)" >> $GITHUB_ENV
+        
+        # Verify tools are available
+        echo "Tool verification:"
+        echo "  CMake: $(cmake --version | head -1)"
+        echo "  Ninja: $(ninja --version)"
+        echo "  Clang: $(clang --version | head -1)"
+        echo "  Clang++: $(clang++ --version | head -1)"
+        
+        # Check vcpkg
+        if [ -d "tools/vcpkg" ]; then
+          echo "  vcpkg: $(./tools/vcpkg/vcpkg version | head -1)"
+          echo "VCPKG_ROOT=${{ github.workspace }}/tools/vcpkg" >> $GITHUB_ENV
+          echo "${{ github.workspace }}/tools/vcpkg" >> $GITHUB_PATH
+        fi
+        
+        # Configure vcpkg binary caching
+        export VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
+        echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
+
+    - name: Create vcpkg triplet for macOS
+      run: |
+        echo "=== Creating custom vcpkg triplet ==="
+        mkdir -p tools/vcpkg/triplets/community
+        
+        # Create a custom triplet with relaxed compiler settings
+        cat > tools/vcpkg/triplets/community/x64-osx-relaxed.cmake << 'EOF'
+        set(VCPKG_TARGET_ARCHITECTURE x64)
+        set(VCPKG_CRT_LINKAGE dynamic)
+        set(VCPKG_LIBRARY_LINKAGE static)
+        set(VCPKG_CMAKE_SYSTEM_NAME Darwin)
+        set(VCPKG_OSX_DEPLOYMENT_TARGET "10.15")
+        
+        # Relax compiler warnings for boost
+        set(VCPKG_CXX_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-enum-constexpr-conversion -Wno-deprecated-builtins")
+        set(VCPKG_C_FLAGS "-Wno-deprecated -Wno-deprecated-declarations")
+        EOF
+        
+        echo "Custom triplet created:"
+        cat tools/vcpkg/triplets/community/x64-osx-relaxed.cmake
+
+    - name: Configure CMake (macOS)
+      env:
+        VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+        MACOSX_DEPLOYMENT_TARGET: "10.15"
+        ACLOCAL: "/usr/local/bin/aclocal"
+        AUTOMAKE: "/usr/local/bin/automake"
+        AUTORECONF: "/usr/local/bin/autoreconf"
+        LIBTOOL: "/usr/local/bin/libtool"
+        M4: "/usr/local/bin/m4"
+      run: |
+        echo "=== Pre-configure disk usage ==="
+        df -h
+        echo "================================="
+        
+        echo "=== Environment Variables ==="
+        echo "CC: $CC"
+        echo "CXX: $CXX"
+        echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
+        echo "VCPKG_ROOT: $VCPKG_ROOT"
+        echo "ACLOCAL: $ACLOCAL"
+        echo "PATH: $PATH"
+        echo "ACLOCAL_PATH: $ACLOCAL_PATH"
+        echo "=============================="
+        
+        # check autotools
+        echo "=== Final autotools check before CMake ==="
+        which aclocal || echo "aclocal not in PATH"
+        which autoreconf || echo "autoreconf not in PATH"
+        ls -la /usr/local/bin/aclocal 2>/dev/null || echo "aclocal not in /usr/local/bin"
+        
+        echo "=== Running CMake configuration ==="
+        
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TEST=ON \
+          -DBUILD_LIB=OFF \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DASAN=OFF \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
+          -DCMAKE_C_COMPILER=$CC \
+          -DCMAKE_CXX_COMPILER=$CXX \
+          -DCMAKE_MAKE_PROGRAM=$(which ninja) \
+          -DVCPKG_TARGET_TRIPLET=x64-osx-relaxed \
+          -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-enum-constexpr-conversion -Wno-deprecated-builtins" \
+          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations"
+        
+        echo "=== Post-configure disk usage ==="
+        df -h
+        echo "=================================="
+
+    - name: Build (macOS)
+      run: |
+        echo "=== Pre-build disk usage ==="
+        df -h
+        echo "============================="
+        
+        # Set number of parallel jobs (use fewer cores on macOS to avoid memory issues)
+        NPROC=$(sysctl -n hw.ncpu)
+        PARALLEL_JOBS=$((NPROC > 4 ? 4 : NPROC))
+        echo "Using $PARALLEL_JOBS parallel jobs (total cores: $NPROC)"
+        
+        cmake --build build --config ${{ matrix.build_type }} --parallel $PARALLEL_JOBS
+        
+        echo "=== Post-build disk usage ==="
+        df -h
+        echo "=============================="
+
+    - name: Run tests (macOS)
+      working-directory: build
+      run: |
+        # Use fewer parallel jobs for testing to avoid resource conflicts
+        NPROC=$(sysctl -n hw.ncpu)
+        PARALLEL_JOBS=$((NPROC > 2 ? 2 : NPROC))
+        echo "Running tests with $PARALLEL_JOBS parallel jobs"
+        
+        ctest --output-on-failure --parallel $PARALLEL_JOBS -C ${{ matrix.build_type }}
+
+    - name: Upload build artifacts (macOS)
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: build-logs-macos-${{ matrix.build_type }}
+        path: |
+          build/CMakeFiles/CMakeOutput.log
+          build/CMakeFiles/CMakeError.log
+          build/compile_commands.json
+          build/vcpkg-manifest-install.log
+          tools/vcpkg/buildtrees/boost-thread/install-*-out.log
+          tools/vcpkg/triplets/community/x64-osx-relaxed.cmake
+        retention-days: 7
+
+  # ================================ Build Summary ================================
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-macos]
+    if: always()
+    
+    steps:
+    - name: Check build results
+      run: |
+        echo "=== Build Summary ==="
+        echo "Linux build: ${{ needs.build-linux.result }}"
+        echo "macOS build: ${{ needs.build-macos.result }}"
+        echo "===================="
+        
+        # Set overall status
+        success_count=0
+        total_count=2
+        
+        if [[ "${{ needs.build-linux.result }}" == "success" ]]; then
+          success_count=$((success_count + 1))
+        fi
+        
+        if [[ "${{ needs.build-macos.result }}" == "success" ]]; then
+          success_count=$((success_count + 1))
+        fi
+        
+        echo "Successful builds: $success_count/$total_count"
+        
+        if [[ $success_count -eq $total_count ]]; then
+          echo "All builds passed!"
+          exit 0
+        elif [[ $success_count -eq 0 ]]; then
+          echo "All builds failed!"
+          exit 1
+        else
+          echo "Some builds failed!"
+          exit 1
+        fi

@@ -36,6 +36,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <cstring>
 
 #include <openssl/md5.h>
 
@@ -146,7 +147,7 @@ public:
         if (dst_len > MD5_DIGEST_LENGTH)
             return false;
 
-        std::memcpy(dst, dst_str.data(), dst_len);
+        memcpy(dst, dst_str.data(), dst_len);
         return true;
     }
 

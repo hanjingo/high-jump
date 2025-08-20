@@ -739,7 +739,14 @@ static int64_t env_get(conf_t conf)
         }
         case CONF_NAME_MAX: 
         {
+#if defined(_SC_NAME_MAX)
             return sysconf(_SC_NAME_MAX);
+#elif defined(_PC_NAME_MAX)
+            long v = pathconf("/", _PC_NAME_MAX);
+            return v > 0 ? v : 255;
+#else
+            return 255;
+#endif
         }
         case CONF_GETGR_R_SIZE_MAX: 
         {
@@ -844,11 +851,25 @@ static int64_t env_get(conf_t conf)
         }
         case CONF_PATH_MAX: 
         {
+#if defined(_SC_PATH_MAX)
             return sysconf(_SC_PATH_MAX);
+#elif defined(_PC_PATH_MAX)
+            long v = pathconf("/", _PC_PATH_MAX);
+            return v > 0 ? v : 4096;
+#else
+            return 4096;
+#endif
         }
         case CONF_PIPE_BUF: 
         {
+#if defined(_SC_PIPE_BUF)
             return sysconf(_SC_PIPE_BUF);
+#elif defined(_PC_PIPE_BUF)
+            long v = pathconf("/", _PC_PIPE_BUF);
+            return v > 0 ? v : 4096;
+#else
+            return 4096;
+#endif
         }
         case CONF_PROCESS_CHILD_MAX: 
         {

@@ -6,8 +6,8 @@ TEST(ini, parse)
     char text[] = "[section1] \na=123 \nb=abc \nc=123.456";
     libcpp::ini ini = libcpp::ini::parse(text);
     ASSERT_EQ(ini.get_child("section1").get<int>("a"), 123);
-    ASSERT_EQ(ini.get_child("section1").get<std::string>("b") == std::string("abc"), true);
-    ASSERT_EQ(ini.get_child("section1").get<float>("c") == float(123.456), true);
+    ASSERT_TRUE(ini.get_child("section1").get<std::string>("b") == std::string("abc"));
+    ASSERT_FLOAT_EQ(ini.get_child("section1").get<float>("c"), 123.456f);
 }
 
 TEST(ini, read_file)
@@ -18,9 +18,9 @@ TEST(ini, read_file)
 
     libcpp::ini cfg2;
     cfg2.read_file("cfg.ini");
-    ASSERT_EQ(cfg2.get_child("person").get<std::string>("name") == std::string("hanjingo"), true);
-    ASSERT_EQ(cfg2.get_child("person").get<int>("age") == 30, true);
-    ASSERT_EQ(cfg2.get_child("person").get<float>("income") == float(10000.123), true);
+    ASSERT_TRUE(cfg2.get_child("person").get<std::string>("name") == std::string("hanjingo"));
+    ASSERT_EQ(cfg2.get_child("person").get<int>("age"), 30);
+    ASSERT_FLOAT_EQ(cfg2.get_child("person").get<float>("income"), 10000.123f);
 }
 
 TEST(ini, write_file)
@@ -32,7 +32,7 @@ TEST(ini, write_file)
 
     libcpp::ini cfg2;
     cfg2.read_file("cfg.ini");
-    ASSERT_EQ(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"), true);
+    ASSERT_TRUE(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"));
 }
 
 TEST(ini, str)
@@ -42,5 +42,5 @@ TEST(ini, str)
     cfg1.get_child("person").put("email", "hehehunanchina@live.com");
     
     libcpp::ini cfg2 = libcpp::ini::parse(cfg1.str().c_str());
-    ASSERT_EQ(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"), true);
+    ASSERT_TRUE(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"));
 }

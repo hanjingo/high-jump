@@ -1,21 +1,16 @@
 #ifndef OPTIONAL_HPP
 #define OPTIONAL_HPP
 
-#if (__cplusplus >= 201703L)
-
+#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <optional>
 
 namespace libcpp
 {
-
 template <class T>
 using optional = std::optional<T>;
-
 }
 
-#endif
-
-#if (__cplusplus < 201703L)
+#else
 #include <boost/optional.hpp>
 
 namespace libcpp

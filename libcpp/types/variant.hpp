@@ -1,7 +1,7 @@
 #ifndef VARIANT_HPP
 #define VARIANT_HPP
 
-#if (__cplusplus >= 201703L)
+#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <variant>
 
 namespace libcpp
@@ -34,10 +34,8 @@ constexpr const T&& get(const std::variant<Types...>&& v)
 };
 
 }
-#endif
 
-
-#if (__cplusplus < 201703L)
+#else
 #include <boost/variant.hpp>
 
 namespace libcpp

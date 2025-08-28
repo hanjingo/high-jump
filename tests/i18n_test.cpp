@@ -457,9 +457,9 @@ TEST_F(I18nTest, FullWorkflowIntegration) {
     i18n_instance.set_locale("ja_JP");
     std::string ja_title = i18n_instance.translate("app.title");
     
-    std::cout << "中文标题: " << zh_title << std::endl;
-    std::cout << "英文标题: " << en_title << std::endl;
-    std::cout << "日文标题: " << ja_title << std::endl;
+    // std::cout << "中文标题: " << zh_title << std::endl;
+    // std::cout << "英文标题: " << en_title << std::endl;
+    // std::cout << "日文标题: " << ja_title << std::endl;
 
     EXPECT_FALSE(zh_title.empty());
     EXPECT_FALSE(en_title.empty());

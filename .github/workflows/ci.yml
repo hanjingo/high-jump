@@ -89,6 +89,9 @@ jobs:
     - name: Configure build environment
       run: |
         echo "=== Running environment configuration script ==="
+
+        # wait for any dpkg locks to clear
+        while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
         python3 scripts/configure.py --platform=linux
         
         echo "=== Verifying environment setup ==="

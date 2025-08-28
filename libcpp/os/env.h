@@ -125,58 +125,17 @@ static inline const char* _COMPILE_TIME() {
 #define COMPILE_TIME _COMPILE_TIME()
 
 
-// deprecated
-#if (__cplusplus >= 201402L)
-#if defined(_MSC_VER)
-#define DEPRECATED(msg) __declspec(deprecated(msg))
-#elif defined(__GNUC__)
-#define DEPRECATED(msg) __attribute__((deprecated(msg)))
-#else
-#define DEPRECATED(msg) [[deprecated(msg)]]
-#endif
-#else
-#define DEPRECATED(msg)
-#endif
-
-
 // QT
 #if defined(QT_VERSION) && defined(QT_CORE_LIB)
-    #define LIBCPP_QT_ENVIRONMENT 1
-    #define LIBCPP_QT_VERSION QT_VERSION
-    #define LIBCPP_QT_VERSION_MAJOR QT_VERSION_MAJOR
-    #define LIBCPP_QT_VERSION_MINOR QT_VERSION_MINOR
-    #define LIBCPP_QT_VERSION_PATCH QT_VERSION_PATCH
-    #define LIBCPP_QT_VERSION_CHECK(major, minor, patch) \
+    #define ENV_QT_ENVIRONMENT   1
+    #define ENV_QT_VERSION       QT_VERSION
+    #define ENV_QT_VERSION_MAJOR QT_VERSION_MAJOR
+    #define ENV_QT_VERSION_MINOR QT_VERSION_MINOR
+    #define ENV_QT_VERSION_PATCH QT_VERSION_PATCH
+    #define ENV_QT_VERSION_CHECK(major, minor, patch) \
         QT_VERSION_CHECK(major, minor, patch)
 #else
-    #define LIBCPP_QT_ENVIRONMENT 0
-#endif
-
-
-// inline
-#if defined(_MSC_VER)
-    #define FORCE_INLINE __forceinline
-    #define NO_INLINE __declspec(noinline)
-#elif defined(__GNUC__) || defined(__clang__)
-    #define FORCE_INLINE __attribute__((always_inline)) inline
-    #define NO_INLINE __attribute__((noinline))
-#else
-    #define FORCE_INLINE inline
-    #define NO_INLINE
-#endif
-
-
-// branch prediction hints (gcc and clang only)
-#if defined(__GNUC__) || defined(__clang__)
-    #define LIKELY(x)   __builtin_expect(!!(x), 1)
-    #define UNLIKELY(x) __builtin_expect(!!(x), 0)
-    #define HOT         __attribute__((hot))
-    #define COLD        __attribute__((cold))
-#else
-    #define LIKELY(x)   (x)
-    #define UNLIKELY(x) (x)
-    #define HOT
-    #define COLD
+    #define ENV_QT_ENVIRONMENT 0
 #endif
 
 

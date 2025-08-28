@@ -31,17 +31,32 @@ TEST(file_path, absolute)
 
 TEST(file_path, relative)
 {
+    std::string pwd = libcpp::filepath::pwd();
+
 #if defined(_WIN32)
     ASSERT_STREQ(
-        libcpp::filepath::relative("/usr/local/src/007.txt").c_str(), 
-        "..\\..\\..\\usr\\local\\src\\007.txt"
+        libcpp::filepath::relative(pwd + "\\007.txt", pwd).c_str(),
+        "007.txt"
+    );
+    ASSERT_STREQ(
+        libcpp::filepath::relative(pwd + "\\..\\src\\007.txt", pwd).c_str(),
+        "..\\src\\007.txt"
     );
 #else
     ASSERT_STREQ(
-        libcpp::filepath::relative("/usr/local/src/007.txt").c_str(),
-        "../../../../007.txt"
+        libcpp::filepath::relative(pwd + "/007.txt", pwd).c_str(),
+        "007.txt"
+    );
+    ASSERT_STREQ(
+        libcpp::filepath::relative(pwd + "/../src/007.txt", pwd).c_str(),
+        "../src/007.txt"
     );
 #endif
+    std::string sibling = libcpp::filepath::join(pwd, "sibling.txt");
+    ASSERT_STREQ(
+        libcpp::filepath::relative(sibling, pwd).c_str(),
+        "sibling.txt"
+    );
 }
 
 TEST(file_path, join)

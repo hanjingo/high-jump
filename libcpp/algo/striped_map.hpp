@@ -6,7 +6,7 @@
 #include <functional>
 #include <memory>
 
-#if (__cplusplus >= 201703L)
+#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <shared_mutex>
 
 using shared_mutex_t = std::shared_mutex;

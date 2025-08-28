@@ -1,17 +1,15 @@
 #ifndef STRING_VIEW_HPP
 #define STRING_VIEW_HPP
 
-#if (__cplusplus >= 201703L)
+#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <string_view>
 
 namespace libcpp
 {
 using string_view = std::string_view;
 }
-#endif
 
-
-#if (__cplusplus < 201703L)
+#else
 #include <boost/utility/string_view.hpp>
 
 namespace libcpp

@@ -150,8 +150,8 @@ TEST_F(GzipTest, LargeDataCompression) {
     double ratio = gzip::compression_ratio(large_data.size(), compressed.size());
     EXPECT_GT(ratio, 0.8);
     
-    std::cout << "Large data compression ratio: " << ratio * 100 << "%" << std::endl;
-    std::cout << "Processing time: " << duration.count() << " ms" << std::endl;
+    // std::cout << "Large data compression ratio: " << ratio * 100 << "%" << std::endl;
+    // std::cout << "Processing time: " << duration.count() << " ms" << std::endl;
 }
 
 TEST_F(GzipTest, RandomDataCompression) {
@@ -167,7 +167,7 @@ TEST_F(GzipTest, RandomDataCompression) {
     EXPECT_EQ(decompressed, random_data);
 
     double ratio = gzip::compression_ratio(random_data.size(), compressed.size());
-    std::cout << "Random data compression ratio: " << ratio * 100 << "%" << std::endl;
+    // std::cout << "Random data compression ratio: " << ratio * 100 << "%" << std::endl;
 }
 
 TEST_F(GzipTest, MaxOutputSizeLimit) {

@@ -1,7 +1,30 @@
 #ifndef INI_HPP
 #define INI_HPP
 
-#if __cplusplus >= 201703L
+#include <functional>
+
+// c++ std::unary_function compatibility
+#ifndef LIBCPP_UNARY_FUNCTION_DEFINED
+    #if defined(_MSC_VER)
+        #if (_MSC_VER >= 1910)
+            #define LIBCPP_UNARY_FUNCTION_DEFINED 0
+        #else
+            #define LIBCPP_UNARY_FUNCTION_DEFINED 1
+        #endif
+    #elif (__cplusplus >= 201703L)
+        #if defined(__GLIBCXX__)
+            #define LIBCPP_UNARY_FUNCTION_DEFINED 1
+        #elif defined(_LIBCPP_VERSION)
+            #define LIBCPP_UNARY_FUNCTION_DEFINED 0
+        #else
+            #define LIBCPP_UNARY_FUNCTION_DEFINED 0
+        #endif
+    #else
+        #define LIBCPP_UNARY_FUNCTION_DEFINED 1
+    #endif
+#endif
+
+#if !LIBCPP_UNARY_FUNCTION_DEFINED
 namespace std {
     template <class Arg, class Result>
     struct unary_function {
@@ -9,6 +32,8 @@ namespace std {
         typedef Result result_type;
     };
 }
+#undef LIBCPP_UNARY_FUNCTION_DEFINED
+#define LIBCPP_UNARY_FUNCTION_DEFINED 1
 #endif
 
 #include <string>

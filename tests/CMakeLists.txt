@@ -11,7 +11,7 @@ endif()
 
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
-    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 endif()
 
 # windows specific settings
@@ -135,34 +135,45 @@ target_link_libraries(${PROJECT_NAME}
     unofficial::libharu::hpdf
 )
 
+# for os-specific libraries
 if (WIN32)
     target_link_libraries(${PROJECT_NAME} 
         ws2_32 # for windows sockets
         bcrypt # for Windows cryptography
-
         hidapi::winapi
     )
-else()
+elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} 
-        pthread # for *nix threads
-        rt # for *nix real-time extensions
-
+        pthread
         hidapi::hidapi
 
-# #       clickhouse-cpp
+# #       for clickhouse-cpp
 #         clickhouse-cpp-lib
 #         lz4::lz4
 #         zstd::libzstd
 #         cityhash
     )
-    
-    # Link DPDK libraries if found
-    if(DPDK_FOUND)
-        target_link_libraries(${PROJECT_NAME} ${DPDK_LIBRARIES})
-        message(STATUS "Linking DPDK libraries: ${DPDK_LIBRARIES}")
-    endif()
+else() # Linux
+    target_link_libraries(${PROJECT_NAME} 
+        rt
+        pthread
+        hidapi::hidapi
+
+# #       for clickhouse-cpp
+#         clickhouse-cpp-lib
+#         lz4::lz4
+#         zstd::libzstd
+#         cityhash
+    )
 endif()
 
+# Link DPDK libraries if found
+if(DPDK_FOUND)
+    target_link_libraries(${PROJECT_NAME} ${DPDK_LIBRARIES})
+    message(STATUS "Linking DPDK libraries: ${DPDK_LIBRARIES}")
+endif()
+
+# opencl or cuda
 if(OpenCL_FOUND)
     target_link_libraries(${PROJECT_NAME} 
         OpenCL::OpenCL

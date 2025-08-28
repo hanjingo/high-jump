@@ -6,6 +6,7 @@
     "boost-math",
     "boost-algorithm",
     "boost-asio",
+    "boost-beast",
     "boost-circular-buffer",
     "boost-filesystem",
     "boost-interprocess",
@@ -19,33 +20,33 @@
     "boost-multi-index",
     "breakpad",
     "clickhouse-cpp",
-    "zstd",
     "concurrentqueue",
     "cpp-httplib",
     "eigen3",
     "flatbuffers",
     "fmt",
     "gtest",
+    "hffix",
     "hidapi",
     "hiredis",
+    "icu",
     "libharu",
+    "libiconv",
+    "libnice",
+    "libpqxx",
     "nlohmann-json",
+    "opencl",
+    "opencv",
     "openssl",
     "protobuf",
     "pugixml",
     "spdlog",
     "sqlite3",
     "tbb",
-    "zeromq",
-    "opencl",
-    "zlib",
     "yaml-cpp",
-    "opencv",
-    "hffix",
-    "libpqxx",
-    "libnice",
-    "libiconv",
-    "icu"
+    "zeromq",
+    "zlib",
+    "zstd"
   ],
   "overrides": [
     {
@@ -178,6 +179,10 @@
     },
     {
       "name": "boost-asio",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-beast",
       "version": "1.76.0"
     },
     {

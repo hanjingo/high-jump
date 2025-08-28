@@ -1,7 +1,7 @@
 #ifndef ANY_HPP
 #define ANY_HPP
 
-#if (__cplusplus >= 201703L)
+#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <any>
 
 namespace libcpp
@@ -34,9 +34,8 @@ constexpr T any_cast(const any& operand)
 }
 
 }
-#endif
 
-#if (__cplusplus < 201703L)
+#else
 #include <boost/any.hpp>
 
 namespace libcpp

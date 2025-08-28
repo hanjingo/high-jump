@@ -10,7 +10,7 @@ endif()
 
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
-    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
 
 # windows specific settings
@@ -44,6 +44,10 @@ include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
 add_executable(${PROJECT_NAME} ${SRC})
 
+# For Github CI detection
+include(GoogleTest)
+gtest_discover_tests(${PROJECT_NAME})
+
 target_link_libraries(${PROJECT_NAME}
 	benchmark::benchmark
 )
@@ -62,5 +66,3 @@ else()
         pthread
     )
 endif()
-
-add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME} --benchmark_min_time=0.1)

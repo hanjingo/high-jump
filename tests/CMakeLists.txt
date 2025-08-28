@@ -146,31 +146,33 @@ elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} 
         pthread
         hidapi::hidapi
-
-# #       for clickhouse-cpp
-#         clickhouse-cpp-lib
-#         lz4::lz4
-#         zstd::libzstd
-#         cityhash
     )
 else() # Linux
     target_link_libraries(${PROJECT_NAME} 
         rt
         pthread
         hidapi::hidapi
-
-# #       for clickhouse-cpp
-#         clickhouse-cpp-lib
-#         lz4::lz4
-#         zstd::libzstd
-#         cityhash
     )
 endif()
 
 # Link DPDK libraries if found
 if(DPDK_FOUND)
-    target_link_libraries(${PROJECT_NAME} ${DPDK_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} 
+        ${DPDK_LIBRARIES}
+    )
     message(STATUS "Linking DPDK libraries: ${DPDK_LIBRARIES}")
+endif()
+
+# Link clickhouse if found
+find_package(clickhouse-cpp QUIET)
+if(TARGET clickhouse-cpp-lib)
+    message(STATUS "clickhouse-cpp found, enabling ClickHouse support")
+    target_link_libraries(${PROJECT_NAME} 
+        clickhouse-cpp-lib 
+        lz4::lz4 
+        zstd::libzstd 
+        cityhash
+    )
 endif()
 
 # opencl or cuda

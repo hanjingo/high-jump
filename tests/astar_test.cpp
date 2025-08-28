@@ -11,11 +11,11 @@ using namespace libcpp::astar;
 class AStarTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        std::cout << "\n=== A* Algorithm Tests Setup ===" << std::endl;
+        // std::cout << "\n=== A* Algorithm Tests Setup ===" << std::endl;
     }
     
     void TearDown() override {
-        std::cout << "=== A* Algorithm Tests Teardown ===" << std::endl;
+        // std::cout << "=== A* Algorithm Tests Teardown ===" << std::endl;
     }
 
     // Helper function to create a simple 3x3 grid_t with full connectivity
@@ -122,39 +122,39 @@ protected:
 
     // Helper function to print path for debugging
     void print_path(const std::vector<location_t>& path) {
-        std::cout << "Path: ";
-        for (size_t i = 0; i < path.size(); ++i) {
-            std::cout << "(" << path[i].x << "," << path[i].y << ")";
-            if (i < path.size() - 1) std::cout << " -> ";
-        }
-        std::cout << std::endl;
+        // std::cout << "Path: ";
+        // for (size_t i = 0; i < path.size(); ++i) {
+        //     std::cout << "(" << path[i].x << "," << path[i].y << ")";
+        //     if (i < path.size() - 1) std::cout << " -> ";
+        // }
+        // std::cout << std::endl;
     }
 
     // Helper function to print grid_t with path for visualization
     void print_grid_with_path(const std::vector<location_t>& path, int width, int height, 
                              const std::vector<location_t>& obstacles = {}) {
-        std::cout << "Grid visualization:" << std::endl;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                location_t current{x, y};
+        // std::cout << "Grid visualization:" << std::endl;
+        // for (int y = 0; y < height; y++) {
+        //     for (int x = 0; x < width; x++) {
+        //         location_t current{x, y};
                 
-                if (std::find(obstacles.begin(), obstacles.end(), current) != obstacles.end()) {
-                    std::cout << "# ";  // Obstacle
-                } else if (std::find(path.begin(), path.end(), current) != path.end()) {
-                    if (current == path.front()) {
-                        std::cout << "S ";  // Start
-                    } else if (current == path.back()) {
-                        std::cout << "G ";  // Goal
-                    } else {
-                        std::cout << "* ";  // Path
-                    }
-                } else {
-                    std::cout << ". ";  // Empty
-                }
-            }
-            std::cout << std::endl;
-        }
-        std::cout << std::endl;
+        //         if (std::find(obstacles.begin(), obstacles.end(), current) != obstacles.end()) {
+        //             std::cout << "# ";  // Obstacle
+        //         } else if (std::find(path.begin(), path.end(), current) != path.end()) {
+        //             if (current == path.front()) {
+        //                 std::cout << "S ";  // Start
+        //             } else if (current == path.back()) {
+        //                 std::cout << "G ";  // Goal
+        //             } else {
+        //                 std::cout << "* ";  // Path
+        //             }
+        //         } else {
+        //             std::cout << ". ";  // Empty
+        //         }
+        //     }
+        //     std::cout << std::endl;
+        // }
+        // std::cout << std::endl;
     }
 
     // Fixed helper function to validate path
@@ -169,13 +169,13 @@ protected:
             try {
                 const auto& neighbors = test_grid.neighbors(current);
                 if (std::find(neighbors.begin(), neighbors.end(), next) == neighbors.end()) {
-                    std::cout << "Invalid step from (" << current.x << "," << current.y 
-                             << ") to (" << next.x << "," << next.y << ")" << std::endl;
+                    // std::cout << "Invalid step from (" << current.x << "," << current.y 
+                    //          << ") to (" << next.x << "," << next.y << ")" << std::endl;
                     return false;
                 }
             } catch (const std::exception& e) {
-                std::cout << "Exception checking neighbors for (" << current.x << "," << current.y 
-                         << "): " << e.what() << std::endl;
+                // std::cout << "Exception checking neighbors for (" << current.x << "," << current.y 
+                //          << "): " << e.what() << std::endl;
                 return false;
             }
         }
@@ -386,8 +386,8 @@ TEST_F(AStarTest, basic_search_step_by_step) {
         // Check if next is a valid neighbor of current
         const auto& neighbors = test_grid.neighbors(current);
         if (std::find(neighbors.begin(), neighbors.end(), next) == neighbors.end()) {
-            std::cout << "Invalid step from (" << current.x << "," << current.y 
-                     << ") to (" << next.x << "," << next.y << ")" << std::endl;
+            // std::cout << "Invalid step from (" << current.x << "," << current.y 
+            //          << ") to (" << next.x << "," << next.y << ")" << std::endl;
             path_valid = false;
         }
     }
@@ -509,22 +509,22 @@ TEST_F(AStarTest, search_with_obstacles_detailed) {
     location_t goal{2, 2};
     
     // Debug: Print grid_t structure
-    std::cout << "Grid structure:" << std::endl;
-    for (int y = 0; y < 3; y++) {
-        for (int x = 0; x < 3; x++) {
-            location_t loc{x, y};
-            try {
-                const auto& neighbors = test_grid.neighbors(loc);
-                std::cout << "(" << x << "," << y << ") has " << neighbors.size() << " neighbors: ";
-                for (const auto& n : neighbors) {
-                    std::cout << "(" << n.x << "," << n.y << ") ";
-                }
-                std::cout << std::endl;
-            } catch (...) {
-                std::cout << "(" << x << "," << y << ") - error getting neighbors" << std::endl;
-            }
-        }
-    }
+    // std::cout << "Grid structure:" << std::endl;
+    // for (int y = 0; y < 3; y++) {
+    //     for (int x = 0; x < 3; x++) {
+    //         location_t loc{x, y};
+    //         try {
+    //             const auto& neighbors = test_grid.neighbors(loc);
+    //             std::cout << "(" << x << "," << y << ") has " << neighbors.size() << " neighbors: ";
+    //             for (const auto& n : neighbors) {
+    //                 std::cout << "(" << n.x << "," << n.y << ") ";
+    //             }
+    //             std::cout << std::endl;
+    //         } catch (...) {
+    //             std::cout << "(" << x << "," << y << ") - error getting neighbors" << std::endl;
+    //         }
+    //     }
+    // }
     
     std::vector<location_t> path;
     search(path, test_grid, start, goal);
@@ -581,9 +581,9 @@ TEST_F(AStarTest, different_heuristics) {
         EXPECT_EQ(euclidean_path.back(), goal);
     }
     
-    std::cout << "Manhattan path: ";
+    // std::cout << "Manhattan path: ";
     print_path(manhattan_path);
-    std::cout << "Euclidean path: ";
+    // std::cout << "Euclidean path: ";
     print_path(euclidean_path);
 }
 
@@ -683,8 +683,8 @@ TEST_F(AStarTest, path_optimality_check) {
         EXPECT_LE(path.size(), 5);  // At most 5 steps (before smoothing)
         
         double path_cost = calculate_path_cost(path, test_grid);
-        std::cout << "Path cost: " << path_cost << std::endl;
-        std::cout << "Path length: " << path.size() << std::endl;
+        // std::cout << "Path cost: " << path_cost << std::endl;
+        // std::cout << "Path length: " << path.size() << std::endl;
     }
 }
 
@@ -709,8 +709,8 @@ TEST_F(AStarTest, large_grid_optimal_path) {
         // For a grid_t without obstacles, optimal path length should be 
         // around 2*size-1 = 19 steps (Manhattan distance)
         // After smoothing, it might be shorter
-        std::cout << "Large grid_t path length: " << path.size() << std::endl;
-        std::cout << "Expected minimum (Manhattan): " << (2*size-2) << std::endl;
+        // std::cout << "Large grid_t path length: " << path.size() << std::endl;
+        // std::cout << "Expected minimum (Manhattan): " << (2*size-2) << std::endl;
     }
 }
 
@@ -743,7 +743,7 @@ TEST_F(AStarTest, corridor_navigation) {
         EXPECT_EQ(path.back(), goal);
         
         // Path should be roughly the length of the corridor
-        std::cout << "Corridor path length: " << path.size() << std::endl;
+        // std::cout << "Corridor path length: " << path.size() << std::endl;
         print_path(path);
     }
 }
@@ -798,9 +798,9 @@ TEST_F(AStarTest, performance_timing) {
     
     EXPECT_GT(path.size(), 0);
     
-    std::cout << "Performance test (" << size << "x" << size << ") took: " 
-              << duration.count() << " microseconds" << std::endl;
-    std::cout << "Path length: " << path.size() << std::endl;
+    // std::cout << "Performance test (" << size << "x" << size << ") took: " 
+    //           << duration.count() << " microseconds" << std::endl;
+    // std::cout << "Path length: " << path.size() << std::endl;
     
     // Performance should be reasonable - less than 10ms for 20x20 grid_t
     EXPECT_LT(duration.count(), 10000);  // 10ms in microseconds

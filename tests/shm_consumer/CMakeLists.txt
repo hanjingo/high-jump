@@ -22,6 +22,6 @@ add_executable(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} 
     ${Boost_LIBRARIES})
 
-if (NOT WIN32)
+if(UNIX AND NOT APPLE) # or if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(${PROJECT_NAME} rt)
 endif()

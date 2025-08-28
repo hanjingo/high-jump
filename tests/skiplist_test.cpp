@@ -12,22 +12,22 @@ using namespace libcpp;
 class SkipListTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        std::cout << "\n=== Skip List Tests Setup ===" << std::endl;
+        // std::cout << "\n=== Skip List Tests Setup ===" << std::endl;
     }
     
     void TearDown() override {
-        std::cout << "=== Skip List Tests Teardown ===" << std::endl;
+        // std::cout << "=== Skip List Tests Teardown ===" << std::endl;
     }
 
     // Helper function to print skiplist for debugging
     template<typename T>
     void print_skiplist_debug(const skiplist<T>& sl) {
-        std::cout << "SkipList size: " << sl.size() << std::endl;
-        std::cout << "Elements: ";
-        for (auto it = sl.begin(); it != sl.end(); ++it) {
-            std::cout << "[" << it.score() << ":" << *it << "] ";
-        }
-        std::cout << std::endl;
+        // std::cout << "SkipList size: " << sl.size() << std::endl;
+        // std::cout << "Elements: ";
+        // for (auto it = sl.begin(); it != sl.end(); ++it) {
+        //     std::cout << "[" << it.score() << ":" << *it << "] ";
+        // }
+        // std::cout << std::endl;
     }
 
     // Helper function to verify skiplist order
@@ -626,7 +626,7 @@ TEST_F(SkipListTest, performance_test) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
-    std::cout << "Inserted " << num_elements << " elements in " << duration.count() << " ms" << std::endl;
+    // std::cout << "Inserted " << num_elements << " elements in " << duration.count() << " ms" << std::endl;
     
     EXPECT_EQ(sl.size(), num_elements);
     EXPECT_TRUE(sl.validate());
@@ -642,7 +642,7 @@ TEST_F(SkipListTest, performance_test) {
     end_time = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
-    std::cout << "1000 rank-based searches took " << duration.count() << " μs" << std::endl;
+    // std::cout << "1000 rank-based searches took " << duration.count() << " μs" << std::endl;
 }
 
 // ================================ Validation Tests ================================

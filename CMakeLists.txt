@@ -26,9 +26,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# # for boost/stacktrace
-# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")
+# for boost/stacktrace
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED=1")
 
 # build type
 if (NOT CMAKE_BUILD_TYPE)
@@ -68,7 +68,7 @@ endif()
 # build benmark
 if (BUILD_TEST)
     add_subdirectory(tests)
-    add_subdirectory(bench)
+    add_subdirectory(benchs)
 endif()
 
 include(GNUInstallDirs)

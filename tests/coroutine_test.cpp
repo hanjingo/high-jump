@@ -37,12 +37,12 @@ TEST(coroutine, coroutine)
 
     libcpp::coroutine<void>::pull_type co1_lambda([](libcpp::coroutine<void>::push_type& out){
         ASSERT_EQ(true, true);
-        std::cout << "lambda" << std::endl;
+        // std::cout << "lambda" << std::endl;
     });
 
     COROUTINE(
         ASSERT_EQ(true, true);
-        std::cout << "COROUTINE" << std::endl;
+        // std::cout << "COROUTINE" << std::endl;
     );
 
     // co2

@@ -57,7 +57,7 @@ public:
 
     // add new work item to the pool
     template<class F, class... Args>
-#if __cplusplus >= 201703L
+#if __cplusplus >= 201703L || (defined(_MSC_VER) && _MSC_VER >= 1910)
     auto enqueue(F&& f, Args&& ... args) -> std::future<typename std::invoke_result<F, Args...>::type>
     {
         using return_type = typename std::invoke_result<F, Args...>::type;

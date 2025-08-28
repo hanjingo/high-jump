@@ -11,7 +11,7 @@ endif()
 
 # set binary output path
 if (NOT EXECUTABLE_OUTPUT_PATH)
-    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
 
 # windows specific settings
@@ -101,6 +101,10 @@ include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
 add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
 
+# For Github CI detection
+include(GoogleTest)
+gtest_discover_tests(${PROJECT_NAME})
+
 # Add DPDK include directories if found
 if(DPDK_FOUND)
     target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
@@ -186,8 +190,6 @@ elseif(CUDA_FOUND)
     )
     target_include_directories(${PROJECT_NAME} PRIVATE ${CUDA_INCLUDE_DIRS})
 endif()
-
-add_test(test ${PROJECT_NAME})
 
 file(COPY cfg.ini DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY json_test.json DESTINATION ${EXECUTABLE_OUTPUT_PATH})

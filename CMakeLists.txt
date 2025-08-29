@@ -65,9 +65,15 @@ endif()
 #      add_subdirectory(example)
 # endif()
 
-# build benmark
+# build test
 if (BUILD_TEST)
+    enable_testing()
+
     add_subdirectory(tests)
+endif()
+
+# build benchmark
+if (BUILD_BENCH)
     add_subdirectory(benchs)
 endif()
 

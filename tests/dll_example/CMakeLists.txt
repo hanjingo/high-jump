@@ -12,7 +12,7 @@ endif()
 
 # set binary output path
 if (NOT LIBRARY_OUTPUT_PATH)
-    set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+    set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR})

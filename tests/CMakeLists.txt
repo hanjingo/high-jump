@@ -24,8 +24,6 @@ if (WIN32)
     )
 endif()
 
-enable_testing()
-
 if(COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
     add_link_options(--coverage -fprofile-arcs -ftest-coverage)
@@ -103,7 +101,9 @@ add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
 
 # For Github CI detection
 include(GoogleTest)
-gtest_discover_tests(${PROJECT_NAME})
+gtest_discover_tests(${PROJECT_NAME}
+    WORKING_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}
+)
 
 # Add DPDK include directories if found
 if(DPDK_FOUND)

@@ -90,10 +90,21 @@ or
 cmake .. -DBUILD_TEST=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake -DASAN=ON
 ```
 
-| option     | default | description                     |
-| ---------- | ------- | ------------------------------- |
-| BUILD_TEST | ON      | test this project if turned on. |
-| ASAN       | ON      | test this project by ASAN tool. |
+| option      | default | description                     |
+| ----------  | ------- | ------------------------------- |
+| BUILD_BENCH | ON      | benchmark this project if turned on. |
+
+### Build bench
+
+```sh
+cmake .. -DBUILD_BENCH=ON
+```
+
+or
+
+```sh
+cmake .. -DBUILD_BENCH=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
+```
 
 ---
 

@@ -44,10 +44,6 @@ include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
 add_executable(${PROJECT_NAME} ${SRC})
 
-# For Github CI detection
-include(GoogleTest)
-gtest_discover_tests(${PROJECT_NAME})
-
 target_link_libraries(${PROJECT_NAME}
 	benchmark::benchmark
 )
@@ -66,3 +62,8 @@ else()
         pthread
     )
 endif()
+
+add_test(
+    NAME ${PROJECT_NAME}
+    COMMAND $<TARGET_FILE:${PROJECT_NAME}> --benchmark_min_time=0.1
+)

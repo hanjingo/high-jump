@@ -30,6 +30,7 @@
     "hidapi",
     "hiredis",
     "icu",
+    "jwt-cpp",
     "libharu",
     "libiconv",
     "libnice",
@@ -160,6 +161,10 @@
     {
       "name": "icu",
       "version": "74.2#6"
+    },
+    {
+      "name": "jwt-cpp",
+      "version": "0.7.1"
     },
     {
       "name": "zstd",

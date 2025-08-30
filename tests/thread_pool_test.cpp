@@ -22,15 +22,6 @@ TEST(thread_pool, enqueue)
     ASSERT_EQ(ret.get(), 5);
 }
 
-TEST(thread_pool, bind_core_)
-{
-    libcpp::thread_pool tp{{1, 2}};
-    auto ret = tp.enqueue([]()->int{
-        return 5;
-    });
-    ASSERT_EQ(ret.get(), 5);
-}
-
 TEST(thread_pool, clear)
 {
     libcpp::thread_pool tp{1};

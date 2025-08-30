@@ -46,6 +46,32 @@ protected:
     }
 };
 
+TEST_F(CpuTest, cpu_brand_functionality)
+{
+    SCOPED_TRACE("Testing cpu_brand functionality");
+    unsigned char brand[128] = {0};
+    cpu_brand(brand, sizeof(brand));
+    std::string brand_str(reinterpret_cast<char*>(brand));
+    EXPECT_FALSE(brand_str.empty()) << "CPU brand string should not be empty";
+    EXPECT_GT(brand_str.length(), 2u) << "CPU brand string should be reasonable length";
+    for (char c : brand_str) {
+        EXPECT_TRUE(c == 0 || (c >= 32 && c <= 126)) << "Brand string should be printable";
+    }
+}
+
+TEST_F(CpuTest, cpu_vendor_functionality)
+{
+    SCOPED_TRACE("Testing cpu_vendor functionality");
+    unsigned char vendor[64] = {0};
+    cpu_vendor(vendor, sizeof(vendor));
+    std::string vendor_str(reinterpret_cast<char*>(vendor));
+    EXPECT_FALSE(vendor_str.empty()) << "CPU vendor string should not be empty";
+    EXPECT_GT(vendor_str.length(), 2u) << "CPU vendor string should be reasonable length";
+    for (char c : vendor_str) {
+        EXPECT_TRUE(c == 0 || (c >= 32 && c <= 126)) << "Vendor string should be printable";
+    }
+}
+
 TEST_F(CpuTest, cpu_core_num_basic)
 {
     SCOPED_TRACE("Testing cpu_core_num basic functionality");

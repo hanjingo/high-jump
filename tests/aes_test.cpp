@@ -1214,7 +1214,13 @@ TEST(aes, decode_file)
     std::string iv = "abcdefghabcdefgh";
 
     // ECB padding PKCS#5
-    str_src = "./aes_ecb_pkcs5_padding_encode.log";
+    str_src = "./crypto.log";
+    str_dst = "./aes_ecb_pkcs5_padding_encode1.log";
+    ASSERT_EQ(libcpp::aes::encode_file(str_dst, str_src, 
+        key128, libcpp::aes::algo::ecb, libcpp::aes::padding::aes_pkcs5_padding, iv), true);
+
+    // ECB padding PKCS#5
+    str_src = "./aes_ecb_pkcs5_padding_encode1.log";
     str_dst = "./aes_ecb_pkcs5_padding.log";
     ASSERT_EQ(libcpp::aes::decode_file(str_dst, str_src, 
         key128, libcpp::aes::algo::ecb, libcpp::aes::padding::aes_pkcs5_padding), true);

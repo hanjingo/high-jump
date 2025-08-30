@@ -6,7 +6,6 @@ TEST(MainboardTest, Model)
 	char buf[256] = {0};
 	int ret = mainboard_model(buf, sizeof(buf));
 	EXPECT_GE(ret, 0);
-	printf("mainboard_model: ret=%d, value='%s'\n", ret, buf);
 }
 
 TEST(MainboardTest, Vendor)
@@ -14,7 +13,6 @@ TEST(MainboardTest, Vendor)
 	char buf[256] = {0};
 	int ret = mainboard_vendor(buf, sizeof(buf));
 	EXPECT_GE(ret, 0);
-	printf("mainboard_vendor: ret=%d, value='%s'\n", ret, buf);
 }
 
 TEST(MainboardTest, SerialNum)
@@ -26,7 +24,6 @@ TEST(MainboardTest, SerialNum)
         return;
     }
     EXPECT_GE(ret, 0);
-    printf("mainboard_serial_num: ret=%d, value='%s'\n", ret, buf);
 }
 
 TEST(MainboardTest, BiosVersion)
@@ -34,7 +31,6 @@ TEST(MainboardTest, BiosVersion)
 	char buf[256] = {0};
 	int ret = mainboard_bios_version(buf, sizeof(buf));
 	EXPECT_GE(ret, 0);
-	printf("mainboard_bios_version: ret=%d, value='%s'\n", ret, buf);
 }
 
 TEST(MainboardTest, Chipset)
@@ -42,19 +38,39 @@ TEST(MainboardTest, Chipset)
 	char buf[256] = {0};
 	int ret = mainboard_chipset(buf, sizeof(buf));
 	EXPECT_GE(ret, 0);
-	printf("mainboard_chipset: ret=%d, value='%s'\n", ret, buf);
 }
 
 TEST(MainboardTest, MemorySlots)
 {
 	int ret = mainboard_memory_slots();
 	EXPECT_GE(ret, -1);
-	printf("mainboard_memory_slots: ret=%d\n", ret);
 }
 
 TEST(MainboardTest, ExpansionSlots)
 {
 	int ret = mainboard_expansion_slots();
 	EXPECT_GE(ret, -1);
-	printf("mainboard_expansion_slots: ret=%d\n", ret);
+}
+
+TEST(MainboardTest, ManufacturerName)
+{
+	char buf[256] = {0};
+	int ret = mainboard_manufacturer_name(buf, sizeof(buf));
+	EXPECT_GE(ret, 0);
+	EXPECT_GT(strlen(buf), 0u);
+}
+
+TEST(MainboardTest, ProductName)
+{
+	char buf[256] = {0};
+	int ret = mainboard_product_name(buf, sizeof(buf));
+	EXPECT_GE(ret, 0);
+	EXPECT_GT(strlen(buf), 0u);
+}
+
+TEST(MainboardTest, Version)
+{
+	uint8_t major = 0, minor = 0, patch = 0;
+	int ret = mainboard_version(&major, &minor, &patch);
+	EXPECT_GE(ret, 0);
 }

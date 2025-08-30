@@ -48,6 +48,7 @@ find_package(Protobuf REQUIRED)
 find_package(TBB REQUIRED)
 find_package(ODBC REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(jwt-cpp CONFIG REQUIRED)
 find_package(hidapi REQUIRED)
 find_package(unofficial-breakpad REQUIRED)
 find_package(unofficial-concurrentqueue REQUIRED)
@@ -128,6 +129,7 @@ target_link_libraries(${PROJECT_NAME}
     ZLIB::ZLIB
     yaml-cpp::yaml-cpp
     nlohmann_json::nlohmann_json
+    jwt-cpp::jwt-cpp
 
 #    breakpad_client
     unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config

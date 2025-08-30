@@ -36,6 +36,157 @@ extern "C" {
 #endif
 
 // ------------------------ CPU API ---------------------------------
+static void cpu_brand(unsigned char* buf, size_t size) 
+{
+#if defined(_WIN32) || defined(_WIN64)
+    int cpuInfo[4] = {0};
+    char brand[64] = {0};
+    __cpuid(cpuInfo, 0x80000000);
+    unsigned int nExIds = cpuInfo[0];
+    if (nExIds >= 0x80000004) 
+    {
+        __cpuid((int*)cpuInfo, 0x80000002);
+        memcpy(brand, cpuInfo, 16);
+        __cpuid((int*)cpuInfo, 0x80000003);
+        memcpy(brand + 16, cpuInfo, 16);
+        __cpuid((int*)cpuInfo, 0x80000004);
+        memcpy(brand + 32, cpuInfo, 16);
+        size_t len = strlen(brand);
+        if (len >= size) 
+            len = size - 1;
+
+        memcpy(buf, brand, len);
+        buf[len] = 0;
+    } 
+    else 
+    {
+        if (size > 0) 
+            buf[0] = 0;
+    }
+#elif defined(__linux__)
+    FILE* fp = fopen("/proc/cpuinfo", "r");
+    if (!fp) 
+    { 
+        if (size > 0) 
+            buf[0] = 0;
+
+        return; 
+    }
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) 
+    {
+        if (strstr(line, "model name")) 
+        {
+            char* p = strchr(line, ':');
+            if (p) 
+            {
+                p++;
+                while (*p == ' ') 
+                    ++p;
+
+                size_t len = strlen(p);
+                if (len > 0 && p[len-1] == '\n') 
+                    p[--len] = 0;
+
+                if (len >= size) 
+                    len = size - 1;
+
+                memcpy(buf, p, len);
+                buf[len] = 0;
+                fclose(fp);
+                return;
+            }
+        }
+    }
+    fclose(fp);
+    if (size > 0) 
+        buf[0] = 0;
+
+#elif defined(__APPLE__)
+    size_t len = size;
+    if (sysctlbyname("machdep.cpu.brand_string", buf, &len, NULL, 0) != 0) 
+    {
+        if (size > 0) 
+            buf[0] = 0;
+    }
+
+#else
+    if (size > 0) 
+        buf[0] = 0;
+
+#endif
+}
+
+static void cpu_vendor(unsigned char* buf, size_t size) 
+{
+#if defined(_WIN32) || defined(_WIN64)
+    int cpuInfo[4] = {0};
+    char vendor[13] = {0};
+    __cpuid(cpuInfo, 0);
+    memcpy(vendor, &cpuInfo[1], 4);
+    memcpy(vendor + 4, &cpuInfo[3], 4);
+    memcpy(vendor + 8, &cpuInfo[2], 4);
+    vendor[12] = 0;
+    size_t len = strlen(vendor);
+    if (len >= size) 
+        len = size - 1;
+
+    memcpy(buf, vendor, len);
+    buf[len] = 0;
+#elif defined(__linux__)
+    FILE* fp = fopen("/proc/cpuinfo", "r");
+    if (!fp) 
+    { 
+        if (size > 0) 
+            buf[0] = 0; 
+            
+        return; 
+    }
+    char line[256];
+    while (fgets(line, sizeof(line), fp)) 
+    {
+        if (strstr(line, "vendor_id")) 
+        {
+            char* p = strchr(line, ':');
+            if (p) 
+            {
+                p++;
+                while (*p == ' ') 
+                    ++p;
+
+                size_t len = strlen(p);
+                if (len > 0 && p[len-1] == '\n') 
+                    p[--len] = 0;
+
+                if (len >= size) 
+                    len = size - 1;
+
+                memcpy(buf, p, len);
+                buf[len] = 0;
+                fclose(fp);
+                return;
+            }
+        }
+    }
+    fclose(fp);
+    if (size > 0) 
+        buf[0] = 0;
+
+#elif defined(__APPLE__)
+    size_t len = size;
+    if (sysctlbyname("machdep.cpu.vendor", buf, &len, NULL, 0) != 0) 
+    {
+        if (size > 0) 
+            buf[0] = 0;
+    }
+
+#else
+    if (size > 0) 
+        buf[0] = 0;
+        
+#endif
+}
+
 static unsigned int cpu_core_num(void)
 {
 #if defined(_WIN32) || defined(_WIN64)

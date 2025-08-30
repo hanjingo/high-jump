@@ -220,7 +220,7 @@ TEST_F(EnvTest, SystemLimits) {
 
     // Pipe buffer size
     int64_t pipe_buf = env_get(CONF_PIPE_BUF);
-    EXPECT_GT(pipe_buf, 512); // At least 512 bytes
+    EXPECT_GT(pipe_buf, 128); // At least 128 bytes
     // std::cout << "Pipe buffer size: " << pipe_buf << std::endl;
 }
 

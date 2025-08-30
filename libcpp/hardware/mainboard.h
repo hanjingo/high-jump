@@ -277,11 +277,105 @@ static int mainboard_expansion_slots()
     char buf[128];
     if (_get_wmi_property("Win32_SystemSlot", "SlotLayout", buf, sizeof(buf)) == 0)
         return atoi(buf);
+
     return -1;
+
 #elif defined(__linux__)
     return -1;
+
 #elif defined(__APPLE__)
     return -1;
+
+#endif
+}
+
+
+static int mainboard_manufacturer_name(char* buf, size_t size)
+{
+#ifdef _WIN32
+    return _get_wmi_property("Win32_BaseBoard", "Manufacturer", buf, size);
+
+#elif defined(__linux__)
+    return _read_sysfs("/sys/class/dmi/id/board_vendor", buf, size);
+
+#elif defined(__APPLE__)
+    snprintf(buf, size, "Apple Inc.");
+    return 0;
+
+#else
+    if (size > 0) 
+        buf[0] = 0;
+
+    return -1;
+
+#endif
+}
+
+static int mainboard_product_name(char* buf, size_t size)
+{
+#ifdef _WIN32
+    return _get_wmi_property("Win32_BaseBoard", "Product", buf, size);
+
+#elif defined(__linux__)
+    return _read_sysfs("/sys/class/dmi/id/board_name", buf, size);
+
+#elif defined(__APPLE__)
+    return _sysctl_string("hw.model", buf, size);
+
+#else
+    if (size > 0) 
+        buf[0] = 0;
+
+    return -1;
+
+#endif
+}
+
+static int mainboard_version(uint8_t* major, uint8_t* minor, uint8_t* patch)
+{
+#ifdef _WIN32
+    char buf[64] = {0};
+    if (_get_wmi_property("Win32_BaseBoard", "Version", buf, sizeof(buf)) != 0)
+        return -1;
+
+    int m=0, n=0, p=0;
+    if (sscanf(buf, "%hhu.%hhu.%hhu", major, minor, patch) == 3)
+        return 0;
+
+    *major = *minor = *patch = 0;
+    return 0;
+
+#elif defined(__linux__)
+    FILE* fp = fopen("/sys/class/dmi/id/board_version", "r");
+    if (!fp) 
+        return -1;
+
+    char buf[32] = {0};
+    if (!fgets(buf, sizeof(buf), fp)) 
+    { 
+        fclose(fp); 
+        return -1; 
+    }
+    fclose(fp);
+    int m=0, n=0, p=0;
+    if (sscanf(buf, "%hhu.%hhu.%hhu", major, minor, patch) == 3)
+        return 0;
+
+    *major = *minor = *patch = 0;
+    return 0;
+
+#elif defined(__APPLE__)
+    char buf[64] = {0};
+    if (_sysctl_string("hw.model", buf, sizeof(buf)) != 0)
+        return -1;
+
+    *major = *minor = *patch = 0;
+    return 0;
+
+#else
+    *major = *minor = *patch = 0;
+    return -1;
+
 #endif
 }
 

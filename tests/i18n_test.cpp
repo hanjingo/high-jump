@@ -23,7 +23,10 @@ protected:
 
     void TearDown() override {
         if (std::filesystem::exists(test_dir_)) {
-            std::filesystem::remove_all(test_dir_);
+            for (auto& entry : std::filesystem::directory_iterator(test_dir_)) {
+                std::filesystem::remove_all(entry.path());
+            }
+            std::filesystem::remove(test_dir_);
         }
 
         i18n::instance().remove("main");

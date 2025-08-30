@@ -181,6 +181,17 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
 
 TEST(rsa, decode_file)
 {
+    std::string pubkey = R"(-----BEGIN PUBLIC KEY-----
+MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==
+-----END PUBLIC KEY-----)";
+
+    // file -> rsa file
+    ASSERT_EQ(libcpp::rsa::encode_file(
+        std::string("./rsa_file_test_encode1.log"),
+        std::string("./crypto.log"), 
+        pubkey), 
+    true);
+
     std::string prikey = R"(-----BEGIN RSA PRIVATE KEY-----
 MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9/CJtqi8S07DgthGvs+XxHeTA6R8vPKqIykZgNgp0sJsJXHOKKNtDnQIDAQABAkAGmXeWJvr3ynnQTWWRvF09hCKSeZFmOkOHz8D/JOXONAxYOPkpNVu3sShS/ccyGMQKjSHEa5Zyo0S9k/vwl+7xAiEAz6bkXHsaut7Sk2Ze4/MZZuRhR6LqE7Q9Y/ecyGyTDFECIQC2F7HqA0RB2PhuD37Gb3JkB1HNUdro9Fj6wVYATXYLjQIgSOP/k0sPRfuDlYRA2OlzyD9wunHAkywYxKednGkocRECIGsm1F31YCQzbjUtzxcsG687E2rz4RK2PuoH/PienHk9AiBIE54w2swcy1YcaL3MnZDN6eWVFYRTZXeue74hbpZ27A==
 -----END RSA PRIVATE KEY-----)";
@@ -188,7 +199,7 @@ MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9
     // rsa file -> file
     ASSERT_EQ(libcpp::rsa::decode_file(
         std::string("./rsa_file_test_decode.log"),
-        std::string("./rsa_file_test_encode.log"), 
+        std::string("./rsa_file_test_encode1.log"), 
         prikey), 
     true);
 }

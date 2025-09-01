@@ -59,6 +59,7 @@ find_package(yaml-cpp CONFIG REQUIRED)
 find_package(cityhash REQUIRED)
 find_package(unofficial-libharu REQUIRED)
 find_package(ICU REQUIRED COMPONENTS uc i18n io)
+find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -118,6 +119,7 @@ target_link_libraries(${PROJECT_NAME}
     ${Eigen_LIBRARIES} 
     ${ODBC_LIBRARIES}
     ${ICU_LIBRARIES}
+    ${OPENTELEMETRY_CPP_LIBRARIES}
     protobuf::libprotobuf
     pugixml
     BT::behaviortree_cpp

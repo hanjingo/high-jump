@@ -39,6 +39,7 @@
     "opencl",
     "opencv",
     "openssl",
+    "opentelemetry-cpp",
     "protobuf",
     "pugixml",
     "spdlog",
@@ -125,6 +126,10 @@
     {
       "name": "openssl",
       "version": "3.5.0"
+    },
+    {
+      "name": "opentelemetry-cpp",
+      "version": "1.22.0#1"
     },
     {
       "name": "clickhouse-cpp",

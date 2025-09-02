@@ -10,8 +10,13 @@ class I18nTest : public ::testing::Test {
 protected:
     void SetUp() override {
         test_dir_ = "test_translations";
-        if (!std::filesystem::exists(test_dir_)) {
-            std::filesystem::create_directory(test_dir_);
+        try {
+            if (!std::filesystem::exists(test_dir_)) {
+                std::filesystem::create_directory(test_dir_);
+            }
+        } catch(...)
+        {
+            std::cerr << "Error creating test directory: " << test_dir_ << std::endl;
         }
 
         create_test_translation_files();
@@ -22,11 +27,13 @@ protected:
     }
 
     void TearDown() override {
-        if (std::filesystem::exists(test_dir_)) {
-            for (auto& entry : std::filesystem::directory_iterator(test_dir_)) {
-                std::filesystem::remove_all(entry.path());
+        try {
+            if (std::filesystem::exists(test_dir_)) {
+                std::filesystem::remove_all(test_dir_);
             }
-            std::filesystem::remove(test_dir_);
+        } catch(...)
+        {
+            std::cerr << "Error cleaning up test directory: " << test_dir_ << std::endl;
         }
 
         i18n::instance().remove("main");

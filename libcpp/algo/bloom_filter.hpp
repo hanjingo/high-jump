@@ -12,7 +12,7 @@
 #endif
 
 #ifndef BLOOM_FILTER_MAX_BITS
-#define BLOOM_FILTER_MAX_BITS 1 << 16 // 8KB bits
+#define BLOOM_FILTER_MAX_BITS (1 << 16) // 8KB bits
 #endif
 
 #ifndef BLOOM_FILTER_MIN_HASHES

@@ -39,7 +39,12 @@
     "opencl",
     "opencv",
     "openssl",
-    "opentelemetry-cpp",
+    {
+      "name": "opentelemetry-cpp",
+      "features": [
+        "otlp-http"
+      ]
+    },
     "protobuf",
     "pugixml",
     "spdlog",

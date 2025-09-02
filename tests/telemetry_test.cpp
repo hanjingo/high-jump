@@ -59,13 +59,13 @@ static double _get_mem_usage()
 #endif
 }
 
-TEST(TelemetryTest, OStreamExportDefault)
+TEST(TelemetryTest, TraceOStreamExportDefault)
 {
 	auto tracer = libcpp::telemetry::make_ostream_tracer("ostream1");
 	for (int i = 0; i < 2; ++i) 
 	{
-		double cpu = _get_cpu_usage();
-		double mem = _get_mem_usage();
+		auto cpu = _get_cpu_usage();
+		auto mem = _get_mem_usage();
 		std::map<std::string, std::string> attrs = {
 			{"cpu_usage", std::to_string(cpu)},
 			{"mem_usage", std::to_string(mem)}
@@ -77,25 +77,24 @@ TEST(TelemetryTest, OStreamExportDefault)
 	}
 }
 
-
-TEST(TelemetryTest, CustomSpanExporter)
+TEST(TelemetryTest, TraceCustomSpanExporter)
 {
 	using namespace libcpp::telemetry;
-	class my_custom_span_exporter : public detail::custom_span_exporter
+	class my_custom_trace_span_exporter : public libcpp::telemetry::custom_trace_span_exporter_t
 	{
 	public:
-		my_custom_span_exporter() : detail::custom_span_exporter()
+		my_custom_trace_span_exporter() : libcpp::telemetry::custom_trace_span_exporter_t()
 		{
 		}
 
-		void on_export(const recordable_t& recordable) noexcept override
+		void on_export(const std::unique_ptr<trace_recordable_t>& recordable) noexcept
 		{
             auto ptr = recordable.get();
             if (!ptr) {
                 std::cout << "[Custom] recordable is null" << std::endl;
                 return;
             }
-			auto span = dynamic_cast<span_data_t*>(ptr);
+			auto span = dynamic_cast<trace_span_data_t*>(ptr);
             if (!span) {
                 std::cout << "[Custom] recordable is not SpanData" << std::endl;
                 return;
@@ -115,11 +114,12 @@ TEST(TelemetryTest, CustomSpanExporter)
 		}
 	};
 
-	auto exporter = std::make_unique<my_custom_span_exporter>();
-	auto tracer = libcpp::telemetry::make_custom_tracer("my_custom_span_exporter1", std::move(exporter));
+	auto exporter = std::make_unique<my_custom_trace_span_exporter>();
+	auto processor = libcpp::telemetry::make_simple_trace_span_processor(std::move(exporter));
+	auto tracer = libcpp::telemetry::make_custom_tracer("my_custom_span_exporter1", std::move(processor));
 	for (int i = 0; i < 2; ++i) {
-		double cpu = _get_cpu_usage();
-		double mem = _get_mem_usage();
+		auto cpu = _get_cpu_usage();
+		auto mem = _get_mem_usage();
 		std::map<std::string, std::string> attrs = {
 			{"cpu_usage", std::to_string(cpu)},
 			{"mem_usage", std::to_string(mem)}
@@ -128,5 +128,52 @@ TEST(TelemetryTest, CustomSpanExporter)
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		ASSERT_GE(cpu, 0.0);
 		ASSERT_GE(mem, 0.0);
+	}
+}
+
+TEST(TelemetryTest, TraceOtlpHttpExport)
+{
+    // prefer to use aliyun cloud as otlp server: https://help.aliyun.com/zh/opentelemetry/user-guide/before-you-begin-before-you-begin?spm=a2c4g.11186623.0.0.1ecc7bdb3PnAO4
+	
+    std::string endpoint = "http://xxx";
+    // endpoint = "http://tracing-cn-guangzhou.arms.aliyuncs.com/adapt_dxnr9nes4v@9aa09164b6238f8_dxnr9nes4v@53df7ad2afe8301/api/otlp/traces";
+    if (endpoint == "http://xxx")
+        GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this test.";
+
+	auto tracer = libcpp::telemetry::make_otlp_http_tracer(
+        "otlp_http_test", 
+        endpoint, 
+        true,
+        libcpp::telemetry::http_request_content_type::kBinary);
+	for (int i = 0; i < 2; ++i)
+	{
+		auto cpu = _get_cpu_usage();
+		auto mem = _get_mem_usage();
+		std::map<std::string, std::string> attrs = {
+            {"service.name", "tests"},
+            {"host.name", "localhost"},
+			{"arms_system_cpu_system", std::to_string(cpu)}, // for aliyun
+			{"arms_system_mem_used_bytes", std::to_string(mem)} // for aliyun
+		};
+		tracer.trace("resource_monitor_otlp_http", attrs);
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		ASSERT_GE(cpu, 0.0);
+		ASSERT_GE(mem, 0.0);
+	}
+}
+
+TEST(TelemetryTest, MeterOStreamExportDefault)
+{
+	auto meter = libcpp::telemetry::make_ostream_meter("meter1");
+	auto cpu_counter = meter.create_double_counter("cpu_usage", "CPU usage", "percent");
+	// cpu_counter->Add(0.7, {{"core", "0"}});
+	// cpu_counter->Add(0.5, {{"core", "1"}});
+
+	for (int i = 0; i < 3; ++i)
+	{
+		auto cpu = _get_cpu_usage();
+		cpu_counter->Add(cpu, { {"step", std::to_string(i)} });
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		ASSERT_GE(cpu, 0.0);
 	}
 }

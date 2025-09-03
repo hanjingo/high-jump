@@ -7,6 +7,8 @@
 #include <vector>
 #include <variant>
 
+#include <opentelemetry/common/attribute_value.h>
+
 #include <opentelemetry/nostd/shared_ptr.h>
 #include <opentelemetry/nostd/string_view.h>
 #include <opentelemetry/nostd/variant.h>
@@ -23,15 +25,29 @@
 #include <opentelemetry/trace/span_context.h>
 #include <opentelemetry/trace/scope.h>
 
-#include <opentelemetry/sdk/metrics/meter_provider.h>
-#include <opentelemetry/sdk/metrics/push_metric_exporter.h>
-#include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader.h>
+#include <opentelemetry/metrics/provider.h>
+#include <opentelemetry/metrics/meter_provider.h>
+#include <opentelemetry/sdk/metrics/aggregation/aggregation_config.h>
 #include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_factory.h>
-#include <opentelemetry/sdk/metrics/view/view_registry.h>
-#include <opentelemetry/metrics/meter.h>
-#include <opentelemetry/metrics/noop.h>
+#include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_options.h>
+#include <opentelemetry/sdk/metrics/instruments.h>
+#include <opentelemetry/sdk/metrics/meter_context.h>
+#include <opentelemetry/sdk/metrics/meter_context_factory.h>
+#include <opentelemetry/sdk/metrics/meter_provider.h>
+#include <opentelemetry/sdk/metrics/meter_provider_factory.h>
+#include <opentelemetry/sdk/metrics/metric_reader.h>
+#include <opentelemetry/sdk/metrics/provider.h>
+#include <opentelemetry/sdk/metrics/push_metric_exporter.h>
+#include <opentelemetry/sdk/metrics/view/instrument_selector.h>
+#include <opentelemetry/sdk/metrics/view/instrument_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/meter_selector.h>
+#include <opentelemetry/sdk/metrics/view/meter_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/view.h>
+#include <opentelemetry/sdk/metrics/view/view_factory.h>
 
 #include <opentelemetry/exporters/ostream/span_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h>
+#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_http_exporter.h>
 #include <opentelemetry/exporters/ostream/metric_exporter_factory.h>
 
@@ -50,8 +66,9 @@ using trace_span_id_t          = opentelemetry::trace::SpanId;
 using trace_span_exporter_t    = opentelemetry::sdk::trace::SpanExporter;
 using trace_recordable_t       = opentelemetry::sdk::trace::Recordable;
 
-using meter_provider_t             = opentelemetry::sdk::metrics::MeterProvider;
+using meter_provider_t             = opentelemetry::metrics::MeterProvider;
 using meter_base_t                 = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter>;
+using meter_context_t              = opentelemetry::v1::sdk::metrics::MeterContext;
 using metric_view_t                = opentelemetry::sdk::metrics::View;
 using metric_view_registry_t       = opentelemetry::sdk::metrics::ViewRegistry;
 using metric_instrument_selector_t = opentelemetry::sdk::metrics::InstrumentSelector;
@@ -60,20 +77,24 @@ using metric_reader_t              = opentelemetry::sdk::metrics::MetricReader;
 using metric_u64_counter_t         = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>;
 using metric_double_counter_t      = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>;
 using metric_obs_instrument_t      = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>;
+using metric_histogram_t           = opentelemetry::nostd::unique_ptr<opentelemetry::metrics::Histogram<uint64_t>>;
+using metric_periodic_reader_opt_t = opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions;
+
+using metric_exporter_options_t             = opentelemetry::exporter::otlp::OtlpHttpMetricExporterOptions;
+using metric_periodic_reader_options_t      = opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions;
+using metric_aggregation_config_t           = opentelemetry::sdk::metrics::AggregationConfig;
+using metric_histogram_aggregation_config_t = opentelemetry::sdk::metrics::HistogramAggregationConfig;
 
 using export_result_t          = opentelemetry::sdk::common::ExportResult;
-using sec_t                    = std::chrono::microseconds;
-using ms_t                     = std::chrono::milliseconds;
 using string_view_t            = opentelemetry::nostd::string_view;
 using resource_t               = opentelemetry::sdk::resource::Resource;
-
+using sec_t                    = std::chrono::microseconds;
+using ms_t                     = std::chrono::milliseconds;
 using otlp_http_opt_t          = opentelemetry::exporter::otlp::OtlpHttpExporterOptions;
 
-enum class http_request_content_type
-{
-    kJson = opentelemetry::exporter::otlp::HttpRequestContentType::kJson,
-    kBinary = opentelemetry::exporter::otlp::HttpRequestContentType::kBinary,
-};
+using instrument_type           = opentelemetry::sdk::metrics::InstrumentType;
+using http_request_content_type = opentelemetry::exporter::otlp::HttpRequestContentType;
+using aggregation_type          = opentelemetry::sdk::metrics::AggregationType;
 
 struct custom_exporter{};
 struct ostream_exporter{};
@@ -133,41 +154,81 @@ static std::string get_value_str(const trace_span_data_t& span, const std::strin
     return "";
 }
 
-static std::unique_ptr<metric_view_registry_t> make_default_metric_view_registry()
+static std::unique_ptr<metric_instrument_selector_t> make_instrument_selector(
+    instrument_type type,
+    const std::string& name,
+    const std::string& unit) noexcept
+{
+    return opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(type, name, unit);
+}
+
+static std::unique_ptr<metric_meter_selector_t> make_meter_selector(
+    const std::string& name,
+    const std::string& version,
+    const std::string& scheme) noexcept
+{
+    return opentelemetry::sdk::metrics::MeterSelectorFactory::Create(name, version, scheme);
+}
+
+static std::unique_ptr<opentelemetry::sdk::metrics::View> make_view(
+    const std::string& name,
+    const std::string& desc,
+    const std::string &unit,
+    aggregation_type type) noexcept
+{
+    return opentelemetry::sdk::metrics::ViewFactory::Create(name, desc, unit, type);
+}
+
+static std::unique_ptr<opentelemetry::sdk::metrics::View> make_view(
+    const std::string& name,
+    const std::string& desc,
+    const std::string &unit,
+    aggregation_type type,
+    std::shared_ptr<metric_aggregation_config_t> aggregation_config) noexcept
+{
+    return opentelemetry::sdk::metrics::ViewFactory::Create(name, desc, unit, type, aggregation_config);
+}
+
+static std::unique_ptr<metric_histogram_aggregation_config_t> make_histogram_aggregation_config(
+    const std::vector<double>& boundaries,
+    bool record_min_max = true) noexcept
+{
+    auto config = std::unique_ptr<metric_histogram_aggregation_config_t>(
+        new metric_histogram_aggregation_config_t);
+    config->boundaries_ = boundaries;
+    config->record_min_max_ = record_min_max;
+    return config;
+}
+
+static std::unique_ptr<metric_view_registry_t> make_default_metric_view_registry(
+    const std::string& name, 
+    const std::string& version,
+    const std::string& scheme) noexcept
 {
     auto views = std::make_unique<metric_view_registry_t>();
 
-    // 匹配所有 Counter（无论名字、unit）
-    views->AddView(
-        std::make_unique<metric_instrument_selector_t>(
-            opentelemetry::sdk::metrics::InstrumentType::kCounter, "*", "*"),
-        std::make_unique<metric_meter_selector_t>("*", "", ""),
-        std::make_unique<metric_view_t>("", "", "", opentelemetry::sdk::metrics::AggregationType::kSum, nullptr, nullptr)
-    );
+    // counter view
+    auto instrument_selector_ct = make_instrument_selector(instrument_type::kCounter, "", "");
+    auto meter_selector = make_meter_selector(name, version, scheme);
+    auto sum_view = make_view(name, "", "", aggregation_type::kSum);
+    views->AddView(std::move(instrument_selector_ct), std::move(meter_selector), std::move(sum_view));
 
-    // 匹配所有 DoubleCounter（unit 不限）
-    views->AddView(
-        std::make_unique<metric_instrument_selector_t>(
-            opentelemetry::sdk::metrics::InstrumentType::kCounter, "*", "*"),
-        std::make_unique<metric_meter_selector_t>("*", "", ""),
-        std::make_unique<metric_view_t>("", "", "", opentelemetry::sdk::metrics::AggregationType::kSum, nullptr, nullptr)
-    );
+    // observable counter view
+    auto obs_instrument_selector = make_instrument_selector(instrument_type::kObservableCounter, "", "");
+    auto obs_meter_selector = make_meter_selector(name, version, scheme);
+    auto obs_sum_view = make_view(name, "", "", aggregation_type::kSum);
+    views->AddView(std::move(obs_instrument_selector), std::move(obs_meter_selector), std::move(obs_sum_view));
 
-    // Gauge
-    views->AddView(
-        std::make_unique<metric_instrument_selector_t>(
-            opentelemetry::sdk::metrics::InstrumentType::kGauge, "*", "*"),
-        std::make_unique<metric_meter_selector_t>("*", "", ""),
-        std::make_unique<metric_view_t>("", "", "", opentelemetry::sdk::metrics::AggregationType::kLastValue, nullptr, nullptr)
-    );
-
-    // ObservableGauge
-    views->AddView(
-        std::make_unique<metric_instrument_selector_t>(
-            opentelemetry::sdk::metrics::InstrumentType::kObservableGauge, "*", "*"),
-        std::make_unique<metric_meter_selector_t>("*", "", ""),
-        std::make_unique<metric_view_t>("", "", "", opentelemetry::sdk::metrics::AggregationType::kLastValue, nullptr, nullptr)
-    );
+    // histogram view
+    auto histogram_instrument_selector = make_instrument_selector(instrument_type::kHistogram, "", "");
+    auto histogram_meter_selector = make_meter_selector(name, version, scheme);
+    auto histogram_aggregation_config = make_histogram_aggregation_config(std::vector<double>{
+        0.0, 50.0, 100.0, 250.0, 500.0, 750.0, 1000.0, 2500.0, 5000.0, 10000.0, 20000.0});
+    std::shared_ptr<metric_aggregation_config_t> aggregation_config(std::move(histogram_aggregation_config));
+    auto histogram_view = make_view(name, "", "", aggregation_type::kHistogram, aggregation_config);
+    views->AddView(std::move(histogram_instrument_selector), 
+                   std::move(histogram_meter_selector),
+                   std::move(histogram_view));
 
     return views;
 }
@@ -295,55 +356,74 @@ class meter
 {
 public:
     meter() = delete;
-    meter(const std::string& name) = delete;
-    explicit meter(const std::string& name, 
-                   std::shared_ptr<metric_reader_t> reader,
-                   std::unique_ptr<metric_view_registry_t>&& views,
-                   const resource_t &resource)
+    meter(const std::string& name, 
+          const std::string& version,
+          const std::string& scheme,
+          std::unique_ptr<metric_reader_t> reader,
+          std::unique_ptr<metric_view_registry_t> views)
     {
-        auto provider = std::make_shared<meter_provider_t>(std::move(views), resource);
-        provider->AddMetricReader(reader);
-        _meter = provider->GetMeter(name);
+        auto context = opentelemetry::sdk::metrics::MeterContextFactory::Create(std::move(views));
+        context->AddMetricReader(std::move(reader));
+
+        auto provider = opentelemetry::sdk::metrics::MeterProviderFactory::Create(std::move(context));
+        std::shared_ptr<libcpp::telemetry::meter_provider_t> api_provider(std::move(provider));
+        opentelemetry::sdk::metrics::Provider::SetMeterProvider(api_provider);
+
+        _meter = opentelemetry::metrics::Provider::GetMeterProvider()->GetMeter(name, version, scheme);
     }
 
     metric_u64_counter_t create_u64_counter(const std::string& name, 
-                                            const std::string& desc = "")
+                                            const std::string& desc = "") noexcept
     {
         return _meter->CreateUInt64Counter(name, desc);
     }
 
     metric_double_counter_t create_double_counter(const std::string& name,
                                                   const std::string& desc = "",
-                                                  const std::string& unit = "") 
+                                                  const std::string& unit = "") noexcept
     {
         return _meter->CreateDoubleCounter(name, desc, unit);
     }
 
     metric_obs_instrument_t create_i64_obs_counter(const std::string& name,
                                                    const std::string& desc = "",
-                                                   const std::string& unit = "") 
+                                                   const std::string& unit = "") noexcept
     {
         return _meter->CreateInt64ObservableCounter(name, desc, unit);
     }
 
     metric_obs_instrument_t create_double_obs_counter(const std::string& name,
                                                       const std::string& desc = "",
-                                                      const std::string& unit = "") 
+                                                      const std::string& unit = "") noexcept
     {
         return _meter->CreateDoubleObservableCounter(name, desc, unit);
     }
 
     metric_obs_instrument_t create_i64_obs_gauge(const std::string& name,
                                                  const std::string& desc = "",
-                                                 const std::string& unit = "") 
+                                                 const std::string& unit = "") noexcept
     {
         return _meter->CreateInt64ObservableGauge(name, desc, unit);
     }
 
     metric_obs_instrument_t create_double_obs_gauge(const std::string& name, 
-                                                    const std::string& desc = "") 
+                                                    const std::string& desc = "") noexcept
     {
         return _meter->CreateDoubleObservableGauge(name, desc);
+    }
+
+    metric_histogram_t create_u64_histogram(const std::string& name,
+                                            const std::string& desc = "",
+                                            const std::string& unit = "") noexcept
+    {
+        return _meter->CreateUInt64Histogram(name, desc, unit);
+    }
+
+    metric_histogram_t create_double_histogram(const std::string& name, 
+                                               const std::string& desc = "",
+                                               const std::string& unit = "") noexcept
+    {
+        return _meter->CreateDoubleHistogram(name, desc, unit);
     }
 
     void add_counter(const std::string& name, 
@@ -423,37 +503,84 @@ static tracer<otlp_http_exporter> make_otlp_http_tracer(const std::string& name,
         options.url = endpoint;
 
     options.console_debug = debug;
-    options.content_type = static_cast<opentelemetry::exporter::otlp::HttpRequestContentType>(content_type);
+    options.content_type = content_type;
     return make_otlp_http_tracer(name, options);
 }
 
 // meter API
-static std::unique_ptr<metric_view_registry_t> make_default_metric_view_registry()
+static void clean_up_metrics()
 {
-    return detail::make_default_metric_view_registry();
+    std::shared_ptr<opentelemetry::metrics::MeterProvider> none;
+    opentelemetry::sdk::metrics::Provider::SetMeterProvider(none);
 }
 
-// static meter<ostream_exporter> make_ostream_meter(const std::string& name, 
-//                                                   std::unique_ptr<metric_reader_t>&& reader)
-// {
-//     auto views = std::make_unique<metric_view_registry_t>();
-//     auto resource = opentelemetry::sdk::resource::Resource::Create({{"service.name", ""}});
-//     return meter<ostream_exporter>(name, std::move(reader), std::move(views), resource);
-// }
+static std::unique_ptr<metric_view_registry_t> make_default_metric_view_registry(
+    const std::string& name, 
+    const std::string& version,
+    const std::string& scheme)
+{
+    return detail::make_default_metric_view_registry(name, version, scheme);
+}
 
-static meter<ostream_exporter> make_ostream_meter(const std::string& name)
+static meter<ostream_exporter> make_ostream_meter(
+    const std::string& name,
+    const std::string& version,
+    const std::string& scheme,
+    std::unique_ptr<libcpp::telemetry::metric_reader_t>&& reader,
+    std::unique_ptr<libcpp::telemetry::metric_view_registry_t>&& views)
+{
+    return meter<ostream_exporter>(name, version, scheme, std::move(reader), std::move(views));
+}
+
+static meter<ostream_exporter> make_ostream_meter(
+    const std::string& name, 
+    const std::string& version,
+    const std::string& scheme,
+    const std::size_t interval_ms, 
+    const std::size_t timeout_ms)
 {
     auto exporter = opentelemetry::exporter::metrics::OStreamMetricExporterFactory::Create();
-    opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions options;
 
-    auto reader = std::make_shared<opentelemetry::sdk::metrics::PeriodicExportingMetricReader>(
+    metric_periodic_reader_opt_t options;
+    options.export_interval_millis = ms_t(interval_ms);
+  	options.export_timeout_millis  = ms_t(timeout_ms);
+
+    auto reader = opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::Create(
         std::move(exporter), 
         options);
 
-    auto views = make_default_metric_view_registry();
+    auto views = make_default_metric_view_registry(name, version, scheme);
 
-    auto resource = opentelemetry::sdk::resource::Resource::Create({{"service.name", name}});
-    return meter<ostream_exporter>(name, std::move(reader), std::move(views), resource);
+    return make_ostream_meter(name, version, scheme, std::move(reader), std::move(views));
+}
+
+static meter<otlp_http_exporter> make_otlp_http_meter(
+    const std::string& name,
+    const std::string& version,
+    const std::string& scheme,
+    const std::string& endpoint,
+    const bool debug,
+    const http_request_content_type content_type,
+    const std::size_t interval_ms,
+    const std::size_t timeout_ms)
+{
+    // Create the OTLP HTTP metric exporter
+    metric_exporter_options_t exporter_options;
+    exporter_options.url = endpoint;
+    exporter_options.console_debug = debug;
+    exporter_options.content_type = content_type;
+    auto exporter = opentelemetry::exporter::otlp::OtlpHttpMetricExporterFactory::Create(exporter_options);
+
+    // Create the periodic reader
+    metric_periodic_reader_options_t reader_options;
+    reader_options.export_interval_millis = std::chrono::milliseconds(interval_ms);
+    reader_options.export_timeout_millis  = std::chrono::milliseconds(timeout_ms);
+    auto reader = opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::Create(
+        std::move(exporter), reader_options);
+
+    auto views = make_default_metric_view_registry(name, version, scheme);
+
+    return meter<otlp_http_exporter>(name, version, scheme, std::move(reader), std::move(views));
 }
 
 } // namespace telemetry

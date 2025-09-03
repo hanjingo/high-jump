@@ -138,7 +138,7 @@ TEST(TelemetryTest, TraceOtlpHttpExport)
     std::string endpoint = "http://xxx";
     // endpoint = "http://tracing-cn-guangzhou.arms.aliyuncs.com/adapt_dxnr9nes4v@9aa09164b6238f8_dxnr9nes4v@53df7ad2afe8301/api/otlp/traces";
     if (endpoint == "http://xxx")
-        GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this test.";
+        GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this trace test.";
 
 	auto tracer = libcpp::telemetry::make_otlp_http_tracer(
         "otlp_http_test", 
@@ -164,16 +164,47 @@ TEST(TelemetryTest, TraceOtlpHttpExport)
 
 TEST(TelemetryTest, MeterOStreamExportDefault)
 {
-	auto meter = libcpp::telemetry::make_ostream_meter("meter1");
-	auto cpu_counter = meter.create_double_counter("cpu_usage", "CPU usage", "percent");
-	// cpu_counter->Add(0.7, {{"core", "0"}});
-	// cpu_counter->Add(0.5, {{"core", "1"}});
+	libcpp::telemetry::clean_up_metrics();
 
-	for (int i = 0; i < 3; ++i)
+	auto meter = libcpp::telemetry::make_ostream_meter("meter1", "1.2.0", "", 500, 100);
+	auto cpu_counter = meter.create_double_counter("cpu_usage", "count CPU usage", "percent");
+	auto mem_counter = meter.create_double_counter("mem_usage", "count Memory usage", "percent");
+	for (uint32_t i = 0; i < 5; ++i)
 	{
 		auto cpu = _get_cpu_usage();
-		cpu_counter->Add(cpu, { {"step", std::to_string(i)} });
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		ASSERT_GE(cpu, 0.0);
+		auto mem = _get_mem_usage();
+		cpu_counter->Add(cpu);
+		mem_counter->Add(mem);
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	}
+}
+
+void async_obs_gauge(opentelemetry::metrics::ObserverResult observer, void * state)
+{
+  auto observer_double =
+      opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObserverResultT<double>>>(observer);
+  observer_double->Observe(10.2f);
+}
+
+TEST(TelemetryTest, MeterOtlpHttpExport)
+{
+	// prefer to use aliyun cloud as otlp server: https://help.aliyun.com/zh/opentelemetry/user-guide/before-you-begin-before-you-begin?spm=a2c4g.11186623.0.0.1ecc7bdb3PnAO4
+
+	std::string endpoint = "http://xxx";
+	endpoint = "http://tracing-cn-guangzhou-internal.arms.aliyuncs.com/adapt_dxnr9nes4v@9aa09164b6238f8_dxnr9nes4v@53df7ad2afe8301/api/otlp/metrics";
+	if (endpoint == "http://xxx")
+		GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this meter test.";
+
+	libcpp::telemetry::clean_up_metrics();
+
+	auto meter = libcpp::telemetry::make_otlp_http_meter(
+		"meter_otlp_http_test", "1.2.0", "", endpoint, true,
+		libcpp::telemetry::http_request_content_type::kBinary, 500, 100);
+
+	auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage", "CPU usage"); // for aliyun
+	cpu_gauge->AddCallback(async_obs_gauge, nullptr);
+
+	for (int i = 0; i < 10; ++i) {
+		std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
 }

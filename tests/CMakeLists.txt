@@ -60,6 +60,9 @@ find_package(cityhash REQUIRED)
 find_package(unofficial-libharu REQUIRED)
 find_package(ICU REQUIRED COMPONENTS uc i18n io)
 find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
+find_package(clickhouse-cpp QUIET) # depend: lz4, zstd, cityhash
+find_package(libpqxx REQUIRED)
+find_package(hiredis CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -132,6 +135,8 @@ target_link_libraries(${PROJECT_NAME}
     yaml-cpp::yaml-cpp
     nlohmann_json::nlohmann_json
     jwt-cpp::jwt-cpp
+    libpqxx::pqxx
+    hiredis::hiredis
 
 #    breakpad_client
     unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
@@ -172,8 +177,8 @@ if(DPDK_FOUND)
 endif()
 
 # Link clickhouse if found
-find_package(clickhouse-cpp QUIET)
 if(TARGET clickhouse-cpp-lib)
+    add_definitions(-DCLICKHOUSE_ENABLE)
     message(STATUS "clickhouse-cpp found, enabling ClickHouse support")
     target_link_libraries(${PROJECT_NAME} 
         clickhouse-cpp-lib 

@@ -39,6 +39,14 @@ bool contains(const std::string& src, const std::string& sub)
     return src.find(sub) != std::string::npos;
 }
 
+bool end_with(const std::string& src, const std::string& suffix)
+{
+    if (src.length() >= suffix.length())
+        return (0 == src.compare(src.length() - suffix.length(), suffix.length(), suffix));
+    else
+        return false;
+}
+
 std::string search(const std::string& src, const std::string& regex)
 {
     std::smatch match;

@@ -23,8 +23,6 @@
 
 #include <libcpp/algo/striped_map.hpp>
 
-#include <libcpp/algo/trie.hpp>
-
 #include <libcpp/algo/uuid.hpp>
 
 #endif // ALGO_HPP

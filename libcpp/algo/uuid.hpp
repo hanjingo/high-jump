@@ -27,7 +27,8 @@ public:
         auto rand = gen_rand();
         auto& bytes = rand.data;
         unsigned long long ull = 0;
-        if (big_endian) {
+        if (big_endian) 
+        {
             ull  = bytes[7] & 0xFF;
             ull |= ((bytes[6] << 8) & 0xFF00);
             ull |= ((bytes[5] << 16) & 0xFF0000);
@@ -36,7 +37,9 @@ public:
             ull |= ((((long long) bytes[2]) << 40) & 0xFF0000000000);
             ull |= ((((long long) bytes[1]) << 48) & 0xFF000000000000);
             ull |= ((((long long) bytes[0]) << 56) & 0xFF00000000000000);
-        } else {
+        } 
+        else 
+        {
             ull  = bytes[0] & 0xFF;
             ull |= ((bytes[1] << 8) & 0xFF00);
             ull |= ((bytes[2] << 16) & 0xFF0000);

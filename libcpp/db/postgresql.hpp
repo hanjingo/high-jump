@@ -1,81 +1,93 @@
 #ifndef POSTGRESQL_HPP
 #define POSTGRESQL_HPP
 
-// #include <pqxx/pqxx>
-// #include <string>
-// #include <vector>
-// #include <stdexcept>
+#include <pqxx/pqxx>
+#include <string>
+#include <vector>
+#include <stdexcept>
 
-// namespace libcpp
-// {
+namespace libcpp
+{
 
-// // Simple wrapper for PostgreSQL database using libpqxx
-// class postgresql
-// {
-// public:
-//     // Construct with connection string
-//     explicit postgresql(const std::string& conninfo)
-//         : conn_(nullptr)
-//     {
-//         connect(conninfo);
-//     }
+class pg_connection
+{
+public:
+    explicit pg_connection(const std::string& options)
+        : _conn(nullptr)
+    {
+        connect(options);
+    }
+    ~pg_connection() 
+    {
+        disconnect();
+    }
 
-//     // Destructor closes connection
-//     ~postgresql() {
-//         disconnect();
-//     }
+    bool connect(const std::string& options) 
+    {
+        disconnect();
+        _conn = new pqxx::connection(options);
+        if (!_conn->is_open())
+        {
+            delete _conn;
+            _conn = nullptr;
+            return false;
+        }
 
-//     // Connect to database
-//     void connect(const std::string& conninfo) {
-//         disconnect();
-//         conn_ = new pqxx::connection(conninfo);
-//         if (!conn_->is_open())
-//             throw std::runtime_error("Failed to open PostgreSQL connection");
-//     }
+        return true;
+    }
 
-//     // Disconnect from database
-//     void disconnect() {
-//         if (conn_) {
-//             conn_->disconnect();
-//             delete conn_;
-//             conn_ = nullptr;
-//         }
-//     }
+    void disconnect() 
+    {
+        if (_conn) 
+        {
+            _conn->close();
+            delete _conn;
+            _conn = nullptr;
+        }
+    }
 
-//     // Execute a SQL command (no result)
-//     void exec(const std::string& sql) {
-//         pqxx::work txn(*conn_);
-//         txn.exec(sql);
-//         txn.commit();
-//     }
+    void set_encoding(const std::string& encoding)
+    {
+        if (!is_open())
+            return;
 
-//     // Execute a SQL query and return results as vector of vector of strings
-//     std::vector<std::vector<std::string>> query(const std::string& sql) {
-//         pqxx::work txn(*conn_);
-//         pqxx::result res = txn.exec(sql);
-//         std::vector<std::vector<std::string>> rows;
-//         for (const auto& row : res) {
-//             std::vector<std::string> fields;
-//             for (const auto& field : row) {
-//                 fields.push_back(field.c_str());
-//             }
-//             rows.push_back(fields);
-//         }
-//         return rows;
-//     }
+        _conn->set_client_encoding(encoding);
+    }
 
-//     // Check if connection is open
-//     bool is_open() const {
-//         return conn_ && conn_->is_open();
-//     }
+    void exec(const std::string& sql) 
+    {
+        pqxx::work txn(*_conn);
+        txn.exec(sql);
+        txn.commit();
+    }
 
-//     // Get underlying pqxx::connection
-//     pqxx::connection* native() { return conn_; }
+    std::vector<std::vector<std::string>> query(const std::string& sql) 
+    {
+        pqxx::work txn(*_conn);
+        pqxx::result res = txn.exec(sql);
+        std::vector<std::vector<std::string>> rows;
+        for (const auto& row : res) 
+        {
+            std::vector<std::string> fields;
+            for (const auto& field : row)
+                fields.push_back(field.c_str());
 
-// private:
-//     pqxx::connection* conn_;
-// };
+            rows.push_back(fields);
+        }
+        return rows;
+    }
 
-// } // namespace libcpp
+    bool is_open() const 
+    {
+        return _conn && _conn->is_open();
+    }
+
+    pqxx::connection* native() { return _conn; }
+
+private:
+    pqxx::connection* _conn;
+};
+
+} // namespace libcpp
 
 #endif // POSTGRESQL_HPP

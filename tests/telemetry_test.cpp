@@ -12,6 +12,16 @@
 #include <unistd.h>
 #endif
 
+static void _hello()
+{
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+
+static void _world()
+{
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+}
+
 static double _get_cpu_usage() 
 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -62,18 +72,15 @@ static double _get_mem_usage()
 TEST(TelemetryTest, TraceOStreamExportDefault)
 {
 	auto tracer = libcpp::telemetry::make_ostream_tracer("ostream1");
-	for (int i = 0; i < 2; ++i) 
+	for (int i = 0; i < 2; ++i)
 	{
-		auto cpu = _get_cpu_usage();
-		auto mem = _get_mem_usage();
-		std::map<std::string, std::string> attrs = {
-			{"cpu_usage", std::to_string(cpu)},
-			{"mem_usage", std::to_string(mem)}
-		};
-		tracer.trace("resource_monitor", attrs);
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		ASSERT_GE(cpu, 0.0);
-		ASSERT_GE(mem, 0.0);
+		auto span_hello = tracer.start_span("call_hello");
+		_hello();
+		tracer.end_span(span_hello);
+
+		auto span_world = tracer.start_span("call_world");
+		_world();
+		tracer.end_span(span_world);
 	}
 }
 
@@ -117,17 +124,15 @@ TEST(TelemetryTest, TraceCustomSpanExporter)
 	auto exporter = std::make_unique<my_custom_trace_span_exporter>();
 	auto processor = libcpp::telemetry::make_simple_trace_span_processor(std::move(exporter));
 	auto tracer = libcpp::telemetry::make_custom_tracer("my_custom_span_exporter1", std::move(processor));
-	for (int i = 0; i < 2; ++i) {
-		auto cpu = _get_cpu_usage();
-		auto mem = _get_mem_usage();
-		std::map<std::string, std::string> attrs = {
-			{"cpu_usage", std::to_string(cpu)},
-			{"mem_usage", std::to_string(mem)}
-		};
-		tracer.trace("resource_monitor_custom", attrs);
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		ASSERT_GE(cpu, 0.0);
-		ASSERT_GE(mem, 0.0);
+	for (int i = 0; i < 2; ++i)
+	{
+		auto span_hello = tracer.start_span("call_hello");
+		_hello();
+		tracer.end_span(span_hello);
+
+		auto span_world = tracer.start_span("call_world");
+		_world();
+		tracer.end_span(span_world);
 	}
 }
 
@@ -136,29 +141,39 @@ TEST(TelemetryTest, TraceOtlpHttpExport)
     // prefer to use aliyun cloud as otlp server: https://help.aliyun.com/zh/opentelemetry/user-guide/before-you-begin-before-you-begin?spm=a2c4g.11186623.0.0.1ecc7bdb3PnAO4
 	
     std::string endpoint = "http://xxx";
-    // endpoint = "http://tracing-cn-guangzhou.arms.aliyuncs.com/adapt_dxnr9nes4v@9aa09164b6238f8_dxnr9nes4v@53df7ad2afe8301/api/otlp/traces";
     if (endpoint == "http://xxx")
         GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this trace test.";
 
 	auto tracer = libcpp::telemetry::make_otlp_http_tracer(
-        "otlp_http_test", 
-        endpoint, 
-        true,
-        libcpp::telemetry::http_request_content_type::kBinary);
+		"otlp_http_test", 
+		endpoint, 
+		true,
+		libcpp::telemetry::http_request_content_type::kBinary);
 	for (int i = 0; i < 2; ++i)
 	{
-		auto cpu = _get_cpu_usage();
-		auto mem = _get_mem_usage();
-		std::map<std::string, std::string> attrs = {
-            {"service.name", "tests"},
-            {"host.name", "localhost"},
-			{"arms_system_cpu_system", std::to_string(cpu)}, // for aliyun
-			{"arms_system_mem_used_bytes", std::to_string(mem)} // for aliyun
-		};
-		tracer.trace("resource_monitor_otlp_http", attrs);
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		ASSERT_GE(cpu, 0.0);
-		ASSERT_GE(mem, 0.0);
+		auto span_hello = tracer.start_span("call_hello");
+		_hello();
+		tracer.end_span(span_hello);
+
+		auto span_world = tracer.start_span("call_world");
+		_world();
+		tracer.end_span(span_world);
+	}
+}
+
+TEST(TelemetryTest, TraceOtlpFileExport)
+{
+	std::string file_pattern = "trace-otlp-file.json";
+	auto tracer = libcpp::telemetry::make_otlp_file_tracer("otlp_file_test", file_pattern);
+	for (int i = 0; i < 2; ++i)
+	{
+		auto span_hello = tracer.start_span("call_hello");
+		_hello();
+		tracer.end_span(span_hello);
+
+		auto span_world = tracer.start_span("call_world");
+		_world();
+		tracer.end_span(span_world);
 	}
 }
 
@@ -191,17 +206,31 @@ TEST(TelemetryTest, MeterOtlpHttpExport)
 	// prefer to use aliyun cloud as otlp server: https://help.aliyun.com/zh/opentelemetry/user-guide/before-you-begin-before-you-begin?spm=a2c4g.11186623.0.0.1ecc7bdb3PnAO4
 
 	std::string endpoint = "http://xxx";
-	endpoint = "http://tracing-cn-guangzhou-internal.arms.aliyuncs.com/adapt_dxnr9nes4v@9aa09164b6238f8_dxnr9nes4v@53df7ad2afe8301/api/otlp/metrics";
 	if (endpoint == "http://xxx")
 		GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this meter test.";
 
 	libcpp::telemetry::clean_up_metrics();
 
 	auto meter = libcpp::telemetry::make_otlp_http_meter(
-		"meter_otlp_http_test", "1.2.0", "", endpoint, true,
-		libcpp::telemetry::http_request_content_type::kBinary, 500, 100);
+		"meter_otlp_http_test", "1.2.0", "", endpoint,
+		libcpp::telemetry::http_request_content_type::kBinary, 500, 100, true);
 
 	auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage", "CPU usage"); // for aliyun
+	cpu_gauge->AddCallback(async_obs_gauge, nullptr);
+
+	for (int i = 0; i < 10; ++i) {
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+	}
+}
+
+TEST(TelemetryTest, MeterOtlpFileExport)
+{
+	libcpp::telemetry::clean_up_metrics();
+
+	auto meter = libcpp::telemetry::make_otlp_file_meter(
+		"meter_otlp_file_test", "1.2.0", "", "meter-otlp-file.json", 500, 100, true);
+
+	auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage", "CPU usage");
 	cpu_gauge->AddCallback(async_obs_gauge, nullptr);
 
 	for (int i = 0; i < 10; ++i) {

@@ -42,7 +42,8 @@
     {
       "name": "opentelemetry-cpp",
       "features": [
-        "otlp-http"
+        "otlp-http",
+        "otlp-file"
       ]
     },
     "protobuf",

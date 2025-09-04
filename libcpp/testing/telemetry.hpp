@@ -17,7 +17,9 @@
 
 #include <opentelemetry/sdk/trace/span_data.h>
 #include <opentelemetry/sdk/trace/tracer_provider.h>
+#include <opentelemetry/sdk/trace/tracer_provider_factory.h>
 #include <opentelemetry/sdk/trace/simple_processor.h>
+#include <opentelemetry/sdk/trace/simple_processor_factory.h>
 #include <opentelemetry/sdk/trace/exporter.h>
 #include <opentelemetry/trace/provider.h>
 #include <opentelemetry/trace/tracer.h>
@@ -46,10 +48,17 @@
 #include <opentelemetry/sdk/metrics/view/view_factory.h>
 
 #include <opentelemetry/exporters/ostream/span_exporter_factory.h>
+#include <opentelemetry/exporters/ostream/metric_exporter_factory.h>
+
+#include <opentelemetry/exporters/otlp/otlp_http_exporter.h>
 #include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h>
 #include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h>
-#include <opentelemetry/exporters/otlp/otlp_http_exporter.h>
-#include <opentelemetry/exporters/ostream/metric_exporter_factory.h>
+
+#include <opentelemetry/exporters/otlp/otlp_file_exporter.h>
+#include <opentelemetry/exporters/otlp/otlp_file_client_options.h>
+#include <opentelemetry/exporters/otlp/otlp_file_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_file_exporter_options.h>
+#include <opentelemetry/exporters/otlp/otlp_file_metric_exporter_factory.h>
 
 namespace libcpp 
 {
@@ -77,10 +86,9 @@ using metric_reader_t              = opentelemetry::sdk::metrics::MetricReader;
 using metric_u64_counter_t         = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>;
 using metric_double_counter_t      = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>;
 using metric_obs_instrument_t      = opentelemetry::nostd::shared_ptr<opentelemetry::metrics::ObservableInstrument>;
-using metric_histogram_t           = opentelemetry::nostd::unique_ptr<opentelemetry::metrics::Histogram<uint64_t>>;
-using metric_periodic_reader_opt_t = opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions;
+using metric_u64_histogram_t       = opentelemetry::nostd::unique_ptr<opentelemetry::metrics::Histogram<uint64_t>>;
+using metric_double_histogram_t    = opentelemetry::nostd::unique_ptr<opentelemetry::metrics::Histogram<double>>;
 
-using metric_exporter_options_t             = opentelemetry::exporter::otlp::OtlpHttpMetricExporterOptions;
 using metric_periodic_reader_options_t      = opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions;
 using metric_aggregation_config_t           = opentelemetry::sdk::metrics::AggregationConfig;
 using metric_histogram_aggregation_config_t = opentelemetry::sdk::metrics::HistogramAggregationConfig;
@@ -90,7 +98,12 @@ using string_view_t            = opentelemetry::nostd::string_view;
 using resource_t               = opentelemetry::sdk::resource::Resource;
 using sec_t                    = std::chrono::microseconds;
 using ms_t                     = std::chrono::milliseconds;
-using otlp_http_opt_t          = opentelemetry::exporter::otlp::OtlpHttpExporterOptions;
+
+using otlp_http_options_t                  = opentelemetry::exporter::otlp::OtlpHttpExporterOptions;
+using otlp_http_metric_exporter_options_t  = opentelemetry::exporter::otlp::OtlpHttpMetricExporterOptions;
+using otlp_file_options_t                  = opentelemetry::exporter::otlp::OtlpFileExporterOptions;
+using otlp_file_metric_exporter_options_t  = opentelemetry::exporter::otlp::OtlpFileMetricExporterOptions;
+using otlp_file_cli_fs_options_t           = opentelemetry::exporter::otlp::OtlpFileClientFileSystemOptions;
 
 using instrument_type           = opentelemetry::sdk::metrics::InstrumentType;
 using http_request_content_type = opentelemetry::exporter::otlp::HttpRequestContentType;
@@ -99,6 +112,7 @@ using aggregation_type          = opentelemetry::sdk::metrics::AggregationType;
 struct custom_exporter{};
 struct ostream_exporter{};
 struct otlp_http_exporter{};
+struct otlp_file_exporter{};
 
 namespace detail
 {
@@ -275,15 +289,16 @@ static std::string to_std_string(const T& value)
     return detail::to_std_string(value);
 }
 
-// ------------------------------------------------- tracer ------------------------------------------
+// ----------------------------------- tracer ------------------------------
 template<typename T>
 class tracer 
 {
 public:
     tracer() = delete;
     tracer(const std::string& name) = delete;
-    explicit tracer(const std::string& name, 
-                    std::unique_ptr<trace_span_processor_t>&& processor)
+    explicit tracer(
+        const std::string& name, 
+        std::unique_ptr<trace_span_processor_t>&& processor)
     {
         auto provider = opentelemetry::nostd::shared_ptr<tracer_provider_t>(
             new opentelemetry::sdk::trace::TracerProvider(std::move(processor)));
@@ -294,8 +309,9 @@ public:
     {
     }
 
-    trace_span_t start_span(const std::string& name, 
-                      const std::map<std::string, std::string>& attrs = {}) 
+    trace_span_t start_span(
+        const std::string& name, 
+        const std::map<std::string, std::string>& attrs = {}) 
     {
         auto span = _tracer->StartSpan(name);
         for (const auto& kv : attrs)
@@ -310,16 +326,18 @@ public:
             span->End();
     }
 
-    void trace(const std::string& name, 
-               const std::map<std::string, std::string>& attrs = {}) 
+    void trace(
+        const std::string& name, 
+        const std::map<std::string, std::string>& attrs = {}) 
     {
         auto span = start_span(name, attrs);
         end_span(span);
     }
 
-    void add_event(trace_span_t& span, 
-                   const std::string& event, 
-                   const std::map<std::string, std::string>& attrs = {}) 
+    void add_event(
+        trace_span_t& span, 
+        const std::string& event, 
+        const std::map<std::string, std::string>& attrs = {}) 
     {
         if (!span) 
             return;
@@ -350,7 +368,7 @@ private:
     bool _is_custom;
 };
 
-// ------------------------------------------------- meter ------------------------------------------
+// ----------------------------------- meter ----------------------------
 template<typename T>
 class meter 
 {
@@ -371,82 +389,78 @@ public:
 
         _meter = opentelemetry::metrics::Provider::GetMeterProvider()->GetMeter(name, version, scheme);
     }
+    ~meter()
+    {
+    }
 
-    metric_u64_counter_t create_u64_counter(const std::string& name, 
-                                            const std::string& desc = "") noexcept
+    metric_u64_counter_t create_u64_counter(
+        const std::string& name, 
+        const std::string& desc = "") noexcept
     {
         return _meter->CreateUInt64Counter(name, desc);
     }
 
-    metric_double_counter_t create_double_counter(const std::string& name,
-                                                  const std::string& desc = "",
-                                                  const std::string& unit = "") noexcept
+    metric_double_counter_t create_double_counter(
+        const std::string& name,
+        const std::string& desc = "",
+        const std::string& unit = "") noexcept
     {
         return _meter->CreateDoubleCounter(name, desc, unit);
     }
 
-    metric_obs_instrument_t create_i64_obs_counter(const std::string& name,
-                                                   const std::string& desc = "",
-                                                   const std::string& unit = "") noexcept
+    metric_obs_instrument_t create_i64_obs_counter(
+        const std::string& name,
+        const std::string& desc = "",
+        const std::string& unit = "") noexcept
     {
         return _meter->CreateInt64ObservableCounter(name, desc, unit);
     }
 
-    metric_obs_instrument_t create_double_obs_counter(const std::string& name,
-                                                      const std::string& desc = "",
-                                                      const std::string& unit = "") noexcept
+    metric_obs_instrument_t create_double_obs_counter(
+        const std::string& name,
+        const std::string& desc = "",
+        const std::string& unit = "") noexcept
     {
         return _meter->CreateDoubleObservableCounter(name, desc, unit);
     }
 
-    metric_obs_instrument_t create_i64_obs_gauge(const std::string& name,
-                                                 const std::string& desc = "",
-                                                 const std::string& unit = "") noexcept
+    metric_obs_instrument_t create_i64_obs_gauge(
+        const std::string& name,
+        const std::string& desc = "",
+        const std::string& unit = "") noexcept
     {
         return _meter->CreateInt64ObservableGauge(name, desc, unit);
     }
 
-    metric_obs_instrument_t create_double_obs_gauge(const std::string& name, 
-                                                    const std::string& desc = "") noexcept
+    metric_obs_instrument_t create_double_obs_gauge(
+        const std::string& name, 
+        const std::string& desc = "") noexcept
     {
         return _meter->CreateDoubleObservableGauge(name, desc);
     }
 
-    metric_histogram_t create_u64_histogram(const std::string& name,
-                                            const std::string& desc = "",
-                                            const std::string& unit = "") noexcept
+    metric_u64_histogram_t create_u64_histogram(
+        const std::string& name,
+        const std::string& desc = "",
+        const std::string& unit = "") noexcept
     {
         return _meter->CreateUInt64Histogram(name, desc, unit);
     }
 
-    metric_histogram_t create_double_histogram(const std::string& name, 
-                                               const std::string& desc = "",
-                                               const std::string& unit = "") noexcept
+
+    metric_double_histogram_t create_double_histogram(
+        const std::string& name, 
+        const std::string& desc = "",
+        const std::string& unit = "") noexcept
     {
         return _meter->CreateDoubleHistogram(name, desc, unit);
-    }
-
-    void add_counter(const std::string& name, 
-                     uint64_t value, 
-                     const std::map<std::string, std::string>& attrs = {}) 
-    {
-        auto counter = create_counter(name);
-        counter->Add(value, attrs);
-    }
-
-    void observe_gauge(const std::string& name, 
-                       double value, 
-                       const std::map<std::string, std::string>& attrs = {}) 
-    {
-        auto gauge = create_gauge(name);
-        gauge->Observe(value, attrs);
     }
 
 private:
     meter_base_t _meter;
 };
 
-// ------------------------------------ global api --------------------------------------
+// ------------------------------ global api -------------------------------
 // tracer API
 static std::unique_ptr<trace_span_processor_t> make_simple_trace_span_processor(
     std::unique_ptr<trace_span_exporter_t>&& exporter)
@@ -460,14 +474,16 @@ static void cleanup_tracer()
     opentelemetry::trace::Provider::SetTracerProvider(none);
 }
 
-static tracer<custom_exporter> make_custom_tracer(const std::string& name, 
-                                                  std::unique_ptr<trace_span_processor_t>&& processor)
+static tracer<custom_exporter> make_custom_tracer(
+    const std::string& name, 
+    std::unique_ptr<trace_span_processor_t>&& processor)
 {
     return tracer<custom_exporter>(name, std::move(processor));
 }
 
-static tracer<ostream_exporter> make_ostream_tracer(const std::string& name, 
-                                                    std::unique_ptr<trace_span_processor_t>&& processor)
+static tracer<ostream_exporter> make_ostream_tracer(
+    const std::string& name, 
+    std::unique_ptr<trace_span_processor_t>&& processor)
 {
     return tracer<ostream_exporter>(name, std::move(processor));
 }
@@ -479,24 +495,27 @@ static tracer<ostream_exporter> make_ostream_tracer(const std::string& name)
     return make_ostream_tracer(name, std::move(processor));
 }
 
-static tracer<otlp_http_exporter> make_otlp_http_tracer(const std::string& name, 
-                                                        std::unique_ptr<trace_span_processor_t>&& processor)
+static tracer<otlp_http_exporter> make_otlp_http_tracer(
+    const std::string& name, 
+    std::unique_ptr<trace_span_processor_t>&& processor)
 {
     return tracer<otlp_http_exporter>(name, std::move(processor));
 }
 
-static tracer<otlp_http_exporter> make_otlp_http_tracer(const std::string& name, 
-                                                        const otlp_http_opt_t& options)
+static tracer<otlp_http_exporter> make_otlp_http_tracer(
+    const std::string& name, 
+    const otlp_http_options_t& options)
 {
     auto exporter = std::make_unique<opentelemetry::exporter::otlp::OtlpHttpExporter>(options);
     auto processor = make_simple_trace_span_processor(std::move(exporter));
     return make_otlp_http_tracer(name, std::move(processor));
 }
 
-static tracer<otlp_http_exporter> make_otlp_http_tracer(const std::string& name, 
-                                                        const std::string& endpoint,
-                                                        const bool debug,
-                                                        const http_request_content_type content_type)
+static tracer<otlp_http_exporter> make_otlp_http_tracer(
+    const std::string& name, 
+    const std::string& endpoint,
+    const bool debug,
+    const http_request_content_type content_type)
 {
     opentelemetry::exporter::otlp::OtlpHttpExporterOptions options;
     if (!endpoint.empty())
@@ -505,6 +524,28 @@ static tracer<otlp_http_exporter> make_otlp_http_tracer(const std::string& name,
     options.console_debug = debug;
     options.content_type = content_type;
     return make_otlp_http_tracer(name, options);
+}
+
+static tracer<otlp_file_exporter> make_otlp_file_tracer(
+    const std::string& name,
+    const otlp_file_options_t& opts)
+{
+    auto exporter  = opentelemetry::exporter::otlp::OtlpFileExporterFactory::Create(opts);
+    auto processor = opentelemetry::sdk::trace::SimpleSpanProcessorFactory::Create(std::move(exporter));
+    return tracer<otlp_file_exporter>(name, std::move(processor));
+}
+
+static tracer<otlp_file_exporter> make_otlp_file_tracer(
+    const std::string& name,
+    const std::string& file_pattern)
+{
+    opentelemetry::exporter::otlp::OtlpFileClientFileSystemOptions fs_backend;
+    fs_backend.file_pattern = file_pattern;
+
+    opentelemetry::exporter::otlp::OtlpFileExporterOptions opts;
+    opts.backend_options    = fs_backend;
+
+    return make_otlp_file_tracer(name, opts);
 }
 
 // meter API
@@ -541,7 +582,7 @@ static meter<ostream_exporter> make_ostream_meter(
 {
     auto exporter = opentelemetry::exporter::metrics::OStreamMetricExporterFactory::Create();
 
-    metric_periodic_reader_opt_t options;
+    metric_periodic_reader_options_t options;
     options.export_interval_millis = ms_t(interval_ms);
   	options.export_timeout_millis  = ms_t(timeout_ms);
 
@@ -559,13 +600,13 @@ static meter<otlp_http_exporter> make_otlp_http_meter(
     const std::string& version,
     const std::string& scheme,
     const std::string& endpoint,
-    const bool debug,
     const http_request_content_type content_type,
     const std::size_t interval_ms,
-    const std::size_t timeout_ms)
+    const std::size_t timeout_ms,
+    const bool debug)
 {
     // Create the OTLP HTTP metric exporter
-    metric_exporter_options_t exporter_options;
+    otlp_http_metric_exporter_options_t exporter_options;
     exporter_options.url = endpoint;
     exporter_options.console_debug = debug;
     exporter_options.content_type = content_type;
@@ -581,6 +622,34 @@ static meter<otlp_http_exporter> make_otlp_http_meter(
     auto views = make_default_metric_view_registry(name, version, scheme);
 
     return meter<otlp_http_exporter>(name, version, scheme, std::move(reader), std::move(views));
+}
+
+static meter<otlp_file_exporter> make_otlp_file_meter(
+    const std::string& name,
+    const std::string& version,
+    const std::string& scheme,
+    const std::string& file_pattern,
+    const std::size_t interval_ms,
+    const std::size_t timeout_ms,
+    const bool debug)
+{
+    otlp_file_cli_fs_options_t fs_backend;
+    fs_backend.file_pattern = file_pattern;
+
+    otlp_file_metric_exporter_options_t exporter_options;
+    exporter_options.console_debug = debug;
+    exporter_options.backend_options = fs_backend;
+    auto exporter = opentelemetry::exporter::otlp::OtlpFileMetricExporterFactory::Create(exporter_options);
+
+    metric_periodic_reader_options_t reader_options;
+    reader_options.export_interval_millis = std::chrono::milliseconds(interval_ms);
+    reader_options.export_timeout_millis  = std::chrono::milliseconds(timeout_ms);
+
+    auto reader = opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::Create(
+        std::move(exporter), reader_options);
+
+    auto views = make_default_metric_view_registry(name, version, scheme);
+    return meter<otlp_file_exporter>(name, version, scheme, std::move(reader), std::move(views));
 }
 
 } // namespace telemetry

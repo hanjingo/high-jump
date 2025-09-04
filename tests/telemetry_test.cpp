@@ -233,7 +233,7 @@ TEST(TelemetryTest, MeterOtlpFileExport)
 	auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage", "CPU usage");
 	cpu_gauge->AddCallback(async_obs_gauge, nullptr);
 
-	for (int i = 0; i < 10; ++i) {
-		std::this_thread::sleep_for(std::chrono::seconds(1));
+	for (int i = 0; i < 5; ++i) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 	}
 }

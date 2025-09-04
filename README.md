@@ -137,7 +137,6 @@ Please feel free to use this project, as there are no restrictions or legal risk
 - eigen: https://github.com/eigenteam/eigen-git-mirror
 - oneTBB: https://github.com/oneapi-src/oneTBB
 - fmt: https://github.com/fmtlib/fmt
-- hat-trie: https://github.com/Tessil/hat-trie
 - pcm: https://github.com/intel/pcm
 - benchmark: https://github.com/google/benchmark
 - clickhouse-cpp: https://github.com/ClickHouse/clickhouse-cpp

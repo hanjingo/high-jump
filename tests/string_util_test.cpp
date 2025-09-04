@@ -7,6 +7,12 @@ TEST(string_util, contains)
     ASSERT_EQ(libcpp::string_util::contains("hello world", "hello1"), false);
 }
 
+TEST(string_util, end_with)
+{
+    ASSERT_TRUE(libcpp::string_util::end_with("hello world", "world"));
+    ASSERT_FALSE(libcpp::string_util::end_with("hello world", "worl"));
+}
+
 TEST(string_util, search)
 {
     ASSERT_EQ(libcpp::string_util::search("hello w123orld", R"(\d+)") == std::string("123"), true);

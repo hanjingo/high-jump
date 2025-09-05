@@ -29,7 +29,7 @@ TEST(BloomFilterTest, SerializeUnserialize) {
 	std::string data;
 	bf.serialize(data);
 	bloom_filter bf2(30, 0.01);
-	bf2.unserialize(data);
+	EXPECT_TRUE(bf2.unserialize(data));
 	EXPECT_TRUE(bf2.contains("x"));
 	EXPECT_TRUE(bf2.contains("y"));
 	EXPECT_FALSE(bf2.contains("z"));

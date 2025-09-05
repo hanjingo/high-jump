@@ -3,10 +3,14 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <filesystem>
 
 // Helper to create a test ROM file
 static void create_test_rom(const char* filename, const char* content) {
     FILE* fp = fopen(filename, "wb");
+    if (!fp) 
+        FAIL() << "Failed to create test ROM file: " << filename;
+
     fwrite(content, 1, strlen(content), fp);
     fclose(fp);
 }
@@ -18,7 +22,8 @@ protected:
     rom_t rom;
 
     void SetUp() override {
-        test_file = "test.rom";
+        auto cwd = std::filesystem::current_path();
+        test_file = (cwd / "test.rom").string();
         test_content = "ROMDATA123";
         create_test_rom(test_file.c_str(), test_content.c_str());
         rom_init(&rom);

@@ -1,7 +1,7 @@
 #ifndef BLOOM_FILTER_HPP
 #define BLOOM_FILTER_HPP
 
-#include <deque>
+#include <bitset>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -26,70 +26,75 @@
 namespace libcpp
 {
 
-class bloom_filter 
-{
+
+class bloom_filter {
 public:
 	bloom_filter(size_t expected_insertions, double false_positive_rate)
 		: _expected_insertions{expected_insertions}
-        , _false_positive_rate{false_positive_rate} 
-    {
+		, _false_positive_rate{false_positive_rate}
+	{
+		// Parameter validation
+		if (_expected_insertions == 0)
+			_expected_insertions = 100; // Avoid division by zero
+
 		if (_false_positive_rate <= 0.0 || _false_positive_rate >= 1.0)
-            _false_positive_rate = 0.01; // Default to 1% if invalid
+			_false_positive_rate = 0.01; // Default to 1% if invalid
 
-	_num_bits = _optimal_num_of_bits(_expected_insertions, _false_positive_rate);
-    _num_bits = (_num_bits < BLOOM_FILTER_MIN_BITS) ? BLOOM_FILTER_MIN_BITS : _num_bits;
-    _num_bits = (_num_bits > BLOOM_FILTER_MAX_BITS) ? BLOOM_FILTER_MAX_BITS : _num_bits;
+		_num_bits = _optimal_num_of_bits(_expected_insertions, _false_positive_rate);
+		_num_bits = (_num_bits < BLOOM_FILTER_MIN_BITS) ? BLOOM_FILTER_MIN_BITS : _num_bits;
+		_num_bits = (_num_bits > BLOOM_FILTER_MAX_BITS) ? BLOOM_FILTER_MAX_BITS : _num_bits;
 
-	_num_hash_functions = _optimal_num_of_hash_functions(_expected_insertions, _num_bits);
-	_num_hash_functions = (_num_hash_functions < BLOOM_FILTER_MIN_HASHES) ? BLOOM_FILTER_MIN_HASHES : _num_hash_functions;
-	_num_hash_functions = (_num_hash_functions > BLOOM_FILTER_MAX_HASHES) ? BLOOM_FILTER_MAX_HASHES : _num_hash_functions;
-
-	_bits.resize(_num_bits, false);
+		_num_hash_functions = _optimal_num_of_hash_functions(_expected_insertions, _num_bits);
+		_num_hash_functions = (_num_hash_functions < BLOOM_FILTER_MIN_HASHES) ? BLOOM_FILTER_MIN_HASHES : _num_hash_functions;
+		_num_hash_functions = (_num_hash_functions > BLOOM_FILTER_MAX_HASHES) ? BLOOM_FILTER_MAX_HASHES : _num_hash_functions;
 	}
 
     ~bloom_filter()
     {
     }
 
-    inline void clear() { std::fill(_bits.begin(), _bits.end(), false); }
+	inline void clear() { _bits.reset(); }
 	inline size_t bit_size() const { return _num_bits; }
 	inline size_t hash_count() const { return _num_hash_functions; }
 
 	void add(const std::string& value) 
-    {
+	{
 		for (size_t i = 0; i < _num_hash_functions; ++i) 
-        {
+		{
 			size_t hash = _hash_i(value, i);
-			_bits[hash % _num_bits] = true;
+			_bits.set(hash % _num_bits);
 		}
 	}
 
 	bool contains(const std::string& value) const 
-    {
-        size_t hash;
+	{
 		for (size_t i = 0; i < _num_hash_functions; ++i) 
-        {
-			hash = _hash_i(value, i);
-			if (!_bits[hash % _num_bits]) 
-                return false;
+		{
+			size_t hash = _hash_i(value, i);
+			if (!_bits.test(hash % _num_bits))
+				return false;
 		}
+
 		return true;
 	}
 
 	void serialize(std::string& s) const 
-    {
-		s.reserve(_bits.size());
-		for (bool b : _bits) 
-            s += b ? '1' : '0';
+	{
+		s.clear();
+		s.reserve(_num_bits);
+		for (size_t i = 0; i < _num_bits; ++i)
+			s += _bits.test(i) ? '1' : '0';
 	}
 
-	void unserialize(const std::string& s) 
-    {
-		if (s.size() != _bits.size())
-            return;
+	bool unserialize(const std::string& s) 
+	{
+		if (s.size() != _num_bits)
+			return false;
 
-		for (size_t i = 0; i < s.size(); ++i) 
-            _bits[i] = (s[i] == '1');
+		for (size_t i = 0; i < s.size(); ++i)
+			_bits.set(i, s[i] == '1');
+
+		return true;
 	}
 
 private:
@@ -106,11 +111,14 @@ private:
 		return std::max<size_t>(1, static_cast<size_t>(std::round((double)m / n * std::log(2))));
 	}
 
+
 	static size_t _hash_i(const std::string& value, size_t i) 
 	{
 		std::hash<std::string> h1;
 		std::hash<size_t> h2;
-		return h1(value) + i * h2(h1(value));
+		size_t hval = h1(value);
+		size_t hmix = hval + i * h2(hval);
+		return hmix & 0x7FFFFFFFFFFFFFFF; // ensure non-negative, mask to 63 bits
 	}
 
 private:
@@ -118,7 +126,7 @@ private:
 	double _false_positive_rate;
 	size_t _num_bits;
 	size_t _num_hash_functions;
-	std::deque<bool> _bits;
+	std::bitset<BLOOM_FILTER_MAX_BITS> _bits;
 };
 
 } // namespace libcpp

@@ -45,8 +45,13 @@ protected:
     }
 
     void create_test_translation_files() {
-        if (!std::filesystem::exists(test_dir_)) {
-            std::filesystem::create_directory(test_dir_);
+        try {
+            if (!std::filesystem::exists(test_dir_)) {
+                std::filesystem::create_directory(test_dir_);
+            }
+        } catch(...)
+        {
+            std::cerr << "Error creating test directory: " << test_dir_ << std::endl;
         }
 
         std::ofstream zh_file(test_dir_ + "/translations_zh_CN.properties");

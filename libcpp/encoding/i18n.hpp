@@ -34,30 +34,26 @@ class i18n
 public:
     class translator 
     {
-    private:
-        std::unordered_map<std::string, std::string> translations_;
-        std::string locale_name_;
-
     public:
         translator() = default;
-        explicit translator(const std::string& locale) : locale_name_(locale) {}
+        explicit translator(const std::string& locale) : _locale_name(locale) {}
 
-        inline const std::string& locale() const { return locale_name_; }
-        inline void set_locale(const std::string& locale) { locale_name_ = locale; }
-        inline bool is_empty() const { return translations_.empty(); }
-        inline void clear() { translations_.clear(); }
-        inline void add(const std::string& key, const std::string& value) { translations_[key] = value; }
+        inline const std::string& locale() const { return _locale_name; }
+        inline void set_locale(const std::string& locale) { _locale_name = locale; }
+        inline bool is_empty() const { return _translations.empty(); }
+        inline void clear() { _translations.clear(); }
+        inline void add(const std::string& key, const std::string& value) { _translations[key] = value; }
 
         bool load_from_map(const std::unordered_map<std::string, std::string>& translations) 
         {
-            translations_ = translations;
+            _translations = translations;
             return true;
         }
 
         std::string translate(const std::string& key) const 
         {
-            auto it = translations_.find(key);
-            if (it != translations_.end())
+            auto it = _translations.find(key);
+            if (it != _translations.end())
                 return it->second;
 
             return key;
@@ -93,7 +89,7 @@ public:
                 std::string key = _trim(line.substr(0, eq_pos));
                 std::string value = _trim(line.substr(eq_pos + 1));
                 value = _unescape_unicode(value);
-                translations_[key] = value;
+                _translations[key] = value;
             }
             file.close();
             return true;
@@ -103,7 +99,7 @@ public:
                                        const std::string& locale_name = "") 
         {
             UErrorCode status = U_ZERO_ERROR;
-            std::string loc = locale_name.empty() ? locale_name_ : locale_name;
+            std::string loc = locale_name.empty() ? _locale_name : locale_name;
             icu::Locale locale(loc.c_str());
             icu::ResourceBundle bundle(bundle_name.c_str(), locale, status);
             if (U_FAILURE(status))
@@ -118,9 +114,9 @@ public:
             if (!file.is_open()) 
                 return false;
 
-            file << "# Translation file for locale: " << locale_name_ << "\n";
+            file << "# Translation file for locale: " << _locale_name << "\n";
             file << "# Generated on " << _current_timestamp() << "\n\n";
-            for (const auto& [key, value] : translations_) 
+            for (const auto& [key, value] : _translations) 
                 file << key << "=" << _escape_unicode(value) << "\n";
 
             file.close();
@@ -152,7 +148,7 @@ public:
         std::string _format_message(const std::string& pattern, Args... args) const 
         {
             UErrorCode status = U_ZERO_ERROR;
-            icu::Locale loc(locale_name_.empty() ? "en_US" : locale_name_.c_str());
+            icu::Locale loc(_locale_name.empty() ? "en_US" : _locale_name.c_str());
             icu::UnicodeString unicode_pattern = icu::UnicodeString::fromUTF8(pattern);
             icu::MessageFormat formatter(unicode_pattern, loc, status);
             if (U_FAILURE(status))
@@ -197,7 +193,7 @@ public:
 
                     std::string utf8_value;
                     value.toUTF8String(utf8_value);
-                    translations_[key] = utf8_value;
+                    _translations[key] = utf8_value;
                 } 
                 else if (child.getType() == URES_TABLE) 
                 {
@@ -226,37 +222,35 @@ public:
             uint16_t code2;
             for (size_t i = 0; i < str.length(); ++i) 
             {
-                if (str[i] == '\\' && i + 5 < str.length() && str[i + 1] == 'u') 
+                if (str[i] != '\\' || i + 5 >= str.length() || str[i + 1] != 'u')
                 {
-                    hex = str.substr(i + 2, 4);
-                    code = static_cast<uint16_t>(std::stoul(hex, nullptr, 16));
-                    if (U16_IS_LEAD(code) && i + 11 < str.length() && str[i + 6] == '\\' && str[i + 7] == 'u') 
-                    {
-                        hex2 = str.substr(i + 8, 4);
-                        code2 = static_cast<uint16_t>(std::stoul(hex2, nullptr, 16));
-                        if (!U16_IS_TRAIL(code2)) 
-                            continue;
+                    result += str[i];
+                    continue;
+                }
 
-                        UChar32 full_char = U16_GET_SUPPLEMENTARY(code, code2);
-                        icu::UnicodeString unicode_char(full_char);
-                        std::string utf8_char;
-                        unicode_char.toUTF8String(utf8_char);
-                        result += utf8_char;
-                        i += 11; // skip \uXXXX
+                hex = str.substr(i + 2, 4);
+                code = static_cast<uint16_t>(std::stoul(hex, nullptr, 16));
+                if (U16_IS_LEAD(code) && i + 11 < str.length() && str[i + 6] == '\\' && str[i + 7] == 'u') 
+                {
+                    hex2 = str.substr(i + 8, 4);
+                    code2 = static_cast<uint16_t>(std::stoul(hex2, nullptr, 16));
+                    if (!U16_IS_TRAIL(code2)) 
                         continue;
-                    }
-                    
-                    icu::UnicodeString unicode_char(code);
+
+                    UChar32 full_char = U16_GET_SUPPLEMENTARY(code, code2);
+                    icu::UnicodeString unicode_char(full_char);
                     std::string utf8_char;
                     unicode_char.toUTF8String(utf8_char);
                     result += utf8_char;
-                    i += 5; // skip \uXXXX
+                    i += 11; // skip \uXXXX
                     continue;
-                } 
-                else 
-                {
-                    result += str[i];
                 }
+                
+                icu::UnicodeString unicode_char(code);
+                std::string utf8_char;
+                unicode_char.toUTF8String(utf8_char);
+                result += utf8_char;
+                i += 5; // skip \uXXXX
             }
             return result;
         }
@@ -305,52 +299,54 @@ public:
             oss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
             return oss.str();
         }
+
+    private:
+        std::unordered_map<std::string, std::string> _translations;
+        std::string _locale_name;
     };
 
 public:
     static i18n& instance() 
     {
-        if (!instance_) 
-            instance_ = std::make_unique<i18n>();
-
-        return *instance_;
+        static i18n _instance;
+        return _instance;
     }
 
-    inline void set_locale(const std::string& locale) { current_locale_ = locale; }
-    inline const std::string& locale() const { return current_locale_; }
-    inline void remove(const std::string& name) { translators_.erase(name); }
+    inline void set_locale(const std::string& locale) { _current_locale = locale; }
+    inline const std::string& locale() const { return _current_locale; }
+    inline void remove(const std::string& name) { _translators.erase(name); }
     inline void install(const std::string& name, std::unique_ptr<translator> trans) 
     {
-        trans->set_locale(current_locale_);
-        translators_[name] = std::move(trans);
+        trans->set_locale(_current_locale);
+        _translators[name] = std::move(trans);
     }
 
     std::string translate(const std::string& key) const 
     {
-        auto current_it = translators_.find(current_locale_);
-        if (current_it != translators_.end()) 
+        auto current_it = _translators.find(_current_locale);
+        if (current_it != _translators.end()) 
         {
             std::string result = current_it->second->translate(key);
             if (result != key)
                 return result;
         }
         
-        auto main_it = translators_.find("main");
-        if (main_it != translators_.end() && main_it->first != current_locale_) 
+        auto main_it = _translators.find("main");
+        if (main_it != _translators.end() && main_it->first != _current_locale) 
         {
             std::string result = main_it->second->translate(key);
             if (result != key)
                 return result;
         }
         
-        for (const auto& [name, trans] : translators_) 
+        for (const auto& [name, trans] : _translators) 
         {
-            if (name != current_locale_ && name != "main") 
-            {
-                std::string result = trans->translate(key);
-                if (result != key)
-                    return result;
-            }
+            if (name == _current_locale || name == "main") 
+                continue;
+
+            std::string result = trans->translate(key);
+            if (result != key)
+                return result;
         }
 
         return key;
@@ -359,30 +355,30 @@ public:
     template<typename... Args>
     std::string translate(const std::string& key, Args... args) const 
     {
-        auto current_it = translators_.find(current_locale_);
-        if (current_it != translators_.end()) 
+        auto current_it = _translators.find(_current_locale);
+        if (current_it != _translators.end()) 
         {
             std::string result = current_it->second->translate(key, args...);
             if (result != key)
                 return result;
         }
         
-        auto main_it = translators_.find("main");
-        if (main_it != translators_.end() && main_it->first != current_locale_) 
+        auto main_it = _translators.find("main");
+        if (main_it != _translators.end() && main_it->first != _current_locale) 
         {
             std::string result = main_it->second->translate(key, args...);
             if (result != key)
                 return result;
         }
         
-        for (const auto& [name, trans] : translators_) 
+        for (const auto& [name, trans] : _translators) 
         {
-            if (name != current_locale_ && name != "main") 
-            {
-                std::string result = trans->translate(key, args...);
-                if (result != key)
-                    return result;
-            }
+            if (name == _current_locale || name == "main")
+                continue;
+
+            std::string result = trans->translate(key, args...);
+            if (result != key)
+                return result;
         }
 
         return key;
@@ -427,7 +423,7 @@ public:
     bool load_translation_auto(const std::string& directory_path, 
                                const std::string& base_name = "translations") 
     {
-        std::string filename = base_name + "_" + current_locale_;
+        std::string filename = base_name + "_" + _current_locale;
         std::vector<std::string> extensions = {".properties"};
         for (const auto& ext : extensions) 
         {
@@ -435,7 +431,7 @@ public:
             if (!std::filesystem::exists(file_path)) 
                 continue;
 
-            auto trans = std::make_unique<translator>(current_locale_);
+            auto trans = std::make_unique<translator>(_current_locale);
             bool loaded = false;
             
             if (ext == ".properties")
@@ -452,13 +448,12 @@ public:
     }
 
 private:
-    static std::unique_ptr<i18n> instance_;
-    std::string current_locale_;
-    std::unordered_map<std::string, std::unique_ptr<translator>> translators_;
+    std::string _current_locale;
+    std::unordered_map<std::string, std::unique_ptr<translator>> _translators;
 };
 
-std::unique_ptr<i18n> i18n::instance_;
 
+// ------------------------------- global API ------------------------------------
 inline std::string tr(const std::string& key, const std::string& default_text = "") 
 {
     return i18n::instance().translate(key, default_text);

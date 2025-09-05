@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/ram.h>
+// #include <libcpp/hardware/ram.h>
 // #include <iostream>
 // #include <vector>
 // #include <string>
@@ -14,7 +14,7 @@
 //         std::cout << "\n=== Random Access Memory (RAM) Tests Setup ===" << std::endl;
         
 //         // Initialize RAM subsystem
-//         ram_error_t result = ram_init();
+//         ram_err_t result = ram_init();
 //         ASSERT_EQ(result, RAM_SUCCESS) << "Failed to initialize RAM subsystem: " 
 //                                        << ram_get_error_string(result);
         
@@ -49,7 +49,7 @@
 //     // Cleanup and re-initialize to test the functions
 //     ram_cleanup();
     
-//     ram_error_t result = ram_init();
+//     ram_err_t result = ram_init();
 //     EXPECT_EQ(result, RAM_SUCCESS) << "RAM initialization should succeed";
     
 //     // Test multiple initializations (should be safe)
@@ -88,7 +88,7 @@
 //     EXPECT_STREQ(ram_get_error_string(RAM_ERROR_PROTECTION_VIOLATION), "Memory protection violation");
     
 //     // Test unknown error code
-//     EXPECT_STREQ(ram_get_error_string(static_cast<ram_error_t>(-999)), "Unknown error");
+//     EXPECT_STREQ(ram_get_error_string(static_cast<ram_err_t>(-999)), "Unknown error");
     
 //     std::cout << "Error string tests completed" << std::endl;
 // }
@@ -101,7 +101,7 @@
 //     std::cout << "Testing system memory information retrieval..." << std::endl;
     
 //     // Test invalid parameter
-//     ram_error_t result = ram_get_system_info(nullptr);
+//     ram_err_t result = ram_get_system_info(nullptr);
 //     EXPECT_EQ(result, RAM_ERROR_INVALID_PARAMETER) << "Should return error for null parameter";
     
 //     // Test valid system info retrieval
@@ -162,7 +162,7 @@
     
 //     // Test invalid parameters
 //     uint32_t actual_count = 0;
-//     ram_error_t result = ram_get_modules(nullptr, 4, &actual_count);
+//     ram_err_t result = ram_get_modules(nullptr, 4, &actual_count);
 //     EXPECT_EQ(result, RAM_ERROR_INVALID_PARAMETER) << "Should return error for null modules array";
     
 //     ram_module_info_t modules[4];
@@ -219,7 +219,7 @@
     
 //     // Test invalid parameters
 //     void* ptr = nullptr;
-//     ram_error_t result = ram_allocate_aligned(0, 16, &ptr);
+//     ram_err_t result = ram_allocate_aligned(0, 16, &ptr);
 //     EXPECT_EQ(result, RAM_ERROR_INVALID_PARAMETER) << "Should return error for zero size";
     
 //     result = ram_allocate_aligned(1024, 0, &ptr);
@@ -279,7 +279,7 @@
     
 //     // Test invalid parameters
 //     void* ptr = nullptr;
-//     ram_error_t result = ram_allocate_large_pages(0, &ptr);
+//     ram_err_t result = ram_allocate_large_pages(0, &ptr);
 //     EXPECT_EQ(result, RAM_ERROR_INVALID_PARAMETER) << "Should return error for zero size";
     
 //     result = ram_allocate_large_pages(1024, nullptr);
@@ -333,7 +333,7 @@
 //     // Allocate memory for protection tests
 //     const size_t test_size = 4096;
 //     void* ptr = nullptr;
-//     ram_error_t result = ram_allocate_aligned(test_size, 4096, &ptr);
+//     ram_err_t result = ram_allocate_aligned(test_size, 4096, &ptr);
 //     ASSERT_EQ(result, RAM_SUCCESS) << "Memory allocation should succeed";
 //     ASSERT_NE(ptr, nullptr) << "Allocated pointer should not be null";
     
@@ -398,7 +398,7 @@
 //     // Allocate memory for locking tests
 //     const size_t test_size = 4096;
 //     void* ptr = nullptr;
-//     ram_error_t result = ram_allocate_aligned(test_size, 4096, &ptr);
+//     ram_err_t result = ram_allocate_aligned(test_size, 4096, &ptr);
 //     ASSERT_EQ(result, RAM_SUCCESS) << "Memory allocation should succeed";
 //     ASSERT_NE(ptr, nullptr) << "Allocated pointer should not be null";
     
@@ -457,7 +457,7 @@
 //     // Allocate memory for prefetching tests
 //     const size_t test_size = 64 * 1024; // 64 KB
 //     void* ptr = nullptr;
-//     ram_error_t result = ram_allocate_aligned(test_size, 4096, &ptr);
+//     ram_err_t result = ram_allocate_aligned(test_size, 4096, &ptr);
 //     ASSERT_EQ(result, RAM_SUCCESS) << "Memory allocation should succeed";
 //     ASSERT_NE(ptr, nullptr) << "Allocated pointer should not be null";
     
@@ -517,16 +517,16 @@
 //     EXPECT_STREQ(ram_type_to_string(RAM_TYPE_UNKNOWN), "Unknown");
     
 //     // Test RAM size formatting
-//     char buffer[64];
-//     EXPECT_STREQ(ram_format_size(0, buffer, sizeof(buffer)), "0 bytes");
-//     EXPECT_STREQ(ram_format_size(1, buffer, sizeof(buffer)), "1 byte");
-//     EXPECT_STREQ(ram_format_size(1023, buffer, sizeof(buffer)), "1023 bytes");
-//     EXPECT_STREQ(ram_format_size(1024, buffer, sizeof(buffer)), "1 KB");
-//     EXPECT_STREQ(ram_format_size(2 * 1024, buffer, sizeof(buffer)), "2 KB");
-//     EXPECT_STREQ(ram_format_size(1024 * 1024, buffer, sizeof(buffer)), "1 MB");
-//     EXPECT_STREQ(ram_format_size(2 * 1024 * 1024, buffer, sizeof(buffer)), "2 MB");
-//     EXPECT_STREQ(ram_format_size(1024 * 1024 * 1024, buffer, sizeof(buffer)), "1 GB");
-//     EXPECT_STREQ(ram_format_size(2 * 1024 * 1024 * 1024, buffer, sizeof(buffer)), "2 GB");
+//     // char buffer[64];
+//     // EXPECT_STREQ(ram_format_size(0, buffer, sizeof(buffer)), "0 bytes");
+//     // EXPECT_STREQ(ram_format_size(1, buffer, sizeof(buffer)), "1 byte");
+//     // EXPECT_STREQ(ram_format_size(1023, buffer, sizeof(buffer)), "1023 bytes");
+//     // EXPECT_STREQ(ram_format_size(1024, buffer, sizeof(buffer)), "1 KB");
+//     // EXPECT_STREQ(ram_format_size(2 * 1024, buffer, sizeof(buffer)), "2 KB");
+//     // EXPECT_STREQ(ram_format_size(1024 * 1024, buffer, sizeof(buffer)), "1 MB");
+//     // EXPECT_STREQ(ram_format_size(2 * 1024 * 1024, buffer, sizeof(buffer)), "2 MB");
+//     // EXPECT_STREQ(ram_format_size(1024 * 1024 * 1024, buffer, sizeof(buffer)), "1 GB");
+//     // EXPECT_STREQ(ram_format_size(2 * 1024 * 1024 * 1024, buffer, sizeof(buffer)), "2 GB");
     
 //     std::cout << "Utility function tests completed" << std::endl;
 // }

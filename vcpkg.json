@@ -37,7 +37,6 @@
     "libpqxx",
     "nlohmann-json",
     "opencl",
-    "opencv",
     "openssl",
     {
       "name": "opentelemetry-cpp",
@@ -148,10 +147,6 @@
     {
       "name": "yaml-cpp",
       "version": "0.8.0#3"
-    },
-    {
-      "name": "opencv",
-      "version": "4.11.0"
     },
     {
       "name": "hffix",

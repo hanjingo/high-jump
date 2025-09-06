@@ -1,6 +1,7 @@
 #ifndef YAML_HPP
 #define YAML_HPP
 
+#include <cstring>
 #include <string>
 #include <sstream>
 #include <yaml-cpp/yaml.h>
@@ -80,7 +81,7 @@ public:
         size = yaml_str.size();
         if (size > 0)
         {
-            std::memcpy(buf, yaml_str.c_str(), size);
+            memcpy(buf, yaml_str.c_str(), size);
             buf[size] = '\0';  // Null-terminate the string
         }
         return true;

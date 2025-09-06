@@ -17,22 +17,27 @@ namespace libcpp
 class redis 
 {
 public:
-	redis(const std::string& host, int port = 6379, int timeout_ms = 2000)
-		: _ctx(nullptr) 
+    redis(const std::string& host, int port = 6379, int timeout_ms = 2000)
+        : _ctx(nullptr) 
     {
-		struct timeval timeout = {timeout_ms / 1000, (timeout_ms % 1000) * 1000};
-		_ctx = redisConnectWithTimeout(host.c_str(), port, timeout);
-		if (!_ctx || _ctx->err) 
+        struct timeval timeout = {timeout_ms / 1000, (timeout_ms % 1000) * 1000};
+        _ctx = redisConnectWithTimeout(host.c_str(), port, timeout);
+        if (!_ctx || _ctx->err) 
         {
-			std::string err = _ctx ? _ctx->errstr : "Can't allocate redis context";
-			throw std::runtime_error("Redis connect failed: " + err);
-		}
-	}
-	~redis() 
+            std::string err = _ctx ? _ctx->errstr : "Can't allocate redis context";
+            if (_ctx) 
+			{
+                redisFree(_ctx);
+                _ctx = nullptr;
+            }
+            throw std::runtime_error("Redis connect failed: " + err);
+        }
+    }
+    ~redis() 
     {
-		if (_ctx) 
+        if (_ctx) 
             redisFree(_ctx);
-	}
+    }
 
     inline bool is_connected() const { return _ctx && _ctx->err == 0; }
 

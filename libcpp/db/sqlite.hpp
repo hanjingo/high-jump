@@ -43,12 +43,25 @@ public:
 
 	bool exec(const std::string& sql) 
     {
-		char* errmsg = nullptr;
-		int rc = sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errmsg);
-		if (errmsg) 
-            sqlite3_free(errmsg);
+        if (!_db) 
+			return false;
 
-		return rc == SQLITE_OK;
+        char* errmsg = nullptr;
+        int rc = sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errmsg);
+        if (rc != SQLITE_OK) 
+		{
+            if (errmsg) 
+			{
+                fprintf(stderr, "sqlite exec error: %s\n", errmsg);
+                sqlite3_free(errmsg);
+            }
+            return false;
+        }
+
+        if (errmsg) 
+			sqlite3_free(errmsg);
+			
+        return true;
 	}
 
 	// Query: returns vector of rows, each row is vector<string>

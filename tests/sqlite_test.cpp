@@ -49,17 +49,18 @@ TEST_F(SqliteTest, OpenClose) {
 }
 
 TEST_F(SqliteTest, ExecAndQuery) {
-	if (!_is_sqlite_valid()) 
-		GTEST_SKIP() << "sqlite not available";
+    if (!_is_sqlite_valid()) 
+        GTEST_SKIP() << "sqlite not available";
 
-	sqlite db;
-	ASSERT_TRUE(db.open(dbfile));
-	EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);") );
-	EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('Alice'),('Bob');"));
-	auto rows = db.query("SELECT id, name FROM t ORDER BY id;", _sqlite_exec_cb);
-	ASSERT_EQ(rows.size(), 2u);
-	EXPECT_EQ(rows[0][1], "Alice");
-	EXPECT_EQ(rows[1][1], "Bob");
+    sqlite db;
+    ASSERT_TRUE(db.open(dbfile));
+    EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
+    EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);"));
+    EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('Alice'),('Bob');"));
+    auto rows = db.query("SELECT id, name FROM t ORDER BY id;", _sqlite_exec_cb);
+    ASSERT_EQ(rows.size(), 2u);
+    EXPECT_EQ(rows[0][1], "Alice");
+    EXPECT_EQ(rows[1][1], "Bob");
 }
 
 TEST_F(SqliteTest, QueryEmpty) {
@@ -68,6 +69,7 @@ TEST_F(SqliteTest, QueryEmpty) {
 		
 	sqlite db;
 	ASSERT_TRUE(db.open(dbfile));
+	EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
 	db.exec("CREATE TABLE t (id INTEGER);");
 	auto rows = db.query("SELECT * FROM t;", _sqlite_exec_cb);
 	EXPECT_TRUE(rows.empty());

@@ -94,11 +94,19 @@ jobs:
         while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
         python3 scripts/configure.py --platform=linux
         
-        echo "=== Verifying environment setup ==="
         # Source environment variables for current session
         if [ -f ~/.bashrc ]; then
           source ~/.bashrc
         fi
+
+        bash scripts/dpdk.sh
+
+        # Source environment variables for current session
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc
+        fi
+
+        echo "=== Verifying environment setup ==="
         
         # Verify tools are available
         echo "Tool verification:"
@@ -302,6 +310,8 @@ jobs:
         # Run environment configuration script
         echo "=== Running environment configuration script ==="
         python3 scripts/configure.py --platform=macos
+
+        bash scripts/dpdk.sh
         
         echo "=== Verifying environment setup ==="
         # Set up critical autotools paths explicitly

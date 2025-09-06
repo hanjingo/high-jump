@@ -41,6 +41,13 @@ install_linux() {
 
 install_macos() {
     echo "Detected macOS"
+    DPDK_MAJOR=$(echo "$DPDK_VERSION" | cut -d. -f1)
+    DPDK_MINOR=$(echo "$DPDK_VERSION" | cut -d. -f2)
+    # for macos >= 21.11; skip it!
+    if [ "$DPDK_MAJOR" -gt 21 ] || { [ "$DPDK_MAJOR" -eq 21 ] && [ "$DPDK_MINOR" -ge 11 ]; }; then
+        echo "DPDK $DPDK_VERSION is not supported on macOS (>=21.11). Skipping DPDK installation."
+        exit 0
+    fi
     if ! command -v brew >/dev/null; then
         echo "Homebrew not found. Please install Homebrew first."
         exit 1

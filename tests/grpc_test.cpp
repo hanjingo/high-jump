@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/misc/grpc.hpp>
+// #include <libcpp/misc/grpc.hpp>
 // #include <grpcpp/grpcpp.h>
 // #include <thread>
 // #include <chrono>
@@ -22,4 +22,3 @@
 //     auto ch = channel.get();
 //     ASSERT_TRUE(ch != nullptr);
 // }
-

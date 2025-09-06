@@ -199,6 +199,15 @@ TEST_F(I18nTest, TranslatorSaveToProperties) {
     trans.add("key3", "value with unicode ü");
     
     std::string save_path = test_dir_ + "/saved_translations.properties";
+    if (!std::filesystem::exists(test_dir_)) 
+    {
+        std::filesystem::create_directory(test_dir_);
+    }
+    if (!std::filesystem::exists(save_path))
+    {
+        std::ofstream ofs(save_path);
+        ofs.close();
+    }
     EXPECT_TRUE(trans.save_to_properties(save_path));
 
     EXPECT_TRUE(std::filesystem::exists(save_path));
@@ -225,6 +234,15 @@ TEST_F(I18nTest, TranslatorUnicodeHandling) {
     EXPECT_EQ(trans.translate("mixed"), "Hello 世界 🌍");
 
     std::string unicode_file = test_dir_ + "/unicode_test.properties";
+    if (!std::filesystem::exists(test_dir_)) 
+    {
+        std::filesystem::create_directory(test_dir_);
+    }
+    if (!std::filesystem::exists(unicode_file))
+    {
+        std::ofstream ofs(unicode_file);
+        ofs.close();
+    }
     EXPECT_TRUE(trans.save_to_properties(unicode_file));
     
     i18n::translator loaded_trans("zh_CN");
@@ -421,6 +439,15 @@ TEST_F(I18nTest, SpecialCharactersAndEdgeCases) {
     EXPECT_EQ(trans.translate("unicode.mix"), "ASCII + 中文 + Русский + العربية");
 
     std::string special_file = test_dir_ + "/special_chars.properties";
+    if (!std::filesystem::exists(test_dir_)) 
+    {
+        std::filesystem::create_directory(test_dir_);
+    }
+    if (!std::filesystem::exists(special_file))
+    {
+        std::ofstream ofs(special_file);
+        ofs.close();
+    }
     EXPECT_TRUE(trans.save_to_properties(special_file));
     
     i18n::translator loaded_trans("test");
@@ -566,6 +593,15 @@ TEST_F(I18nTest, GermanUmlautsAndSpecialChars) {
     EXPECT_EQ(trans.translate("eszett_word"), "weiß");
 
     std::string german_file = test_dir_ + "/german_umlauts.properties";
+    if (!std::filesystem::exists(test_dir_)) 
+    {
+        std::filesystem::create_directory(test_dir_);
+    }
+    if (!std::filesystem::exists(german_file))
+    {
+        std::ofstream ofs(german_file);
+        ofs.close();
+    }
     EXPECT_TRUE(trans.save_to_properties(german_file));
     
     i18n::translator loaded_trans("de_DE");
@@ -619,6 +655,15 @@ TEST_F(I18nTest, GermanLongWords) {
     EXPECT_EQ(trans.translate("compound"), "Arbeitsplatz-Computer-Bildschirm");
 
     std::string long_words_file = test_dir_ + "/german_long_words.properties";
+    if (!std::filesystem::exists(test_dir_)) 
+    {
+        std::filesystem::create_directory(test_dir_);
+    }
+    if (!std::filesystem::exists(long_words_file))
+    {
+        std::ofstream ofs(long_words_file);
+        ofs.close();
+    }
     EXPECT_TRUE(trans.save_to_properties(long_words_file));
     
     i18n::translator loaded_trans("de_DE");

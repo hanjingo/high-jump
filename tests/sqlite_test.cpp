@@ -11,6 +11,7 @@ bool _is_sqlite_valid()
         sqlite db;
         if (!db.open("test_check.db"))
             return false;
+
         db.close();
         remove("test_check.db");
         return true;
@@ -46,6 +47,7 @@ TEST_F(SqliteTest, OpenClose) {
 	EXPECT_TRUE(db.is_open());
 	db.close();
 	EXPECT_FALSE(db.is_open());
+    remove("test.db");
 }
 
 TEST_F(SqliteTest, ExecAndQuery) {
@@ -61,6 +63,7 @@ TEST_F(SqliteTest, ExecAndQuery) {
     ASSERT_EQ(rows.size(), 2u);
     EXPECT_EQ(rows[0][1], "Alice");
     EXPECT_EQ(rows[1][1], "Bob");
+    remove("test.db");
 }
 
 TEST_F(SqliteTest, QueryEmpty) {
@@ -73,4 +76,5 @@ TEST_F(SqliteTest, QueryEmpty) {
 	db.exec("CREATE TABLE t (id INTEGER);");
 	auto rows = db.query("SELECT * FROM t;", _sqlite_exec_cb);
 	EXPECT_TRUE(rows.empty());
+    remove("test.db");
 }

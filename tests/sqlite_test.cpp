@@ -5,6 +5,20 @@
 
 using namespace libcpp;
 
+bool _is_sqlite_valid()
+{
+    try {
+        sqlite db;
+        if (!db.open("test_check.db"))
+            return false;
+        db.close();
+        remove("test_check.db");
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 int _sqlite_exec_cb(void* in, int argc, char** argv, char** col_name)
 {
     auto* rows = static_cast<std::vector<std::vector<std::string>>*>(in);
@@ -24,6 +38,9 @@ protected:
 };
 
 TEST_F(SqliteTest, OpenClose) {
+	if (!_is_sqlite_valid()) 
+		GTEST_SKIP() << "sqlite not available";
+
 	sqlite db;
 	EXPECT_TRUE(db.open(dbfile));
 	EXPECT_TRUE(db.is_open());
@@ -32,6 +49,9 @@ TEST_F(SqliteTest, OpenClose) {
 }
 
 TEST_F(SqliteTest, ExecAndQuery) {
+	if (!_is_sqlite_valid()) 
+		GTEST_SKIP() << "sqlite not available";
+
 	sqlite db;
 	ASSERT_TRUE(db.open(dbfile));
 	EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);") );
@@ -43,6 +63,9 @@ TEST_F(SqliteTest, ExecAndQuery) {
 }
 
 TEST_F(SqliteTest, QueryEmpty) {
+	if (!_is_sqlite_valid()) 
+		GTEST_SKIP() << "sqlite not available";
+		
 	sqlite db;
 	ASSERT_TRUE(db.open(dbfile));
 	db.exec("CREATE TABLE t (id INTEGER);");

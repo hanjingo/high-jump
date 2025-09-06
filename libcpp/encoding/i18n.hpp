@@ -174,7 +174,7 @@ public:
         }
 
         bool _load_from_resource_bundle_recursive(const icu::ResourceBundle& bundle, 
-                                                 const std::string& prefix) 
+                                                  const std::string& prefix) 
         {
             UErrorCode status = U_ZERO_ERROR;
             int32_t size = bundle.getSize();
@@ -216,77 +216,62 @@ public:
         std::string _unescape_unicode(const std::string& str) const 
         {
             std::string result;
-            std::string hex;
-            std::string hex2;
-            uint16_t code;
-            uint16_t code2;
             for (size_t i = 0; i < str.length(); ++i) 
             {
-                if (str[i] != '\\' || i + 5 >= str.length() || str[i + 1] != 'u')
+                if (str[i] != '\\') 
                 {
                     result += str[i];
                     continue;
                 }
-
-                hex = str.substr(i + 2, 4);
-                code = static_cast<uint16_t>(std::stoul(hex, nullptr, 16));
-                if (U16_IS_LEAD(code) && i + 11 < str.length() && str[i + 6] == '\\' && str[i + 7] == 'u') 
+                if (i + 1 >= str.length()) 
                 {
-                    hex2 = str.substr(i + 8, 4);
-                    code2 = static_cast<uint16_t>(std::stoul(hex2, nullptr, 16));
-                    if (!U16_IS_TRAIL(code2)) 
-                        continue;
-
-                    UChar32 full_char = U16_GET_SUPPLEMENTARY(code, code2);
-                    icu::UnicodeString unicode_char(full_char);
+                    result += str[i];
+                    continue;
+                }
+                if (str[i + 1] == 'n') 
+                {
+                    result += '\n';
+                    ++i;
+                } 
+                else if (str[i + 1] == 't') 
+                {
+                    result += '\t';
+                    ++i;
+                } 
+                else if (str[i + 1] == '\\') 
+                {
+                    result += '\\';
+                    ++i;
+                } 
+                else if (str[i + 1] == 'u' && i + 5 < str.length()) 
+                {
+                    std::string hex = str.substr(i + 2, 4);
+                    uint16_t code = static_cast<uint16_t>(std::stoul(hex, nullptr, 16));
+                    icu::UnicodeString unicode_char(code);
                     std::string utf8_char;
                     unicode_char.toUTF8String(utf8_char);
                     result += utf8_char;
-                    i += 11; // skip \uXXXX
-                    continue;
+                    i += 5;
                 }
-                
-                icu::UnicodeString unicode_char(code);
-                std::string utf8_char;
-                unicode_char.toUTF8String(utf8_char);
-                result += utf8_char;
-                i += 5; // skip \uXXXX
             }
             return result;
         }
 
         std::string _escape_unicode(const std::string& str) const 
         {
-            icu::UnicodeString unicode_str = icu::UnicodeString::fromUTF8(str);
             std::string result;
-            for (int32_t i = 0; i < unicode_str.length(); ++i) 
-            {
-                UChar32 ch = unicode_str.char32At(i);
-                if (ch < 128 && ch > 31 && ch != '\\' && ch != '=') 
+            for (size_t i = 0; i < str.size(); ++i) {
+                unsigned char ch = str[i];
+                switch (ch) 
                 {
-                    result += static_cast<char>(ch);
-                } 
-                else 
-                {
-                    if (ch <= 0xFFFF) 
-                    {
-                        std::ostringstream oss;
-                        oss << "\\u" << std::hex << std::setfill('0') << std::setw(4) << ch;
-                        result += oss.str();
-                    } 
-                    else 
-                    {
-                        UChar lead = U16_LEAD(ch);
-                        UChar trail = U16_TRAIL(ch);
-                        std::ostringstream oss;
-                        oss << "\\u" << std::hex << std::setfill('0') << std::setw(4) << lead
-                            << "\\u" << std::hex << std::setfill('0') << std::setw(4) << trail;
-                        result += oss.str();
-                    }
+                    case '\n': result += "\\n"; break;
+                    case '\t': result += "\\t"; break;
+                    case '\\': result += "\\\\"; break;
+                    case '=':  result += "\\="; break;
+                    case ':':  result += "\\:"; break;
+                    default:
+                        result += ch;
                 }
-
-                if (U16_IS_LEAD(unicode_str[i]) && i + 1 < unicode_str.length())
-                    ++i;
             }
             return result;
         }

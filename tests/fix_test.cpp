@@ -1,31 +1,25 @@
 #include <gtest/gtest.h>
 #include <libcpp/misc/fix.hpp>
 
-// using libcpp::fix_message;
+TEST(FixTest, BuildAndParse) {
+    libcpp::FixBuilder builder;
+    builder.begin();
+    builder.add_string(35, "D"); // MsgType
+    builder.add_string(49, "SENDER"); // SenderCompID
+    builder.add_string(56, "TARGET"); // TargetCompID
+    builder.add_int(34, 123); // MsgSeqNum
+    builder.add_char(54, '1'); // Side
+    builder.end();
 
-// TEST(FixTest, BuildAndParseMessage) {
-//     fix_message msg;
-//     msg.start_message();
-//     msg.add_field(11, "ORDER123"); // ClOrdID
-//     msg.add_field(55, "AAPL");     // Symbol
-//     msg.add_field(54, "1");        // Side
-//     msg.add_field(38, "100");      // OrderQty
-//     std::string fix_str = msg.finish_message();
+    std::string fixmsg = builder.str();
 
-//     // Parse the message
-//     fix_message parsed;
-//     parsed.parse(fix_str);
-
-//     EXPECT_EQ(parsed.get_field(11), "ORDER123");
-//     EXPECT_EQ(parsed.get_field(55), "AAPL");
-//     EXPECT_EQ(parsed.get_field(54), "1");
-//     EXPECT_EQ(parsed.get_field(38), "100");
-// }
-
-// TEST(FixTest, InvalidMessage) {
-//     fix_message msg;
-//     msg.parse("8=FIX.4.2|9=12|35=0|10=000|"); // Invalid checksum and delimiter
-//     EXPECT_EQ(msg.get_field(35), "0");
-//     EXPECT_EQ(msg.get_field(999), "");      // Non-existent field
-// }
+    libcpp::FixParser parser(fixmsg.data(), fixmsg.size());
+    ASSERT_TRUE(parser.valid());
+    ASSERT_TRUE(parser.complete());
+    EXPECT_EQ(parser.get_string(35), "D");
+    EXPECT_EQ(parser.get_string(49), "SENDER");
+    EXPECT_EQ(parser.get_string(56), "TARGET");
+    EXPECT_EQ(parser.get_int<int>(34), 123);
+    EXPECT_EQ(parser.get_char(54), '1');
+}
 

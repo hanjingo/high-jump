@@ -1,75 +1,105 @@
 #ifndef GRPC_HPP
 #define GRPC_HPP
 
-// #include <grpc/grpc.h>
-// #include <string>
-// #include <memory>
-// #include <functional>
-// #include <thread>
-// #include <atomic>
-// #include <iostream>
+#include <grpcpp/grpcpp.h>
+#include <grpcpp/impl/service_type.h>
+#include <string>
+#include <memory>
+#include <functional>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
+#include <iostream>
 
-// namespace libcpp
-// {
+namespace libcpp
+{
 
-// class grpc_server 
-// {
-// public:
-//     grpc_server() : _running(false) {}
-//     ~grpc_server() {}
+class grpc_server 
+{
+public:
+    grpc_server() : _running(false), _shutdown_requested(false) {}
 
-//     template<typename ServiceType>
-//     bool start(const std::string& address, ServiceType* service) 
-//     {
-//         grpc::ServerBuilder builder;
-//         builder.AddListeningPort(address, grpc::InsecureServerCredentials());
-//         builder.RegisterService(service);
-//         _server = builder.BuildAndStart();
-//         if (!_server) 
-//             return false;
+    ~grpc_server() 
+    { 
+        stop(); 
+    }
 
-//         _running = true;
-//         _server_thread = std::thread([this]() { _server->Wait(); });
-//         return true;
-//     }
+    template<typename ServiceType>
+    bool start(const std::string& address, ServiceType* service) 
+    {
+        grpc::ServerBuilder builder;
+        builder.AddListeningPort(address, grpc::InsecureServerCredentials());
+        builder.RegisterService(service);
+        _cq = builder.AddCompletionQueue();
+        _server = builder.BuildAndStart();
+        if (!_server) 
+            return false;
 
-//     void stop() 
-//     {
-//         if (_server) 
-//         {
-//             _server->Shutdown();
-//             _running = false;
-//             if (_server_thread.joinable())
-//                 _server_thread.join();
-//         }
-//     }
+        _running = true;
+        _shutdown_requested = false;
+        _cq_thread = std::thread([this]() { this->cq_worker(); });
+        _server_thread = std::thread([this]() { _server->Wait(); });
+        return true;
+    }
 
-//     bool is_running() const { return _running; }
+    void stop() 
+    {
+        if (_server) 
+        {
+            if (!_shutdown_requested.exchange(true)) 
+            {
+                _server->Shutdown();
+                if (_cq) 
+                    _cq->Shutdown();
+            }
+            _running = false;
+            if (_server_thread.joinable())
+                _server_thread.join();
 
-//     ~grpc_server() { stop(); }
+            if (_cq_thread.joinable())
+                _cq_thread.join();
 
-// private:
-//     std::unique_ptr<grpc::Server> _server;
-//     std::thread _server_thread;
-//     std::atomic<bool> _running;
-// };
+            _cq.reset();
+            _server.reset();
+        }
+    }
 
-// class grpc_channel 
-// {
-// public:
-//     grpc_channel() = default;
+    bool is_running() const { return _running; }
 
-//     bool connect(const std::string& address) 
-//     {
-//         _channel = grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
-//         return (_channel != nullptr);
-//     }
+private:
+    void cq_worker() {
+        void* tag;
+        bool ok;
+        while (_cq && _cq->Next(&tag, &ok)) 
+        {
+            // No custom async events, just drain
+        }
+    }
 
-//     std::shared_ptr<grpc::Channel> get() const { return _channel; }
+    std::unique_ptr<grpc::Server> _server;
+    std::unique_ptr<grpc::ServerCompletionQueue> _cq;
+    std::thread _server_thread;
+    std::thread _cq_thread;
+    std::atomic<bool> _running;
+    std::atomic<bool> _shutdown_requested;
+};
 
-// private:
-//     std::shared_ptr<grpc::Channel> _channel;
-// };
+class grpc_channel 
+{
+public:
+    grpc_channel() = default;
+
+    bool connect(const std::string& address) 
+    {
+        _channel = grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+        return (_channel != nullptr);
+    }
+
+    std::shared_ptr<grpc::Channel> get() const { return _channel; }
+
+private:
+    std::shared_ptr<grpc::Channel> _channel;
+};
 
 } // namespace libcpp
 

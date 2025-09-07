@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <libcpp/hardware/dpdk.h>
 
+#ifdef DPDK_ENABLE
+
 static bool dpdk_eal_inited = false;
 
 TEST(dpdk, dpdk_eal_init)
@@ -86,3 +88,5 @@ TEST(dpdk, dpdk_dev_close)
     int ret = rte_eth_dev_close(port);
     ASSERT_GE(ret, 0);
 }
+
+#endif // DPDK_ENABLE

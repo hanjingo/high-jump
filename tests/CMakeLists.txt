@@ -63,6 +63,7 @@ find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
 find_package(clickhouse-cpp QUIET) # depend: lz4, zstd, cityhash
 find_package(libpqxx REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -79,6 +80,7 @@ if(NOT WIN32)
     if(PkgConfig_FOUND)
         pkg_check_modules(DPDK QUIET libdpdk)
         if(DPDK_FOUND)
+            add_definitions(-DDPDK_ENABLE)
             message(STATUS "DPDK found, enabling DPDK")
         else()
             message(WARNING "DPDK requested but not found")
@@ -138,13 +140,19 @@ target_link_libraries(${PROJECT_NAME}
     libpqxx::pqxx
     hiredis::hiredis
 
-#    breakpad_client
+    # grpc
+    gRPC::grpc
+    gRPC::grpc++ 
+    gRPC::grpc++_reflection # for windows
+
+    # breakpad_client
     unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
     unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
 
-#    concurrentqueue
+    # concurrentqueue
     unofficial::concurrentqueue::concurrentqueue # for unofficial concurrentqueue cmake config
 
+    # pdf
     unofficial::libharu::hpdf
 )
 

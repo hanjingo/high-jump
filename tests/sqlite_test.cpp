@@ -30,32 +30,24 @@ int _sqlite_exec_cb(void* in, int argc, char** argv, char** col_name)
     return 0;
 }
 
-class SqliteTest : public ::testing::Test {
-protected:
-	std::string dbfile = "test.db";
-	void TearDown() override {
-		remove(dbfile.c_str());
-	}
-};
-
-TEST_F(SqliteTest, OpenClose) {
+TEST(SqliteTest, OpenClose) {
 	if (!_is_sqlite_valid()) 
 		GTEST_SKIP() << "sqlite not available";
 
 	sqlite db;
-	EXPECT_TRUE(db.open(dbfile));
+	EXPECT_TRUE(db.open("test.db"));
 	EXPECT_TRUE(db.is_open());
 	db.close();
 	EXPECT_FALSE(db.is_open());
     remove("test.db");
 }
 
-TEST_F(SqliteTest, ExecAndQuery) {
+TEST(SqliteTest, ExecAndQuery) {
     if (!_is_sqlite_valid()) 
         GTEST_SKIP() << "sqlite not available";
 
     sqlite db;
-    ASSERT_TRUE(db.open(dbfile));
+    ASSERT_TRUE(db.open("test.db"));
     EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
     EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);"));
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('Alice'),('Bob');"));
@@ -63,18 +55,20 @@ TEST_F(SqliteTest, ExecAndQuery) {
     ASSERT_EQ(rows.size(), 2u);
     EXPECT_EQ(rows[0][1], "Alice");
     EXPECT_EQ(rows[1][1], "Bob");
+    db.close();
     remove("test.db");
 }
 
-TEST_F(SqliteTest, QueryEmpty) {
+TEST(SqliteTest, QueryEmpty) {
 	if (!_is_sqlite_valid()) 
 		GTEST_SKIP() << "sqlite not available";
 		
 	sqlite db;
-	ASSERT_TRUE(db.open(dbfile));
+	ASSERT_TRUE(db.open("test.db"));
 	EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
 	db.exec("CREATE TABLE t (id INTEGER);");
 	auto rows = db.query("SELECT * FROM t;", _sqlite_exec_cb);
 	EXPECT_TRUE(rows.empty());
+    db.close();
     remove("test.db");
 }

@@ -35,11 +35,11 @@ TEST(SqliteTest, OpenClose) {
 		GTEST_SKIP() << "sqlite not available";
 
 	sqlite db;
-	EXPECT_TRUE(db.open("test.db"));
+	EXPECT_TRUE(db.open("OpenCloseTest.db"));
 	EXPECT_TRUE(db.is_open());
 	db.close();
 	EXPECT_FALSE(db.is_open());
-    remove("test.db");
+    remove("OpenCloseTest.db");
 }
 
 TEST(SqliteTest, ExecAndQuery) {
@@ -47,7 +47,7 @@ TEST(SqliteTest, ExecAndQuery) {
         GTEST_SKIP() << "sqlite not available";
 
     sqlite db;
-    ASSERT_TRUE(db.open("test.db"));
+    ASSERT_TRUE(db.open("ExecAndQueryTest.db"));
     EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
     EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);"));
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('Alice'),('Bob');"));
@@ -56,7 +56,7 @@ TEST(SqliteTest, ExecAndQuery) {
     EXPECT_EQ(rows[0][1], "Alice");
     EXPECT_EQ(rows[1][1], "Bob");
     db.close();
-    remove("test.db");
+    remove("ExecAndQueryTest.db");
 }
 
 TEST(SqliteTest, QueryEmpty) {
@@ -64,11 +64,11 @@ TEST(SqliteTest, QueryEmpty) {
 		GTEST_SKIP() << "sqlite not available";
 		
 	sqlite db;
-	ASSERT_TRUE(db.open("test.db"));
+	ASSERT_TRUE(db.open("QueryEmptyTest.db"));
 	EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
 	db.exec("CREATE TABLE t (id INTEGER);");
 	auto rows = db.query("SELECT * FROM t;", _sqlite_exec_cb);
 	EXPECT_TRUE(rows.empty());
     db.close();
-    remove("test.db");
+    remove("QueryEmptyTest.db");
 }

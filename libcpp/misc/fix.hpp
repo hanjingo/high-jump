@@ -1,66 +1,108 @@
 #ifndef FIX_HPP
 #define FIX_HPP
 
-// // hffix: https://github.com/jamesdbrock/hffix
-// #include <hffix.hpp>
-// #include <string>
-// #include <vector>
-// #include <cstdint>
-// #include <cstring>
-// #include <stdexcept>
+#include <hffix.hpp>
+#include <string>
+#include <vector>
+#include <cstdint>
+#include <cstring>
+#include <stdexcept>
 
-// namespace libcpp
-// {
+namespace libcpp
+{
 
-// // Simple wrapper for hffix FIX message building and parsing
-// class fix_message {
-// public:
-//     fix_message() : buffer_(1024), writer_(&buffer_[0], &buffer_[0] + buffer_.size()) {}
+class FixBuilder {
+public:
+    FixBuilder(size_t bufsize = 1024)
+        : _buffer(bufsize)
+        , _writer(_buffer.data(), _buffer.size()) 
+    {}
 
-//     // Start a new FIX message
-//     void start_message(uint8_t begin_string_major = 4, uint8_t begin_string_minor = 2) {
-//         writer_.reset(&buffer_[0], &buffer_[0] + buffer_.size());
-//         writer_.push_back_begin_string(begin_string_major, begin_string_minor);
-//         writer_.push_back_msgtype("D"); // Default to NewOrderSingle
-//     }
+    void begin(const std::string& begin_string = "FIX.4.4") 
+    {
+        _writer.push_back_header(begin_string.c_str());
+    }
 
-//     // Add a field to the message
-//     template<typename T>
-//     void add_field(int tag, const T& value) {
-//         writer_.push_back(tag, value);
-//     }
+    void add_string(int tag, const std::string& value) 
+    {
+        _writer.push_back_string(tag, value);
+    }
 
-//     // Complete the message and get the raw FIX buffer
-//     std::string finish_message() {
-//         writer_.push_back_checksum();
-//         return std::string(writer_.message_begin(), writer_.message_end());
-//     }
+    template<typename IntType>
+    void add_int(int tag, IntType value) 
+    {
+        _writer.push_back_int(tag, value);
+    }
 
-//     // Parse a FIX message from string
-//     void parse(const std::string& fix_str) {
-//         message_ = hffix::message(fix_str.data(), fix_str.data() + fix_str.size());
-//     }
+    void add_char(int tag, char value) 
+    {
+        _writer.push_back_char(tag, value);
+    }
 
-//     // Get field value by tag as string
-//     std::string get_field(int tag) const {
-//         if (!message_.is_valid()) return "";
-//         for (hffix::field_iterator i = message_.begin(); i != message_.end(); ++i) {
-//             if (i->tag() == tag) {
-//                 return std::string(i->value().begin(), i->value().end());
-//             }
-//         }
-//         return "";
-//     }
+    template<typename IntType>
+    void add_decimal(int tag, IntType mantissa, IntType exponent) 
+    {
+        _writer.push_back_decimal(tag, mantissa, exponent);
+    }
 
-//     // Get the underlying hffix::message
-//     const hffix::message& raw_message() const { return message_; }
+    void end() 
+    {
+        _writer.push_back_trailer();
+    }
 
-// private:
-//     std::vector<char> buffer_;
-//     hffix::message_writer writer_;
-//     hffix::message message_;
-// };
+    const char* data() const { return _writer.message_begin(); }
+    size_t size() const { return _writer.message_size(); }
+    std::string str() const { return std::string(data(), size()); }
 
-// } // namespace libcpp
+private:
+    std::vector<char> _buffer;
+    hffix::message_writer _writer;
+};
+
+class FixParser {
+public:
+    FixParser(const char* data, size_t size)
+        : _reader(data, size) 
+    {}
+
+    bool valid() const { return _reader.is_valid(); }
+    bool complete() const { return _reader.is_complete(); }
+
+    std::string get_string(int tag) const 
+    {
+        for (auto it = _reader.begin(); it != _reader.end(); ++it) 
+        {
+            if (it->tag() == tag) 
+                return it->value().as_string();
+        }
+        return "";
+    }
+
+    template<typename IntType>
+    IntType get_int(int tag) const 
+    {
+        for (auto it = _reader.begin(); it != _reader.end(); ++it) 
+        {
+            if (it->tag() == tag) 
+                return it->value().as_int<IntType>();
+        }
+        return IntType();
+    }
+
+    char get_char(int tag) const 
+    {
+        for (auto it = _reader.begin(); it != _reader.end(); ++it) 
+        {
+            if (it->tag() == tag) 
+                return it->value().as_char();
+        }
+        return '\0';
+    }
+
+private:
+    hffix::message_reader _reader;
+};
+
+} // namespace libcpp
 
 #endif // FIX_HPP

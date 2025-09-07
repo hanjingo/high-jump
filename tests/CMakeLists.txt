@@ -64,6 +64,7 @@ find_package(clickhouse-cpp QUIET) # depend: lz4, zstd, cityhash
 find_package(libpqxx REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+find_package(hffix REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -143,7 +144,6 @@ target_link_libraries(${PROJECT_NAME}
     # grpc
     gRPC::grpc
     gRPC::grpc++ 
-    gRPC::grpc++_reflection # for windows
 
     # breakpad_client
     unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
@@ -162,6 +162,8 @@ if (WIN32)
         ws2_32 # for windows sockets
         bcrypt # for Windows cryptography
         hidapi::winapi
+
+        gRPC::grpc++_reflection # for windows grpc
     )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} 

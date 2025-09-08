@@ -13,10 +13,20 @@ Ugl3Etuc1Ux9AiA+OYz0CP4lFG3RvlJ6Mzr93V8G6aUVpU20RkPpbzwsWQIhAKXc
 afQ0WRgZier6MrdwlXd70JZIpgc6kLeOz2GuV4lX
 -----END RSA PRIVATE KEY-----)";
 
-    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {"", prikey, "", ""}, 1};
+    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {"", prikey, "", ""}, 2};
     libcpp::license::token_t token;
     auto err = isu.issue(
         token,
+        "harry", 
+        30, 
+        {
+            {"disk_sn", libcpp::license::get_disk_sn()}, 
+        }
+    );
+    ASSERT_TRUE(err.value() == 0);
+
+    err = isu.issue_file(
+        "./test1.lic",
         "harry", 
         30, 
         {
@@ -43,7 +53,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 8h/RQTcsk06WYYQJB6CZcjLeXwVsoIC5T8Ph3lvRIGmVCEQQ0peBowIDAQAB
 -----END PUBLIC KEY-----)";
 
-    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 1};
+    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 2};
     libcpp::license::token_t token;
     auto err = isu.issue(
         token,
@@ -55,7 +65,8 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     );
     ASSERT_TRUE(err.value() == 0);
 
-    err = isu.verify(
+    libcpp::license::verifier vefer{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}};
+    err = vefer.verify(
         token,
         "harry",
         30,
@@ -65,8 +76,38 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     );
     ASSERT_TRUE(err.value() == 0);
 
-    err = isu.verify(
+    err = vefer.verify(
         token,
+        "harry1",
+        30,
+        {
+            {"disk_sn", libcpp::license::get_disk_sn()}, 
+        }
+    );
+    ASSERT_FALSE(err.value() == 0);
+
+    err = isu.issue_file(
+        "./test2.lic",
+        "harry", 
+        30, 
+        {
+            {"disk_sn", libcpp::license::get_disk_sn()}, 
+        }
+    );
+    ASSERT_TRUE(err.value() == 0);
+
+    err = vefer.verify_file(
+        "./test2.lic",
+        "harry",
+        30,
+        {
+            {"disk_sn", libcpp::license::get_disk_sn()}, 
+        }
+    );
+    ASSERT_TRUE(err.value() == 0);
+
+    err = vefer.verify_file(
+        "./test2.lic",
         "harry1",
         30,
         {
@@ -93,7 +134,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 8h/RQTcsk06WYYQJB6CZcjLeXwVsoIC5T8Ph3lvRIGmVCEQQ0peBowIDAQAB
 -----END PUBLIC KEY-----)";
 
-    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 1};
+    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 2};
     libcpp::license::token_t token;
     auto err = isu.issue(
         token,
@@ -105,7 +146,8 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     );
     ASSERT_TRUE(err.value() == 0);
 
-    err = isu.verify(
+    libcpp::license::verifier vefer{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}};
+    err = vefer.verify(
         token,
         "harry",
         30,
@@ -116,7 +158,17 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     ASSERT_TRUE(err.value() == 0);
 
     isu.release(libcpp::license::sign_algo::none, {});
-    err = isu.verify(
+    err = isu.issue(
+        token,
+        "harry", 
+        30,
+        {
+            {"disk_sn", libcpp::license::get_disk_sn()}
+        }
+    );
+    ASSERT_TRUE(err.value() == 0);
+    
+    err = vefer.verify(
         token,
         "harry",
         30,

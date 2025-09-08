@@ -2,6 +2,9 @@
 #ifndef LICENSE_HPP
 #define LICENSE_HPP
 
+#include <fstream>
+#include <iostream>
+
 #include <jwt-cpp/traits/nlohmann-json/traits.h>
 #include <jwt-cpp/jwt.h>
 
@@ -29,34 +32,45 @@ enum class sign_algo
     rsa256,
 };
 
-enum class err {
+enum class err 
+{
     err_start = 1000,
     invalid_times,
     claim_mismatch,
     keys_not_changed,
     keys_not_enough,
+    file_not_exist,
+    input_stream_invalid,
+    output_stream_invalid
 };
 
 constexpr const char* JWT_TYPE = "JWT";
 
 namespace detail
 {
-class error_category : public std::error_category {
+class error_category : public std::error_category 
+{
 public:
     const char* name() const noexcept override { return "license"; }
-    std::string message(int ev) const override {
-        switch (static_cast<err>(ev)) {
-        case err::err_start: return "error start";
-        case err::invalid_times: return "invalid times";
-        case err::claim_mismatch: return "claim mismatch";
-        case err::keys_not_changed: return "keys not changed";
-        case err::keys_not_enough: return "keys not enough";
-        default: return "unknown";
+    std::string message(int ev) const override 
+    {
+        switch (static_cast<err>(ev)) 
+        {
+            case err::err_start: return "error start";
+            case err::invalid_times: return "invalid times";
+            case err::claim_mismatch: return "claim mismatch";
+            case err::keys_not_changed: return "keys not changed";
+            case err::keys_not_enough: return "keys not enough";
+            case err::file_not_exist: return "file not exist";
+            case err::input_stream_invalid: return "input stream invalid";
+            case err::output_stream_invalid: return "output stream invalid";
+            default: return "unknown";
         }
     }
 };
 
-inline const error_category& license_category() {
+inline const error_category& license_category() 
+{
     static error_category cat;
     return cat;
 }
@@ -226,11 +240,6 @@ static std::string get_disk_sn()
 
 } // namespace detail
 
-static const err_t ERR_INVALID_TIMES = detail::make_err(err::invalid_times);
-static const err_t ERR_CLAIM_MISMATCH = detail::make_err(err::claim_mismatch);
-static const err_t ERR_KEYS_NOT_CHANGED = detail::make_err(err::keys_not_changed);
-static const err_t ERR_KEYS_NOT_ENOUGH = detail::make_err(err::keys_not_enough);
-
 static inline std::string get_disk_sn() { return detail::get_disk_sn(); }
 
 class issuer
@@ -271,7 +280,7 @@ public:
     {
         err_t err;
         if (_valid_times < 1)
-            return ERR_INVALID_TIMES;
+            return detail::make_err(err::invalid_times);
 
         _valid_times--;
         return detail::issue(token, 
@@ -283,6 +292,77 @@ public:
                              _keys, 
                              claims);
     }
+
+    err_t issue(std::ostream& out,
+                const std::string& licensee,
+                const std::size_t leeway_days,
+                const std::initializer_list<pair_t>& claims = {})
+    {
+        if (!out || !out.good())
+            return detail::make_err(err::output_stream_invalid);
+
+        token_t token;
+        auto err = issue(token, licensee, leeway_days, claims);
+        if (err)
+            return err;
+
+        out << token;
+        if (!out.good())
+            return detail::make_err(err::output_stream_invalid);
+        return err_t{};
+    }
+
+    err_t issue_file(const std::string& filepath,
+                     const std::string& licensee,
+                     const std::size_t leeway_days,
+                     const std::initializer_list<pair_t>& claims = {})
+    {
+        std::ofstream out(filepath, std::ios::binary);
+        if (!out || !out.is_open())
+            return detail::make_err(err::file_not_exist);
+
+        return issue(out, licensee, leeway_days, claims);
+    }
+
+    // release all issued licences by reset encrypt keys
+    err_t release(const sign_algo algo,
+                  const std::vector<std::string>& keys)
+    {
+        if (algo == _algo && keys == _keys)
+            return detail::make_err(err::keys_not_changed);
+
+        err_t err;
+        _algo = algo;
+        _keys = keys;
+        return err;
+    }
+
+private:
+    std::string              _id;
+    sign_algo                _algo;
+    std::vector<std::string> _keys;
+    std::size_t              _valid_times;
+};
+
+class verifier
+{
+public:
+    verifier() = delete;
+    verifier(const std::string& id,
+             const sign_algo algo,
+             const std::vector<std::string>& keys)
+        : _id{id}
+        , _algo{algo}
+        , _keys{keys}
+    {
+    }
+    verifier(const verifier& other)
+        : _id{other._id}
+        , _algo{other._algo}
+        , _keys{other._keys}
+    {
+    }
+    virtual ~verifier() = default;
 
     err_t verify(const token_t& token,
                  const std::string& licensee,
@@ -298,25 +378,41 @@ public:
                               claims);
     }
 
-    // release all issued licences by reset encrypt keys
-    err_t release(const sign_algo algo,
-                  const std::vector<std::string>& keys)
+    err_t verify(std::istream& in, 
+                 const std::string& licensee,
+                 const std::size_t leeway_days,
+                 const std::initializer_list<pair_t>& claims = {})
     {
-        if (algo == _algo && keys == _keys)
-            return ERR_KEYS_NOT_CHANGED;
+        if (!in)
+            return detail::make_err(err::input_stream_invalid);
 
-        err_t err;
-        _algo = algo;
-        _keys = keys;
-        return err;
+        std::string line, buf;
+        while (std::getline(in, line)) 
+            buf += line;
+
+        if (buf.empty())
+            return detail::make_err(err::input_stream_invalid);
+
+        token_t token = buf;
+        return detail::verify(token, _id, licensee, leeway_days * 24 * 60 * 60, _algo, _keys, claims);
+    }
+
+    err_t verify_file(const token_t& filepath,
+                      const std::string& licensee,
+                      const std::size_t leeway_days,
+                      const std::initializer_list<pair_t>& claims = {})
+    {
+        std::ifstream in(filepath, std::ios::binary);
+        if (!in || !in.is_open())
+            return detail::make_err(err::file_not_exist);
+
+        return verify(in, licensee, leeway_days, claims);
     }
 
 private:
     std::string              _id;
     sign_algo                _algo;
     std::vector<std::string> _keys;
-    std::size_t              _valid_times;
-    bool                     _active;
 };
 
 } // namespace license

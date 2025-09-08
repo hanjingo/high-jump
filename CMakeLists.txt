@@ -60,10 +60,10 @@ if (BUILD_LIB)
     add_subdirectory(libcpp/binding)
 endif()
 
-# # build example
-# if(BUILD_EXAMPLE)
-#      add_subdirectory(example)
-# endif()
+# build example
+if(BUILD_EXAMPLE)
+     add_subdirectory(examples)
+endif()
 
 # build test
 if (BUILD_TEST)

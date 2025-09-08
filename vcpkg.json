@@ -47,6 +47,7 @@
       ]
     },
     "protobuf",
+    "abseil",
     "pugixml",
     "spdlog",
     "sqlite3",
@@ -128,6 +129,10 @@
     {
       "name": "protobuf",
       "version": "5.29.3"
+    },
+    {
+      "name": "abseil",
+      "version": "20250127.1#4"
     },
     {
       "name": "opencl",

@@ -35,6 +35,7 @@ if(COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     endif()
 endif()
 
+find_package(PkgConfig QUIET)
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 find_package(ZeroMQ REQUIRED)
@@ -77,7 +78,6 @@ find_package(CUDA QUIET)
 
 # DPDK support - optional and only on non-Windows platforms
 if(NOT WIN32)
-    find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(DPDK QUIET libdpdk)
         if(DPDK_FOUND)

@@ -7,7 +7,6 @@
 
 using namespace GrpcLibrary;
 
-// 服务实现补充
 class TestGrpcServiceImpl : public GrpcService::Service {
 public:
     ::grpc::Status SayHello(::grpc::ServerContext* context,
@@ -19,7 +18,6 @@ public:
     }
 };
 
-// 用 new 分配，永不 delete
 TestGrpcServiceImpl* g_service = new TestGrpcServiceImpl();
 
 TEST(GRPCTest, SayHelloUnaryCall) {
@@ -42,5 +40,4 @@ TEST(GRPCTest, SayHelloUnaryCall) {
     EXPECT_EQ(reply.message(), "Hello, World");
 
     server.stop();
-    // 不 delete g_service，进程退出时由操作系统回收
 }

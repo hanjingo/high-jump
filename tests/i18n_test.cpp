@@ -320,6 +320,11 @@ TEST_F(I18nTest, I18nMultipleTranslators) {
 TEST_F(I18nTest, I18nLoadFromDirectory) {
     auto& i18n_instance = i18n::instance();
 
+    if (!std::filesystem::exists(test_dir_)) 
+    {
+        std::filesystem::create_directory(test_dir_);
+    }
+
     EXPECT_TRUE(i18n_instance.load_translations_from_directory(test_dir_));
 
     i18n_instance.set_locale("zh_CN");

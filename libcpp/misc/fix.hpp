@@ -11,9 +11,9 @@
 namespace libcpp
 {
 
-class FixBuilder {
+class fix_builder {
 public:
-    FixBuilder(size_t bufsize = 1024)
+    fix_builder(size_t bufsize = 1024)
         : _buffer(bufsize)
         , _writer(_buffer.data(), _buffer.size()) 
     {}
@@ -59,9 +59,9 @@ private:
     hffix::message_writer _writer;
 };
 
-class FixParser {
+class fix_parser {
 public:
-    FixParser(const char* data, size_t size)
+    fix_parser(const char* data, size_t size)
         : _reader(data, size) 
     {}
 

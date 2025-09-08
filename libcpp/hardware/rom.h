@@ -34,6 +34,14 @@ static bool rom_load(rom_t* rom, const char* filename)
     if (!rom || !filename) 
         return false;
 
+    if (rom->data) 
+    {
+        free(rom->data);
+        rom->data = NULL;
+        rom->size = 0;
+        rom->loaded = false;
+    }
+
     FILE* fp = fopen(filename, "rb");
     if (!fp) 
         return false;
@@ -41,18 +49,26 @@ static bool rom_load(rom_t* rom, const char* filename)
     fseek(fp, 0, SEEK_END);
     size_t sz = ftell(fp);
     fseek(fp, 0, SEEK_SET);
+    if (sz == 0) 
+    {
+        fclose(fp);
+        return false;
+    }
+
     void* buf = malloc(sz);
     if (!buf) 
     {
         fclose(fp);
         return false;
     }
+
     if (fread(buf, 1, sz, fp) != sz) 
     {
         free(buf);
         fclose(fp);
         return false;
     }
+    
     fclose(fp);
     rom->data = buf;
     rom->size = sz;

@@ -54,11 +54,18 @@ TEST(base64, decode)
 TEST(base64, encode_file)
 {
     // base64 file -> file
-    ASSERT_EQ(libcpp::base64::encode_file(std::string("./base64_file_test_encode.log"), 
-        std::string("./crypto.log")), true);
+    ASSERT_TRUE(libcpp::base64::encode_file(
+        std::string("./base64_file_test_encode.log"), 
+        std::string("./crypto.log")));
 }
 
 TEST(base64, decode_file)
 {
-    ASSERT_EQ(libcpp::base64::decode_file(std::string("./base64_file_test_decode.log"), std::string("./base64_file_test_encode.log")), true);
+    ASSERT_TRUE(libcpp::base64::encode_file(
+        std::string("./base64_file_test_encode1.log"), 
+        std::string("./crypto.log")));
+
+    ASSERT_TRUE(libcpp::base64::decode_file(
+        std::string("./base64_file_test_decode.log"), 
+        std::string("./base64_file_test_encode1.log")));
 }

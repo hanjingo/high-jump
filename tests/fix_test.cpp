@@ -2,7 +2,7 @@
 #include <libcpp/misc/fix.hpp>
 
 TEST(FixTest, BuildAndParse) {
-    libcpp::FixBuilder builder;
+    libcpp::fix_builder builder;
     builder.begin();
     builder.add_string(35, "D"); // MsgType
     builder.add_string(49, "SENDER"); // SenderCompID
@@ -13,7 +13,7 @@ TEST(FixTest, BuildAndParse) {
 
     std::string fixmsg = builder.str();
 
-    libcpp::FixParser parser(fixmsg.data(), fixmsg.size());
+    libcpp::fix_parser parser(fixmsg.data(), fixmsg.size());
     ASSERT_TRUE(parser.valid());
     ASSERT_TRUE(parser.complete());
     EXPECT_EQ(parser.get_string(35), "D");

@@ -2,6 +2,7 @@
 #ifndef LICENSE_HPP
 #define LICENSE_HPP
 
+#include <sys/stat.h>
 #include <fstream>
 #include <iostream>
 
@@ -241,6 +242,11 @@ static std::string get_disk_sn()
 } // namespace detail
 
 static inline std::string get_disk_sn() { return detail::get_disk_sn(); }
+static inline bool is_file_exist(const std::string& filepath)
+{
+    struct stat buffer;
+    return stat(filepath.c_str(), &buffer) == 0;
+}
 
 class issuer
 {

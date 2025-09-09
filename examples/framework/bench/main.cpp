@@ -1,4 +1,4 @@
-#include <libcpp/testing/benchmark.hpp>
+#include <benchmark/benchmark.h>
 
 int main(int argc, char* argv[])
 {

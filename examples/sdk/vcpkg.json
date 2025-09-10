@@ -1,0 +1,47 @@
+{
+  "dependencies": [
+    "benchmark",
+    "breakpad",
+    "fmt",
+    "gtest",
+    "jwt-cpp",
+    {
+      "name": "opentelemetry-cpp",
+      "features": [
+        "otlp-http",
+        "otlp-file"
+      ]
+    },
+    "spdlog"
+  ],
+  "overrides": [
+    {
+      "name": "benchmark",
+      "version": "1.9.4"
+    },
+    {
+      "name": "breakpad",
+      "version": "2024-02-16"
+    },
+    {
+      "name": "fmt",
+      "version": "11.0.2"
+    },
+    {
+      "name": "gtest",
+      "version": "1.17.0"
+    },
+    {
+      "name": "jwt-cpp",
+      "version": "0.7.1"
+    },
+    {
+      "name": "opentelemetry-cpp",
+      "version": "1.22.0#1"
+    },
+    {
+      "name": "spdlog",
+      "version": "1.15.3"
+    }
+  ]
+}

@@ -14,10 +14,10 @@ TEST(ini, read_file)
 {
     char text[] = "[person] \nname=hanjingo \nage=30 \nincome=10000.123";
     libcpp::ini cfg1 = libcpp::ini::parse(text);
-    cfg1.write_file("cfg.ini");
+    cfg1.write_file("cfg1.ini");
 
     libcpp::ini cfg2;
-    cfg2.read_file("cfg.ini");
+    cfg2.read_file("cfg1.ini");
     ASSERT_TRUE(cfg2.get_child("person").get<std::string>("name") == std::string("hanjingo"));
     ASSERT_EQ(cfg2.get_child("person").get<int>("age"), 30);
     ASSERT_FLOAT_EQ(cfg2.get_child("person").get<float>("income"), 10000.123f);
@@ -28,10 +28,10 @@ TEST(ini, write_file)
     char text[] = "[person] \nname=hanjingo \nage=30 \nincome=10000.123";
     libcpp::ini cfg1 = libcpp::ini::parse(text);
     cfg1.get_child("person").put("email", "hehehunanchina@live.com");
-    cfg1.write_file("cfg.ini");
+    cfg1.write_file("cfg2.ini");
 
     libcpp::ini cfg2;
-    cfg2.read_file("cfg.ini");
+    cfg2.read_file("cfg2.ini");
     ASSERT_TRUE(cfg2.get_child("person").get<std::string>("email") == std::string("hehehunanchina@live.com"));
 }
 

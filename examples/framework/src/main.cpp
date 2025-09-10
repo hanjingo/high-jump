@@ -6,6 +6,7 @@
 #include <libcpp/encoding/i18n.hpp>
 #include <libcpp/testing/crash.hpp>
 #include <libcpp/testing/telemetry.hpp>
+#include <iostream>
 
 int main(int argc, char* argv[])
 {
@@ -69,5 +70,6 @@ int main(int argc, char* argv[])
     LOG_INFO("{} compile time {}", PACKAGE, COMPILE_TIME);
     LOG_INFO("{} email {}", PACKAGE, EMAIL);
 
+    std::cin.get();
     // add your code here...
 }

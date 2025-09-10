@@ -77,6 +77,7 @@ TEST(process, kill)
     }
 
     vec.clear();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
         if (arg.size() < 2)
             return false;

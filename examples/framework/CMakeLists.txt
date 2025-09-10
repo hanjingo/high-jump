@@ -88,7 +88,7 @@ if (ASAN)
 endif()
 
 # Macro Definitions
-add_definitions(-DI18N_LOCALE="en_US")
+add_definitions(-DI18N_LOCALE="${I18N_LOCALE}")
 add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})

@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include <libcpp/os/process.hpp>
 
+#include <thread>
+#include <chrono>
+
 TEST(process, getpid)
 {
     ASSERT_EQ(libcpp::process::getpid() >= 0, true);

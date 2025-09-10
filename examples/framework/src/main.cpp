@@ -7,6 +7,8 @@
 #include <libcpp/testing/crash.hpp>
 #include <libcpp/testing/telemetry.hpp>
 
+// add your code here...
+
 int main(int argc, char* argv[])
 {
     // add options parse support
@@ -32,7 +34,6 @@ int main(int argc, char* argv[])
     // add i18n support
     libcpp::i18n::instance().set_locale(I18N_LOCALE);
     libcpp::i18n::instance().load_translation_auto("./", "framework");
-    LOG_DEBUG("{}", libcpp::tr("app.title"));
 
     // add telemetry support
     auto tracer = libcpp::telemetry::make_otlp_file_tracer("otlp_call", telemetry_fpath);

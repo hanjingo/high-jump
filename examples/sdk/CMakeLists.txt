@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.19.2)
 
-project(sdk 
+# Load Environment Info
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/env.cmake)
+load_env("${CMAKE_CURRENT_SOURCE_DIR}/.env")
+
+# set project
+project(${PACKAGE_NAME} 
     LANGUAGES CXX 
-    DESCRIPTION "The SDK example of libcpp"
+    DESCRIPTION ${PACKAGE_DESCRIPTION_SUMMARY}
 )
 
 # options--code check
@@ -14,10 +19,6 @@ option(BUILD_STATIC "Build static object" OFF)
 # Options--build
 option(BUILD_TEST "Build test" OFF)
 option(BUILD_BENCHMARK "Build benchmark" OFF)
-
-# Load Environment Info
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/env.cmake)
-load_env("${CMAKE_CURRENT_SOURCE_DIR}/.env")
 
 # import vcpkg module
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)

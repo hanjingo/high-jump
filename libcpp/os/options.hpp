@@ -58,12 +58,18 @@ namespace libcpp
 class options
 {
 public:
+    options() = default;
+    ~options() = default;
+
     template<typename T>
     void add(const char* key, T default_value, const char* memo = "")
     {
-        _desc.add_options()(key, 
-                            boost::program_options::value<T>()->default_value(default_value), 
-                            memo);
+        _add_impl(key, default_value, memo, std::is_same<T, std::vector<std::string>>{});
+    }
+
+    void add_positional(const char* key, int max_count = 1)
+    {
+        _pos.add(key, max_count);
     }
 
     template<typename T>
@@ -72,8 +78,20 @@ public:
         T ret = T{};
         try {
             boost::program_options::variables_map vm;
-            boost::program_options::store(
-                boost::program_options::parse_command_line(argc, argv, _desc), vm);
+            if (_pos.max_total_count() > 0) 
+            {
+                boost::program_options::store(
+                    boost::program_options::command_line_parser(argc, argv)
+                        .options(_desc)
+                        .positional(_pos)
+                        .run(),
+                    vm);
+            } 
+            else 
+            {
+                boost::program_options::store(
+                    boost::program_options::parse_command_line(argc, argv, _desc), vm);
+            }
             boost::program_options::notify(vm);
             if (vm.count(key))
                 ret = vm[key].as<T>();
@@ -86,10 +104,21 @@ public:
     {
         try {
             boost::program_options::variables_map vm;
-            boost::program_options::store(
-                boost::program_options::parse_command_line(argc, argv, _desc), vm);
+            if (_pos.max_total_count() > 0) 
+            {
+                boost::program_options::store(
+                    boost::program_options::command_line_parser(argc, argv)
+                        .options(_desc)
+                        .positional(_pos)
+                        .run(),
+                    vm);
+            } 
+            else 
+            {
+                boost::program_options::store(
+                    boost::program_options::parse_command_line(argc, argv, _desc), vm);
+            }
             boost::program_options::notify(vm);
-            
             if (!vm.count(key)) 
                 return default_value;
 
@@ -103,8 +132,47 @@ public:
         }
     }
 
+    template<typename T = std::vector<std::string>>
+    T parse_positional(int argc, char* argv[], const char* key)
+    {
+        T ret{};
+        try {
+            boost::program_options::variables_map vm;
+            boost::program_options::store(
+                boost::program_options::command_line_parser(argc, argv)
+                    .options(_desc)
+                    .positional(_pos)
+                    .run(),
+                vm);
+            boost::program_options::notify(vm);
+            if (vm.count(key))
+                ret = vm[key].as<T>();
+        } catch (...) {}
+        return ret;
+    }
+
+private:
+    template<typename T>
+    void _add_impl(const char* key, T default_value, const char* memo, std::false_type)
+    {
+        _desc.add_options()(
+            key,
+            boost::program_options::value<T>()->default_value(default_value),
+            memo);
+    }
+
+    template<typename T>
+    void _add_impl(const char* key, T, const char* memo, std::true_type)
+    {
+        _desc.add_options()(
+            key,
+            boost::program_options::value<T>(),
+            memo);
+    }
+
 private:
     boost::program_options::options_description _desc;
+    boost::program_options::positional_options_description _pos;
 };
 
 }

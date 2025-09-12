@@ -35,7 +35,7 @@ private:
 #define __init_cat(a, b) a##b
 #define _init_cat(a, b) __init_cat(a, b)
 
-#define INIT(cmd) ::libcpp::init _init_cat(__simulate_go_init__, __COUNTER__)([](){ cmd; });
+#define INIT(cmd) namespace { ::libcpp::init _init_cat(__simulate_go_init__, __COUNTER__)([](){ cmd; }); }
 
 
 #endif

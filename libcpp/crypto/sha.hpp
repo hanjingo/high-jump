@@ -30,6 +30,8 @@
 #endif
 
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <vector>
 #include <string>
 #include <openssl/sha.h>
@@ -198,6 +200,28 @@ public:
         out.write(hash_result.data(), hash_result.size());
         out.flush();
         return true;
+    }
+
+    static bool encode_file(const char* dst_file_path,
+                            const char* src_file_path,
+                            const algorithm algo = algorithm::sha256)
+    {
+        std::ifstream src_file(src_file_path, std::ios::binary);
+        if (!src_file.is_open())
+            return false;
+
+        std::ofstream dst_file(dst_file_path, std::ios::binary);
+        if (!dst_file.is_open())
+            return false;
+
+        return encode(dst_file, src_file, algo);
+    }
+
+    static bool encode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path,
+                            const algorithm algo = algorithm::sha256)
+    {
+        return encode_file(dst_file_path.c_str(), src_file_path.c_str(), algo);
     }
 
     static std::size_t encode_len_reserve(const algorithm algo = algorithm::sha256)

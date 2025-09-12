@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.19.2)
 
-project(framework 
+# Load Environment Info
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/env.cmake)
+load_env("${CMAKE_CURRENT_SOURCE_DIR}/.env")
+
+# set project
+project(${PACKAGE_NAME} 
     LANGUAGES CXX 
-    DESCRIPTION "The framework example of libcpp"
+    DESCRIPTION ${PACKAGE_DESCRIPTION_SUMMARY}
 )
 
 # options--code check
@@ -88,7 +93,7 @@ if (ASAN)
 endif()
 
 # Macro Definitions
-add_definitions(-DI18N_LOCALE="${I18N_LOCALE}")
+add_definitions(-DI18N_LOCALE="${LANGUAGE_LOCALE}")
 add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})

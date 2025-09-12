@@ -97,6 +97,7 @@ public:
 
         out.resize(128 / 8);
         MD5_Final(reinterpret_cast<unsigned char*>(&out[0]), &ctx);
+        return true;
     };
 
     static bool encode(std::ostream& out, 
@@ -120,35 +121,26 @@ public:
         return true;
     };
 
-    // file -> encode string
-    static bool encode_file(std::string& dst,
+    // encode: file -> file
+    static bool encode_file(const char* dst_file_path,
                             const char* src_file_path)
     {
-        std::size_t dst_len = MD5_DIGEST_LENGTH;
-        dst.resize(dst_len);
-        return encode_file(const_cast<char*>(dst.data()), dst_len, src_file_path);
+        std::ifstream in(src_file_path, std::ios::binary);
+        if (!in.is_open())
+            return false;
+
+        std::ofstream out(dst_file_path, std::ios::binary);
+        if (!out.is_open())
+            return false;
+
+        return encode(out, in);
     }
 
-    // file -> encode char*
-    static bool encode_file(char* dst,
-                            std::size_t& dst_len,
-                            const char* src_file_path)
+    // encode: file -> file
+    static bool encode_file(const std::string& dst_file_path,
+                            const std::string& src_file_path)
     {
-        std::ifstream src_file(src_file_path, std::ios::binary);
-        if (!src_file.is_open())
-            return false;
-
-        std::ostringstream dst_stream;
-        if (!encode(dst_stream, src_file))
-            return false;
-
-        std::string dst_str = dst_stream.str();
-        dst_len = dst_str.size();
-        if (dst_len > MD5_DIGEST_LENGTH)
-            return false;
-
-        memcpy(dst, dst_str.data(), dst_len);
-        return true;
+        return encode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
 
     static std::string to_hex(const std::string& str, bool upper_case = false)

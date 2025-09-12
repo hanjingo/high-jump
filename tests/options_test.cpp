@@ -4,6 +4,8 @@
 #include <string>
 #include <cstring>
 
+#include <algorithm>
+
 using namespace libcpp;
 
 class OptionsTest : public ::testing::Test {
@@ -315,4 +317,50 @@ TEST_F(OptionsTest, TypeSafety) {
 
     int correct_type = opts->parse<int>(static_cast<int>(args.size()), argv, "number");
     EXPECT_EQ(correct_type, 123);
+}
+
+TEST_F(OptionsTest, ParseSinglePositionalArgument) {
+    opts->add<std::string>("input", "", "input file");
+    opts->add_positional("input", 1);
+    std::vector<std::string> args = {"program", "file.txt"};
+    char** argv = create_argv(args);
+    std::string input = opts->parse<std::string>(static_cast<int>(args.size()), argv, "input");
+    EXPECT_EQ(input, "file.txt");
+}
+
+TEST_F(OptionsTest, ParseMultiplePositionalArguments) {
+    opts->add<std::string>("input", "", "input file");
+    opts->add<std::string>("output", "", "output file");
+    opts->add_positional("input", 1);
+    opts->add_positional("output", 1);
+    std::vector<std::string> args = {"program", "in.txt", "out.txt"};
+    char** argv = create_argv(args);
+    std::string input = opts->parse<std::string>(static_cast<int>(args.size()), argv, "input");
+    std::string output = opts->parse<std::string>(static_cast<int>(args.size()), argv, "output");
+    EXPECT_EQ(input, "in.txt");
+    EXPECT_EQ(output, "out.txt");
+}
+
+TEST_F(OptionsTest, ParsePositionalVector) {
+    opts->add<std::vector<std::string>>("files", {}, "input files");
+    opts->add_positional("files", 3);
+    std::vector<std::string> args = {"program", "a.txt", "b.txt", "c.txt"};
+    char** argv = create_argv(args);
+    auto files = opts->parse_positional<std::vector<std::string>>(static_cast<int>(args.size()), argv, "files");
+    ASSERT_EQ(files.size(), 3);
+    EXPECT_TRUE(std::find(files.begin(), files.end(), "a.txt") != files.end());
+    EXPECT_TRUE(std::find(files.begin(), files.end(), "b.txt") != files.end());
+    EXPECT_TRUE(std::find(files.begin(), files.end(), "c.txt") != files.end());
+}
+
+TEST_F(OptionsTest, ParseMixedOptionsAndPositional) {
+    opts->add<std::string>("output,o", "", "output file");
+    opts->add<std::string>("input", "", "input file");
+    opts->add_positional("input", 1);
+    std::vector<std::string> args = {"program", "input.txt", "-o", "output.txt"};
+    char** argv = create_argv(args);
+    std::string input = opts->parse<std::string>(static_cast<int>(args.size()), argv, "input");
+    std::string output = opts->parse<std::string>(static_cast<int>(args.size()), argv, "output");
+    EXPECT_EQ(input, "input.txt");
+    EXPECT_EQ(output, "output.txt");
 }

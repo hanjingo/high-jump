@@ -151,6 +151,11 @@ static void handle_err(std::error_code err, Args&& ... args)
                 std::forward<Args>(args)...);
             break;
         }
+        case err_keygen_fail:
+        {
+            LOG_ERROR("keygen failed: name:\"{}\", fmt:\"{}\", mode:\"{}\", bits:\"{}\"", std::forward<Args>(args)...);
+            break;
+        }
         default: {
             break;
         }

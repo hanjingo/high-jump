@@ -35,7 +35,18 @@ static const std::vector<std::string> rsa_paddings{
 static const std::vector<std::string> fmts{
     "auto", "hex", "base64"};
 
+static const std::vector<std::string> keygen_algos{
+    "auto", "rsa"};
+static const std::vector<std::string> keygen_rsa_fmts{
+    "auto", "x509", "pkcs1"};
+static const std::vector<std::string> keygen_rsa_modes{
+    "auto", "none", "aes_128_ecb", "aes_192_ecb", "aes_256_ecb",
+    "aes_128_cbc", "aes_192_cbc", "aes_256_cbc",
+    "aes_128_cfb", "aes_192_cfb", "aes_256_cfb",
+    "aes_128_ofb", "aes_192_ofb", "aes_256_ofb"};
+
 void print_console(const std::string& msg);
+void print_console(const std::string& msg, const std::string& fmt);
 std::string print_str_vector(std::vector<std::string> vec);
 libcpp::aes::mode str_to_aes_mode(const std::string& mode);
 libcpp::aes::padding str_to_aes_padding(const std::string& padding);
@@ -44,6 +55,9 @@ libcpp::des::mode str_to_des_mode(const std::string& mode);
 libcpp::des::padding str_to_des_padding(const std::string& padding);
 
 libcpp::rsa::padding str_to_rsa_padding(const std::string& padding);
+libcpp::rsa::key_format str_to_rsa_key_format(const std::string& fmt);
+libcpp::rsa::mode str_to_rsa_mode(const std::string& mode);
+
 void format(
     std::string& out,
     const std::string& in, 
@@ -52,10 +66,14 @@ void unformat(
     std::string& out, 
     const std::string& in, 
     const std::string& fmt);
-// err_t format_file(
-//     const std::string& in, 
-//     std::string& out, 
-//     const std::string& fmt);
+
+err_t rsa_keygen(
+    std::string& pubkey,
+    std::string& prikey,
+    std::string& name,
+    const std::string& fmt,
+    const std::string& mode,
+    const int bits);
 
 // --------------------- encrypt ----------------------------
 bool is_encrypt_output_valid(const std::string& out);
@@ -90,13 +108,11 @@ err_t encrypt_aes(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t encrypt_base64(
     std::string& out,
     const std::string& in, 
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t encrypt_des(
     std::string& out,
     const std::string& in,
@@ -105,18 +121,15 @@ err_t encrypt_des(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t encrypt_md5(
     std::string& out,
     const std::string& in,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t encrypt_sha256(
     std::string& out,
     const std::string& in,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t encrypt_rsa(
     std::string& out,
     const std::string& in,
@@ -125,8 +138,7 @@ err_t encrypt_rsa(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 
 // --------------------- encrypt ----------------------------
 bool is_decrypt_output_valid(const std::string& out);
@@ -160,13 +172,11 @@ err_t decrypt_aes(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t decrypt_base64(
     std::string& out,
     const std::string& in, 
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t decrypt_des(
     std::string& out,
     const std::string& in,
@@ -175,8 +185,7 @@ err_t decrypt_des(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 err_t decrypt_rsa(
     std::string& out,
     const std::string& in,
@@ -185,7 +194,6 @@ err_t decrypt_rsa(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt);
+    const std::string& ctx);
 
 #endif

@@ -28,7 +28,11 @@ void decrypt(
 );
 
 void keygen(
-
+    std::string& name,
+    std::string& algo,
+    std::string& fmt,
+    std::string& mode,
+    int bits
 );
 
 void help();

@@ -5,7 +5,28 @@
 #include <libcpp/log/log.hpp>
 #include <libcpp/testing/telemetry.hpp>
 
-INIT(
+C_STYLE_EXPORT void id(char* buf, size_t* len)
+{
+    // add your code here ...
+}
+
+C_STYLE_EXPORT void version(char* buf, size_t* len)
+{
+    // add your code here ...
+}
+
+C_STYLE_EXPORT void description(char* buf, size_t* len)
+{
+    // add your code here ...
+}
+
+C_STYLE_EXPORT void category(char* buf, size_t* len)
+{
+    // add your code here ...
+}
+
+C_STYLE_EXPORT bool init()
+{
     // add crash handle support
     libcpp::crash_handler::instance()->prevent_set_unhandled_exception_filter();
     libcpp::crash_handler::instance()->set_local_path("./");
@@ -24,9 +45,21 @@ INIT(
         PATCH_VERSION);
     LOG_INFO("{} compile time {}", PACKAGE, COMPILE_TIME);
     LOG_INFO("{} email {}", PACKAGE, EMAIL);
-)
 
-void init()
+    // add your code here ...
+}
+
+C_STYLE_EXPORT void shutdown()
+{
+    // add your code here ...
+}
+
+C_STYLE_EXPORT void call(const char* api, const size_t len, void* ctx)
+{
+    // add your code here ...
+}
+
+C_STYLE_EXPORT bool event(const char* event, const size_t len, void* ctx)
 {
     // add your code here ...
 }

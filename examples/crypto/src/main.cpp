@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
 
     // add i18n support
     libcpp::i18n::instance().set_locale("en_US");
-    libcpp::i18n::instance().load_translation_auto("./", "crypto");
+    libcpp::i18n::instance().load_translation_auto("./", "de");
 
     // add telemetry support
     auto tracer = libcpp::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
@@ -60,16 +60,18 @@ int main(int argc, char* argv[])
     opts.add<std::string>("algo,a", std::string("auto"), "algorithm");
     opts.add<std::string>("mode,m", std::string("auto"), "mode");
     opts.add<std::string>("key,k", std::string(""), "key");
+    opts.add<int>("bits,b", 2048, "bits for keygen");
+    opts.add<std::string>("name,n", std::string(""), "name for keygen");
     opts.add<std::string>("padding,p", std::string("auto"), "padding mode");
     opts.add<std::string>("iv,v", std::string(""), "iv");
-    opts.add<std::string>("fmt,f", std::string("hex"), "input output format");
+    opts.add<std::string>("fmt,f", std::string("auto"), "input output format");
     opts.add<std::string>("ctx", "", "input content");
     opts.add_positional("ctx", 2);
     std::string subcmd = opts.parse<std::string>(argc, argv, "subcmd");
     if (subcmd == "encrypt") 
     {
-        // crypto encrypt --output <file> --input <file> --algo <auto/aes/base64/des/md5/rsa/sha> --mode <auto/ecb/cbc/cfb/...> --key <key> --padding <auto/pkcs7/zero/...> --iv <iv> --fmt <auto/hex/base64> xxx
-        // crypto encrypt -o <file> -i <file> -a <auto/aes/base64/des/md5/rsa/sha> -k <key> -m <auto/ecb/cbc/cfb/...> -p <auto/pkcs7/zero/...> -v <iv> -f <auto/hex/base64> xxx
+        // de encrypt --output <file> --input <file> --algo <auto/aes/base64/des/md5/rsa/sha> --mode <auto/ecb/cbc/cfb/...> --key <key> --padding <auto/pkcs7/zero/...> --iv <iv> --fmt <auto/hex/base64> xxx
+        // de encrypt -o <file> -i <file> -a <auto/aes/base64/des/md5/rsa/sha> -k <key> -m <auto/ecb/cbc/cfb/...> -p <auto/pkcs7/zero/...> -v <iv> -f <auto/hex/base64> xxx
         auto output = opts.parse<std::string>(argc, argv, "output");
         auto input = opts.parse<std::string>(argc, argv, "input");
         auto algo = opts.parse<std::string>(argc, argv, "algo");
@@ -118,11 +120,25 @@ int main(int argc, char* argv[])
     }
     else if (subcmd == "keygen")
     {
-        // crypto keygen --algo <rsa> --bits <2048> --pub <file> --pri <file> --pub-pass <password> --pri-pass <password>
+        // de keygen --name <xxx> --algo <auto/rsa256> --fmt <x509> --mode <none> --bits <512/1024/2048/3072/4096> 
+        // de keygen -n <xxx> -a <auto/rsa256> -f <x509> -m <none> -b <512/1024/2048/3072/4096>
+        auto name = opts.parse<std::string>(argc, argv, "name");
+        auto algo = opts.parse<std::string>(argc, argv, "algo");
+        auto fmt = opts.parse<std::string>(argc, argv, "fmt");
+        auto mode = opts.parse<std::string>(argc, argv, "mode");
+        auto bits = opts.parse<int>(static_cast<int>(argc), argv, "bits");
+
+        LOG_DEBUG("name:{}", name);
+        LOG_DEBUG("algo:{}", algo);
+        LOG_DEBUG("fmt:{}", fmt);
+        LOG_DEBUG("mode:{}", mode);
+        LOG_DEBUG("bits:{}", bits);
+
+        keygen(name, algo, fmt, mode, bits);
     }
     else if (subcmd == "help") 
     {
-        // crypto help --search <content>
+        // de help --search <content>
     } 
     else 
     {

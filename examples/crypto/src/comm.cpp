@@ -11,6 +11,13 @@ void print_console(const std::string& msg)
     std::cout << msg << std::endl;
 }
 
+void print_console(const std::string& msg, const std::string& fmt)
+{
+    std::string buf;
+    format(buf, msg, fmt);
+    print_console(buf);
+}
+
 std::string print_str_vector(std::vector<std::string> vec)
 {
     std::string s;
@@ -131,6 +138,48 @@ libcpp::rsa::padding str_to_rsa_padding(const std::string& padding)
         return libcpp::rsa::padding::pkcs1; // default
 }
 
+libcpp::rsa::key_format str_to_rsa_key_format(const std::string& fmt)
+{
+    if (fmt == "x509")
+        return libcpp::rsa::key_format::x509;
+    else if (fmt == "pkcs1")
+        return libcpp::rsa::key_format::pkcs1;
+    else
+        return libcpp::rsa::key_format::x509; // default
+}
+
+libcpp::rsa::mode str_to_rsa_mode(const std::string& mode)
+{
+    if (mode == "none")
+        return libcpp::rsa::mode::none;
+    else if (mode == "aes_128_ecb")
+        return libcpp::rsa::mode::aes_128_ecb;
+    else if (mode == "aes_192_ecb")
+        return libcpp::rsa::mode::aes_192_ecb;
+    else if (mode == "aes_256_ecb")
+        return libcpp::rsa::mode::aes_256_ecb;
+    else if (mode == "aes_128_cbc")
+        return libcpp::rsa::mode::aes_128_cbc;
+    else if (mode == "aes_192_cbc")
+        return libcpp::rsa::mode::aes_192_cbc;
+    else if (mode == "aes_256_cbc")
+        return libcpp::rsa::mode::aes_256_cbc;
+    else if (mode == "aes_128_cfb")
+        return libcpp::rsa::mode::aes_128_cfb;
+    else if (mode == "aes_192_cfb")
+        return libcpp::rsa::mode::aes_192_cfb;
+    else if (mode == "aes_256_cfb")
+        return libcpp::rsa::mode::aes_256_cfb;
+    else if (mode == "aes_128_ofb")
+        return libcpp::rsa::mode::aes_128_ofb;
+    else if (mode == "aes_192_ofb")
+        return libcpp::rsa::mode::aes_192_ofb;
+    else if (mode == "aes_256_ofb")
+        return libcpp::rsa::mode::aes_256_ofb;
+    else
+        return libcpp::rsa::mode::none; // default
+}
+
 void format(
     std::string& out,
     const std::string& in, 
@@ -143,6 +192,10 @@ void format(
     else if (fmt == "base64")
     {
         libcpp::base64::encode(out, in);
+    }
+    else
+    {
+        out = in;
     }
 }
 
@@ -159,6 +212,29 @@ void unformat(
     {
         libcpp::base64::decode(out, in);
     }
+}
+
+err_t rsa_keygen(
+    std::string& pubkey,
+    std::string& prikey,
+    std::string& name,
+    const std::string& fmt,
+    const std::string& mode,
+    const int bits)
+{
+    auto key_fmt = str_to_rsa_key_format(fmt);
+    auto key_mode = str_to_rsa_mode(mode);
+    bool succ = false;
+    if (name == "") // to console
+    {
+        succ = libcpp::rsa::make_key_pair(pubkey, prikey, bits, key_fmt, key_mode);
+    }
+    else // to file
+    {
+
+    }
+
+    return succ ? err_t() : error(err_keygen_fail);
 }
 
 // --------------------- encrypt ----------------------------
@@ -195,21 +271,21 @@ bool is_encrypt_input_valid(
         {
             auto mod = str_to_aes_mode(mode);
             auto pad = str_to_aes_padding(padding);
-            std::ifstream in(in, std::ios::binary);
-            return libcpp::aes::is_plain_valid(mod, key.size(), pad, in);
+            std::ifstream fin(in, std::ios::binary);
+            return libcpp::aes::is_plain_valid(mod, key.size(), pad, fin);
         }
         else if (algo == "des")
         {
             auto pad = str_to_des_padding(padding);
-            std::ifstream in(in, std::ios::binary);
-            return libcpp::des::is_plain_valid(in, pad);
+            std::ifstream fin(in, std::ios::binary);
+            return libcpp::des::is_plain_valid(fin, pad);
         }
         else if (algo == "rsa")
         {
-            std::ifstream in(in, std::ios::binary);
+            std::ifstream fin(in, std::ios::binary);
             auto pad = str_to_rsa_padding(padding);
             return libcpp::rsa::is_plain_valid(
-                in, 
+                fin, 
                 pad, 
                 reinterpret_cast<const unsigned char*>(key.c_str()),
                 key.size());
@@ -361,8 +437,7 @@ err_t encrypt_aes(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     err_t err;
     auto mod = str_to_aes_mode(mode);
@@ -370,10 +445,7 @@ err_t encrypt_aes(
     bool succ = false;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        std::string buf;
-        succ = libcpp::aes::encrypt(buf, ctx, key, mod, pad, iv);
-        if (succ)
-            format(out, buf, fmt);
+        succ = libcpp::aes::encrypt(out, ctx, key, mod, pad, iv);
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
@@ -401,16 +473,12 @@ err_t encrypt_aes(
 err_t encrypt_base64(
     std::string& out,
     const std::string& in, 
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     bool succ = false;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        std::string buf;
-        succ = libcpp::base64::encode(buf, ctx);
-        if (succ)
-            format(out, buf, fmt);
+        succ = libcpp::base64::encode(out, ctx);
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
@@ -441,18 +509,14 @@ err_t encrypt_des(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     auto mod = str_to_des_mode(mode);
     auto pad = str_to_des_padding(padding);
     bool succ = false;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        std::string buf;
-        succ = libcpp::des::encrypt(buf, ctx, key, mod, pad, iv);
-        if (succ)
-            format(out, buf, fmt);
+        succ = libcpp::des::encrypt(out, ctx, key, mod, pad, iv);
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
@@ -480,16 +544,12 @@ err_t encrypt_des(
 err_t encrypt_md5(
     std::string& out,
     const std::string& in,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     bool succ = false;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        std::string buf;
-        succ = libcpp::md5::encode(buf, ctx);
-        if (succ)
-            format(out, buf, fmt);
+        succ = libcpp::md5::encode(out, ctx);
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
@@ -515,16 +575,12 @@ err_t encrypt_md5(
 err_t encrypt_sha256(
     std::string& out,
     const std::string& in,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     bool succ = false;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        std::string buf;
-        succ = libcpp::sha::encode(buf, ctx, libcpp::sha::algorithm::sha256);
-        if (succ)
-            format(out, buf, fmt);
+        succ = libcpp::sha::encode(out, ctx, libcpp::sha::algorithm::sha256);
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
@@ -555,8 +611,7 @@ err_t encrypt_rsa(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     // TODO
     return err_t();
@@ -593,10 +648,10 @@ bool is_decrypt_input_valid(
         }
         else if (algo == "rsa")
         {
-            std::ifstream in(in, std::ios::binary);
+            std::ifstream fin(in, std::ios::binary);
             auto pad = str_to_rsa_padding(padding);
             return libcpp::rsa::is_cipher_valid(
-                in, 
+                fin, 
                 pad, 
                 reinterpret_cast<const unsigned char*>(key.c_str()),
                 key.size());
@@ -730,17 +785,14 @@ err_t decrypt_aes(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     auto mod = str_to_aes_mode(mode);
     auto pad = str_to_aes_padding(padding);
     bool succ = false;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        std::string buf;
-        unformat(buf, ctx, fmt);
-        succ = libcpp::aes::decrypt(out, buf, key, mod, pad, iv);
+        succ = libcpp::aes::decrypt(out, ctx, key, mod, pad, iv);
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
@@ -768,15 +820,12 @@ err_t decrypt_aes(
 err_t decrypt_base64(
     std::string& out,
     const std::string& in, 
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     bool succ = false;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        std::string buf;
-        unformat(buf, ctx, fmt);
-        succ = libcpp::base64::decode(out, buf);
+        succ = libcpp::base64::decode(out, ctx);
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
@@ -807,17 +856,14 @@ err_t decrypt_des(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     auto mod = str_to_des_mode(mode);
     auto pad = str_to_des_padding(padding);
     bool succ = false;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        std::string buf;
-        unformat(buf, ctx, fmt);
-        succ = libcpp::des::decrypt(out, buf, key, mod, pad, iv);
+        succ = libcpp::des::decrypt(out, ctx, key, mod, pad, iv);
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
@@ -850,8 +896,7 @@ err_t decrypt_rsa(
     const std::string& key,
     const std::string& padding,
     const std::string& iv,
-    const std::string& ctx,
-    const std::string& fmt)
+    const std::string& ctx)
 {
     // TODO
     return err_t();

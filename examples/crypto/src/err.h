@@ -37,6 +37,8 @@ enum err
     err_decrypt_md5_failed,
     err_decrypt_sha256_failed,
     err_decrypt_rsa_failed,
+
+    err_keygen_fail,
 };
 
 INIT(
@@ -69,6 +71,8 @@ INIT(
     libcpp::register_err("crypto", err_decrypt_md5_failed, "MD5 decrypt failed");
     libcpp::register_err("crypto", err_decrypt_sha256_failed, "SHA256 decrypt failed");
     libcpp::register_err("crypto", err_decrypt_rsa_failed, "RSA decrypt failed");
+
+    libcpp::register_err("crypto", err_keygen_fail, "keygen failed");
 );
 
 static inline std::error_code error(const err e) { return libcpp::make_err(e, "crypto"); }

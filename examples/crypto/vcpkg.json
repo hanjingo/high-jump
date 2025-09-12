@@ -1,6 +1,7 @@
 {
   "dependencies": [
     "benchmark",
+    "boost-filesystem",
     "boost-program-options",
     "breakpad",
     "fmt",
@@ -20,6 +21,10 @@
     {
       "name": "benchmark",
       "version": "1.9.4"
+    },
+    {
+      "name": "boost-filesystem",
+      "version": "1.76.0"
     },
     {
       "name": "boost-program-options",

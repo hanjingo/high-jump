@@ -3,6 +3,9 @@
 #include <libcpp/crypto/base64.hpp>
 #include <iomanip>
 
+#include <fstream>
+#include <cstdio>
+
 TEST(sha256, encode)
 {
     std::string data;
@@ -31,4 +34,31 @@ TEST(sha256, encode)
         hex << std::hex << std::setw(2) << std::setfill('0') << (int)c;
     std::string hex_digest = hex.str();
     ASSERT_STREQ(hex_digest.c_str(), "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92");
+}
+
+TEST(sha256, encode_file)
+{
+    const char* input_file = "sha_test_input.txt";
+    const char* output_file = "sha_test_output.bin";
+    {
+        std::ofstream ofs(input_file, std::ios::binary);
+        if (!ofs.is_open())
+            GTEST_SKIP() << "Failed to create test input file.";
+        ofs << "123456";
+    }
+
+    std::remove(output_file);
+    ASSERT_TRUE(libcpp::sha::encode_file(output_file, input_file, libcpp::sha::algorithm::sha256));
+
+    std::ifstream ifs(output_file, std::ios::binary);
+    std::string sha_bin((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    ASSERT_EQ(sha_bin.size(), 32);
+    std::ostringstream hex;
+    for (unsigned char c : sha_bin)
+        hex << std::hex << std::setw(2) << std::setfill('0') << (int)c;
+    std::string hex_digest = hex.str();
+    ASSERT_STREQ(hex_digest.c_str(), "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92");
+
+    std::remove(input_file);
+    std::remove(output_file);
 }

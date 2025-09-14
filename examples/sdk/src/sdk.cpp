@@ -32,7 +32,7 @@ C_STYLE_EXPORT bool init()
     libcpp::crash_handler::instance()->set_local_path("./");
 
     // add log support
-    libcpp::logger::instance()->set_level(libcpp::log_lvl::log_lvl_debug);
+    libcpp::logger::instance()->set_level(libcpp::log_lvl::debug);
 
     // add telemetry support
     auto tracer = libcpp::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");

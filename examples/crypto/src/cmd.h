@@ -21,6 +21,7 @@ void decrypt(
     std::string& algo,
     std::string& mode,
     std::string& key,
+    std::string& passwd,
     std::string& padding,
     std::string& iv,
     std::string& fmt,
@@ -33,6 +34,28 @@ void keygen(
     std::string& fmt,
     std::string& mode,
     int bits
+);
+
+void guess(
+    std::string& out,
+    std::string& in,
+    std::string& algo,
+    std::string& mode,
+    std::string& key,
+    std::string& passwd,
+    std::string& padding,
+    std::string& iv,
+    std::string& fmt,
+    std::string& ctx,
+    std::size_t timeout
+);
+
+void dict(
+
+);
+
+void attach(
+    
 );
 
 void help();

@@ -40,13 +40,14 @@ namespace libcpp
 
 class logger;
 
-enum class log_lvl : int {
-    log_lvl_trace = 0,
-    log_lvl_debug,
-    log_lvl_info,
-    log_lvl_warn,
-    log_lvl_err,
-    log_lvl_critial,
+enum class log_lvl : int 
+{
+    trace = 0,
+    debug,
+    info,
+    warn,
+    err,
+    critical,
 };
 
 static std::mutex log_mu;
@@ -112,7 +113,7 @@ public:
             base_ = std::make_shared<spdlog::logger>(name, sinks.begin(), sinks.end());
         }
 
-        base_->set_level(spdlog::level::level_enum(log_lvl::log_lvl_trace));
+        base_->set_level(spdlog::level::level_enum(log_lvl::trace));
     }
 
     ~logger()

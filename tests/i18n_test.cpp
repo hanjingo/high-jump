@@ -54,7 +54,7 @@ protected:
             std::cerr << "Error creating test directory: " << test_dir_ << std::endl;
         }
 
-        std::ofstream zh_file(test_dir_ + "/translations_zh_CN.properties");
+        std::ofstream zh_file(test_dir_ + "/translations_zh_CN.properties", std::ios::binary);
         zh_file << "# Chinese translations\n";
         zh_file << "app.title=我的应用程序\n";
         zh_file << "menu.file=文件\n";
@@ -68,7 +68,7 @@ protected:
         zh_file << "empty.line.test=\n";
         zh_file.close();
 
-        std::ofstream en_file(test_dir_ + "/translations_en_US.properties");
+        std::ofstream en_file(test_dir_ + "/translations_en_US.properties", std::ios::binary);
         en_file << "# English translations\n";
         en_file << "app.title=My Application\n";
         en_file << "menu.file=File\n";
@@ -79,7 +79,7 @@ protected:
         en_file << "msg.with_spaces=  Text with spaces  \n";
         en_file.close();
 
-        std::ofstream ja_file(test_dir_ + "/translations_ja_JP.properties");
+        std::ofstream ja_file(test_dir_ + "/translations_ja_JP.properties", std::ios::binary);
         ja_file << "# Japanese translations\n";
         ja_file << "app.title=私のアプリケーション\n";
         ja_file << "menu.file=ファイル\n";
@@ -88,7 +88,7 @@ protected:
         ja_file << "msg.welcome={0}さん、いらっしゃいませ！\n";
         ja_file.close();
 
-        std::ofstream de_file(test_dir_ + "/translations_de_DE.properties");
+        std::ofstream de_file(test_dir_ + "/translations_de_DE.properties", std::ios::binary);
         de_file << "# German translations\n";
         de_file << "app.title=Meine Anwendung\n";
         de_file << "menu.file=Datei\n";
@@ -106,7 +106,7 @@ protected:
         de_file << "german.informal=Du hast eine neue Nachricht bekommen.\n";
         de_file.close();
 
-        std::ofstream invalid_file(test_dir_ + "/invalid_file.properties");
+        std::ofstream invalid_file(test_dir_ + "/invalid_file.properties", std::ios::binary);
         invalid_file << "invalid content without equals sign\n";
         invalid_file << "key1=value1\n";
         invalid_file << "malformed line\n";
@@ -205,7 +205,7 @@ TEST_F(I18nTest, TranslatorSaveToProperties) {
     }
     if (!std::filesystem::exists(save_path))
     {
-        std::ofstream ofs(save_path);
+        std::ofstream ofs(save_path, std::ios::binary);
         ofs.close();
     }
     EXPECT_TRUE(trans.save_to_properties(save_path));
@@ -240,7 +240,7 @@ TEST_F(I18nTest, TranslatorUnicodeHandling) {
     }
     if (!std::filesystem::exists(unicode_file))
     {
-        std::ofstream ofs(unicode_file);
+        std::ofstream ofs(unicode_file, std::ios::binary);
         ofs.close();
     }
     EXPECT_TRUE(trans.save_to_properties(unicode_file));
@@ -454,7 +454,7 @@ TEST_F(I18nTest, SpecialCharactersAndEdgeCases) {
     }
     if (!std::filesystem::exists(special_file))
     {
-        std::ofstream ofs(special_file);
+        std::ofstream ofs(special_file, std::ios::binary);
         ofs.close();
     }
     EXPECT_TRUE(trans.save_to_properties(special_file));
@@ -609,7 +609,7 @@ TEST_F(I18nTest, GermanUmlautsAndSpecialChars) {
     }
     if (!std::filesystem::exists(german_file))
     {
-        std::ofstream ofs(german_file);
+        std::ofstream ofs(german_file, std::ios::binary);
         ofs.close();
     }
     EXPECT_TRUE(trans.save_to_properties(german_file));
@@ -671,7 +671,7 @@ TEST_F(I18nTest, GermanLongWords) {
     }
     if (!std::filesystem::exists(long_words_file))
     {
-        std::ofstream ofs(long_words_file);
+        std::ofstream ofs(long_words_file, std::ios::binary);
         ofs.close();
     }
     EXPECT_TRUE(trans.save_to_properties(long_words_file));

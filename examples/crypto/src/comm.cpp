@@ -606,15 +606,36 @@ err_t encrypt_sha256(
 err_t encrypt_rsa(
     std::string& out,
     const std::string& in,
-    const std::string& algo,
-    const std::string& mode,
     const std::string& key,
     const std::string& padding,
-    const std::string& iv,
     const std::string& ctx)
 {
-    // TODO
-    return err_t();
+    err_t err;
+    auto pad = str_to_rsa_padding(padding);
+    bool succ = false;
+    if (out == "" && in == "") // encrypt: mem -> mem
+    {
+        succ = libcpp::rsa::encrypt(out, ctx, key, pad);
+    }
+    else if (out != "" && in != "") // encrypt: file -> file
+    {
+        succ = libcpp::rsa::encrypt_file(out, in, key, pad);
+    }
+    else if (out != "" && in == "") // encrypt: mem -> file
+    {
+        std::ofstream fout(out, std::ios::binary);
+        std::istringstream sin(ctx);
+        succ = libcpp::rsa::encrypt(fout, sin, reinterpret_cast<const unsigned char*>(key.c_str()), key.size(), pad);
+    }
+    else // encrypt: file -> mem
+    {
+        std::ifstream fin(in, std::ios::binary);
+        std::ostringstream sout(out);
+        succ = libcpp::rsa::encrypt(sout, fin, reinterpret_cast<const unsigned char*>(key.c_str()), key.size(), pad);
+        out = sout.str();
+    }
+
+    return succ ? err_t() : error(err_encrypt_rsa_failed);
 }
 
 // --------------------- decrypt ----------------------------
@@ -891,13 +912,36 @@ err_t decrypt_des(
 err_t decrypt_rsa(
     std::string& out,
     const std::string& in,
-    const std::string& algo,
-    const std::string& mode,
     const std::string& key,
     const std::string& padding,
-    const std::string& iv,
+    const std::string& password,
     const std::string& ctx)
 {
-    // TODO
-    return err_t();
+    auto pad = str_to_rsa_padding(padding);
+    bool succ = false;
+    if (out == "" && in == "") // decrypt: mem -> mem
+    {
+        succ = libcpp::rsa::decrypt(out, ctx, key, pad, "");
+    }
+    else if (out != "" && in != "") // decrypt: file -> file
+    {
+        succ = libcpp::rsa::decrypt_file(out, in, key, pad, "");
+    }
+    else if (out != "" && in == "") // decrypt: mem -> file
+    {
+        std::ofstream fout(out, std::ios::binary);
+        std::istringstream sin(ctx);
+        succ = libcpp::rsa::decrypt(fout, sin, reinterpret_cast<const unsigned char*>(key.c_str()), key.size(),
+            pad, nullptr, 0);
+    }
+    else // decrypt: file -> mem
+    {
+        std::ifstream fin(in, std::ios::binary);
+        std::ostringstream sout(out);
+        succ = libcpp::rsa::decrypt(sout, fin, reinterpret_cast<const unsigned char*>(key.c_str()), key.size(),
+            pad, nullptr, 0);
+        out = sout.str();
+    }
+
+    return succ ? err_t() : error(err_decrypt_rsa_failed);
 }

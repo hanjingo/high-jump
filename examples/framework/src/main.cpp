@@ -7,6 +7,10 @@
 #include <libcpp/testing/crash.hpp>
 #include <libcpp/testing/telemetry.hpp>
 
+#ifndef I18N_LOCALE
+    #define I18N_LOCALE "en_US"
+#endif
+
 // add your code here...
 
 int main(int argc, char* argv[])
@@ -19,7 +23,7 @@ int main(int argc, char* argv[])
     libcpp::crash_handler::instance()->set_local_path("./");
 
     // add log support
-    libcpp::logger::instance()->set_level(libcpp::log_lvl::log_lvl_debug);
+    libcpp::logger::instance()->set_level(libcpp::log_lvl::debug);
 
     // add i18n support
     libcpp::i18n::instance().set_locale(I18N_LOCALE);

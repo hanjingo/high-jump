@@ -71,7 +71,7 @@ public:
 
         bool load_from_properties(const std::string& file_path) 
         {
-            std::ifstream file(file_path);
+            std::ifstream file(file_path, std::ios::binary);
             if (!file.is_open())
                 return false;
 
@@ -110,7 +110,7 @@ public:
 
         bool save_to_properties(const std::string& file_path) const 
         {
-            std::ofstream file(file_path);
+            std::ofstream file(file_path, std::ios::binary);
             if (!file.is_open()) 
                 return false;
 

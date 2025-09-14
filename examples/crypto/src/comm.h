@@ -8,11 +8,12 @@
 #include <fstream>
 
 #include <libcpp/log/log.hpp>
+#include <libcpp/encoding/i18n.hpp>
 #include <libcpp/crypto/crypto.hpp>
 
 #include "err.h"
 
-static const std::vector<std::string> subcmds{"encrypt", "decrypt", "keygen", "help"};
+static const std::vector<std::string> subcmds{"encrypt", "decrypt", "keygen", "guess", "dict", "help"};
 static const std::vector<std::string> algos{
     "auto", "aes", "base64", "des", "md5", "rsa", "sha256"};
 static const std::vector<std::string> decrypt_algos{
@@ -44,6 +45,17 @@ static const std::vector<std::string> keygen_rsa_modes{
     "aes_128_cbc", "aes_192_cbc", "aes_256_cbc",
     "aes_128_cfb", "aes_192_cfb", "aes_256_cfb",
     "aes_128_ofb", "aes_192_ofb", "aes_256_ofb"};
+
+static inline std::string tr(const std::string& key, const std::string& default_text = "") 
+{
+    return libcpp::tr(key, default_text);
+}
+
+template<typename... Args>
+static inline std::string tr(const std::string& key, Args... args) 
+{
+    return libcpp::tr(key, args...);
+}
 
 void print_console(const std::string& msg);
 void print_console(const std::string& msg, const std::string& fmt);
@@ -133,11 +145,8 @@ err_t encrypt_sha256(
 err_t encrypt_rsa(
     std::string& out,
     const std::string& in,
-    const std::string& algo,
-    const std::string& mode,
     const std::string& key,
     const std::string& padding,
-    const std::string& iv,
     const std::string& ctx);
 
 // --------------------- encrypt ----------------------------
@@ -189,11 +198,9 @@ err_t decrypt_des(
 err_t decrypt_rsa(
     std::string& out,
     const std::string& in,
-    const std::string& algo,
-    const std::string& mode,
     const std::string& key,
     const std::string& padding,
-    const std::string& iv,
+    const std::string& password,
     const std::string& ctx);
 
 #endif

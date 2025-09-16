@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/types/bits.hpp>
+#include <libcpp/encoding/bits.hpp>
 #include <cstdint>
 
 using libcpp::bits;

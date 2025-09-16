@@ -15,7 +15,8 @@
         "otlp-file"
       ]
     },
-    "spdlog"
+    "spdlog",
+    "sqlite3"
   ],
   "overrides": [
     {
@@ -57,6 +58,10 @@
     {
       "name": "spdlog",
       "version": "1.15.3"
+    },
+    {
+      "name": "sqlite3",
+      "version": "3.49.2"
     }
   ]
 }

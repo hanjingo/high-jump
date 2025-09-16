@@ -65,3 +65,6 @@ tools/vcpkg
 # 3rd
 3rd/*
 !3rd/CMakeLists.txt
+
+# db
+**/*.db

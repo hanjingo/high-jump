@@ -3,12 +3,6 @@
 
 #include <libcpp/types/any.hpp>
 
-#include <libcpp/types/bits.hpp>
-
-#include <libcpp/types/bytes.hpp>
-
-#include <libcpp/types/endian.hpp>
-
 #include <libcpp/types/noncopyable.hpp>
 
 #include <libcpp/types/optional.hpp>

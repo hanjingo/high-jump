@@ -3,16 +3,7 @@
     "benchmark",
     "breakpad",
     "fmt",
-    "gtest",
-    "jwt-cpp",
-    {
-      "name": "opentelemetry-cpp",
-      "features": [
-        "otlp-http",
-        "otlp-file"
-      ]
-    },
-    "spdlog"
+    "gtest"
   ],
   "overrides": [
     {
@@ -30,18 +21,6 @@
     {
       "name": "gtest",
       "version": "1.17.0"
-    },
-    {
-      "name": "jwt-cpp",
-      "version": "0.7.1"
-    },
-    {
-      "name": "opentelemetry-cpp",
-      "version": "1.22.0#1"
-    },
-    {
-      "name": "spdlog",
-      "version": "1.15.3"
     }
   ]
 }

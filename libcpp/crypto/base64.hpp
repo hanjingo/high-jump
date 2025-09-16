@@ -357,6 +357,87 @@ public:
 		return (src_len / 4) * 3;
 	}
 
+    static bool is_valid(const unsigned char* buf, const std::size_t len)
+    {
+        if (len == 0 || buf == nullptr)
+            return false;
+
+        if (len % 4 != 0)
+            return false;
+
+        std::size_t pad = 0;
+        for (std::size_t i = 0; i < len; ++i)
+        {
+            char c = buf[i];
+            if ((c >= 'A' && c <= 'Z') ||
+                (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') ||
+                c == '+' || c == '/')
+            {
+                if (pad > 0)
+                    return false;
+
+                continue;
+            }
+            if (c == '=')
+            {
+                ++pad;
+                if (pad > 2)
+                    return false;
+
+                if (i < len - 2)
+                    return false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static bool is_valid(const std::string& str)
+    {
+        return is_valid(reinterpret_cast<const unsigned char*>(str.c_str()), str.length());
+    }
+
+    static bool is_valid(std::ifstream& in)
+    {
+        if (!in.is_open())
+            return false;
+
+        unsigned char buf[BASE64_BUF_SIZE];
+        std::size_t total_len = 0;
+        std::ifstream::pos_type start_pos = in.tellg();
+        while (in)
+        {
+            in.read(reinterpret_cast<char*>(buf), BASE64_BUF_SIZE);
+            std::streamsize n = in.gcount();
+            if (n == 0)
+                break;
+
+            total_len += n;
+            if (!is_valid(buf, n))
+                return false;
+        }
+
+        in.clear();
+        in.seekg(start_pos);
+        if (total_len == 0 || total_len % 4 != 0)
+            return false;
+
+        return true;
+    }
+
+    static bool is_valid_file(const std::string& file_path)
+    {
+        std::ifstream file(file_path, std::ios::binary);
+        if (!file.is_open())
+            return false;
+            
+        return is_valid(file);
+    }
+
 private:
     base64() = default;
     ~base64() = default;

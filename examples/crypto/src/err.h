@@ -1,80 +1,58 @@
-#ifndef ERROR_H
-#define ERROR_H
+#ifndef ERR_H
+#define ERR_H
 
 #include <libcpp/testing/error.hpp>
 #include <libcpp/util/init.hpp>
 
+#include "examples/crypto_core/src/api.h"
+
 using err_t = std::error_code;
 
-enum err
-{
-    err_invalid_subcmd,
-    err_invalid_fmt,
-
-    err_invalid_input,
-    err_invalid_output,
-    err_invalid_algo,
-    err_invalid_key,
-    err_invalid_padding,
-    err_invalid_iv,
-    err_encrypt_aes_failed,
-    err_encrypt_base64_failed,
-    err_encrypt_des_failed,
-    err_encrypt_md5_failed,
-    err_encrypt_sha256_failed,
-    err_encrypt_rsa_failed,
-
-    err_invalid_decrypt_subcmd,
-    err_invalid_decrypt_input,
-    err_invalid_decrypt_output,
-    err_invalid_decrypt_algo,
-    err_invalid_decrypt_key,
-    err_invalid_decrypt_padding,
-    err_invalid_decrypt_iv,
-    err_decrypt_aes_failed,
-    err_decrypt_base64_failed,
-    err_decrypt_des_failed,
-    err_decrypt_md5_failed,
-    err_decrypt_sha256_failed,
-    err_decrypt_rsa_failed,
-
-    err_keygen_fail,
-};
-
 INIT(
-    libcpp::register_err("crypto", err_invalid_subcmd, "invalid subcmd");
-    libcpp::register_err("crypto", err_invalid_fmt, "invalid format");
+    libcpp::register_err("crypto", FAIL, "failed");
+    libcpp::register_err("crypto", ERR_CORE_NOT_LOAD, "core not load");
+    libcpp::register_err("crypto", ERR_CORE_LOAD_FAIL, "core load failed");
+    libcpp::register_err("crypto", ERR_VERSION_MISMATCH, "version mismatch");
+    libcpp::register_err("crypto", ERR_INIT_FAIL, "init failed");
+    libcpp::register_err("crypto", ERR_QUIT_FAIL, "quit failed");
 
-    libcpp::register_err("crypto", err_invalid_input, "invalid input path");
-    libcpp::register_err("crypto", err_invalid_output, "invalid output path");
-    libcpp::register_err("crypto", err_invalid_algo, "invalid algorithm");
-    libcpp::register_err("crypto", err_invalid_key, "invalid key");
-    libcpp::register_err("crypto", err_invalid_padding, "invalid padding");
-    libcpp::register_err("crypto", err_invalid_iv, "invalid IV");
-    libcpp::register_err("crypto", err_encrypt_aes_failed, "AES encrypt failed");
-    libcpp::register_err("crypto", err_encrypt_base64_failed, "base64 encrypt failed");
-    libcpp::register_err("crypto", err_encrypt_des_failed, "DES encrypt failed");
-    libcpp::register_err("crypto", err_encrypt_md5_failed, "MD5 encrypt failed");
-    libcpp::register_err("crypto", err_encrypt_sha256_failed, "SHA256 encrypt failed");
-    libcpp::register_err("crypto", err_encrypt_rsa_failed, "RSA encrypt failed");
+    libcpp::register_err("crypto", ERR_INVALID_SUBCMD, "invalid subcmd");
+    libcpp::register_err("crypto", ERR_INVALID_FMT, "invalid format");
+    libcpp::register_err("crypto", ERR_INVALID_INPUT, "invalid input path");
+    libcpp::register_err("crypto", ERR_INVALID_OUTPUT, "invalid output path");
+    libcpp::register_err("crypto", ERR_INVALID_ALGO, "invalid algorithm");
+    libcpp::register_err("crypto", ERR_INVALID_KEY, "invalid key");
+    libcpp::register_err("crypto", ERR_INVALID_PADDING, "invalid padding");
+    libcpp::register_err("crypto", ERR_INVALID_IV, "invalid IV");
+    libcpp::register_err("crypto", ERR_INVALID_MODE, "invalid mode");
 
-    libcpp::register_err("crypto", err_invalid_decrypt_subcmd, "invalid decrypt subcmd");
-    libcpp::register_err("crypto", err_invalid_decrypt_input, "invalid decrypt input path");
-    libcpp::register_err("crypto", err_invalid_decrypt_output, "invalid decrypt output path");
-    libcpp::register_err("crypto", err_invalid_decrypt_algo, "invalid decrypt algorithm");
-    libcpp::register_err("crypto", err_invalid_decrypt_key, "invalid decrypt key");
-    libcpp::register_err("crypto", err_invalid_decrypt_padding, "invalid decrypt padding");
-    libcpp::register_err("crypto", err_invalid_decrypt_iv, "invalid decrypt IV");
-    libcpp::register_err("crypto", err_decrypt_aes_failed, "AES decrypt failed");
-    libcpp::register_err("crypto", err_decrypt_base64_failed, "base64 decrypt failed");
-    libcpp::register_err("crypto", err_decrypt_des_failed, "DES decrypt failed");
-    libcpp::register_err("crypto", err_decrypt_md5_failed, "MD5 decrypt failed");
-    libcpp::register_err("crypto", err_decrypt_sha256_failed, "SHA256 decrypt failed");
-    libcpp::register_err("crypto", err_decrypt_rsa_failed, "RSA decrypt failed");
+    libcpp::register_err("crypto", ERR_ENCRYPT_AES_FAILED, "AES encrypt failed");
+    libcpp::register_err("crypto", ERR_ENCRYPT_BASE64_FAILED, "base64 encrypt failed");
+    libcpp::register_err("crypto", ERR_ENCRYPT_DES_FAILED, "DES encrypt failed");
+    libcpp::register_err("crypto", ERR_ENCRYPT_MD5_FAILED, "MD5 encrypt failed");
+    libcpp::register_err("crypto", ERR_ENCRYPT_SHA256_FAILED, "SHA256 encrypt failed");
+    libcpp::register_err("crypto", ERR_ENCRYPT_RSA_FAILED, "RSA encrypt failed");
 
-    libcpp::register_err("crypto", err_keygen_fail, "keygen failed");
+    libcpp::register_err("crypto", ERR_DECRYPT_AES_FAILED, "AES decrypt failed");
+    libcpp::register_err("crypto", ERR_DECRYPT_BASE64_FAILED, "base64 decrypt failed");
+    libcpp::register_err("crypto", ERR_DECRYPT_DES_FAILED, "DES decrypt failed");
+    libcpp::register_err("crypto", ERR_DECRYPT_MD5_FAILED, "MD5 decrypt failed");
+    libcpp::register_err("crypto", ERR_DECRYPT_SHA256_FAILED, "SHA256 decrypt failed");
+    libcpp::register_err("crypto", ERR_DECRYPT_RSA_FAILED, "RSA decrypt failed");
+
+    libcpp::register_err("crypto", ERR_KEYGEN_FAIL, "keygen failed");
+
+    libcpp::register_err("crypto", ERR_FORMAT_FAIL, "format failed");
+    libcpp::register_err("crypto", ERR_FORMAT_STYLE_NOT_FOUND, "format style not found");
+    libcpp::register_err("crypto", ERR_FORMAT_INVALID_TARGET, "format invalid target");
+    libcpp::register_err("crypto", ERR_FORMAT_HEX_FAILED, "format hex failed");
+    libcpp::register_err("crypto", ERR_FORMAT_BASE64_FAILED, "format base64 failed");
+
+    libcpp::register_err("crypto", ERR_UNFORMAT_FAIL, "unformat failed");
+    libcpp::register_err("crypto", ERR_UNFORMAT_STYLE_NOT_FOUND, "unformat style not found");
+    libcpp::register_err("crypto", ERR_UNFORMAT_INVALID_TARGET, "unformat invalid target");
+    libcpp::register_err("crypto", ERR_UNFORMAT_HEX_FAILED, "unformat hex failed");
+    libcpp::register_err("crypto", ERR_UNFORMAT_BASE64_FAILED, "unformat base64 failed");
 );
-
-static inline std::error_code error(const err e) { return libcpp::make_err(e, "crypto"); }
 
 #endif

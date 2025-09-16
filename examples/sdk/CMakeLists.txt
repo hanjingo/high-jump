@@ -89,7 +89,6 @@ if (ASAN)
 endif()
 
 # Macro Definitions
-add_definitions(-DI18N_LOCALE="en_US")
 add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
@@ -117,8 +116,6 @@ if (BUILD_BENCHMARK)
 endif()
 
 # add vcpkg library
-find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
-find_package(jwt-cpp CONFIG REQUIRED)
 find_package(fmt REQUIRED)
 find_package(unofficial-breakpad REQUIRED)
 
@@ -133,18 +130,35 @@ if (BUILD_SHARED)
     add_library(${SDK_SHARED_NAME} SHARED ${SRC})
 
     # link library
-    target_link_libraries(${SDK_SHARED_NAME} 
-        ${CMAKE_DL_LIBS}
-        ${Boost_LIBRARIES}
-        ${ICU_LIBRARIES}
-        ${OPENTELEMETRY_CPP_LIBRARIES}
-        jwt-cpp::jwt-cpp
-        fmt::fmt
+    if (WIN32)
+        target_link_libraries(${SDK_SHARED_NAME} 
+            ${CMAKE_DL_LIBS}
+            bcrypt # for Windows cryptography
 
-        # breakpad_client
-        unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
-        unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
-    )
+            fmt::fmt
+            unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
+            unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
+        )
+    elseif(APPLE)
+        target_link_libraries(${SDK_SHARED_NAME} 
+            ${CMAKE_DL_LIBS}
+            pthread
+
+            fmt::fmt
+            unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
+            unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
+        )
+    else() # Linux
+        target_link_libraries(${SDK_SHARED_NAME} 
+            ${CMAKE_DL_LIBS}
+            rt
+            pthread
+
+            fmt::fmt
+            unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
+            unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
+        )
+    endif()
 
     # Deploy dependencies
     # for windows + vs2019:
@@ -157,10 +171,8 @@ if (BUILD_SHARED)
     if (WIN32)
         win_deploy(${SDK_SHARED_NAME}
             ${CMAKE_DL_LIBS}
-            ${Boost_LIBRARIES}
-            ${ICU_LIBRARIES}
-            ${OPENTELEMETRY_CPP_LIBRARIES}
-            jwt-cpp::jwt-cpp
+            bcrypt
+
             fmt::fmt
             unofficial::breakpad::libbreakpad
             unofficial::breakpad::libbreakpad_client
@@ -168,10 +180,8 @@ if (BUILD_SHARED)
     elseif(APPLE)
         mac_deploy(${SDK_SHARED_NAME}
             ${CMAKE_DL_LIBS}
-            ${Boost_LIBRARIES}
-            ${ICU_LIBRARIES}
-            ${OPENTELEMETRY_CPP_LIBRARIES}
-            jwt-cpp::jwt-cpp
+            pthread
+
             fmt::fmt
             unofficial::breakpad::libbreakpad
             unofficial::breakpad::libbreakpad_client
@@ -179,10 +189,9 @@ if (BUILD_SHARED)
     else()
         linux_deploy(${SDK_SHARED_NAME}
             ${CMAKE_DL_LIBS}
-            ${Boost_LIBRARIES}
-            ${ICU_LIBRARIES}
-            ${OPENTELEMETRY_CPP_LIBRARIES}
-            jwt-cpp::jwt-cpp
+            rt
+            pthread
+
             fmt::fmt
             unofficial::breakpad::libbreakpad
             unofficial::breakpad::libbreakpad_client
@@ -194,19 +203,36 @@ if (BUILD_STATIC)
     set(SDK_STATIC_NAME "${PROJECT_NAME}_static")
     add_library(${SDK_STATIC_NAME} STATIC ${SRC})
 
-    # link library
-    target_link_libraries(${SDK_STATIC_NAME} 
-        ${CMAKE_DL_LIBS}
-        ${Boost_LIBRARIES}
-        ${ICU_LIBRARIES}
-        ${OPENTELEMETRY_CPP_LIBRARIES}
-        jwt-cpp::jwt-cpp
-        fmt::fmt
+    # for os-specific libraries
+    if (WIN32)
+        target_link_libraries(${SDK_STATIC_NAME} 
+            ${CMAKE_DL_LIBS}
+            bcrypt # for Windows cryptography
 
-        # breakpad_client
-        unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
-        unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
-    )
+            fmt::fmt
+            unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
+            unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
+        )
+    elseif(APPLE)
+        target_link_libraries(${SDK_STATIC_NAME} 
+            ${CMAKE_DL_LIBS}
+            pthread
+
+            fmt::fmt
+            unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
+            unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
+        )
+    else() # Linux
+        target_link_libraries(${SDK_STATIC_NAME} 
+            ${CMAKE_DL_LIBS}
+            rt
+            pthread
+
+            fmt::fmt
+            unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
+            unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
+        )
+    endif()
 
     # Deploy dependencies
     # for windows + vs2019:
@@ -219,10 +245,8 @@ if (BUILD_STATIC)
     if (WIN32)
         win_deploy(${SDK_STATIC_NAME}
             ${CMAKE_DL_LIBS}
-            ${Boost_LIBRARIES}
-            ${ICU_LIBRARIES}
-            ${OPENTELEMETRY_CPP_LIBRARIES}
-            jwt-cpp::jwt-cpp
+            bcrypt
+
             fmt::fmt
             unofficial::breakpad::libbreakpad
             unofficial::breakpad::libbreakpad_client
@@ -230,10 +254,8 @@ if (BUILD_STATIC)
     elseif(APPLE)
         mac_deploy(${SDK_STATIC_NAME}
             ${CMAKE_DL_LIBS}
-            ${Boost_LIBRARIES}
-            ${ICU_LIBRARIES}
-            ${OPENTELEMETRY_CPP_LIBRARIES}
-            jwt-cpp::jwt-cpp
+            pthread
+
             fmt::fmt
             unofficial::breakpad::libbreakpad
             unofficial::breakpad::libbreakpad_client
@@ -241,10 +263,9 @@ if (BUILD_STATIC)
     else()
         linux_deploy(${SDK_STATIC_NAME}
             ${CMAKE_DL_LIBS}
-            ${Boost_LIBRARIES}
-            ${ICU_LIBRARIES}
-            ${OPENTELEMETRY_CPP_LIBRARIES}
-            jwt-cpp::jwt-cpp
+            rt
+            pthread
+
             fmt::fmt
             unofficial::breakpad::libbreakpad
             unofficial::breakpad::libbreakpad_client

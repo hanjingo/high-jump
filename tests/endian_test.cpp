@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/types/endian.hpp>
+#include <libcpp/encoding/endian.hpp>
 
 bool is_big_endian()
 {

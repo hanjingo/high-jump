@@ -21,6 +21,7 @@
 
 #include <string.h>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <iomanip>
 
@@ -109,13 +110,24 @@ public:
         return decode<T>(std::string(buf));
     }
 
-    static void decode(std::ostream& out, std::istream& in)
+    static bool decode(std::ostream& out, std::istream& in)
     {
+        if (!out.good() || !in.good())
+            return false;
+            
         std::ostringstream oss;
         oss << in.rdbuf();
         std::string hex_content = oss.str();
         std::string binary_data = decode<std::string>(hex_content);
         out << binary_data;
+        return true;
+    }
+
+    static bool decode_file(const std::string& out, const std::string& in)
+    {
+        std::ifstream fin(in, std::ios::binary);
+        std::ofstream fout(out, std::ios::binary);
+        return decode(fout, fin);
     }
 
     template<typename T>
@@ -129,13 +141,93 @@ public:
         return oss.str();
     }
 
-    static void encode(std::ostream& out, std::istream& in, bool upper_case = true)
+    static bool encode(std::ostream& out, std::istream& in, bool upper_case = true)
     {
+        if (!out.good() || !in.good())
+            return false;
+
         out << (upper_case ? std::uppercase : std::nouppercase) << std::hex;
         
         char ch;
         while (in.read(&ch, 1)) 
             out << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(static_cast<unsigned char>(ch));
+
+        return true;
+    }
+
+    static bool encode_file(const std::string& out, const std::string& in)
+    {
+        std::ifstream fin(in, std::ios::binary);
+        std::ofstream fout(out, std::ios::binary);
+        return encode(fout, fin);
+    }
+
+    static bool is_valid(const unsigned char* buf, const std::size_t len)
+    {
+        if (len == 0 || buf == nullptr) 
+            return false;
+
+        if (len % 2 != 0) 
+            return false;
+
+        for (int i = 0; i < len; ++i) 
+        {
+            char c = buf[i];
+            if (!((c >= '0' && c <= '9') ||
+                (c >= 'a' && c <= 'f') ||
+                (c >= 'A' && c <= 'F')))
+                return false;
+        }
+
+        return true;
+    }
+
+    static bool is_valid(const std::string& hex_str)
+    {
+        return is_valid(reinterpret_cast<const unsigned char*>(hex_str.c_str()), hex_str.length());
+    }
+
+    static bool is_valid(std::ifstream& in)
+    {
+        if (!in.is_open())
+            return false;
+
+        unsigned char buf[HEX_BUF_SZ];
+        std::size_t total_len = 0;
+        std::ifstream::pos_type start_pos = in.tellg();
+        while (in)
+        {
+            in.read(reinterpret_cast<char*>(buf), HEX_BUF_SZ);
+            std::streamsize n = in.gcount();
+            if (n == 0) 
+                break;
+
+            total_len += n;
+            for (std::streamsize i = 0; i < n; ++i)
+            {
+                char c = buf[i];
+                if (!((c >= '0' && c <= '9') ||
+                        (c >= 'a' && c <= 'f') ||
+                        (c >= 'A' && c <= 'F')))
+                    return false;
+            }
+        }
+
+        in.clear();
+        in.seekg(start_pos);
+        if (total_len == 0 || total_len % 2 != 0)
+            return false;
+            
+        return true;
+    }
+
+    static bool is_valid_file(const std::string& file_path)
+    {
+        std::ifstream file(file_path, std::ios::binary);
+        if (!file.is_open())
+            return false;
+
+        return is_valid(file);
     }
 
 private:

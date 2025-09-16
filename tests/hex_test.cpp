@@ -53,3 +53,71 @@ TEST(hex, encode)
     libcpp::hex::encode(out2, in2, true);
     ASSERT_EQ(out2.str(), "FF0F");
 }
+
+TEST(hex, is_valid)
+{
+    EXPECT_TRUE(libcpp::hex::is_valid("00"));
+    EXPECT_TRUE(libcpp::hex::is_valid("0A"));
+    EXPECT_TRUE(libcpp::hex::is_valid("ff"));
+    EXPECT_TRUE(libcpp::hex::is_valid("ABCDEFabcdef0123456789"));
+
+    EXPECT_FALSE(libcpp::hex::is_valid("0G"));
+    EXPECT_FALSE(libcpp::hex::is_valid("xyz"));
+    EXPECT_FALSE(libcpp::hex::is_valid("12 34"));
+    EXPECT_FALSE(libcpp::hex::is_valid("12-34"));
+
+    EXPECT_FALSE(libcpp::hex::is_valid("F"));
+    EXPECT_FALSE(libcpp::hex::is_valid("123"));
+
+    EXPECT_FALSE(libcpp::hex::is_valid(""));
+
+    {
+        std::string valid_hex = "AABBCCDDEEFF";
+        std::string invalid_hex = "AABBCCGG";
+        std::string odd_hex = "AABBCCD";
+        std::string empty_hex = "";
+
+        {
+            std::ofstream ofs("tmp_valid_hex.txt", std::ios::binary);
+            ofs << valid_hex;
+        }
+        {
+            std::ofstream ofs("tmp_invalid_hex.txt", std::ios::binary);
+            ofs << invalid_hex;
+        }
+        {
+            std::ofstream ofs("tmp_odd_hex.txt", std::ios::binary);
+            ofs << odd_hex;
+        }
+        {
+            std::ofstream ofs("tmp_empty_hex.txt", std::ios::binary);
+            ofs << empty_hex;
+        }
+
+        EXPECT_TRUE(libcpp::hex::is_valid_file("tmp_valid_hex.txt"));
+        EXPECT_FALSE(libcpp::hex::is_valid_file("tmp_invalid_hex.txt"));
+        EXPECT_FALSE(libcpp::hex::is_valid_file("tmp_odd_hex.txt"));
+        EXPECT_FALSE(libcpp::hex::is_valid_file("tmp_empty_hex.txt"));
+
+        std::ifstream fin1("tmp_valid_hex.txt", std::ios::binary);
+        EXPECT_TRUE(libcpp::hex::is_valid(fin1));
+        fin1.close();
+
+        std::ifstream fin2("tmp_invalid_hex.txt", std::ios::binary);
+        EXPECT_FALSE(libcpp::hex::is_valid(fin2));
+        fin2.close();
+
+        std::ifstream fin3("tmp_odd_hex.txt", std::ios::binary);
+        EXPECT_FALSE(libcpp::hex::is_valid(fin3));
+        fin3.close();
+
+        std::ifstream fin4("tmp_empty_hex.txt", std::ios::binary);
+        EXPECT_FALSE(libcpp::hex::is_valid(fin4));
+        fin4.close();
+
+        std::remove("tmp_valid_hex.txt");
+        std::remove("tmp_invalid_hex.txt");
+        std::remove("tmp_odd_hex.txt");
+        std::remove("tmp_empty_hex.txt");
+    }
+}

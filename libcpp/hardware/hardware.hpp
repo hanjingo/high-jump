@@ -13,7 +13,11 @@
 
 #include <libcpp/hardware/gpu.h>
 
-#include <libcpp/hardware/motherboard.h>
+#include <libcpp/hardware/keyboard.h>
+
+#include <libcpp/hardware/mainboard.h>
+
+#include <libcpp/hardware/mouse.h>
 
 #include <libcpp/hardware/nic.h>
 

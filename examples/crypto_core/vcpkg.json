@@ -1,0 +1,41 @@
+{
+  "dependencies": [
+    "benchmark",
+    "boost-filesystem",
+    "breakpad",
+    "fmt",
+    "gtest",
+    "openssl",
+    "spdlog"
+  ],
+  "overrides": [
+    {
+      "name": "benchmark",
+      "version": "1.9.4"
+    },
+    {
+      "name": "boost-filesystem",
+      "version": "1.76.0"
+    },
+    {
+      "name": "breakpad",
+      "version": "2024-02-16"
+    },
+    {
+      "name": "fmt",
+      "version": "11.0.2"
+    },
+    {
+      "name": "gtest",
+      "version": "1.17.0"
+    },
+    {
+      "name": "openssl",
+      "version": "3.5.0"
+    },
+    {
+      "name": "spdlog",
+      "version": "1.15.3"
+    }
+  ]
+}

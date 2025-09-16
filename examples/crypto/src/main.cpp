@@ -7,17 +7,13 @@
 #include <libcpp/testing/crash.hpp>
 #include <libcpp/testing/telemetry.hpp>
 
-#ifndef I18N_LOCALE
-    #define I18N_LOCALE "en_US"
-#endif
-
 // add your code here...
 #include <iostream>
 
 #include "err.h"
-#include "err_handle.h"
+#include "core.h"
+#include "handle.h"
 #include "comm.h"
-#include "cmd.h"
 
 int main(int argc, char* argv[])
 {
@@ -32,7 +28,7 @@ int main(int argc, char* argv[])
     libcpp::logger::instance()->set_level(libcpp::log_lvl::debug);
 
     // add i18n support
-    libcpp::i18n::instance().set_locale(I18N_LOCALE);
+    libcpp::i18n::instance().set_locale("en_US");
     libcpp::i18n::instance().load_translation_auto("./", "crypto");
 
     // add telemetry support
@@ -57,40 +53,70 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    crypto_core core;
+    // version check
+    int major, minor, patch;
+    auto err = core.version(major, minor, patch);
+    if (err) 
+    {
+        handle_err(err);
+        return 1;
+    }
+    if (major < CORE_MAJOR_VERSION_MIN || minor < CORE_MINOR_VERSION_MIN || patch < CORE_PATCH_VERSION_MIN)
+    {
+        handle_err(error(ERR_VERSION_MISMATCH), major, minor, patch);
+        return 1;
+    }
+
+    // init
+    err = core.init();
+    if (err) 
+    {
+        handle_err(err);
+        return 1;
+    }
+
     opts.add<std::string>("subcmd", std::string(""), "subcommand");
     opts.add_positional("subcmd", 1);
-    opts.add<std::string>("output,o", std::string(""), "output file path");
-    opts.add<std::string>("input,i", std::string(""), "input file path");
-    opts.add<std::string>("algo,a", std::string("auto"), "algorithm");
-    opts.add<std::string>("mode,m", std::string("auto"), "mode");
-    opts.add<std::string>("key,k", std::string(""), "key");
-    opts.add<std::string>("passwd", std::string(""), "password");
+
+    opts.add<std::string>("algo,a", std::string(""), "algorithm");
     opts.add<int>("bits,b", 2048, "bits for keygen");
-    opts.add<std::string>("name,n", std::string(""), "name for keygen");
-    opts.add<std::string>("padding,p", std::string("auto"), "padding mode");
-    opts.add<std::string>("iv,v", std::string(""), "iv");
-    opts.add<std::string>("fmt,f", std::string("auto"), "input output format");
-    opts.add<std::size_t>("timeout,t", 30, "timeout in seconds");
-    opts.add<std::string>("set,s", std::string(""), "set dictionary value");
     opts.add<std::string>("del,d", std::string(""), "delete dictionary value");
+    opts.add<std::string>("fmt,f", std::string("none"), "input output format");
+    opts.add<std::string>("input,i", std::string(""), "input file path");
+    opts.add<std::string>("key,k", std::string(""), "key");
     opts.add<std::string>("list,l", std::string(""), "list dictionary value");
-    opts.add<std::string>("ctx", "", "input content");
-    opts.add_positional("ctx", 2);
+    opts.add<std::string>("mode,m", std::string(""), "mode");
+    opts.add<std::string>("name,n", std::string(""), "name for keygen");
+    opts.add<std::string>("output,o", std::string(""), "output file path");
+    opts.add<std::string>("padding,p", std::string("pkcs7"), "padding mode");
+    opts.add<std::string>("set,s", std::string(""), "set dictionary value");
+    opts.add<std::size_t>("timeout,t", 30, "timeout in seconds");
+    opts.add<std::string>("iv,v", std::string(""), "iv");
+    opts.add<std::string>("passwd", std::string(""), "password");
+    opts.add<std::string>("content", "", "input content");
+    opts.add_positional("content", 2);
+
     std::string subcmd = opts.parse<std::string>(argc, argv, "subcmd");
+    auto output = opts.parse<std::string>(argc, argv, "output");
+    auto input = opts.parse<std::string>(argc, argv, "input");
+    auto algo = opts.parse<std::string>(argc, argv, "algo");
+    auto mode = opts.parse<std::string>(argc, argv, "mode");
+    auto key = opts.parse<std::string>(argc, argv, "key");
+    auto passwd = opts.parse<std::string>(argc, argv, "passwd");
+    auto bits = opts.parse<int>(static_cast<int>(argc), argv, "bits");
+    auto padding = opts.parse<std::string>(argc, argv, "padding");
+    auto iv = opts.parse<std::string>(argc, argv, "iv");
+    auto fmt = opts.parse<std::string>(argc, argv, "fmt");
+    auto timeout = opts.parse<std::size_t>(argc, argv, "timeout");
+    auto set_value = opts.parse<std::string>(argc, argv, "set");
+    auto del_value = opts.parse<std::string>(argc, argv, "del");
+    auto list_value = opts.parse<std::string>(argc, argv, "list");
+    auto content = opts.parse<std::string>(argc, argv, "content");
     if (subcmd == "encrypt") 
     {
         // crypto encrypt --output <file> --input <file> --algo <auto/aes/base64/des/md5/rsa/sha> --mode <auto/ecb/cbc/cfb/...> --key <key> --padding <auto/pkcs7/zero/...> --iv <iv> --fmt <auto/hex/base64> xxx
         // crypto encrypt -o <file> -i <file> -a <auto/aes/base64/des/md5/rsa/sha> -k <key> -m <auto/ecb/cbc/cfb/...> -p <auto/pkcs7/zero/...> -v <iv> -f <auto/hex/base64> xxx
-        auto output = opts.parse<std::string>(argc, argv, "output");
-        auto input = opts.parse<std::string>(argc, argv, "input");
-        auto algo = opts.parse<std::string>(argc, argv, "algo");
-        auto mode = opts.parse<std::string>(argc, argv, "mode");
-        auto key = opts.parse<std::string>(argc, argv, "key");
-        auto padding = opts.parse<std::string>(argc, argv, "padding");
-        auto iv = opts.parse<std::string>(argc, argv, "iv");
-        auto fmt = opts.parse<std::string>(argc, argv, "fmt");
-        auto ctx = opts.parse<std::string>(argc, argv, "ctx");
-
         LOG_DEBUG("output:{}", output);
         LOG_DEBUG("input:{}", input);
         LOG_DEBUG("algo:{}", algo);
@@ -99,23 +125,18 @@ int main(int argc, char* argv[])
         LOG_DEBUG("padding:{}", padding);
         LOG_DEBUG("iv:{}", iv);
         LOG_DEBUG("fmt:{}", fmt);
-        LOG_DEBUG("ctx:{}", ctx);
+        LOG_DEBUG("content:{}", content);
 
-        encrypt(output, input, algo, mode, key, padding, iv, fmt, ctx);
+        auto otype = select_output_type(output);
+        auto ofmt = select_encrypt_output_fmt(fmt, output, algo);
+        auto err = core.encrypt(output, input, content, algo, mode, key, padding, iv, ofmt);
+        if (err)
+            handle_err(err, output, input, content, algo, mode, key, padding, iv, ofmt);
+        else
+            print(output, otype);
     } 
     else if (subcmd == "decrypt")
     {
-        auto output = opts.parse<std::string>(argc, argv, "output");
-        auto input = opts.parse<std::string>(argc, argv, "input");
-        auto algo = opts.parse<std::string>(argc, argv, "algo");
-        auto mode = opts.parse<std::string>(argc, argv, "mode");
-        auto key = opts.parse<std::string>(argc, argv, "key");
-        auto passwd = opts.parse<std::string>(argc, argv, "passwd");
-        auto padding = opts.parse<std::string>(argc, argv, "padding");
-        auto iv = opts.parse<std::string>(argc, argv, "iv");
-        auto fmt = opts.parse<std::string>(argc, argv, "fmt");
-        auto ctx = opts.parse<std::string>(argc, argv, "ctx");
-
         LOG_DEBUG("output:{}", output);
         LOG_DEBUG("input:{}", input);
         LOG_DEBUG("algo:{}", algo);
@@ -125,79 +146,70 @@ int main(int argc, char* argv[])
         LOG_DEBUG("padding:{}", padding);
         LOG_DEBUG("iv:{}", iv);
         LOG_DEBUG("fmt:{}", fmt);
-        LOG_DEBUG("ctx:{}", ctx);
+        LOG_DEBUG("ctx:{}", content);
 
-        decrypt(output, input, algo, mode, key, passwd, padding, iv, fmt, ctx);
+        auto otype = select_output_type(output);
+        auto err = core.decrypt(output, input, content, algo, mode, key, passwd, padding, iv, fmt);
+        if (err)
+            handle_err(err, output, input, content, algo, mode, key, padding, iv, fmt);
+        else
+            print(output, otype);
     }
-    else if (subcmd == "keygen")
-    {
-        // crypto keygen --name <xxx> --algo <auto/rsa256> --fmt <x509> --mode <none> --bits <512/1024/2048/3072/4096> 
-        // crypto keygen -n <xxx> -a <auto/rsa256> -f <x509> -m <none> -b <512/1024/2048/3072/4096>
-        auto name = opts.parse<std::string>(argc, argv, "name");
-        auto algo = opts.parse<std::string>(argc, argv, "algo");
-        auto fmt = opts.parse<std::string>(argc, argv, "fmt");
-        auto mode = opts.parse<std::string>(argc, argv, "mode");
-        auto bits = opts.parse<int>(static_cast<int>(argc), argv, "bits");
+    // else if (subcmd == "keygen")
+    // {
+    //     // crypto keygen --output <xxx> --algo <auto/rsa256> --fmt <x509> --mode <none> --bits <512/1024/2048/3072/4096> 
+    //     // crypto keygen -o <xxx> -a <auto/rsa256> -f <x509> -m <none> -b <512/1024/2048/3072/4096>
+    //     LOG_DEBUG("output:{}", output);
+    //     LOG_DEBUG("algo:{}", algo);
+    //     LOG_DEBUG("fmt:{}", fmt);
+    //     LOG_DEBUG("mode:{}", mode);
+    //     LOG_DEBUG("bits:{}", bits);
 
-        LOG_DEBUG("name:{}", name);
-        LOG_DEBUG("algo:{}", algo);
-        LOG_DEBUG("fmt:{}", fmt);
-        LOG_DEBUG("mode:{}", mode);
-        LOG_DEBUG("bits:{}", bits);
+    //     keygen(output, algo, fmt, mode, bits);
+    // }
+    // else if (subcmd == "guess")
+    // {
+    //     // crypto guess --output <file> --input <file> --algo <auto/aes/base64/des/md5/rsa/sha> --mode <auto/ecb/cbc/cfb/...> --key <key> --padding <auto/pkcs7/zero/...> --iv <iv> --fmt <auto/hex/base64> xxx
+    //     // crypto guess -o <file> -i <file> -a <auto/aes/base64/des/md5/rsa/sha> -k <key> -m <auto/ecb/cbc/cfb/...> -p <auto/pkcs7/zero/...> -v <iv> -f <auto/hex/base64> xxx
 
-        keygen(name, algo, fmt, mode, bits);
-    }
-    else if (subcmd == "guess")
-    {
-        // crypto guess --output <file> --input <file> --algo <auto/aes/base64/des/md5/rsa/sha> --mode <auto/ecb/cbc/cfb/...> --key <key> --padding <auto/pkcs7/zero/...> --iv <iv> --fmt <auto/hex/base64> xxx
-        // crypto guess -o <file> -i <file> -a <auto/aes/base64/des/md5/rsa/sha> -k <key> -m <auto/ecb/cbc/cfb/...> -p <auto/pkcs7/zero/...> -v <iv> -f <auto/hex/base64> xxx
-        auto output = opts.parse<std::string>(argc, argv, "output");
-        auto input = opts.parse<std::string>(argc, argv, "input");
-        auto algo = opts.parse<std::string>(argc, argv, "algo");
-        auto mode = opts.parse<std::string>(argc, argv, "mode");
-        auto key = opts.parse<std::string>(argc, argv, "key");
-        auto passwd = opts.parse<std::string>(argc, argv, "passwd");
-        auto padding = opts.parse<std::string>(argc, argv, "padding");
-        auto iv = opts.parse<std::string>(argc, argv, "iv");
-        auto fmt = opts.parse<std::string>(argc, argv, "fmt");
-        auto timeout = opts.parse<std::size_t>(argc, argv, "timeout");
-        auto ctx = opts.parse<std::string>(argc, argv, "ctx");
+    //     LOG_DEBUG("output:{}", output);
+    //     LOG_DEBUG("input:{}", input);
+    //     LOG_DEBUG("algo:{}", algo);
+    //     LOG_DEBUG("mode:{}", mode);
+    //     LOG_DEBUG("key:{}", key);
+    //     LOG_DEBUG("passwd:{}", passwd);
+    //     LOG_DEBUG("padding:{}", padding);
+    //     LOG_DEBUG("iv:{}", iv);
+    //     LOG_DEBUG("fmt:{}", fmt);
+    //     LOG_DEBUG("ctx:{}", ctx);
 
-        LOG_DEBUG("output:{}", output);
-        LOG_DEBUG("input:{}", input);
-        LOG_DEBUG("algo:{}", algo);
-        LOG_DEBUG("mode:{}", mode);
-        LOG_DEBUG("key:{}", key);
-        LOG_DEBUG("passwd:{}", passwd);
-        LOG_DEBUG("padding:{}", padding);
-        LOG_DEBUG("iv:{}", iv);
-        LOG_DEBUG("fmt:{}", fmt);
-        LOG_DEBUG("ctx:{}", ctx);
+    //     guess(output, input, algo, mode, key, passwd, padding, iv, fmt, ctx, timeout);
+    // }
+    // else if ("collision")
+    // {
+    //     // crypt collision --input <file> --algo <sha256> xxx
 
-        guess(output, input, algo, mode, key, passwd, padding, iv, fmt, ctx, timeout);
-    }
-    else if (subcmd == "dict")
-    {
-        // crypto dict --set <xx> --del <xx> --list
-        auto set_value = opts.parse<std::string>(argc, argv, "set");
-        auto del_value = opts.parse<std::string>(argc, argv, "del");
-        auto list_value = opts.parse<std::string>(argc, argv, "list");
+    //     collision();
+    // }
+    // else if (subcmd == "dict")
+    // {
+    //     // crypto dict --set <xx> --del <xx> --list <*>
 
-        dict();
-    }
-    else if (subcmd == "attach") 
-    {
-        // crypto attach --pid <pid>
-        attach();
-    }
-    else if (subcmd == "help") 
-    {
-        // crypto help
-        help();
-    } 
-    else 
-    {
-        handle_err(error(err_invalid_subcmd), subcmd);
-        return 1;
-    }
+    //     dict();
+    // }
+    // else if (subcmd == "attach") 
+    // {
+    //     // crypto attach xxx
+    //     attach();
+    // }
+    // else if (subcmd == "help") 
+    // {
+    //     // crypto help
+    //     help();
+    // } 
+    // else 
+    // {
+    //     handle_err(error(err_invalid_subcmd), subcmd);
+    //     return 1;
+    // }
 }

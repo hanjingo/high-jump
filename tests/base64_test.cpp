@@ -69,3 +69,68 @@ TEST(base64, decode_file)
         std::string("./base64_file_test_decode.log"), 
         std::string("./base64_file_test_encode1.log")));
 }
+
+TEST(base64, is_valid)
+{
+    EXPECT_TRUE(libcpp::base64::is_valid("TWFu")); // "Man"
+    EXPECT_TRUE(libcpp::base64::is_valid("TWE=")); // "Ma"
+    EXPECT_TRUE(libcpp::base64::is_valid("TQ==")); // "M"
+    EXPECT_TRUE(libcpp::base64::is_valid("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA=="));
+
+    EXPECT_FALSE(libcpp::base64::is_valid("TWFu!"));
+    EXPECT_FALSE(libcpp::base64::is_valid("TWFu$"));
+    EXPECT_FALSE(libcpp::base64::is_valid("TWFu==="));
+    EXPECT_FALSE(libcpp::base64::is_valid("TWFu" "=")); // 5 bytes, invalid
+    EXPECT_FALSE(libcpp::base64::is_valid("TWF"));
+    EXPECT_FALSE(libcpp::base64::is_valid(""));
+
+    {
+        std::string valid_b64 = "TWFu";
+        std::string invalid_b64 = "TWFu!";
+        std::string odd_b64 = "TWF";
+        std::string empty_b64 = "";
+
+        {
+            std::ofstream ofs("tmp_valid_b64.txt", std::ios::binary);
+            ofs << valid_b64;
+        }
+        {
+            std::ofstream ofs("tmp_invalid_b64.txt", std::ios::binary);
+            ofs << invalid_b64;
+        }
+        {
+            std::ofstream ofs("tmp_odd_b64.txt", std::ios::binary);
+            ofs << odd_b64;
+        }
+        {
+            std::ofstream ofs("tmp_empty_b64.txt", std::ios::binary);
+            ofs << empty_b64;
+        }
+
+        EXPECT_TRUE(libcpp::base64::is_valid_file("tmp_valid_b64.txt"));
+        EXPECT_FALSE(libcpp::base64::is_valid_file("tmp_invalid_b64.txt"));
+        EXPECT_FALSE(libcpp::base64::is_valid_file("tmp_odd_b64.txt"));
+        EXPECT_FALSE(libcpp::base64::is_valid_file("tmp_empty_b64.txt"));
+
+        std::ifstream fin1("tmp_valid_b64.txt", std::ios::binary);
+        EXPECT_TRUE(libcpp::base64::is_valid(fin1));
+        fin1.close();
+
+        std::ifstream fin2("tmp_invalid_b64.txt", std::ios::binary);
+        EXPECT_FALSE(libcpp::base64::is_valid(fin2));
+        fin2.close();
+
+        std::ifstream fin3("tmp_odd_b64.txt", std::ios::binary);
+        EXPECT_FALSE(libcpp::base64::is_valid(fin3));
+        fin3.close();
+
+        std::ifstream fin4("tmp_empty_b64.txt", std::ios::binary);
+        EXPECT_FALSE(libcpp::base64::is_valid(fin4));
+        fin4.close();
+
+        std::remove("tmp_valid_b64.txt");
+        std::remove("tmp_invalid_b64.txt");
+        std::remove("tmp_odd_b64.txt");
+        std::remove("tmp_empty_b64.txt");
+    }
+}

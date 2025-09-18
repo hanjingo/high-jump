@@ -18,10 +18,10 @@ int decryptor_mgr::add(std::unique_ptr<decryptor>&& enc)
 {
     for (const auto& e : _decryptors)
         if (e->type() == enc->type())
-            return FAIL;
+            return CRYPTO_ERR_FAIL;
 
     _decryptors.emplace_back(std::move(enc));
-    return OK;
+    return CRYPTO_OK;
 }
 
 int decryptor_mgr::decrypt(
@@ -44,7 +44,7 @@ int decryptor_mgr::decrypt(
         return e->decrypt(out, in, content, mode, key, passwd, padding, iv, fmt);
     }
 
-    return ERR_INVALID_ALGO;
+    return CRYPTO_ERR_INVALID_ALGO;
 }
 
 // ------------------------------------ AES -------------------------------------
@@ -60,43 +60,45 @@ int aes_decryptor::decrypt(
     const std::string& fmt)
 {
     if (!_is_mode_valid(mode))
-        return ERR_INVALID_MODE;
+        return CRYPTO_ERR_INVALID_MODE;
 
     if (!_is_key_valid(key, mode))
-        return ERR_INVALID_KEY;
+        return CRYPTO_ERR_INVALID_KEY;
 
     if (!_is_padding_valid(padding))
-        return ERR_INVALID_PADDING;
+        return CRYPTO_ERR_INVALID_PADDING;
 
     if (!_is_iv_valid(iv, mode))
-        return ERR_INVALID_IV;
+        return CRYPTO_ERR_INVALID_IV;
 
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
     auto mod = str_to_aes_mode(mode);
     auto pad = str_to_aes_padding(padding);
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
         std::string tmp;
         err = formator::unformat(tmp, content, fmt, fmt_target::memory);
-        if (err == OK)
-            err = libcpp::aes::decrypt(out, tmp, key, mod, pad, iv) ? OK : ERR_DECRYPT_AES_FAILED;
+        if (err == CRYPTO_OK)
+            err = libcpp::aes::decrypt(out, tmp, key, mod, pad, iv) ? 
+                CRYPTO_OK : CRYPTO_ERR_DECRYPT_AES_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
         std::string tmp = in + ".tmp";
         err = formator::unformat(tmp, in, fmt, fmt_target::file);
-        if (err == OK)
-            err = libcpp::aes::decrypt_file(out, tmp, key, mod, pad, iv) ? OK : ERR_DECRYPT_AES_FAILED;
+        if (err == CRYPTO_OK)
+            err = libcpp::aes::decrypt_file(out, tmp, key, mod, pad, iv) ? 
+                CRYPTO_OK : CRYPTO_ERR_DECRYPT_AES_FAILED;
         libcpp::filepath::remove(tmp);
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
         std::string tmp;
         err = formator::unformat(tmp, content, fmt, fmt_target::memory);
-        if (err == OK)
+        if (err == CRYPTO_OK)
         {
             std::istringstream sin(tmp);
             std::ofstream fout(out, std::ios::binary);
@@ -108,14 +110,14 @@ int aes_decryptor::decrypt(
                 mod, 
                 pad, 
                 reinterpret_cast<const unsigned char*>(iv.c_str()), 
-                iv.size()) ? OK : ERR_DECRYPT_AES_FAILED;
+                iv.size()) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_AES_FAILED;
         }
     }
     else // decrypt: file -> mem
     {
         std::string tmp = in + ".tmp";
         err = formator::unformat(tmp, in, fmt, fmt_target::file);
-        if (err == OK)
+        if (err == CRYPTO_OK)
         {
             std::ifstream fin(tmp, std::ios::binary);
             std::ostringstream sout(out);
@@ -127,7 +129,7 @@ int aes_decryptor::decrypt(
                 mod, 
                 pad, 
                 reinterpret_cast<const unsigned char*>(iv.c_str()), 
-                iv.size()) ? OK : ERR_DECRYPT_AES_FAILED;
+                iv.size()) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_AES_FAILED;
             out = sout.str();
         }
         libcpp::filepath::remove(tmp);
@@ -185,14 +187,14 @@ int base64_decryptor::decrypt(
     const std::string& iv,
     const std::string& fmt)
 {
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        err = libcpp::base64::decode(out, content) ? OK : ERR_DECRYPT_BASE64_FAILED;
+        err = libcpp::base64::decode(out, content) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
-        err = libcpp::base64::decode_file(out, in) ? OK : ERR_DECRYPT_BASE64_FAILED;
+        err = libcpp::base64::decode_file(out, in) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
@@ -204,7 +206,7 @@ int base64_decryptor::decrypt(
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = libcpp::base64::decode(sout, fin) ? OK : ERR_DECRYPT_BASE64_FAILED;
+        err = libcpp::base64::decode(sout, fin) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
         out = sout.str();
     }
 
@@ -224,30 +226,32 @@ int des_decryptor::decrypt(
     const std::string& fmt)
 {
     if (!_is_mode_valid(mode))
-        return ERR_INVALID_MODE;
+        return CRYPTO_ERR_INVALID_MODE;
 
     if (!_is_key_valid(key, mode))
-        return ERR_INVALID_KEY;
+        return CRYPTO_ERR_INVALID_KEY;
 
     if (!_is_padding_valid(padding))
-        return ERR_INVALID_PADDING;
+        return CRYPTO_ERR_INVALID_PADDING;
 
     if (!_is_iv_valid(iv, mode))
-        return ERR_INVALID_IV;
+        return CRYPTO_ERR_INVALID_IV;
 
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
     auto mod = str_to_des_mode(mode);
     auto pad = str_to_des_padding(padding);
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        err = libcpp::des::decrypt(out, content, key, mod, pad, iv) ? OK : ERR_DECRYPT_DES_FAILED;
+        err = libcpp::des::decrypt(out, content, key, mod, pad, iv) ? 
+            CRYPTO_OK : CRYPTO_ERR_DECRYPT_DES_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
-        err = libcpp::des::decrypt_file(out, in, key, mod, pad, iv) ? OK : ERR_DECRYPT_DES_FAILED;
+        err = libcpp::des::decrypt_file(out, in, key, mod, pad, iv) ? 
+            CRYPTO_OK : CRYPTO_ERR_DECRYPT_DES_FAILED;
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
@@ -261,7 +265,7 @@ int des_decryptor::decrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? OK : ERR_DECRYPT_DES_FAILED;
+            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_DES_FAILED;
     }
     else // decrypt: file -> mem
     {
@@ -275,7 +279,7 @@ int des_decryptor::decrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? OK : ERR_DECRYPT_DES_FAILED;
+            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_DES_FAILED;
         out = sout.str();
     }
 
@@ -330,26 +334,28 @@ int rsa_decryptor::decrypt(
     const std::string& fmt)
 {
     if (!_is_key_valid(key))
-        return ERR_INVALID_KEY;
+        return CRYPTO_ERR_INVALID_KEY;
 
     if (!_is_padding_valid(padding))
-        return ERR_INVALID_PADDING;
+        return CRYPTO_ERR_INVALID_PADDING;
 
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
     if (!_is_input_valid(out, in, content, key, padding))
-        return ERR_INVALID_INPUT;
+        return CRYPTO_ERR_INVALID_INPUT;
 
     auto pad = str_to_rsa_padding(padding);
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        err = libcpp::rsa::decrypt(out, content, key, pad, "") ? OK : ERR_DECRYPT_RSA_FAILED;
+        err = libcpp::rsa::decrypt(out, content, key, pad, "") ? 
+            CRYPTO_OK : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
-        err = libcpp::rsa::decrypt_file(out, in, key, pad, "") ? OK : ERR_DECRYPT_RSA_FAILED;
+        err = libcpp::rsa::decrypt_file(out, in, key, pad, "") ? 
+            CRYPTO_OK : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
@@ -362,7 +368,7 @@ int rsa_decryptor::decrypt(
             key.size(),
             pad, 
             nullptr, 
-            0) ? OK : ERR_DECRYPT_RSA_FAILED;
+            0) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     }
     else // decrypt: file -> mem
     {
@@ -375,7 +381,7 @@ int rsa_decryptor::decrypt(
             key.size(),
             pad, 
             nullptr, 
-            0) ? OK : ERR_DECRYPT_RSA_FAILED;
+            0) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_RSA_FAILED;
         out = sout.str();
     }
 

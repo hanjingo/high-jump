@@ -7,7 +7,7 @@
 #include "api.h"
 #include <libcpp/crypto/rsa.hpp>
 
-class key_maker
+class keymaker
 {
 public:
     virtual std::string type() const = 0;
@@ -18,7 +18,38 @@ public:
         const int bits) = 0;
 };
 
-class rsa_key_maker : public key_maker
+class keymaker_mgr
+{
+public:
+    keymaker_mgr()
+        :_keymakers{}
+    {
+    }
+    ~keymaker_mgr()
+    {
+        _keymakers.clear();
+    }
+
+    static keymaker_mgr& instance()
+    {
+        static keymaker_mgr inst;
+        return inst;
+    }
+
+    std::vector<std::string> supported_algos();
+    int add(std::unique_ptr<keymaker>&& km);
+    int make(
+        std::vector<std::string>& outs,
+        const std::string& algo,
+        const std::string& fmt,
+        const std::string& mode,
+        const int bits);
+
+private:
+    std::vector<std::unique_ptr<keymaker>> _keymakers;
+};
+
+class rsa_keymaker : public keymaker
 {
 public:
     inline std::string type() const override { return "rsa"; }

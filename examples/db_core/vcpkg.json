@@ -1,7 +1,8 @@
 {
   "dependencies": [
     "benchmark",
-    "gtest"
+    "gtest",
+    "sqlite3"
   ],
   "overrides": [
     {
@@ -11,6 +12,10 @@
     {
       "name": "gtest",
       "version": "1.17.0"
+    },
+    {
+      "name": "sqlite3",
+      "version": "3.49.2"
     }
   ]
 }

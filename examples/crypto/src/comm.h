@@ -35,8 +35,6 @@ std::string select_encrypt_output_fmt(
 std::string fmt_strs(const std::vector<std::string>& vec);
 
 void print(const std::string& msg, const output_type& otype);
-
-param_encrypt* make_param_encrypt();
-param_decrypt* make_param_decrypt();
+void print(const std::vector<std::string>& msgs, const output_type& otype);
 
 #endif

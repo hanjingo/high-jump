@@ -37,5 +37,4 @@ private:
 
 #define INIT(cmd) namespace { ::libcpp::init _init_cat(__simulate_go_init__, __COUNTER__)([](){ cmd; }); }
 
-
 #endif

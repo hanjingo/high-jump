@@ -2,7 +2,45 @@
 
 #include <libcpp/crypto/rsa.hpp>
 
-int rsa_key_maker::make(
+std::vector<std::string> keymaker_mgr::supported_algos() 
+{ 
+    std::vector<std::string> algos;
+    for (const auto& enc : _keymakers)
+        algos.push_back(enc->type());
+
+    return algos;
+}
+
+int keymaker_mgr::add(std::unique_ptr<keymaker>&& km)
+{
+    for (const auto& e : _keymakers)
+        if (e->type() == km->type())
+            return CRYPTO_ERR_FAIL;
+
+    _keymakers.emplace_back(std::move(km));
+    return CRYPTO_OK;
+}
+
+int keymaker_mgr::make(
+    std::vector<std::string>& outs,
+    const std::string& algo,
+    const std::string& fmt,
+    const std::string& mode,
+    const int bits)
+{
+    for (const auto& e : _keymakers)
+    {
+        if (e->type() != algo)
+            continue;
+
+        return e->make(outs, fmt, mode, bits);
+    }
+
+    return CRYPTO_ERR_INVALID_ALGO;
+}
+
+// ----------------------------- RSA ------------------------------
+int rsa_keymaker::make(
     std::vector<std::string>& keys,
     const std::string& fmt,
     const std::string& mode,
@@ -12,14 +50,14 @@ int rsa_key_maker::make(
     auto key_mode = _to_mode(mode);
     std::string pubkey, prikey;
     if (!libcpp::rsa::make_key_pair(pubkey, prikey, bits, key_fmt, key_mode))
-        return ERR_KEYGEN_FAIL;
+        return CRYPTO_ERR_KEYGEN_FAIL;
 
     keys.push_back(pubkey);
     keys.push_back(prikey);
-    return OK;
+    return CRYPTO_OK;
 }
 
-libcpp::rsa::key_format rsa_key_maker::_to_key_format(const std::string& fmt)
+libcpp::rsa::key_format rsa_keymaker::_to_key_format(const std::string& fmt)
 {
     if (fmt == "x509")
         return libcpp::rsa::key_format::x509;
@@ -29,7 +67,7 @@ libcpp::rsa::key_format rsa_key_maker::_to_key_format(const std::string& fmt)
         return libcpp::rsa::key_format::x509; // default
 }
 
-libcpp::rsa::mode rsa_key_maker::_to_mode(const std::string& mode)
+libcpp::rsa::mode rsa_keymaker::_to_mode(const std::string& mode)
 {
     if (mode == "none")
         return libcpp::rsa::mode::none;

@@ -1,5 +1,5 @@
-#ifndef API_H
-#define API_H
+#ifndef SDK_API_H
+#define SDK_API_H
 
 #include <libcpp/os/dll.h>
 

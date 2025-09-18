@@ -77,6 +77,12 @@ public:
 	}
 
 private:
+    sqlite(const sqlite&) = delete;
+    sqlite& operator=(const sqlite&) = delete;
+    sqlite(sqlite&&) = delete;
+    sqlite& operator=(sqlite&&) = delete;
+
+private:
 	sqlite3* _db;
 };
 

@@ -2,6 +2,7 @@
   "dependencies": [
     "benchmark",
     "boost-filesystem",
+    "boost-pool",
     "breakpad",
     "fmt",
     "gtest",
@@ -15,6 +16,10 @@
     },
     {
       "name": "boost-filesystem",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-pool",
       "version": "1.76.0"
     },
     {

@@ -17,10 +17,10 @@ int encryptor_mgr::add(std::unique_ptr<encryptor>&& enc)
 {
     for (const auto& e : _encryptors)
         if (e->type() == enc->type())
-            return FAIL;
+            return CRYPTO_ERR_FAIL;
 
     _encryptors.emplace_back(std::move(enc));
-    return OK;
+    return CRYPTO_OK;
 }
 
 int encryptor_mgr::encrypt(
@@ -42,7 +42,7 @@ int encryptor_mgr::encrypt(
         return e->encrypt(out, in, content, mode, key, padding, iv, fmt);
     }
 
-    return ERR_INVALID_ALGO;
+    return CRYPTO_ERR_INVALID_ALGO;
 }
 
 // ------------------------------------ AES -------------------------------------
@@ -57,38 +57,40 @@ int aes_encryptor::encrypt(
     const std::string& fmt)
 {
     if (!_is_mode_valid(mode))
-        return ERR_INVALID_MODE;
+        return CRYPTO_ERR_INVALID_MODE;
 
     if (!_is_key_valid(key, mode))
-        return ERR_INVALID_KEY;
+        return CRYPTO_ERR_INVALID_KEY;
 
     if (!_is_padding_valid(padding))
-        return ERR_INVALID_PADDING;
+        return CRYPTO_ERR_INVALID_PADDING;
 
     if (!_is_iv_valid(iv, mode))
-        return ERR_INVALID_IV;
+        return CRYPTO_ERR_INVALID_IV;
 
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
     if (!_is_input_valid(out, in, content, mode, key, padding))
-        return ERR_INVALID_INPUT;
+        return CRYPTO_ERR_INVALID_INPUT;
 
     // do encrypt
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     auto mod = str_to_aes_mode(mode);
     auto pad = str_to_aes_padding(padding);
     if (out == "" && in == "") // encrypt: mem -> mem
     {
         std::string tmp;
-        err = libcpp::aes::encrypt(tmp, content, key, mod, pad, iv) ? OK : ERR_ENCRYPT_AES_FAILED;
-        if (err == OK)
+        err = libcpp::aes::encrypt(tmp, content, key, mod, pad, iv) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
+        if (err == CRYPTO_OK)
             err = formator::format(out, tmp, fmt, fmt_target::memory);
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
-        err = libcpp::aes::encrypt_file(out, in, key, mod, pad, iv) ? OK : ERR_ENCRYPT_AES_FAILED;
-        if (err == OK)
+        err = libcpp::aes::encrypt_file(out, in, key, mod, pad, iv) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
+        if (err == CRYPTO_OK)
             err = formator::format(out, out, fmt, fmt_target::file);
     }
     else if (out != "" && in == "") // encrypt: mem -> file
@@ -103,8 +105,8 @@ int aes_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? OK : ERR_ENCRYPT_AES_FAILED;
-        if (err == OK)
+            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
+        if (err == CRYPTO_OK)
             err = formator::format(out, out, fmt, fmt_target::file);
     }
     else // encrypt: file -> mem
@@ -119,9 +121,9 @@ int aes_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? OK : ERR_ENCRYPT_AES_FAILED;
+            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
 
-        if (err == OK)
+        if (err == CRYPTO_OK)
             err = formator::format(out, sout.str(), fmt, fmt_target::memory);
     }
 
@@ -200,28 +202,32 @@ int base64_encryptor::encrypt(
     const std::string& fmt)
 {
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        err = libcpp::base64::encode(out, content) ? OK : ERR_ENCRYPT_BASE64_FAILED;
+        err = libcpp::base64::encode(out, content) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
-        err = libcpp::base64::encode_file(out, in) ? OK : ERR_ENCRYPT_BASE64_FAILED;
+        err = libcpp::base64::encode_file(out, in) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
-        err = libcpp::base64::encode(fout, sin) ? OK : ERR_ENCRYPT_BASE64_FAILED;
+        err = libcpp::base64::encode(fout, sin) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
     }
     else // encrypt: file -> mem
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = libcpp::base64::encode(sout, fin) ? OK : ERR_ENCRYPT_BASE64_FAILED;
+        err = libcpp::base64::encode(sout, fin) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
         out = sout.str();
     }
 
@@ -245,33 +251,35 @@ int des_encryptor::encrypt(
     const std::string& fmt)
 {
     if (!_is_mode_valid(mode))
-        return ERR_INVALID_MODE;
+        return CRYPTO_ERR_INVALID_MODE;
 
     if (!_is_key_valid(key, mode))
-        return ERR_INVALID_KEY;
+        return CRYPTO_ERR_INVALID_KEY;
 
     if (!_is_padding_valid(padding))
-        return ERR_INVALID_PADDING;
+        return CRYPTO_ERR_INVALID_PADDING;
 
     if (!_is_iv_valid(iv, mode))
-        return ERR_INVALID_IV;
+        return CRYPTO_ERR_INVALID_IV;
 
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
     if (_is_input_valid(out, in, content, padding))
-        return ERR_INVALID_INPUT;
+        return CRYPTO_ERR_INVALID_INPUT;
 
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     auto mod = str_to_des_mode(mode);
     auto pad = str_to_des_padding(padding);
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        err = libcpp::des::encrypt(out, content, key, mod, pad, iv) ? OK : ERR_ENCRYPT_DES_FAILED;
+        err = libcpp::des::encrypt(out, content, key, mod, pad, iv) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
-        err = libcpp::des::encrypt_file(out, in, key, mod, pad, iv) ? OK : ERR_ENCRYPT_DES_FAILED;
+        err = libcpp::des::encrypt_file(out, in, key, mod, pad, iv) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
@@ -285,7 +293,7 @@ int des_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? OK : ERR_ENCRYPT_DES_FAILED;
+            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
     }
     else // encrypt: file -> mem
     {
@@ -299,7 +307,7 @@ int des_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? OK : ERR_ENCRYPT_DES_FAILED;
+            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
         out = sout.str();
     }
 
@@ -371,28 +379,28 @@ int md5_encryptor::encrypt(
     const std::string& fmt)
 {
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        err = libcpp::md5::encode(out, content) ? OK : ERR_ENCRYPT_MD5_FAILED;
+        err = libcpp::md5::encode(out, content) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
-        err = libcpp::md5::encode_file(out, in) ? OK : ERR_ENCRYPT_MD5_FAILED;
+        err = libcpp::md5::encode_file(out, in) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
-        err = libcpp::md5::encode(fout, sin) ? OK : ERR_ENCRYPT_MD5_FAILED;
+        err = libcpp::md5::encode(fout, sin) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
     }
     else // encrypt: file -> mem
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = libcpp::md5::encode(sout, fin) ? OK : ERR_ENCRYPT_MD5_FAILED;
+        err = libcpp::md5::encode(sout, fin) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
         out = sout.str();
     }
 
@@ -416,32 +424,32 @@ int sha256_encryptor::encrypt(
     const std::string& fmt)
 {
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
         err = libcpp::sha::encode(out, content, libcpp::sha::algorithm::sha256) ? 
-            OK : ERR_ENCRYPT_SHA256_FAILED;
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
         err = libcpp::sha::encode_file(out, in, libcpp::sha::algorithm::sha256) ? 
-            OK : ERR_ENCRYPT_SHA256_FAILED;
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
         err = libcpp::sha::encode(fout, sin, libcpp::sha::algorithm::sha256) ? 
-            OK : ERR_ENCRYPT_SHA256_FAILED;
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
     }
     else // encrypt: file -> mem
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
         err = libcpp::sha::encode(sout, fin, libcpp::sha::algorithm::sha256) ? 
-            OK : ERR_ENCRYPT_SHA256_FAILED;
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
         out = sout.str();
     }
 
@@ -465,26 +473,28 @@ int rsa_encryptor::encrypt(
     const std::string& fmt)
 {
     if (!_is_key_valid(key))
-        return ERR_INVALID_KEY;
+        return CRYPTO_ERR_INVALID_KEY;
 
     if (!_is_padding_valid(padding))
-        return ERR_INVALID_PADDING;
+        return CRYPTO_ERR_INVALID_PADDING;
 
     if (!_is_fmt_valid(fmt))
-        return ERR_INVALID_FMT;
+        return CRYPTO_ERR_INVALID_FMT;
 
     if (!_is_input_valid(out, in, content, key, padding))
-        return ERR_INVALID_INPUT;
+        return CRYPTO_ERR_INVALID_INPUT;
 
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     auto pad = str_to_rsa_padding(padding);
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        err = libcpp::rsa::encrypt(out, content, key, pad) ? OK : ERR_ENCRYPT_RSA_FAILED;
+        err = libcpp::rsa::encrypt(out, content, key, pad) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
-        err = libcpp::rsa::encrypt_file(out, in, key, pad) ? OK : ERR_ENCRYPT_RSA_FAILED;
+        err = libcpp::rsa::encrypt_file(out, in, key, pad) ? 
+            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
@@ -495,7 +505,7 @@ int rsa_encryptor::encrypt(
             sin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
             key.size(), 
-            pad) ? OK : ERR_ENCRYPT_RSA_FAILED;
+            pad) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
     }
     else // encrypt: file -> mem
     {
@@ -506,7 +516,7 @@ int rsa_encryptor::encrypt(
             fin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
             key.size(), 
-            pad) ? OK : ERR_ENCRYPT_RSA_FAILED;
+            pad) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
         out = sout.str();
     }
 

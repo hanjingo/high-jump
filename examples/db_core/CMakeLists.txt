@@ -116,6 +116,7 @@ if (BUILD_BENCHMARK)
 endif()
 
 # add vcpkg library
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -132,14 +133,14 @@ if (BUILD_SHARED)
         target_link_libraries(${SDK_SHARED_NAME} 
             ${CMAKE_DL_LIBS}
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     elseif(APPLE)
         target_link_libraries(${SDK_SHARED_NAME} 
             ${CMAKE_DL_LIBS}
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     else() # Linux
         target_link_libraries(${SDK_SHARED_NAME} 
@@ -147,7 +148,7 @@ if (BUILD_SHARED)
             rt
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     endif()
 
@@ -162,16 +163,15 @@ if (BUILD_SHARED)
     if (WIN32)
         win_deploy(${SDK_SHARED_NAME}
             ${CMAKE_DL_LIBS}
-            bcrypt
-
-            # add your library here ...
+            
+            unofficial::sqlite3::sqlite3
         )
     elseif(APPLE)
         mac_deploy(${SDK_SHARED_NAME}
             ${CMAKE_DL_LIBS}
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     else()
         linux_deploy(${SDK_SHARED_NAME}
@@ -179,7 +179,7 @@ if (BUILD_SHARED)
             rt
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     endif()
 endif()
@@ -192,15 +192,15 @@ if (BUILD_STATIC)
     if (WIN32)
         target_link_libraries(${SDK_STATIC_NAME} 
             ${CMAKE_DL_LIBS}
-
-            # add your library here ...
+            
+            unofficial::sqlite3::sqlite3
         )
     elseif(APPLE)
         target_link_libraries(${SDK_STATIC_NAME} 
             ${CMAKE_DL_LIBS}
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     else() # Linux
         target_link_libraries(${SDK_STATIC_NAME} 
@@ -208,7 +208,7 @@ if (BUILD_STATIC)
             rt
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     endif()
 
@@ -223,15 +223,15 @@ if (BUILD_STATIC)
     if (WIN32)
         win_deploy(${SDK_STATIC_NAME}
             ${CMAKE_DL_LIBS}
-
-            # add your library here ...
+            
+            unofficial::sqlite3::sqlite3
         )
     elseif(APPLE)
         mac_deploy(${SDK_STATIC_NAME}
             ${CMAKE_DL_LIBS}
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     else()
         linux_deploy(${SDK_STATIC_NAME}
@@ -239,7 +239,7 @@ if (BUILD_STATIC)
             rt
             pthread
 
-            # add your library here ...
+            unofficial::sqlite3::sqlite3
         )
     endif()
 endif()

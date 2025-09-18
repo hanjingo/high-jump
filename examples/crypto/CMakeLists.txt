@@ -94,9 +94,12 @@ add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
 add_definitions(-DPATCH_VERSION=${PACKAGE_VERSION_PATCH})
-add_definitions(-DCORE_MAJOR_VERSION_MIN=${CORE_VERSION_MAJOR_MIN})
-add_definitions(-DCORE_MINOR_VERSION_MIN=${CORE_VERSION_MINOR_MIN})
-add_definitions(-DCORE_PATCH_VERSION_MIN=${CORE_VERSION_PATCH_MIN})
+add_definitions(-DCRYPTO_CORE_VERSION_MAJOR_MIN=${CRYPTO_CORE_VERSION_MAJOR_MIN})
+add_definitions(-DCRYPTO_CORE_VERSION_MINOR_MIN=${CRYPTO_CORE_VERSION_MINOR_MIN})
+add_definitions(-DCRYPTO_CORE_VERSION_PATCH_MIN=${CRYPTO_CORE_VERSION_PATCH_MIN})
+add_definitions(-DDB_CORE_VERSION_MAJOR_MIN=${DB_CORE_VERSION_MAJOR_MIN})
+add_definitions(-DDB_CORE_VERSION_MINOR_MIN=${DB_CORE_VERSION_MINOR_MIN})
+add_definitions(-DDB_CORE_VERSION_PATCH_MIN=${DB_CORE_VERSION_PATCH_MIN})
 add_definitions(-DEMAIL="${PACKAGE_CONTACT}")
 
 # windows specific settings
@@ -166,20 +169,31 @@ add_dependencies(${PROJECT_NAME} copy_properties)
 
 # copy library files
 if (WIN32)
-    file(GLOB LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../crypto_core/bin/${CMAKE_BUILD_TYPE}/*.dll")
+    file(GLOB CRYPTO_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../crypto_core/bin/${CMAKE_BUILD_TYPE}/*.dll")
+    file(GLOB DB_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../db_core/bin/${CMAKE_BUILD_TYPE}/*.dll")
 else()
-    file(GLOB LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../crypto_core/bin/*.so")
+    file(GLOB CRYPTO_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../crypto_core/bin/*.so")
+    file(GLOB DB_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../db_core/bin/*.so")
 endif()
-add_custom_target(copy_librarys ALL
+add_custom_target(copy_crypto_librarys ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${LIBRARY_FILES}
+        ${CRYPTO_LIBRARY_FILES}
         $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    DEPENDS ${LIBRARY_FILES}
-    COMMENT "Copying library files to output dir"
+    DEPENDS ${CRYPTO_LIBRARY_FILES}
+    COMMENT "Copying crypto library files to output dir"
+)
+add_custom_target(copy_db_librarys ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${DB_LIBRARY_FILES}
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    DEPENDS ${DB_LIBRARY_FILES}
+    COMMENT "Copying db library files to output dir"
 )
 
-add_dependencies(${PROJECT_NAME} copy_librarys)
+add_dependencies(${PROJECT_NAME} copy_crypto_librarys)
+add_dependencies(${PROJECT_NAME} copy_db_librarys)
 
 # Deploy dependencies
 # for windows + vs2019:

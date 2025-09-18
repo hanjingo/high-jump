@@ -20,7 +20,7 @@ int formator::format(
         case fmt_target::file:
             return _format_file(out, in, fmt);
         default:
-            return ERR_FORMAT_INVALID_TARGET;
+            return CRYPTO_ERR_FORMAT_INVALID_TARGET;
     }
 }
 
@@ -37,7 +37,7 @@ int formator::unformat(
         case fmt_target::file:
             return _unformat_file(out, in, fmt);
         default:
-            return ERR_FORMAT_INVALID_TARGET;
+            return CRYPTO_ERR_FORMAT_INVALID_TARGET;
     }
 }
 
@@ -46,27 +46,27 @@ int formator::_format_memory(
     const std::string& in,
     const std::string& fmt)
 {
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     std::string tmp = in;
     if (fmt == "hex")
     {
         tmp = libcpp::hex::encode(in, true); // upper case
-        err = (!tmp.empty()) ? OK : ERR_FORMAT_HEX_FAILED;
+        err = (!tmp.empty()) ? CRYPTO_OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
     }
     else if (fmt == "base64")
     {
-        err = libcpp::base64::encode(tmp, in) ? OK : ERR_FORMAT_BASE64_FAILED;
+        err = libcpp::base64::encode(tmp, in) ? CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
     }
     else if (fmt == "none" || fmt == "")
     {
-        err = OK;
+        err = CRYPTO_OK;
     }
     else
     {
-        err = ERR_FORMAT_STYLE_NOT_FOUND;
+        err = CRYPTO_ERR_FORMAT_STYLE_NOT_FOUND;
     }
 
-    if (err == OK)
+    if (err == CRYPTO_OK)
         out = tmp;
 
     return err;
@@ -77,30 +77,31 @@ int formator::_unformat_memory(
     const std::string& in,
     const std::string& fmt)
 {
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     std::string tmp = in;
     if (fmt == "hex")
     {
         tmp = libcpp::hex::decode(in); // upper case
-        err = (!tmp.empty()) ? OK : ERR_UNFORMAT_HEX_FAILED;
+        err = (!tmp.empty()) ? CRYPTO_OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
     }
     else if (fmt == "base64")
     {
-        err = libcpp::base64::decode(out, in) ? OK : ERR_UNFORMAT_BASE64_FAILED;
+        err = libcpp::base64::decode(out, in) ? 
+            CRYPTO_OK : CRYPTO_ERR_UNFORMAT_BASE64_FAILED;
     }
     else if (fmt == "none" || fmt == "")
     {
-        err = OK;
+        err = CRYPTO_OK;
     }
     else
     {
-        err = ERR_UNFORMAT_STYLE_NOT_FOUND;
+        err = CRYPTO_ERR_UNFORMAT_STYLE_NOT_FOUND;
     }
 
-    if (err == OK)
+    if (err == CRYPTO_OK)
         out = tmp;
-        
-    return OK;
+
+    return CRYPTO_OK;
 }
 
 int formator::_format_file(
@@ -108,7 +109,7 @@ int formator::_format_file(
     const std::string& in,
     const std::string& fmt)
 {
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     std::string tmp = "";
     if (out == in)
     {
@@ -125,13 +126,15 @@ int formator::_format_file(
         // not same file
         if (tmp == "")
         {
-            err = libcpp::hex::encode_file(out, in) ? OK : ERR_FORMAT_HEX_FAILED;
+            err = libcpp::hex::encode_file(out, in) ? 
+                CRYPTO_OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
         }
         else
         {
             // same file
             libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::hex::encode_file(out, tmp) ? OK : ERR_FORMAT_HEX_FAILED;
+            err = libcpp::hex::encode_file(out, tmp) ? 
+                CRYPTO_OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
             libcpp::filepath::remove(tmp);
         }
     }
@@ -140,23 +143,25 @@ int formator::_format_file(
         if (tmp == "")
         {
             // not same file
-            err = libcpp::base64::encode_file(out, in) ? OK : ERR_FORMAT_BASE64_FAILED;
+            err = libcpp::base64::encode_file(out, in) ? 
+                CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
         }
         else
         {
             // same file
             libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::base64::encode_file(out, tmp) ? OK : ERR_FORMAT_BASE64_FAILED;
+            err = libcpp::base64::encode_file(out, tmp) ? 
+                CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
             libcpp::filepath::remove(tmp);
         }
     }
     else if (fmt == "none" || fmt == "")
     {
-        err = OK;
+        err = CRYPTO_OK;
     }
     else
     {
-        err = ERR_FORMAT_STYLE_NOT_FOUND;
+        err = CRYPTO_ERR_FORMAT_STYLE_NOT_FOUND;
     }
 
     return err;
@@ -167,7 +172,7 @@ int formator::_unformat_file(
     const std::string& in,
     const std::string& fmt)
 {
-    int err = FAIL;
+    int err = CRYPTO_ERR_FAIL;
     std::string tmp = "";
     if (out == in)
     {
@@ -184,13 +189,15 @@ int formator::_unformat_file(
         if (tmp == "")
         {
             // not same file
-            err = libcpp::hex::decode_file(out, in) ? OK : ERR_UNFORMAT_HEX_FAILED;
+            err = libcpp::hex::decode_file(out, in) ? 
+                CRYPTO_OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
         }
         else
         {
             // same file
             libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::hex::decode_file(out, tmp) ? OK : ERR_UNFORMAT_HEX_FAILED;
+            err = libcpp::hex::decode_file(out, tmp) ? 
+                CRYPTO_OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
             libcpp::filepath::remove(tmp);
         }
     }
@@ -199,23 +206,25 @@ int formator::_unformat_file(
         if (tmp == "")
         {
             // not same file
-            err = libcpp::base64::decode_file(out, in) ? OK : ERR_FORMAT_BASE64_FAILED;
+            err = libcpp::base64::decode_file(out, in) ? 
+                CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
         }
         else
         {
             // same file
             libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::base64::decode_file(out, tmp) ? OK : ERR_FORMAT_BASE64_FAILED;
+            err = libcpp::base64::decode_file(out, tmp) ? 
+                CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
             libcpp::filepath::remove(tmp);
         }
     }
     else if (fmt == "none" || fmt == "")
     {
-        err = OK;
+        err = CRYPTO_OK;
     }
     else
     {
-        err = ERR_FORMAT_STYLE_NOT_FOUND;
+        err = CRYPTO_ERR_FORMAT_STYLE_NOT_FOUND;
     }
 
     return err;

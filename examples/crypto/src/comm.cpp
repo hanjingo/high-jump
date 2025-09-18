@@ -50,37 +50,15 @@ void print(const std::string& msg, const output_type& otype)
     }
 }
 
-param_encrypt* make_param_encrypt()
+void print(const std::vector<std::string>& msgs, const output_type& otype)
 {
-    auto param = new param_encrypt;
-    param->result = FAIL;
-    param->out = nullptr;
-    param->out_len = nullptr;
-    param->in = nullptr;
-    param->content = nullptr;
-    param->algo = nullptr;
-    param->mode = nullptr;
-    param->key = nullptr;
-    param->padding = nullptr;
-    param->iv = nullptr;
-    param->fmt = nullptr;
-    return param;
-}
-
-param_decrypt* make_param_decrypt()
-{
-    auto param = new param_decrypt;
-    param->result = FAIL;
-    param->out = nullptr;
-    param->out_len = nullptr;
-    param->in = nullptr;
-    param->content = nullptr;
-    param->algo = nullptr;
-    param->mode = nullptr;
-    param->key = nullptr;
-    param->passwd = nullptr;
-    param->padding = nullptr;
-    param->iv = nullptr;
-    param->fmt = nullptr;
-    return param;
+    switch (otype)
+    {
+        case output_type::console:
+            for (const auto& msg : msgs)
+                std::cout << msg << std::endl;
+            break;
+        default:
+            break;
+    }
 }

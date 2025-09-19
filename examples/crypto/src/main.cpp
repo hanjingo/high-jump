@@ -212,20 +212,27 @@ int main(int argc, char* argv[])
     }
     else if (subcmd == "add")
     {
-        // crypto add --key <xx>
-        // crypto add -k <xx>
-        LOG_DEBUG("key:{}", key);
+        // crypto add <xx>
+        LOG_DEBUG("passwd:{}", passwd);
 
-        db_sdk.add(key);
+        db_sdk.add("dict", passwd);
     }
     else if (subcmd == "list")
     {
-        // crypto add --key <*> --num 100
-        // crypto add -k <*> -n 100
-        LOG_DEBUG("key:{}", key);
+        // crypto add --output <file> --num 100 xxx
+        // crypto add --o <file> -n 100 xxx
+        LOG_DEBUG("output:{}", output);
         LOG_DEBUG("num:{}", num);
+        LOG_DEBUG("content:{}", content);
 
-        db_sdk.select(key, num);
+        std::vector<std::vector<std::string>> outs;
+        std::vector<std::string> contents{content};
+        auto otype = select_output_type(output);
+        auto err = db_sdk.query(outs, "dict", "passwords", contents, num);
+        if (err)
+            handle_err(err, content, num);
+        else
+            print(outs, otype);
     }
     else if (subcmd == "attach") 
     {

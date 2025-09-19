@@ -52,13 +52,13 @@ void print(const std::string& msg, const output_type& otype)
 
 void print(const std::vector<std::string>& msgs, const output_type& otype)
 {
-    switch (otype)
-    {
-        case output_type::console:
-            for (const auto& msg : msgs)
-                std::cout << msg << std::endl;
-            break;
-        default:
-            break;
-    }
+    for (const auto& msg : msgs)
+        print(msg, otype);
+}
+
+void print(const std::vector<std::vector<std::string>>& msgs, const output_type& otype)
+{
+    for (const auto& row : msgs)
+        for (const auto& msg : row)
+            print(msg, otype);
 }

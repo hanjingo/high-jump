@@ -117,6 +117,10 @@ endif()
 
 # add vcpkg library
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
+find_package(Boost REQUIRED COMPONENTS
+    system
+    filesystem
+)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -124,123 +128,54 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 aux_source_directory(./src SRC)
 
 # build lib file
-if (BUILD_SHARED)
-    set(SDK_SHARED_NAME "${PROJECT_NAME}")
-    add_library(${SDK_SHARED_NAME} SHARED ${SRC})
-
-    # link library
-    if (WIN32)
-        target_link_libraries(${SDK_SHARED_NAME} 
-            ${CMAKE_DL_LIBS}
-
-            unofficial::sqlite3::sqlite3
-        )
-    elseif(APPLE)
-        target_link_libraries(${SDK_SHARED_NAME} 
-            ${CMAKE_DL_LIBS}
-            pthread
-
-            unofficial::sqlite3::sqlite3
-        )
-    else() # Linux
-        target_link_libraries(${SDK_SHARED_NAME} 
-            ${CMAKE_DL_LIBS}
-            rt
-            pthread
-
-            unofficial::sqlite3::sqlite3
-        )
+foreach(TYPE SHARED STATIC)
+    if(TYPE STREQUAL "SHARED" AND BUILD_SHARED)
+        set(LIB_NAME "${PROJECT_NAME}")
+    elseif(TYPE STREQUAL "STATIC" AND BUILD_STATIC)
+        set(LIB_NAME "${PROJECT_NAME}_static")
+    else()
+        continue()
     endif()
 
-    # Deploy dependencies
-    # for windows + vs2019:
-    # cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019" -DBUILD_SHARED=ON
-    # for *nix:
-    # cmake .. -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" -DBUILD_SHARED=ON
-    #
-    # cmake --build .
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/deploy.cmake)
-    if (WIN32)
-        win_deploy(${SDK_SHARED_NAME}
-            ${CMAKE_DL_LIBS}
-            
-            unofficial::sqlite3::sqlite3
+    add_library(${LIB_NAME} ${TYPE} ${SRC})
+
+    set(LINK_LIBS 
+        ${CMAKE_DL_LIBS}
+
+        # boost
+        ${Boost_LIBRARIES}
+
+        # sqlite3
+        unofficial::sqlite3::sqlite3
+    )
+    if(WIN32)
+        list(APPEND LINK_LIBS 
+            bcrypt
         )
     elseif(APPLE)
-        mac_deploy(${SDK_SHARED_NAME}
-            ${CMAKE_DL_LIBS}
+        list(APPEND LINK_LIBS 
             pthread
-
-            unofficial::sqlite3::sqlite3
         )
     else()
-        linux_deploy(${SDK_SHARED_NAME}
-            ${CMAKE_DL_LIBS}
-            rt
+        list(APPEND LINK_LIBS 
+            rt 
             pthread
-
-            unofficial::sqlite3::sqlite3
         )
     endif()
-endif()
+    target_link_libraries(${LIB_NAME} ${LINK_LIBS})
 
-if (BUILD_STATIC)
-    set(SDK_STATIC_NAME "${PROJECT_NAME}_static")
-    add_library(${SDK_STATIC_NAME} STATIC ${SRC})
-
-    # for os-specific libraries
-    if (WIN32)
-        target_link_libraries(${SDK_STATIC_NAME} 
-            ${CMAKE_DL_LIBS}
-            
-            unofficial::sqlite3::sqlite3
-        )
-    elseif(APPLE)
-        target_link_libraries(${SDK_STATIC_NAME} 
-            ${CMAKE_DL_LIBS}
-            pthread
-
-            unofficial::sqlite3::sqlite3
-        )
-    else() # Linux
-        target_link_libraries(${SDK_STATIC_NAME} 
-            ${CMAKE_DL_LIBS}
-            rt
-            pthread
-
-            unofficial::sqlite3::sqlite3
-        )
-    endif()
-
-    # Deploy dependencies
-    # for windows + vs2019:
-    # cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019" -DBUILD_STATIC=ON
-    # for *nix:
-    # cmake .. -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" -DBUILD_STATIC=ON
-    #
-    # cmake --build .
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/deploy.cmake)
-    if (WIN32)
-        win_deploy(${SDK_STATIC_NAME}
-            ${CMAKE_DL_LIBS}
-            
-            unofficial::sqlite3::sqlite3
+    if(WIN32)
+        win_deploy(${LIB_NAME} 
+            ${LINK_LIBS}
         )
     elseif(APPLE)
-        mac_deploy(${SDK_STATIC_NAME}
-            ${CMAKE_DL_LIBS}
-            pthread
-
-            unofficial::sqlite3::sqlite3
+        mac_deploy(${LIB_NAME} 
+            ${LINK_LIBS}
         )
     else()
-        linux_deploy(${SDK_STATIC_NAME}
-            ${CMAKE_DL_LIBS}
-            rt
-            pthread
-
-            unofficial::sqlite3::sqlite3
+        linux_deploy(${LIB_NAME} 
+            ${LINK_LIBS}
         )
     endif()
-endif()
-
+endforeach()

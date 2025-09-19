@@ -1,6 +1,9 @@
 {
   "dependencies": [
     "benchmark",
+    "boost-filesystem",
+    "boost-pool",
+    "boost-property-tree",
     "gtest",
     "sqlite3"
   ],
@@ -8,6 +11,18 @@
     {
       "name": "benchmark",
       "version": "1.9.4"
+    },
+    {
+      "name": "boost-filesystem",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-pool",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-property-tree",
+      "version": "1.76.0"
     },
     {
       "name": "gtest",

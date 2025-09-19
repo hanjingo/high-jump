@@ -72,3 +72,17 @@ TEST(SqliteTest, QueryEmpty) {
     db.close();
     remove("QueryEmptyTest.db");
 }
+
+TEST(SqliteTest, GetLastError) {
+    if (!_is_sqlite_valid())
+        GTEST_SKIP() << "sqlite not available";
+
+    sqlite db;
+    ASSERT_TRUE(db.open("GetLastErrorTest.db"));
+    EXPECT_FALSE(db.exec("SELECT * FROM not_exist_table;"));
+    std::string err = db.get_last_error();
+    EXPECT_FALSE(err.empty());
+    EXPECT_NE(err.find("no such table"), std::string::npos);
+    db.close();
+    remove("GetLastErrorTest.db");
+}

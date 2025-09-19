@@ -3,10 +3,12 @@
 
 #include <libcpp/util/defer.hpp>
 
-// crypto core
+// ------------------------------ crypto core ------------------------------
 crypto_core::crypto_core()
 {
-    load();
+    auto err = load();
+    if (err)
+        throw std::runtime_error("crypto_core load fail with err: " + err.message());
 }
 
 crypto_core::~crypto_core()
@@ -146,7 +148,7 @@ err_t crypto_core::encrypt(
     DEFER(release(CRYPTO_PARAM_ENCRYPT, param); param = nullptr;);
     if (!out.empty())
     {
-        strncpy_s(param->out, out.size(), out.c_str(), CRYPTO_OUTPUT_BUF);
+        strncpy_s(param->out, CRYPTO_MAX_OUTPUT_SIZE, out.c_str(), out.size());
         *param->out_len = out.size();
     }
     param->in = in.c_str();
@@ -190,7 +192,7 @@ err_t crypto_core::decrypt(
     DEFER(release(CRYPTO_PARAM_DECRYPT, param); param = nullptr;);
     if (!out.empty())
     {
-        strncpy_s(param->out, out.size(), out.c_str(), CRYPTO_OUTPUT_BUF);
+        strncpy_s(param->out, CRYPTO_MAX_OUTPUT_SIZE, out.c_str(), out.size());
         *param->out_len = out.size();
     }
     param->in = in.c_str();
@@ -254,10 +256,12 @@ err_t crypto_core::keygen(
     return err_t();
 }
 
-// db core
+// ------------------------------ db core ------------------------------
 db_core::db_core()
 {
-    load();
+    auto err = load();
+    if (err)
+        throw std::runtime_error("db_core load fail with err: " + err.message());
 }
 
 db_core::~db_core()
@@ -275,9 +279,13 @@ err_t db_core::load()
     if (_dll == nullptr)
         return error(DB_ERR_CORE_LOAD_FAIL);
 
+    _require = static_cast<db_api>(dll_get(_dll, "db_require"));
+    _release = static_cast<db_api>(dll_get(_dll, "db_release"));
     _version = static_cast<db_api>(dll_get(_dll, "db_version"));
     _init = static_cast<db_api>(dll_get(_dll, "db_init"));
     _quit = static_cast<db_api>(dll_get(_dll, "db_quit"));
+    _exec = static_cast<db_api>(dll_get(_dll, "db_exec"));
+    _query = static_cast<db_api>(dll_get(_dll, "db_query"));
     return err_t();
 }
 
@@ -287,9 +295,13 @@ err_t db_core::unload()
     if (err)
         return err;
 
+    _require = nullptr;
+    _release = nullptr;
     _version = nullptr;
     _init = nullptr;
     _quit = nullptr;
+    _exec = nullptr;
+    _query = nullptr;
     if (_dll)
     {
         dll_close(_dll);
@@ -335,8 +347,19 @@ err_t db_core::init()
     auto param = new db_param_init{};
     DEFER(delete param; param = nullptr;);
 
-    param->sqlite_conn_capa = 10;
-    param->sqlite_db_path = "dict.db";
+    param->result = DB_ERR_FAIL;
+
+    std::string opt_str = R"(
+[data_pool1]
+type=data_pool
+data_pool_size=1
+
+[dict1]
+type=sqlite
+db_id=dict
+db_path=dict.db
+db_conn_capa=1)";// ini style
+    param->option = opt_str.c_str(); 
 
     db_context ctx;
     ctx.user_data = param;
@@ -354,24 +377,133 @@ err_t db_core::quit()
     if (_quit == nullptr)
         return error(DB_ERR_CORE_NOT_LOAD);
 
+    auto param = new db_param_quit{};
+    DEFER(delete param; param = nullptr;);
+
+    db_context ctx;
+    ctx.user_data = param;
+    ctx.cb = nullptr;
+    ctx.sz = sizeof(db_context);
+    _quit(ctx);
+    if (param->result != DB_OK)
+        return error(param->result);
+
     return err_t();
 }
 
-err_t db_core::add(
+err_t db_core::exec(
+    const std::string& db_id,
+    const std::string& sql)
+{
+    if (_exec == nullptr)
+        return error(DB_ERR_CORE_NOT_LOAD);
+
+    auto value = require(DB_PARAM_EXEC);
+    if (value == nullptr)
+        return error(DB_ERR_REQUIRE_FAIL);
+
+    auto param = static_cast<db_param_exec*>(value);
+    DEFER(release(DB_PARAM_EXEC, param); param = nullptr;);
+    param->db_id = db_id.c_str();
+    param->sql = sql.c_str();
+
+    db_context ctx;
+    ctx.user_data = param;
+    ctx.cb = nullptr;
+    ctx.sz = sizeof(db_context);
+    _exec(ctx);
+    if (param->result != DB_OK)
+        return error(param->result);
+
+    return err_t();
+}
+
+err_t  db_core::add(
+    const std::string& db_id,
     const std::string& key)
 {
-    if (_exec == nullptr)
-        return error(DB_ERR_CORE_NOT_LOAD);
+    std::vector<std::string> outs;
+    if (db_id == "dict")
+    {
+        std::string sql = "INSERT INTO passwords (password) VALUES ('" + key + "')";
+        auto err = exec(db_id, sql);
+        if (err)
+            return err;
+    }
 
     return err_t();
 }
 
-err_t db_core::select(
-    const std::string& key,
-    const int num)
+err_t db_core::query(
+    std::vector<std::vector<std::string>>& outs,
+    const std::string& db_id,
+    const std::string& sql)
 {
-    if (_exec == nullptr)
+    if (_query == nullptr)
         return error(DB_ERR_CORE_NOT_LOAD);
 
+    auto value = require(DB_PARAM_QUERY);
+    if (value == nullptr)
+        return error(DB_ERR_REQUIRE_FAIL);
+
+    LOG_DEBUG("query with sql:{}", sql);
+    auto param = static_cast<db_param_query*>(value);
+    DEFER(release(DB_PARAM_QUERY, param); param = nullptr;);
+    param->db_id = db_id.c_str();
+    param->sql = sql.c_str();
+
+    db_context ctx;
+    ctx.user_data = param;
+    ctx.cb = nullptr;
+    ctx.sz = sizeof(db_context);
+    _query(ctx);
+    if (param->result != DB_OK)
+        return error(param->result);
+
+    for (size_t i = 0; i < DB_MAX_QUERY_OUTPUT_NUM_LVL1; i++)
+    {
+        std::vector<std::string> row;
+        for (size_t j = 0; j < DB_MAX_QUERY_OUTPUT_NUM_LVL2; j++)
+        {
+            if (param == nullptr || param->out == nullptr || param->out_len == nullptr)
+                continue;
+
+            if (param->out_len[i] == nullptr || *param->out_len[i] == 0)
+                continue;
+
+            if (param->out_len[i][j] == nullptr || *param->out_len[i][j] == 0)
+                continue;
+
+            std::string elem(param->out[i][j], *param->out_len[i][j]);
+            row.emplace_back(elem);
+        }
+
+        if (!row.empty())
+            outs.emplace_back(row);
+    }
     return err_t();
+}
+
+err_t db_core::query(
+    std::vector<std::vector<std::string>>& outs,
+    const std::string& db_id,
+    const std::string& tbl,
+    const std::vector<std::string>& contents,
+    const int count)
+{
+    std::string sql;
+    std::string limit_sql;
+    if (count > 0)
+        limit_sql = std::string(" LIMIT ") + std::to_string(count);
+
+    if (db_id == "dict")
+    {
+        // SELECT password FROM passwords LIMIT 100;
+        sql = std::string("SELECT " + fmt_strs(contents) + " FROM " + tbl + limit_sql + ";");
+        return query(outs, db_id, sql);
+    }
+    else
+    {
+        return error(DB_ERR_DB_NOT_EXIST);
+    }
 }

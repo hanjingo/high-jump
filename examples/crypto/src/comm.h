@@ -36,5 +36,6 @@ std::string fmt_strs(const std::vector<std::string>& vec);
 
 void print(const std::string& msg, const output_type& otype);
 void print(const std::vector<std::string>& msgs, const output_type& otype);
+void print(const std::vector<std::vector<std::string>>& msgs, const output_type& otype);
 
 #endif

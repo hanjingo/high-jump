@@ -146,7 +146,7 @@ C_STYLE_EXPORT void crypto_encrypt(crypto_context ctx)
         if (ret->out_len != NULL)
             *ret->out_len = out.size();
 
-        strncpy_s(ret->out, CRYPTO_OUTPUT_BUF, out.c_str(), out.size());
+        strncpy_s(ret->out, CRYPTO_MAX_OUTPUT_SIZE, out.c_str(), out.size());
     }
     if (ctx.cb != NULL)
         ctx.cb(static_cast<void*>(ret));
@@ -179,7 +179,7 @@ C_STYLE_EXPORT void crypto_decrypt(crypto_context ctx)
         if (ret->out_len != NULL)
             *ret->out_len = out.size();
 
-        strncpy_s(ret->out, CRYPTO_OUTPUT_BUF, out.c_str(), out.size());
+        strncpy_s(ret->out, CRYPTO_MAX_OUTPUT_SIZE, out.c_str(), out.size());
     }
     if (ctx.cb != NULL)
         ctx.cb(static_cast<void*>(ret));

@@ -1,5 +1,5 @@
-#ifndef DATA_H
-#define DATA_H
+#ifndef DATA_MGR_H
+#define DATA_MGR_H
 
 #include <libcpp/sync/object_pool.hpp>
 
@@ -16,8 +16,7 @@ public:
 
     inline std::vector<int>& supported_types()
     {
-        static std::vector<int> types{
-            CRYPTO_PARAM_KEYGEN, CRYPTO_PARAM_DECRYPT, CRYPTO_PARAM_ENCRYPT};
+        static std::vector<int> types{DB_PARAM_EXEC, };
         return types;
     }
 
@@ -27,14 +26,11 @@ public:
     void release(const int typ, void* value);
 
 private:
-    void _init(crypto_param_keygen* param);
-    void _reset(crypto_param_keygen* param);
+    void _init(db_param_exec* param);
+    void _reset(db_param_exec* param);
 
-    void _init(crypto_param_encrypt* param);
-    void _reset(crypto_param_encrypt* param);
-
-    void _init(crypto_param_decrypt* param);
-    void _reset(crypto_param_decrypt* param);
+    void _init(db_param_query* param);
+    void _reset(db_param_query* param);
 
 private:
     data_mgr() = default;
@@ -45,9 +41,8 @@ private:
     data_mgr& operator=(data_mgr&&) = delete;
 
 private:
-    libcpp::object_pool<crypto_param_keygen> _keygen_pool;
-    libcpp::object_pool<crypto_param_encrypt> _encrypt_pool;
-    libcpp::object_pool<crypto_param_decrypt> _decrypt_pool;
+    libcpp::object_pool<db_param_exec> _exec_pool;
+    libcpp::object_pool<db_param_query> _query_pool;
 };
 
 #endif

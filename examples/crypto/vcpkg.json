@@ -3,6 +3,7 @@
     "benchmark",
     "boost-filesystem",
     "boost-program-options",
+    "boost-property-tree",
     "breakpad",
     "fmt",
     "gtest",
@@ -29,6 +30,10 @@
     },
     {
       "name": "boost-program-options",
+      "version": "1.76.0"
+    },
+    {
+      "name": "boost-property-tree",
       "version": "1.76.0"
     },
     {

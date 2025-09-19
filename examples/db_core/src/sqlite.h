@@ -17,8 +17,9 @@ public:
     using conn_ptr_t = std::shared_ptr<conn_t>;
 
 public:
-    sqlite(const char* path, const std::size_t capa)
-        : _path{path}
+    sqlite(const char* id, const char* path, const std::size_t capa)
+        : _id{id}
+        , _path{path}
         , _pool{
             capa,
             [this]()->conn_ptr_t { return _make_conn(); },
@@ -29,13 +30,12 @@ public:
     {
     }
 
-    const std::string type() override { return "sqlite"; }
+    const std::string id() override { return _id; }
 
     int exec(const char* sql) override;
-
-private:
-    conn_ptr_t _make_conn();
-    bool _check_conn(conn_ptr_t conn);
+    int query(
+        std::vector<std::vector<std::string>>& outs, 
+        const char* sql) override;
 
 private:
     sqlite(const sqlite&) = delete;
@@ -43,7 +43,13 @@ private:
     sqlite(sqlite&&) = delete;
     sqlite& operator=(sqlite&&) = delete;
 
+    conn_ptr_t _make_conn();
+    bool _check_conn(conn_ptr_t conn);
+
+    static int _query_cb(void* in, int argc, char** argv, char** col_name);
+
 private:
+    std::string                  _id;
     std::string                  _path;
     libcpp::db_conn_pool<conn_t> _pool;
 };

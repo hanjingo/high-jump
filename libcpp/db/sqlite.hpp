@@ -21,10 +21,11 @@ public:
     }
 	~sqlite() 
     { 
-        close(); 
+        close();
     }
 
     inline bool is_open() const { return _db != nullptr; }
+    inline std::string get_last_error() { return _last_err; }
 
 	bool open(const std::string& filename) 
     {
@@ -52,8 +53,8 @@ public:
 		{
             if (errmsg) 
 			{
-                fprintf(stderr, "sqlite exec error: %s\n", errmsg);
-                sqlite3_free(errmsg);
+                 _last_err.assign(errmsg, strlen(errmsg));
+                 sqlite3_free(errmsg);
             }
             return false;
         }
@@ -83,7 +84,8 @@ private:
     sqlite& operator=(sqlite&&) = delete;
 
 private:
-	sqlite3* _db;
+	sqlite3* _db = nullptr;
+    std::string _last_err;
 };
 
 } // namespace libcpp

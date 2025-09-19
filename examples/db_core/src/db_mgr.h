@@ -27,9 +27,16 @@ public:
         return inst;
     }
 
-    std::vector<std::string> supported_dbs();
+    const std::vector<std::string>& supported_db_types();
 
     int add(std::unique_ptr<db>&& db);
+    int exec(
+        const std::string& db_id, 
+        const std::string& sql);
+    int query(
+        std::vector<std::vector<std::string>>& outs, // for example: [["name", "age"], [...], ...]
+        const std::string& db_id, 
+        const std::string& sql);
 
 private:
     std::vector<std::unique_ptr<db>> _dbs;

@@ -1,7 +1,6 @@
 #include "data.h"
 
 #include <libcpp/util/once.hpp>
-#include <libcpp/log/log.hpp>
 
 void data_mgr::init(size_t pool_size)
 {
@@ -158,7 +157,7 @@ void data_mgr::_init(crypto_param_encrypt* param)
         return;
 
     param->result = CRYPTO_ERR_FAIL;
-    param->out = new char[CRYPTO_OUTPUT_BUF];
+    param->out = new char[CRYPTO_MAX_OUTPUT_SIZE];
     param->out_len = new size_t(0);
     param->in = nullptr;
     param->content = nullptr;
@@ -177,7 +176,7 @@ void data_mgr::_reset(crypto_param_encrypt* param)
 
     param->result = CRYPTO_ERR_FAIL;
     if (param->out != nullptr)
-        memset((char*)param->out, 0, CRYPTO_OUTPUT_BUF);
+        memset((char*)param->out, 0, CRYPTO_MAX_OUTPUT_SIZE);
     if (param->out_len != nullptr)
         *(param->out_len) = 0;
     param->in = nullptr;
@@ -196,7 +195,7 @@ void data_mgr::_init(crypto_param_decrypt* param)
         return;
 
     param->result = CRYPTO_ERR_FAIL;
-    param->out = new char[CRYPTO_OUTPUT_BUF];
+    param->out = new char[CRYPTO_MAX_OUTPUT_SIZE];
     param->out_len = new size_t(0);
     param->in = nullptr;
     param->content = nullptr;
@@ -215,7 +214,7 @@ void data_mgr::_reset(crypto_param_decrypt* param)
 
     param->result = CRYPTO_ERR_FAIL;
     if (param->out != nullptr)
-        memset((char*)param->out, 0, CRYPTO_OUTPUT_BUF);
+        memset((char*)param->out, 0, CRYPTO_MAX_OUTPUT_SIZE);
     if (param->out_len != nullptr)
         *(param->out_len) = 0;
     param->in = nullptr;

@@ -138,18 +138,43 @@ aux_source_directory(./src SRC)
 add_executable(${PROJECT_NAME} ${SRC})
 
 # link library
-target_link_libraries(${PROJECT_NAME} 
+set(LINK_LIBS 
     ${CMAKE_DL_LIBS}
+
+    # boost
     ${Boost_LIBRARIES}
+
+    # ICU
     ${ICU_LIBRARIES}
+
+    # telemetry
     ${OPENTELEMETRY_CPP_LIBRARIES}
+
+    # jwt
     jwt-cpp::jwt-cpp
+
+    # fmt
     fmt::fmt
 
     # breakpad_client
     unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
     unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
 )
+if(WIN32)
+    list(APPEND LINK_LIBS 
+        bcrypt
+    )
+elseif(APPLE)
+    list(APPEND LINK_LIBS 
+        pthread
+    )
+else()
+    list(APPEND LINK_LIBS 
+        rt 
+        pthread
+    )
+endif()
+target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
 # copy resource files
 file(GLOB PROPERTY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties")
@@ -172,38 +197,17 @@ add_dependencies(${PROJECT_NAME} copy_properties)
 #
 # cmake --build .
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/deploy.cmake)
-if (WIN32)
-    win_deploy(${PROJECT_NAME}
-        ${CMAKE_DL_LIBS}
-        ${Boost_LIBRARIES}
-        ${ICU_LIBRARIES}
-        ${OPENTELEMETRY_CPP_LIBRARIES}
-        jwt-cpp::jwt-cpp
-        fmt::fmt
-        unofficial::breakpad::libbreakpad
-        unofficial::breakpad::libbreakpad_client
+if(WIN32)
+    win_deploy(${PROJECT_NAME} 
+        ${LINK_LIBS}
     )
 elseif(APPLE)
-    mac_deploy(${PROJECT_NAME}
-        ${CMAKE_DL_LIBS}
-        ${Boost_LIBRARIES}
-        ${ICU_LIBRARIES}
-        ${OPENTELEMETRY_CPP_LIBRARIES}
-        jwt-cpp::jwt-cpp
-        fmt::fmt
-        unofficial::breakpad::libbreakpad
-        unofficial::breakpad::libbreakpad_client
+    mac_deploy(${PROJECT_NAME} 
+        ${LINK_LIBS}
     )
 else()
-    linux_deploy(${PROJECT_NAME}
-        ${CMAKE_DL_LIBS}
-        ${Boost_LIBRARIES}
-        ${ICU_LIBRARIES}
-        ${OPENTELEMETRY_CPP_LIBRARIES}
-        jwt-cpp::jwt-cpp
-        fmt::fmt
-        unofficial::breakpad::libbreakpad
-        unofficial::breakpad::libbreakpad_client
+    linux_deploy(${PROJECT_NAME} 
+        ${LINK_LIBS}
     )
 endif()
 

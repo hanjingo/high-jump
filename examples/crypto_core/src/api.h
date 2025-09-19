@@ -72,7 +72,8 @@ C_STYLE_EXPORT void crypto_quit(crypto_context ctx);
 #define CRYPTO_ERR_END 999
 
 // --------------- const --------------------
-#define CRYPTO_OUTPUT_BUF 16384 // 16KB
+#define CRYPTO_MAX_OUTPUT_NUM 1024   // 16KB * 1024 = 16MB
+#define CRYPTO_MAX_OUTPUT_SIZE 16384 // 16KB
 
 #define CRYPTO_MAX_KEY_NUM 2
 #define CRYPTO_MAX_KEY_SIZE 8192 // 8KB

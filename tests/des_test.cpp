@@ -1145,9 +1145,13 @@ TEST(des, decrypt_file)
     std::string key("12345678");
     std::string iv("abcdefgh");
 
-    // ECB padding PKCS#5
     str_src = "./des_ecb_pkcs5_padding_encrypt.log";
     str_dst = "./des_ecb_pkcs5_padding.log";
+
+    ASSERT_TRUE(libcpp::des::encrypt_file(str_src, "./crypto.log", 
+        key, libcpp::des::mode::ecb, libcpp::des::padding::pkcs5));
+
+    // ECB padding PKCS#5
     ASSERT_TRUE(libcpp::des::decrypt_file(str_dst, str_src, 
         key, libcpp::des::mode::ecb, libcpp::des::padding::pkcs5));
     md5_src = calc_file_md5("./crypto.log");

@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#elif defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #include <stdio.h>
 
@@ -320,7 +320,7 @@ static int bios_serial_num(uint8_t* serial_num, size_t* length)
     return 0;
 }
 
-#elif __linux__
+#elif defined(__linux__)
 #include <stdio.h>
 
 static int bios_vendor(unsigned char* vendor, size_t* length)
@@ -430,7 +430,7 @@ static int bios_serial_num(uint8_t* serial_num, size_t* length)
     return 0;
 }
 
-#elif __APPLE__
+#elif defined(__APPLE__)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

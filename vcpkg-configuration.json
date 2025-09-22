@@ -7,11 +7,11 @@
   "registries": [
     {
       "kind": "git",
-      "baseline": "96ec7fb25da25e0463446e552d59715a47c95e73",
+      "baseline": "054637a2ae63c6c647b3169251759910cc4c984a",
       "repository": "https://github.com/Microsoft/vcpkg",
       "packages": [
-          "boost*",
-          "boost-*"
+        "boost*",
+        "boost-*"
       ]
     }
   ]

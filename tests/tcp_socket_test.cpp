@@ -305,15 +305,15 @@ TEST(tcp_socket, async_send)
     std::thread t([](){
         libcpp::tcp_socket::io_t io;
         libcpp::tcp_listener li{io};
-        li.async_accept(13006, [](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
+        auto buf_ptr = std::make_shared<std::array<unsigned char, 1024>>();
+        li.async_accept(13006, [buf_ptr](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
             ASSERT_EQ(err.failed(), false);
             ASSERT_EQ(sock->is_connected(), true);
 
-            unsigned char buf[1024];
-            sock->async_recv(buf, 1024, [sock, &buf](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+            sock->async_recv(buf_ptr->data(), 5, [sock, buf_ptr](const libcpp::tcp_socket::err_t& err, std::size_t sz){
                 ASSERT_EQ(err.failed(), false);
                 ASSERT_EQ(sz == 5, true);
-                ASSERT_EQ(std::string(reinterpret_cast<char*>(buf), 5) == "hello", true);
+                ASSERT_EQ(std::string(reinterpret_cast<char*>(buf_ptr->data()), 5) == "hello", true);
                 delete sock;
             });
         });
@@ -324,13 +324,14 @@ TEST(tcp_socket, async_send)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     libcpp::tcp_socket::io_t io;
     libcpp::tcp_socket sock{io};
-    sock.async_connect("127.0.0.1", 13006, [&sock](const libcpp::tcp_socket::err_t& err){
+    auto send_buf = std::make_shared<std::array<unsigned char, 5>>();
+    std::memcpy(send_buf->data(), "hello", 5);
+    sock.async_connect("127.0.0.1", 13006, [send_buf, &sock](const libcpp::tcp_socket::err_t& err){
         ASSERT_EQ(err.failed(), false);
         ASSERT_EQ(sock.is_connected(), true);
         ASSERT_EQ(sock.check_connected(), true);
 
-        sock.async_send(reinterpret_cast<const unsigned char*>(std::string("hello").c_str()), 5, 
-            [](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+        sock.async_send(send_buf->data(), 5, [send_buf](const libcpp::tcp_socket::err_t& err, std::size_t sz){
             ASSERT_EQ(err.failed(), false);
             ASSERT_EQ(sz == 5, true);
         });
@@ -426,23 +427,23 @@ TEST(tcp_socket, async_recv)
     std::thread t([](){
         libcpp::tcp_socket::io_t io;
         libcpp::tcp_listener li{io};
-        unsigned char buf[1024];
+        auto buf_ptr = std::make_shared<std::array<unsigned char, 1024>>();
         std::size_t nrecved = 0;
         libcpp::tcp_socket* sock_ptr = nullptr;
-        li.async_accept(13009, [&buf, &nrecved, &sock_ptr](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
+        li.async_accept(13009, [buf_ptr, &nrecved, &sock_ptr](const libcpp::tcp_listener::err_t& err, libcpp::tcp_socket* sock) {
             ASSERT_EQ(err.failed(), false);
             ASSERT_EQ(sock->is_connected(), true);
             sock_ptr = sock;
 
-            sock->async_recv(buf, 1024, [&buf, &nrecved](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+            sock->async_recv(buf_ptr->data(), 5, [buf_ptr, &nrecved](const libcpp::tcp_socket::err_t& err, std::size_t sz){
                 ASSERT_EQ(err.failed(), false);
-                ASSERT_EQ(sz >= 5, true);
+                ASSERT_EQ(sz == 5, true);
                 nrecved += sz;
             });
 
-            sock->async_recv(buf, 1024, [&buf, &nrecved](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+            sock->async_recv(buf_ptr->data() + 5, 5, [buf_ptr, &nrecved](const libcpp::tcp_socket::err_t& err, std::size_t sz){
                 ASSERT_EQ(err.failed(), false);
-                ASSERT_EQ(sz >= 5, true);
+                ASSERT_EQ(sz == 5, true);
                 nrecved += sz;
             });
         });
@@ -455,17 +456,19 @@ TEST(tcp_socket, async_recv)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     libcpp::tcp_socket::io_t io;
     libcpp::tcp_socket sock{io};
-    sock.async_connect("127.0.0.1", 13009, [&sock](const libcpp::tcp_socket::err_t& err){
+    auto send_buf1 = std::make_shared<std::array<unsigned char, 5>>();
+    std::memcpy(send_buf1->data(), "hello", 5);
+    auto send_buf2 = std::make_shared<std::array<unsigned char, 5>>();
+    std::memcpy(send_buf2->data(), "harry", 5);
+    sock.async_connect("127.0.0.1", 13009, [send_buf1, send_buf2, &sock](const libcpp::tcp_socket::err_t& err){
         ASSERT_EQ(err.failed(), false);
 
-        sock.async_send(reinterpret_cast<const unsigned char*>(std::string("hello").c_str()), 5, 
-        [](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+        sock.async_send(send_buf1->data(), 5, [send_buf1](const libcpp::tcp_socket::err_t& err, std::size_t sz){
             ASSERT_EQ(err.failed(), false);
             ASSERT_EQ(sz == 5, true);
         });
 
-        sock.async_send(reinterpret_cast<const unsigned char*>(std::string("harry").c_str()), 5, 
-        [](const libcpp::tcp_socket::err_t& err, std::size_t sz){
+        sock.async_send(send_buf2->data(), 5, [send_buf2](const libcpp::tcp_socket::err_t& err, std::size_t sz){
             ASSERT_EQ(err.failed(), false);
             ASSERT_EQ(sz == 5, true);
         });

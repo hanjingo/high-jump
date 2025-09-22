@@ -56,6 +56,19 @@ For vcpkg run cmd (reference from: https://learn.microsoft.com/zh-cn/vcpkg/consu
 vcpkg install
 ```
 
+For vcpkg run cmd to install old version 3rd library(for example: boost 1.81.0):
+
+```cmd
+# Check the commit history of versions/b-/boost.json to find the desired version hash
+cd ${VCPKG_ROOT}
+git log "--format=%H %cd %s" --date=short --left-only -- versions/b-/boost.json 
+
+# modify vcpkg-configuration.json to set the "baseline" field to the desired version hash
+# Then run the following command to install the specified version of the library
+
+vcpkg install
+```
+
 or install 3rd-party project by yourself.
 
 ### Build Library

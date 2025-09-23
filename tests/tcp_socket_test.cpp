@@ -407,14 +407,22 @@ TEST(tcp_socket, recv_until)
     ASSERT_EQ(buf.size() == 0, true);
     ASSERT_EQ(sock.recv_until(buf, 6) == 6, true);
     ASSERT_EQ(buf.size() == 6, true);
+#if BOOST_VERSION < 108700
     auto data = boost::asio::buffer_cast<const char*>(buf.data());
+#else
+    auto data = static_cast<const char*>(buf.data().data());
+#endif
     ASSERT_EQ(std::string(data, 5) == std::string("hello"), true);
     buf.consume(6);
 
     ASSERT_EQ(buf.size() == 0, true);
     ASSERT_EQ(sock.recv_until(buf, 6) == 6, true);
     ASSERT_EQ(buf.size() == 6, true);
+#if BOOST_VERSION < 108700
     auto data1 = boost::asio::buffer_cast<const char*>(buf.data());
+#else
+    auto data1 = static_cast<const char*>(buf.data().data());
+#endif
     ASSERT_EQ(std::string(data1, 5) == std::string("harry"), true);
     buf.consume(6);
 

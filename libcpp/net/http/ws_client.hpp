@@ -50,7 +50,11 @@ public:
     }
     static inline endpoint_t make_endpoint(const char* host, const uint16_t port)
     {
+#if BOOST_VERSION < 108700
         return endpoint_t(addr_t::from_string(host), port);
+#else
+        return endpoint_t(boost::asio::ip::make_address(host), port);
+#endif
     }
 
     inline bool is_connected() const { return connected_; }

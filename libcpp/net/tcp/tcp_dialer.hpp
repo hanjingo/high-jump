@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <mutex>
 #include <functional>
+#include <boost/version.hpp>
 #include <libcpp/net/tcp/tcp_socket.hpp>
 
 namespace libcpp

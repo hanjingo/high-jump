@@ -2,176 +2,247 @@
 #define PROCESS_HPP
 
 #include <functional>
-
-// c++ std::unary_function compatibility
-#ifndef LIBCPP_UNARY_FUNCTION_DEFINED
-    #if defined(_MSC_VER)
-        #if (_MSC_VER >= 1910)
-            #define LIBCPP_UNARY_FUNCTION_DEFINED 0
-        #else
-            #define LIBCPP_UNARY_FUNCTION_DEFINED 1
-        #endif
-    #elif (__cplusplus >= 201703L)
-        #if defined(__GLIBCXX__)
-            #define LIBCPP_UNARY_FUNCTION_DEFINED 1
-        #elif defined(_LIBCPP_VERSION)
-            #define LIBCPP_UNARY_FUNCTION_DEFINED 0
-        #else
-            #define LIBCPP_UNARY_FUNCTION_DEFINED 0
-        #endif
-    #else
-        #define LIBCPP_UNARY_FUNCTION_DEFINED 1
-    #endif
-#endif
-
-#if !LIBCPP_UNARY_FUNCTION_DEFINED
-namespace std {
-    template <class Arg, class Result>
-    struct unary_function {
-        typedef Arg argument_type;
-        typedef Result result_type;
-    };
-}
-#undef LIBCPP_UNARY_FUNCTION_DEFINED
-#define LIBCPP_UNARY_FUNCTION_DEFINED 1
-#endif
-
-
 #include <vector>
+#include <string>
 #include <algorithm>
-#include <boost/process.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/algorithm/string.hpp>
+#include <thread>
+#include <chrono>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <unistd.h>
+    #include <sys/types.h>
+    #include <sys/wait.h>
+#endif
 
 namespace libcpp
 {
-
 namespace process
 {
-using pid_t         = boost::process::pid_t;
+
+#if defined(_WIN32)
+    using pid_t = DWORD;
+#else
+    using pid_t = pid_t;
+#endif
+
 using exit_code_t   = int;
-using error_code_t  = std::error_code;
-using child_t       = boost::process::child;
-using group_t       = boost::process::group;
-using path_t        = boost::filesystem::path;
+using error_code_t  = int;
+using child_t       = pid_t;
+using path_t        = std::string;
+using list_match_cb = std::function<bool(const std::vector<std::string>&)>;
 
-using pstream_t     = boost::process::pstream;
-using ipstream_t    = boost::process::ipstream;
-using opstream_t    = boost::process::opstream;
-
-// pair: [pid, process name]
-using list_match_cb = std::function<bool(const std::vector<std::string>)>;
-
-static constexpr boost::process::detail::std_in_<void> std_in = boost::process::std_in;
-static constexpr boost::process::detail::std_out_<1> std_out  = boost::process::std_out;
-static constexpr boost::process::detail::std_out_<2> std_err  = boost::process::std_err;
-
-#if defined(_WIN32)
-static constexpr char cmd_list_pid[] = "tasklist /FO CSV /NH";
-static constexpr char cmd_kill[]     = "taskkill /PID ";
-#else
-static constexpr char cmd_list_pid[] = "ps -eo comm,pid";
-static constexpr char cmd_kill[]     = "kill -9 ";
-#endif
-
-inline pid_t getpid() { return pid_t(::getpid()); }
-
-#if defined(_WIN32)
-inline pid_t getppid() { return pid_t(0); }
-#else
-inline pid_t getppid() { return pid_t(::getppid()); }
-#endif
-
-template <typename... Args>
-inline int system(Args&&... args) 
-{ 
-    return boost::process::system(std::forward<Args>(args)...); 
-}
-
-template <typename... Args>
-inline child_t child(Args&&... args) 
-{ 
-    return boost::process::child(std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void spawn(Args&&... args) 
-{ 
-    boost::process::spawn(std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-inline void daemon(Args&&... args)
+inline pid_t getpid() 
 {
-    // Step1. ignore signal
-    // Step2. fork child and set work directory to pwd/root
-    // Step3. close file
-    // Step4. io_in, io_out, io_err redirect io null
-    boost::process::group gp{};
-    boost::process::spawn(
-        std::forward<Args>(args)..., 
-        boost::process::start_dir(boost::filesystem::current_path()), // pwd/root
-        boost::process::std_in.null(),
-        boost::process::std_out.null(),
-        boost::process::std_out.null(),
-        gp
+#if defined(_WIN32)
+    return GetCurrentProcessId();
+#else
+    return ::getpid();
+#endif
+}
+
+inline pid_t getppid() 
+{
+#if defined(_WIN32)
+    return 0;
+#else
+    return ::getppid();
+#endif
+}
+
+inline int system(const std::string& cmd) 
+{
+#if defined(_WIN32)
+    return std::system(cmd.c_str());
+#else
+    return std::system(cmd.c_str());
+#endif
+}
+
+inline child_t child(const std::string& cmd) 
+{
+#if defined(_WIN32)
+    STARTUPINFOA si = { sizeof(si) };
+    PROCESS_INFORMATION pi = {};
+    BOOL ret = CreateProcessA(
+        nullptr,
+        const_cast<char*>(cmd.c_str()),
+        nullptr,
+        nullptr,
+        FALSE,
+        0,
+        nullptr,
+        nullptr,
+        &si,
+        &pi
     );
-    gp.detach();
-}
+    if (ret) 
+    {
+        CloseHandle(pi.hThread);
+        return pi.dwProcessId;
+    }
+    return 0;
 
-inline group_t group()
-{
-    return boost::process::group();
-}
-
-inline void list(std::vector<pid_t>& result, 
-                 list_match_cb match = [](const std::vector<std::string>) -> bool{return true;})
-{
-        boost::process::ipstream stream;
-        std::string line;
-        std::vector<std::string> vec;
-        bool is_first_line = true;
-    try{
-        boost::process::child proc(cmd_list_pid, boost::process::std_out > stream);
-        while (std::getline(stream, line)) 
-        {
-#if defined(_WIN32)
-            boost::algorithm::split(vec, line, [](char c) { return c == ','; });
-            for (auto itr = vec.begin(); itr != vec.end(); ++itr)
-                boost::erase_all(*itr, "\"");
 #else
-            if (is_first_line) 
-            { 
-                is_first_line = false; 
-                continue; 
-            }
-            boost::algorithm::split(vec, line, boost::algorithm::is_space(), boost::token_compress_on);
+    pid_t pid = fork();
+    if (pid == 0) 
+    {
+        execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
+        std::exit(127);
+    }
+    return pid;
+
 #endif
-            if (!match(vec) || vec.size() < 2)
-                continue;
-
-            result.push_back(pid_t(std::stoi(vec[1])));
-        }
-    } catch(const std::exception& e) {
-        return;
-    }
 }
 
-inline void kill(const pid_t pid)
+inline void spawn(const std::string& cmd) { child(cmd); }
+
+inline void daemon(const std::string& cmd) 
 {
-    try {
-        std::string cmd = std::string(cmd_kill).append(std::to_string(pid));
-        boost::process::child proc(cmd);
-        proc.wait();
-    } catch(const std::exception& e) {
-        return;
+#if defined(_WIN32)
+    STARTUPINFOA si = { sizeof(si) };
+    PROCESS_INFORMATION pi = {};
+    BOOL ret = CreateProcessA(
+        nullptr,
+        const_cast<char*>(cmd.c_str()),
+        nullptr,
+        nullptr,
+        FALSE,
+        DETACHED_PROCESS,
+        nullptr,
+        nullptr,
+        &si,
+        &pi
+    );
+    if (ret) 
+    {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
     }
 
-    return;
+#else
+    pid_t pid = fork();
+    if (pid < 0) 
+        return;
+
+    if (pid > 0) 
+        return;
+
+    setsid();
+    pid = fork();
+    if (pid < 0) 
+        exit(EXIT_FAILURE);
+
+    if (pid > 0) 
+        exit(EXIT_SUCCESS);
+
+    chdir("/");
+    for (int fd = 0; fd < 1024; ++fd) 
+        close(fd);
+
+    execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)nullptr);
+    exit(EXIT_SUCCESS);
+
+#endif
 }
 
-};
+inline void list(
+    std::vector<pid_t>& result, 
+    list_match_cb match = [](const std::vector<std::string>&){ return true; }) 
+{
+#if defined(_WIN32)
+    FILE* fp = _popen("tasklist /FO CSV /NH", "r");
+    if (!fp) 
+        return;
 
+    char buf[1024];
+    while (fgets(buf, sizeof(buf), fp)) 
+    {
+        std::string line(buf);
+        std::vector<std::string> vec;
+        size_t pos = 0;
+        while ((pos = line.find(',')) != std::string::npos) 
+        {
+            vec.push_back(line.substr(0, pos));
+            line.erase(0, pos + 1);
+        }
+        vec.push_back(line);
+
+        for (auto& v : vec) 
+        {
+            v.erase(std::remove(v.begin(), v.end(), '\"'), v.end());
+            v.erase(std::remove_if(v.begin(), v.end(), ::isspace), v.end());
+        }
+
+        if (vec.size() >= 2 && match(vec)) 
+        {
+            try {
+                if (!vec[1].empty() && std::all_of(vec[1].begin(), vec[1].end(), ::isdigit)) {
+                    result.push_back(static_cast<pid_t>(std::stoi(vec[1])));
+                }
+            } catch (...) {}
+        }
+    }
+    _pclose(fp);
+
+#else
+    FILE* fp = popen("ps -eo comm,pid", "r");
+    if (!fp) return;
+    char buf[1024];
+    bool is_first_line = true;
+    while (fgets(buf, sizeof(buf), fp)) 
+    {
+        if (is_first_line) 
+        { 
+            is_first_line = false; 
+            continue; 
+        }
+
+        std::string line(buf);
+        std::vector<std::string> vec;
+        size_t pos = line.find_last_of(' ');
+        if (pos != std::string::npos) 
+        {
+            vec.push_back(line.substr(0, pos));
+            vec.push_back(line.substr(pos + 1));
+        }
+
+        for (auto& v : vec)
+            v.erase(std::remove_if(v.begin(), v.end(), ::isspace), v.end());
+
+        if (vec.size() >= 2 && match(vec)) 
+        {
+            try {
+                if (!vec[1].empty() && std::all_of(vec[1].begin(), vec[1].end(), ::isdigit))
+                    result.push_back(static_cast<pid_t>(std::stoi(vec[1])));
+            } catch (...) {}
+        }
+    }
+    pclose(fp);
+#endif
 }
+
+inline void kill(const pid_t pid) 
+{
+#if defined(_WIN32)
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+    if (hProcess) 
+    {
+        TerminateProcess(hProcess, 0);
+        CloseHandle(hProcess);
+    }
+
+#else
+    ::kill(pid, SIGKILL);
+    
+#endif
+}
+
+} // namespace process
+} // namespace libcpp
 
 #endif

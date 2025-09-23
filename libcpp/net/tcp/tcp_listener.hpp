@@ -9,6 +9,7 @@
 #include <memory>
 
 #include <boost/asio.hpp>
+#include <boost/version.hpp>
 
 #include <libcpp/net/tcp/tcp_socket.hpp>
 
@@ -18,11 +19,15 @@ namespace libcpp
 class tcp_listener
 {
 public:
-    using io_t              = tcp_socket::io_t;
+#if BOOST_VERSION < 108700
     using io_work_t         = tcp_socket::io_work_t;
-    using err_t             = tcp_socket::err_t;
     using address_t         = tcp_socket::address_t;
+#else
+    using address_t         = boost::asio::ip::address;
+#endif
 
+    using io_t              = tcp_socket::io_t;
+    using err_t             = tcp_socket::err_t;
     using sock_t            = tcp_socket::sock_t;
     using endpoint_t        = tcp_socket::endpoint_t;
     using acceptor_t        = boost::asio::ip::tcp::acceptor;
@@ -75,7 +80,11 @@ public:
 
     tcp_socket* accept(const char* ip, uint16_t port)
     {
+#if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
+#else
+        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+#endif
         return accept(ep);
     }
 
@@ -136,14 +145,22 @@ public:
 
     void async_accept(const char* ip, uint16_t port)
     {
+#if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
+#else
+        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+#endif
         accept_handler_t fn = accept_handler_;
         async_accept(ep, std::move(fn));
     }
 
     void async_accept(const char* ip, uint16_t port, accept_handler_t&& fn)
     {
+#if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
+#else
+        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+#endif
         async_accept(ep, std::move(fn));
     }
 

@@ -13,6 +13,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include <boost/version.hpp>
 #include <boost/asio.hpp>
 
 namespace libcpp
@@ -20,8 +21,14 @@ namespace libcpp
 
 class timer;
 
+#if BOOST_VERSION < 108700
 static boost::asio::io_service io_global;
 static boost::asio::io_service::work worker_global{io_global};
+#else
+static boost::asio::io_context io_global;
+static boost::asio::executor_work_guard<boost::asio::io_context::executor_type> worker_global{io_global.get_executor()};
+#endif
+
 static std::once_flag io_run_once;
 static std::unordered_map<int64_t, std::shared_ptr<libcpp::timer>> tm_map_global{};
 static std::mutex tm_map_mu;

@@ -14,8 +14,13 @@
 #include <initializer_list>
 
 #include <boost/stacktrace.hpp>
+#include <boost/version.hpp>
 #include <boost/asio.hpp>
 #include <boost/asio/deadline_timer.hpp>
+
+#if BOOST_VERSION >= 108700
+    #include <boost/asio/ip/address.hpp>
+#endif
 
 namespace libcpp
 {
@@ -30,7 +35,9 @@ public:
 #endif
 
     using io_t              = boost::asio::io_context;
+#if BOOST_VERSION < 108700
     using io_work_t         = boost::asio::io_service::work;
+#endif
     using err_t             = boost::system::error_code;
     
     using const_buffer_t    = boost::asio::const_buffer;
@@ -38,7 +45,11 @@ public:
     using streambuf_t       = boost::asio::streambuf;
 
     using sock_t            = boost::asio::ip::tcp::socket;
+#if BOOST_VERSION < 108700
     using address_t         = boost::asio::ip::address;
+#else
+    using address_t         = boost::asio::ip::address;
+#endif
     using endpoint_t        = boost::asio::ip::tcp::endpoint;
 
     using steady_timer_t    = boost::asio::steady_timer;
@@ -112,7 +123,11 @@ public:
                  std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
                  int try_times = 1)
     {
+#if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
+#else
+        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+#endif
         return connect(ep, timeout, try_times);
     }
 
@@ -174,7 +189,11 @@ public:
 
     void async_connect(const char* ip, const uint16_t port, conn_handler_t&& fn)
     {
+#if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
+#else
+        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+#endif
         async_connect(ep, std::move(fn));
     }
 

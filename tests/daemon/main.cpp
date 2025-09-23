@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <libcpp/os/process.hpp>
 
@@ -6,6 +7,11 @@ int main(int argc, char* argv[])
 {
     (void)argc;
     (void)argv;
+
+    std::ofstream fout("daemon_test.txt");
+    fout << "daemon running" << std::endl;
+    fout.close();
+
     while (true)
     {
         std::cout << "daemon watching..." << std::endl;

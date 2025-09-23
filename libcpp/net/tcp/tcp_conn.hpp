@@ -10,6 +10,12 @@
 #include <libcpp/net/tcp/tcp_socket.hpp>
 
 #include <concurrentqueue/blockingconcurrentqueue.h>
+#include <boost/version.hpp>
+#include <boost/asio.hpp>
+#if BOOST_VERSION >= 108700
+    #include <boost/asio/post.hpp>
+    #include <boost/asio/ip/address.hpp>
+#endif
 
 #ifndef MTU
 #define MTU 1500
@@ -23,7 +29,9 @@ class tcp_conn
 public:
     using flag_t           = std::int64_t;
     using io_t             = libcpp::tcp_socket::io_t;
+#if BOOST_VERSION < 108700
     using io_work_t        = libcpp::tcp_socket::io_work_t;
+#endif
     using err_t            = libcpp::tcp_socket::err_t;
     using msg_ptr_t        = void*;
     using channel_t        = moodycamel::BlockingConcurrentQueue<msg_ptr_t>;
@@ -112,10 +120,13 @@ public:
         set_w_closed(false);
         set_r_closed(false);
 
-        // active send event
+#if BOOST_VERSION < 108700
         io_.post(std::bind(&tcp_conn::_async_send, this, err_t(), 0));
-        // active recv event
         io_.post(std::bind(&tcp_conn::_async_recv, this, err_t(), 0));
+#else
+        boost::asio::post(io_, std::bind(&tcp_conn::_async_send, this, err_t(), 0));
+        boost::asio::post(io_, std::bind(&tcp_conn::_async_recv, this, err_t(), 0));
+#endif
         return true;
     }
 
@@ -130,10 +141,13 @@ public:
                 set_w_closed(false);
                 set_r_closed(false);
 
-                // active send event
+#if BOOST_VERSION < 108700
                 io_.post(std::bind(&tcp_conn::_async_send, this, err_t(), 0));
-                // active recv event
                 io_.post(std::bind(&tcp_conn::_async_recv, this, err_t(), 0));
+#else
+                boost::asio::post(io_, std::bind(&tcp_conn::_async_send, this, err_t(), 0));
+                boost::asio::post(io_, std::bind(&tcp_conn::_async_recv, this, err_t(), 0));
+#endif
             }
 
             fn(this, err);
@@ -179,7 +193,11 @@ public:
             return false;
 
         w_ch_.enqueue(msg);
+#if BOOST_VERSION < 108700
         io_.post(std::bind(&tcp_conn::_async_send, this, err_t(), 0));
+#else
+        boost::asio::post(io_, std::bind(&tcp_conn::_async_send, this, err_t(), 0));
+#endif
         return true;
     }
 
@@ -189,7 +207,11 @@ public:
             return false;
 
         r_ch_.enqueue(msg);
+#if BOOST_VERSION < 108700
         io_.post(std::bind(&tcp_conn::_async_recv, this, err_t(), 0));
+#else
+        boost::asio::post(io_, std::bind(&tcp_conn::_async_recv, this, err_t(), 0));
+#endif
         return true;
     }
 
@@ -221,7 +243,11 @@ private:
 
         auto buf = w_buf_.prepare(MTU);
         sz = buf.size();
+#if BOOST_VERSION < 108700
         unsigned char* data = boost::asio::buffer_cast<unsigned char*>(buf);
+#else
+        unsigned char* data = static_cast<unsigned char*>(buf.data());
+#endif
         sz = encode_handler_(data, sz, msg);
         if (sz < 1)
         {
@@ -229,7 +255,6 @@ private:
             return;
         }
         w_buf_.commit(sz);
-        // BUF_PRINT(this->w_buf_, true);
 
         sock_->async_send(data, sz, std::bind(&tcp_conn::_async_send, this, std::placeholders::_1, std::placeholders::_2));
         if (send_handler_)
@@ -248,7 +273,6 @@ private:
         {
             this->r_buf_.commit(sz);
             is_recving_.store(false);
-            // BUF_PRINT(this->r_buf_, true);
         }
 
         msg_ptr_t msg = nullptr;
@@ -257,7 +281,11 @@ private:
             if (!r_ch_.try_dequeue(msg) || msg == nullptr || !decode_handler_)
                 return;
 
+#if BOOST_VERSION < 108700
             auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
+#else
+            auto data = static_cast<const unsigned char*>(r_buf_.data().data());
+#endif
             sz = r_buf_.size();
             sz = decode_handler_(msg, data, sz);
             if (sz > 0) 
@@ -268,13 +296,12 @@ private:
             else
             {
                 r_ch_.enqueue(msg); // put back
-                break; // big msg, wait for next recv
+                break;
             }
         } while (true);
 
-        // recv again
         if (is_recving_.load())
-            return; // already recving, exit
+            return;
         auto buf = r_buf_.prepare(MTU);
         is_recving_.store(true);
         sock_->async_recv(buf, std::bind(&tcp_conn::_async_recv, this, std::placeholders::_1, std::placeholders::_2));
@@ -298,7 +325,11 @@ private:
 
             auto buf = w_buf_.prepare(MTU);
             sz = buf.size();
+#if BOOST_VERSION < 108700
             unsigned char* data = boost::asio::buffer_cast<unsigned char*>(buf);
+#else
+            unsigned char* data = static_cast<unsigned char*>(buf.data());
+#endif
             sz = encode_handler_(data, sz, msg);
             if (sz < 1)
             {
@@ -307,10 +338,9 @@ private:
             }
 
             w_buf_.commit(sz);
-            // BUF_PRINT(this->w_buf_, true);
 
             nsend = sock_->send(w_buf_.data());
-            if (nsend < sz) // send fail, exit
+            if (nsend < sz)
             {
                 set_w_closed(true);
                 return false;
@@ -339,21 +369,23 @@ private:
             if (!r_ch_.try_dequeue(msg) || msg == nullptr || !decode_handler_)
                 break;
             
+#if BOOST_VERSION < 108700
             auto data = boost::asio::buffer_cast<const unsigned char*>(r_buf_.data());
+#else
+            auto data = static_cast<const unsigned char*>(r_buf_.data().data());
+#endif
             sz = r_buf_.size();
             sz = decode_handler_(msg, data, sz);
             if (sz > 0) 
             { 
                 r_buf_.consume(sz);
-                // BUF_PRINT(this->r_buf_, true);
                 if (recv_handler_)
                     recv_handler_(this, msg);
 
                 continue; 
             }
 
-            // big msg
-            r_ch_.enqueue(msg); // put back
+            r_ch_.enqueue(msg);
             auto buf = r_buf_.prepare(MTU);
             sz = sock_->recv(buf);
             r_buf_.commit(sz);

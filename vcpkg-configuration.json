@@ -3,16 +3,5 @@
     "kind": "git",
     "baseline": "294f76666c3000630d828703e675814c05a4fd43",
     "repository": "https://github.com/microsoft/vcpkg"
-  },
-  "registries": [
-    {
-      "kind": "git",
-      "baseline": "054637a2ae63c6c647b3169251759910cc4c984a",
-      "repository": "https://github.com/Microsoft/vcpkg",
-      "packages": [
-        "boost*",
-        "boost-*"
-      ]
-    }
-  ]
+  }
 }

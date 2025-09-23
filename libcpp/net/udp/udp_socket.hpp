@@ -1,6 +1,7 @@
 #ifndef UDP_SOCKET_HPP
 #define UDP_SOCKET_HPP
 
+#include <boost/version.hpp>
 #include <boost/asio.hpp>
 
 namespace libcpp
@@ -10,7 +11,9 @@ class udp_socket
 {
 public:
     using io_t              = boost::asio::io_context;
+#if BOOST_VERSION < 108700
     using io_work_t         = boost::asio::io_service::work;
+#endif
     using err_t             = boost::system::error_code;
     using address_t         = boost::asio::ip::address;
 
@@ -45,7 +48,9 @@ public:
 
     inline void loop_start()
     {
+#if BOOST_VERSION < 108700
         io_work_t work{io_};
+#endif
         io_.run();
     }
 
@@ -125,7 +130,11 @@ public:
 public:
     static endpoint_t end_point(const char* ip, const uint16_t port)
     {
+#if BOOST_VERSION < 108700
         return endpoint_t(address_t::from_string(ip), port);
+#else
+        return endpoint_t(boost::asio::ip::make_address(ip), port);
+#endif
     }
 
     static endpoint_t endpoint_v4(const uint16_t port)

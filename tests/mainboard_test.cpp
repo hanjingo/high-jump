@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/mainboard.h>
+#include <hj/hardware/mainboard.h>
 
 TEST(MainboardTest, Model)
 {

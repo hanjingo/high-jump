@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/json.hpp>
+#include <hj/encoding/json.hpp>
 
 struct json_obj
 {
@@ -11,7 +11,7 @@ struct json_obj
 TEST(json, get)
 {
     json_obj obj;
-    auto js = libcpp::json{{"name", "harry potter"}, {"age", 30}, {"email", "hehehunanchina@live.com"}};
+    auto js = hj::json{{"name", "harry potter"}, {"age", 30}, {"email", "hehehunanchina@live.com"}};
     js.at("name").get_to(obj.name);
     ASSERT_EQ(obj.name, std::string("harry potter"));
     ASSERT_EQ(js.at("name").get<std::string>(), std::string("harry potter"));
@@ -26,7 +26,7 @@ TEST(json, get)
 TEST(json, parse)
 {
     // from string
-    auto js1 = libcpp::json::parse(R"(
+    auto js1 = hj::json::parse(R"(
         {
             "pi": 3.141,
             "happy": true
@@ -40,7 +40,7 @@ TEST(json, parse)
 
     // from ifstream
     std::ifstream f("./json_test.json");
-    auto js2 = libcpp::json::parse(f);
+    auto js2 = hj::json::parse(f);
 
     ASSERT_EQ(js2.contains("pi"), true);
     ASSERT_EQ(js2["pi"].get<double>(), 3.141);

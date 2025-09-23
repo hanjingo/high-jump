@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/mouse.h>
+#include <hj/hardware/mouse.h>
 
 TEST(MouseTest, EnumerateMouse) 
 {

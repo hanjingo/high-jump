@@ -4,8 +4,8 @@
 #include <string>
 #include <memory>
 
-#include <libcpp/db/sqlite.hpp>
-#include <libcpp/db/db_conn_pool.hpp>
+#include <hj/db/sqlite.hpp>
+#include <hj/db/db_conn_pool.hpp>
 
 #include "comm.h"
 #include "api.h"
@@ -13,7 +13,7 @@
 class sqlite : public db
 {
 public:
-    using conn_t = libcpp::sqlite;
+    using conn_t = hj::sqlite;
     using conn_ptr_t = std::shared_ptr<conn_t>;
 
 public:
@@ -51,7 +51,7 @@ private:
 private:
     std::string                  _id;
     std::string                  _path;
-    libcpp::db_conn_pool<conn_t> _pool;
+    hj::db_conn_pool<conn_t> _pool;
 };
 
 #endif

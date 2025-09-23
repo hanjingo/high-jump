@@ -2,10 +2,10 @@
 
 #include <string.h>
 
-#include <libcpp/util/init.hpp>
-#include <libcpp/util/once.hpp>
-#include <libcpp/os/env.h>
-#include <libcpp/testing/crash.hpp>
+#include <hj/util/init.hpp>
+#include <hj/util/once.hpp>
+#include <hj/os/env.h>
+#include <hj/testing/crash.hpp>
 
 #include "comm.h"
 #include "encrypt.h"
@@ -38,11 +38,11 @@ C_STYLE_EXPORT void crypto_init(crypto_context ctx)
 
     ONCE(
         // add crash handle support
-        libcpp::crash_handler::instance()->prevent_set_unhandled_exception_filter();
-        libcpp::crash_handler::instance()->set_local_path("./");
+        hj::crash_handler::instance()->prevent_set_unhandled_exception_filter();
+        hj::crash_handler::instance()->set_local_path("./");
 
         // add log support
-        libcpp::logger::instance()->set_level(libcpp::log_lvl::debug);
+        hj::logger::instance()->set_level(hj::log_lvl::debug);
 
         // add your code here ...
         if (ctx.user_data == NULL)

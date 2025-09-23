@@ -1,2 +1,2 @@
 #include <gtest/gtest.h>
-#include <libcpp/math/vector2d.hpp>
+#include <hj/math/vector2d.hpp>

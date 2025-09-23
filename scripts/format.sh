@@ -98,10 +98,10 @@ CLANG_FORMAT_VERSION=$(clang-format --version)
 log_verbose "Using: $CLANG_FORMAT_VERSION"
 
 # Find all C++ files
-log_verbose "Searching for C++ files in libcpp/ and tests/ directories..."
+log_verbose "Searching for C++ files in hj/ and tests/ directories..."
 
 # Use find to locate C++ files
-mapfile -t files < <(find libcpp tests -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" -o -name "*.cxx" \) 2>/dev/null || true)
+mapfile -t files < <(find hj tests -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" -o -name "*.cxx" \) 2>/dev/null || true)
 
 if [[ ${#files[@]} -eq 0 ]]; then
     yellow "Warning: No C++ files found"

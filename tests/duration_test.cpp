@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/time/duration.hpp>
+#include <hj/time/duration.hpp>
 #include <thread>
 
 TEST(duration, time_passed)

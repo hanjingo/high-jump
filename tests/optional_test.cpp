@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/types/optional.hpp>
+#include <hj/types/optional.hpp>
 
-libcpp::optional<int> hello(int in)
+hj::optional<int> hello(int in)
 {
-    return (in % 2 == 0) ? in : libcpp::optional<int>();
+    return (in % 2 == 0) ? in : hj::optional<int>();
 }
 
 TEST(optional, value)

@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# filepath: c:\work\libcpp\scripts\format.ps1
+# filepath: c:\work\hj\scripts\format.ps1
 
 <#
 .SYNOPSIS
@@ -28,7 +28,7 @@ try {
 }
 
 # Find all C++ files
-$files = Get-ChildItem -Recurse -Path "libcpp", "tests" -Include "*.cpp", "*.hpp", "*.h" -ErrorAction SilentlyContinue
+$files = Get-ChildItem -Recurse -Path "hj", "tests" -Include "*.cpp", "*.hpp", "*.h" -ErrorAction SilentlyContinue
 
 if ($files.Count -eq 0) {
     Write-Warning "No C++ files found"

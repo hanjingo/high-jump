@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/io/dbuffer.hpp>
+#include <hj/io/dbuffer.hpp>
 #include <thread>
 #include <shared_mutex>
 #include <chrono>
@@ -8,7 +8,7 @@
 
 TEST(dbuffer, read)
 {
-    libcpp::dbuffer<std::vector<int> > dbuf{};
+    hj::dbuffer<std::vector<int> > dbuf{};
     std::vector<int> buf1{1, 2, 3};
     std::vector<int> buf2{0, 0, 0};
     ASSERT_EQ(dbuf.write(buf1), true);

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/os/kernel.h>
+#include <hj/os/kernel.h>
 #include <string>
 
 TEST(kernel, kernel_name) 

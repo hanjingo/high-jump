@@ -1,9 +1,9 @@
 #include "format.h"
 
-#include <libcpp/crypto/base64.hpp>
-#include <libcpp/encoding/hex.hpp>
-#include <libcpp/io/filepath.hpp>
-#include <libcpp/math/random.hpp>
+#include <hj/crypto/base64.hpp>
+#include <hj/encoding/hex.hpp>
+#include <hj/io/filepath.hpp>
+#include <hj/math/random.hpp>
 
 #include "api.h"
 
@@ -50,12 +50,12 @@ int formator::_format_memory(
     std::string tmp = in;
     if (fmt == "hex")
     {
-        tmp = libcpp::hex::encode(in, true); // upper case
+        tmp = hj::hex::encode(in, true); // upper case
         err = (!tmp.empty()) ? CRYPTO_OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
     }
     else if (fmt == "base64")
     {
-        err = libcpp::base64::encode(tmp, in) ? CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+        err = hj::base64::encode(tmp, in) ? CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
     }
     else if (fmt == "none" || fmt == "")
     {
@@ -81,12 +81,12 @@ int formator::_unformat_memory(
     std::string tmp = in;
     if (fmt == "hex")
     {
-        tmp = libcpp::hex::decode(in); // upper case
+        tmp = hj::hex::decode(in); // upper case
         err = (!tmp.empty()) ? CRYPTO_OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
     }
     else if (fmt == "base64")
     {
-        err = libcpp::base64::decode(out, in) ? 
+        err = hj::base64::decode(out, in) ? 
             CRYPTO_OK : CRYPTO_ERR_UNFORMAT_BASE64_FAILED;
     }
     else if (fmt == "none" || fmt == "")
@@ -114,10 +114,10 @@ int formator::_format_file(
     if (out == in)
     {
         // the same file
-        auto name = libcpp::filepath::file_name(out, false);
-        auto ext = libcpp::filepath::extension(out);
-        auto path = libcpp::filepath::path_name(out);
-        tmp = libcpp::filepath::join(path, name + std::to_string(libcpp::random::range<0, 999>()) + ext);
+        auto name = hj::filepath::file_name(out, false);
+        auto ext = hj::filepath::extension(out);
+        auto path = hj::filepath::path_name(out);
+        tmp = hj::filepath::join(path, name + std::to_string(hj::random::range<0, 999>()) + ext);
     }
 
     // do format
@@ -126,16 +126,16 @@ int formator::_format_file(
         // not same file
         if (tmp == "")
         {
-            err = libcpp::hex::encode_file(out, in) ? 
+            err = hj::hex::encode_file(out, in) ? 
                 CRYPTO_OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
         }
         else
         {
             // same file
-            libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::hex::encode_file(out, tmp) ? 
+            hj::filepath::copy_file(in, tmp);
+            err = hj::hex::encode_file(out, tmp) ? 
                 CRYPTO_OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
-            libcpp::filepath::remove(tmp);
+            hj::filepath::remove(tmp);
         }
     }
     else if (fmt == "base64")
@@ -143,16 +143,16 @@ int formator::_format_file(
         if (tmp == "")
         {
             // not same file
-            err = libcpp::base64::encode_file(out, in) ? 
+            err = hj::base64::encode_file(out, in) ? 
                 CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
         }
         else
         {
             // same file
-            libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::base64::encode_file(out, tmp) ? 
+            hj::filepath::copy_file(in, tmp);
+            err = hj::base64::encode_file(out, tmp) ? 
                 CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
-            libcpp::filepath::remove(tmp);
+            hj::filepath::remove(tmp);
         }
     }
     else if (fmt == "none" || fmt == "")
@@ -177,10 +177,10 @@ int formator::_unformat_file(
     if (out == in)
     {
         // the same file
-        auto name = libcpp::filepath::file_name(out, false);
-        auto ext = libcpp::filepath::extension(out);
-        auto path = libcpp::filepath::path_name(out);
-        tmp = libcpp::filepath::join(path, name + std::to_string(libcpp::random::range<0, 999>()) + ext);
+        auto name = hj::filepath::file_name(out, false);
+        auto ext = hj::filepath::extension(out);
+        auto path = hj::filepath::path_name(out);
+        tmp = hj::filepath::join(path, name + std::to_string(hj::random::range<0, 999>()) + ext);
     }
 
     // do unformat
@@ -189,16 +189,16 @@ int formator::_unformat_file(
         if (tmp == "")
         {
             // not same file
-            err = libcpp::hex::decode_file(out, in) ? 
+            err = hj::hex::decode_file(out, in) ? 
                 CRYPTO_OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
         }
         else
         {
             // same file
-            libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::hex::decode_file(out, tmp) ? 
+            hj::filepath::copy_file(in, tmp);
+            err = hj::hex::decode_file(out, tmp) ? 
                 CRYPTO_OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
-            libcpp::filepath::remove(tmp);
+            hj::filepath::remove(tmp);
         }
     }
     else if (fmt == "base64")
@@ -206,16 +206,16 @@ int formator::_unformat_file(
         if (tmp == "")
         {
             // not same file
-            err = libcpp::base64::decode_file(out, in) ? 
+            err = hj::base64::decode_file(out, in) ? 
                 CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
         }
         else
         {
             // same file
-            libcpp::filepath::copy_file(in, tmp);
-            err = libcpp::base64::decode_file(out, tmp) ? 
+            hj::filepath::copy_file(in, tmp);
+            err = hj::base64::decode_file(out, tmp) ? 
                 CRYPTO_OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
-            libcpp::filepath::remove(tmp);
+            hj::filepath::remove(tmp);
         }
     }
     else if (fmt == "none" || fmt == "")

@@ -1,7 +1,7 @@
 #ifndef CRYPTO_CORE_API_H
 #define CRYPTO_CORE_API_H
 
-#include <libcpp/os/dll.h>
+#include <hj/os/dll.h>
 
 typedef struct crypto_context
 {

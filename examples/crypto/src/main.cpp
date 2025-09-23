@@ -1,11 +1,11 @@
-#include <libcpp/log/log.hpp>
-#include <libcpp/os/env.h>
-#include <libcpp/os/options.hpp>
-#include <libcpp/os/signal.hpp>
-#include <libcpp/util/license.hpp>
-#include <libcpp/encoding/i18n.hpp>
-#include <libcpp/testing/crash.hpp>
-#include <libcpp/testing/telemetry.hpp>
+#include <hj/log/log.hpp>
+#include <hj/os/env.h>
+#include <hj/os/options.hpp>
+#include <hj/os/signal.hpp>
+#include <hj/util/license.hpp>
+#include <hj/encoding/i18n.hpp>
+#include <hj/testing/crash.hpp>
+#include <hj/testing/telemetry.hpp>
 
 // add your code here...
 #include <iostream>
@@ -18,28 +18,28 @@
 int main(int argc, char* argv[])
 {
     // add options parse support
-    libcpp::options opts;
+    hj::options opts;
 
     // add crash handle support
-    libcpp::crash_handler::instance()->prevent_set_unhandled_exception_filter();
-    libcpp::crash_handler::instance()->set_local_path("./");
+    hj::crash_handler::instance()->prevent_set_unhandled_exception_filter();
+    hj::crash_handler::instance()->set_local_path("./");
 
     // add log support
-    libcpp::logger::instance()->set_level(libcpp::log_lvl::debug);
+    hj::logger::instance()->set_level(hj::log_lvl::debug);
 
     // add i18n support
-    libcpp::i18n::instance().set_locale("en_US");
-    libcpp::i18n::instance().load_translation_auto("./", "crypto");
+    hj::i18n::instance().set_locale("en_US");
+    hj::i18n::instance().load_translation_auto("./", "crypto");
 
     // add telemetry support
-    auto tracer = libcpp::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
+    auto tracer = hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
 
     // add signals handle support
-    libcpp::sigcatch({SIGABRT, SIGTERM}, [](int sig){});
+    hj::sigcatch({SIGABRT, SIGTERM}, [](int sig){});
 
     // add license check support
-    // libcpp::license::verifier vef{lic_issuer, libcpp::license::sign_algo::none, {}};
-    // auto err = vef.verify_file(lic_fpath, user, 30, {{"sn", libcpp::license::get_disk_sn()}});
+    // hj::license::verifier vef{lic_issuer, hj::license::sign_algo::none, {}};
+    // auto err = vef.verify_file(lic_fpath, user, 30, {{"sn", hj::license::get_disk_sn()}});
     // if (err)
     // {
     //     LOG_ERROR("license verify failed with err: {}, please check your license file: {}", err.message(), lic_fpath);

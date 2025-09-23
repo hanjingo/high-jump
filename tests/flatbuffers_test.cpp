@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <string>
-#include <libcpp/encoding/flatbuffers.hpp>
+#include <hj/encoding/flatbuffers.hpp>
 #include "monster_generated.h"
 
 TEST(flatbuffers, flatbuffers)
 {
-    libcpp::flatbuffer_builder builder;
+    hj::flatbuffer_builder builder;
     auto monster = MyGame::CreateMonster(
         builder, 1, builder.CreateString("Dragon"), 100, 35.5f);
     builder.Finish(monster);

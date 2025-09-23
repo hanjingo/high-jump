@@ -1,5 +1,5 @@
 ---
-# Allman Style Configuration for libcpp project
+# Allman Style Configuration for hj project
 Language: Cpp
 Standard: c++17
 BasedOnStyle: None

@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/db/sqlite.hpp>
+#include <hj/db/sqlite.hpp>
 #include <cstdio>
 #include <string>
 
-using namespace libcpp;
+using namespace hj;
 
 bool _is_sqlite_valid()
 {

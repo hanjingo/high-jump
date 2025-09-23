@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/db/postgresql.hpp>
+#include <hj/db/postgresql.hpp>
 #include <string>
 #include <vector>
 
@@ -13,7 +13,7 @@ static bool _is_pg_server_running()
     // Check if PostgreSQL server is running
     try
     {
-        libcpp::pg_connection conn("dbname=postgres user=postgres password=postgres");
+        hj::pg_connection conn("dbname=postgres user=postgres password=postgres");
         if (conn.is_open())
         {
             conn.disconnect();
@@ -32,7 +32,7 @@ TEST(PostgreSQLTest, ConnectAndDisconnect)
     if (!_is_pg_server_running())
         GTEST_SKIP() << "PostgreSQL server is not running or connection failed.";
 
-    libcpp::pg_connection db(conninfo);
+    hj::pg_connection db(conninfo);
     ASSERT_TRUE(db.is_open());
     db.disconnect();
     ASSERT_FALSE(db.is_open());
@@ -43,7 +43,7 @@ TEST(PostgreSQLTest, ExecAndQuery)
     if (!_is_pg_server_running())
         GTEST_SKIP() << "PostgreSQL server is not running or connection failed.";
 
-    libcpp::pg_connection db(conninfo);
+    hj::pg_connection db(conninfo);
     ASSERT_TRUE(db.is_open());
 
     db.exec("DROP TABLE IF EXISTS test_table");

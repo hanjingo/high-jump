@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/yaml.hpp>
+#include <hj/encoding/yaml.hpp>
 #include <cstdio>
 #include <string>
 
-using namespace libcpp;
+using namespace hj;
 
 TEST(YamlTest, ParseFromString)
 {

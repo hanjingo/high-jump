@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
-#include <libcpp/os/options.hpp>
+#include <hj/os/options.hpp>
 #include <vector>
 #include <string>
 #include <cstring>
 
 #include <algorithm>
 
-using namespace libcpp;
+using namespace hj;
 
 class OptionsTest : public ::testing::Test {
 protected:

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/simd.h>
+#include <hj/hardware/simd.h>
 #include <vector>
 #include <cmath>
 

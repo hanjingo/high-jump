@@ -2,7 +2,7 @@
 
 // #define CRC16_MODBUS_ENABLED
 #define CRC16_XMODEM_ENABLED
-#include <libcpp/algo/crc16.h>
+#include <hj/algo/crc16.h>
 #include <cstring>
 
 TEST(crc16, standard_test_vectors)

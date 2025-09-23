@@ -1,7 +1,7 @@
 #ifndef SDK_API_H
 #define SDK_API_H
 
-#include <libcpp/os/dll.h>
+#include <hj/os/dll.h>
 
 typedef struct context
 {

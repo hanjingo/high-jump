@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/sync/object_pool.hpp>
+#include <hj/sync/object_pool.hpp>
 
 #include <string>
 
@@ -27,7 +27,7 @@ struct c_worker
 
 TEST(object_pool, construct)
 {
-    libcpp::object_pool<worker> pool;
+    hj::object_pool<worker> pool;
     pool.construct("harry", 30, 10000.0, "hehehunanchina@live.com");
     auto obj1 = pool.pop();
     ASSERT_EQ(obj1 != nullptr, true);
@@ -37,7 +37,7 @@ TEST(object_pool, construct)
     ASSERT_EQ(obj1->email == std::string("hehehunanchina@live.com"), true);
     pool.push(obj1);
 
-    libcpp::object_pool<c_worker> cpool;
+    hj::object_pool<c_worker> cpool;
     c_worker* cw = cpool.allocate();
     cw->name = "lucy";
     cw->age = new int(18);
@@ -54,7 +54,7 @@ TEST(object_pool, construct)
 
 TEST(object_pool, push)
 {
-    libcpp::object_pool<worker> pool;
+    hj::object_pool<worker> pool;
     pool.construct("tom", 25, 8000.0, "tom@abc.com");
     auto obj = pool.pop();
     ASSERT_NE(obj, nullptr);
@@ -64,7 +64,7 @@ TEST(object_pool, push)
     ASSERT_EQ(obj2->age, 26);
     pool.push(obj2);
 
-    libcpp::object_pool<c_worker> cpool;
+    hj::object_pool<c_worker> cpool;
     c_worker* cw = cpool.allocate();
     cw->name = "lucy";
     cw->age = new int(18);
@@ -81,14 +81,14 @@ TEST(object_pool, push)
 
 TEST(object_pool, pop)
 {
-    libcpp::object_pool<worker> pool;
+    hj::object_pool<worker> pool;
     pool.construct("jack", 40, 12000.0, "jack@abc.com");
     auto obj = pool.pop();
     ASSERT_NE(obj, nullptr);
     ASSERT_EQ(obj->name, "jack");
     pool.push(obj);
 
-    libcpp::object_pool<c_worker> cpool;
+    hj::object_pool<c_worker> cpool;
     c_worker* cw = cpool.allocate();
     cw->name = "bob";
     cw->age = new int(22);
@@ -103,7 +103,7 @@ TEST(object_pool, pop)
 
 TEST(object_pool, size)
 {
-    libcpp::object_pool<worker> pool;
+    hj::object_pool<worker> pool;
     ASSERT_EQ(pool.size(), 0);
     pool.construct("alice", 35, 9000.0, "alice@abc.com");
     ASSERT_EQ(pool.size(), 1);
@@ -112,7 +112,7 @@ TEST(object_pool, size)
     pool.push(obj);
     ASSERT_EQ(pool.size(), 1);
 
-    libcpp::object_pool<c_worker> cpool;
+    hj::object_pool<c_worker> cpool;
     ASSERT_EQ(cpool.size(), 0);
     c_worker* cw = cpool.allocate();
     cw->name = "eve";

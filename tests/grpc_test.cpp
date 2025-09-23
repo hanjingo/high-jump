@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/misc/grpc.hpp>
+#include <hj/misc/grpc.hpp>
 #include <grpcpp/grpcpp.h>
 #include <thread>
 #include <chrono>
@@ -21,12 +21,12 @@ public:
 TestGrpcServiceImpl* g_service = new TestGrpcServiceImpl();
 
 TEST(GRPCTest, SayHelloUnaryCall) {
-    libcpp::grpc_server server;
+    hj::grpc_server server;
     std::string address = "127.0.0.1:50051";
     ASSERT_TRUE(server.start(address, g_service));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    libcpp::grpc_channel channel;
+    hj::grpc_channel channel;
     ASSERT_TRUE(channel.connect(address));
     auto stub = GrpcService::NewStub(channel.get());
 

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/protobuf.hpp>
+#include <hj/encoding/protobuf.hpp>
 #include "person.pb.h"
 #include <cstdio>
 #include <string>
@@ -10,9 +10,9 @@ TEST(ProtobufTest, SerializeParseString) {
     p.set_id(100);
     p.set_email("hehehunanchina@live.com");
     std::string buf;
-    ASSERT_TRUE(libcpp::pb::serialize(buf, p));
+    ASSERT_TRUE(hj::pb::serialize(buf, p));
     test::Person p1;
-    ASSERT_TRUE(libcpp::pb::deserialize(p1, buf));
+    ASSERT_TRUE(hj::pb::deserialize(p1, buf));
     EXPECT_EQ(p1.name(), "test");
     EXPECT_EQ(p1.email(), "hehehunanchina@live.com");
     EXPECT_EQ(p1.id(), 100);
@@ -24,12 +24,12 @@ TEST(ProtobufTest, SerializeParseFile) {
     p.set_id(42);
     p.set_email("file@example.com");
     std::ofstream fout("person_test.pb", std::ios::binary);
-    ASSERT_TRUE(libcpp::pb::serialize(fout, p));
+    ASSERT_TRUE(hj::pb::serialize(fout, p));
     fout.close();
 
     test::Person p2;
     std::ifstream fin("person_test.pb", std::ios::binary);
-    ASSERT_TRUE(libcpp::pb::deserialize(p2, fin));
+    ASSERT_TRUE(hj::pb::deserialize(p2, fin));
     EXPECT_EQ(p2.name(), "file");
     EXPECT_EQ(p2.id(), 42);
     EXPECT_EQ(p2.email(), "file@example.com");

@@ -1,6 +1,6 @@
 #include <exception>
 #include <gtest/gtest.h>
-#include <libcpp/testing/stacktrace.hpp>
+#include <hj/testing/stacktrace.hpp>
 
 // TEST(stacktrace, stacktrace)
 // {
@@ -10,7 +10,7 @@
 //     }
 //     catch (...)
 //     {
-//         std::cout << libcpp::stacktrace() << std::endl;
+//         std::cout << hj::stacktrace() << std::endl;
 //     }
 // }
 

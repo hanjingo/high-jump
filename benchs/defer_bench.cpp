@@ -1,9 +1,9 @@
 #include <benchmark/benchmark.h>
-#include <libcpp/util/defer.hpp>
+#include <hj/util/defer.hpp>
 
 static void BM_Defer_Empty(benchmark::State& state) {
 	for (auto _ : state) {
-		libcpp::defer d([]{});
+		hj::defer d([]{});
 	}
 }
 BENCHMARK(BM_Defer_Empty);
@@ -11,7 +11,7 @@ BENCHMARK(BM_Defer_Empty);
 static void BM_Defer_Lambda(benchmark::State& state) {
 	int x = 0;
 	for (auto _ : state) {
-		libcpp::defer d([&]{ x++; });
+		hj::defer d([&]{ x++; });
 	}
 	benchmark::DoNotOptimize(x);
 }

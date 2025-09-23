@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/bluetooth.h>
+#include <hj/hardware/bluetooth.h>
 
 bool print_bluetooth_device_info(bluetooth_info_t* device)
 {

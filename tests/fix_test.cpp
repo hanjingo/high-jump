@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include <libcpp/misc/fix.hpp>
+#include <hj/misc/fix.hpp>
 
 TEST(FixTest, BuildAndParse) {
-    libcpp::fix_builder builder;
+    hj::fix_builder builder;
     builder.begin();
     builder.add_string(35, "D"); // MsgType
     builder.add_string(49, "SENDER"); // SenderCompID
@@ -13,7 +13,7 @@ TEST(FixTest, BuildAndParse) {
 
     std::string fixmsg = builder.str();
 
-    libcpp::fix_parser parser(fixmsg.data(), fixmsg.size());
+    hj::fix_parser parser(fixmsg.data(), fixmsg.size());
     ASSERT_TRUE(parser.valid());
     ASSERT_TRUE(parser.complete());
     EXPECT_EQ(parser.get_string(35), "D");

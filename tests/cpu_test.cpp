@@ -2,7 +2,7 @@
 #include <chrono>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <libcpp/hardware/cpu.h>
+#include <hj/hardware/cpu.h>
 #include <map>
 #include <set>
 #include <thread>

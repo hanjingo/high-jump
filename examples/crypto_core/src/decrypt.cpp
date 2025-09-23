@@ -1,6 +1,6 @@
 #include "decrypt.h"
 
-#include <libcpp/io/filepath.hpp>
+#include <hj/io/filepath.hpp>
 
 #include "comm.h"
 #include "format.h"
@@ -82,7 +82,7 @@ int aes_decryptor::decrypt(
         std::string tmp;
         err = formator::unformat(tmp, content, fmt, fmt_target::memory);
         if (err == CRYPTO_OK)
-            err = libcpp::aes::decrypt(out, tmp, key, mod, pad, iv) ? 
+            err = hj::aes::decrypt(out, tmp, key, mod, pad, iv) ? 
                 CRYPTO_OK : CRYPTO_ERR_DECRYPT_AES_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
@@ -90,9 +90,9 @@ int aes_decryptor::decrypt(
         std::string tmp = in + ".tmp";
         err = formator::unformat(tmp, in, fmt, fmt_target::file);
         if (err == CRYPTO_OK)
-            err = libcpp::aes::decrypt_file(out, tmp, key, mod, pad, iv) ? 
+            err = hj::aes::decrypt_file(out, tmp, key, mod, pad, iv) ? 
                 CRYPTO_OK : CRYPTO_ERR_DECRYPT_AES_FAILED;
-        libcpp::filepath::remove(tmp);
+        hj::filepath::remove(tmp);
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
@@ -102,7 +102,7 @@ int aes_decryptor::decrypt(
         {
             std::istringstream sin(tmp);
             std::ofstream fout(out, std::ios::binary);
-            err = libcpp::aes::decrypt(
+            err = hj::aes::decrypt(
                 fout, 
                 sin, 
                 reinterpret_cast<const unsigned char*>(key.c_str()), 
@@ -121,7 +121,7 @@ int aes_decryptor::decrypt(
         {
             std::ifstream fin(tmp, std::ios::binary);
             std::ostringstream sout(out);
-            err = libcpp::aes::decrypt(
+            err = hj::aes::decrypt(
                 sout, 
                 fin, 
                 reinterpret_cast<const unsigned char*>(key.c_str()), 
@@ -132,7 +132,7 @@ int aes_decryptor::decrypt(
                 iv.size()) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_AES_FAILED;
             out = sout.str();
         }
-        libcpp::filepath::remove(tmp);
+        hj::filepath::remove(tmp);
     }
 
     return err;
@@ -149,7 +149,7 @@ bool aes_decryptor::_is_key_valid(
     const std::string& mode)
 {
     auto mod = str_to_aes_mode(mode);
-    return libcpp::aes::is_key_valid(
+    return hj::aes::is_key_valid(
         mod, 
         reinterpret_cast<const unsigned char*>(key.c_str()), 
         key.size());
@@ -167,7 +167,7 @@ bool aes_decryptor::_is_iv_valid(
 {
     const unsigned char* iv_ptr = (iv == "") ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
     auto mod = str_to_aes_mode(mode);
-    return libcpp::aes::is_iv_valid(mod, iv_ptr, iv.size());
+    return hj::aes::is_iv_valid(mod, iv_ptr, iv.size());
 }
 
 bool aes_decryptor::_is_fmt_valid(const std::string& fmt)
@@ -190,23 +190,23 @@ int base64_decryptor::decrypt(
     int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        err = libcpp::base64::decode(out, content) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
+        err = hj::base64::decode(out, content) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
-        err = libcpp::base64::decode_file(out, in) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
+        err = hj::base64::decode_file(out, in) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
-        err = libcpp::base64::decode(fout, sin);
+        err = hj::base64::decode(fout, sin);
     }
     else // decrypt: file -> mem
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = libcpp::base64::decode(sout, fin) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
+        err = hj::base64::decode(sout, fin) ? CRYPTO_OK : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
         out = sout.str();
     }
 
@@ -245,19 +245,19 @@ int des_decryptor::decrypt(
     int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        err = libcpp::des::decrypt(out, content, key, mod, pad, iv) ? 
+        err = hj::des::decrypt(out, content, key, mod, pad, iv) ? 
             CRYPTO_OK : CRYPTO_ERR_DECRYPT_DES_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
-        err = libcpp::des::decrypt_file(out, in, key, mod, pad, iv) ? 
+        err = hj::des::decrypt_file(out, in, key, mod, pad, iv) ? 
             CRYPTO_OK : CRYPTO_ERR_DECRYPT_DES_FAILED;
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
-        err = libcpp::des::decrypt(
+        err = hj::des::decrypt(
             fout, 
             sin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
@@ -271,7 +271,7 @@ int des_decryptor::decrypt(
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = libcpp::des::decrypt(
+        err = hj::des::decrypt(
             sout, 
             fin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
@@ -296,7 +296,7 @@ bool des_decryptor::_is_key_valid(
     const std::string& key,
     const std::string& mode)
 {
-    return libcpp::des::is_key_valid(
+    return hj::des::is_key_valid(
         reinterpret_cast<const unsigned char*>(key.c_str()), 
         key.size());
 }
@@ -313,7 +313,7 @@ bool des_decryptor::_is_iv_valid(
 {
     const unsigned char* iv_ptr = (iv == "") ? nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
     auto mod = str_to_des_mode(mode);
-    return libcpp::des::is_iv_valid(mod, iv_ptr, iv.size());
+    return hj::des::is_iv_valid(mod, iv_ptr, iv.size());
 }
 
 bool des_decryptor::_is_fmt_valid(const std::string& fmt)
@@ -349,19 +349,19 @@ int rsa_decryptor::decrypt(
     int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // decrypt: mem -> mem
     {
-        err = libcpp::rsa::decrypt(out, content, key, pad, "") ? 
+        err = hj::rsa::decrypt(out, content, key, pad, "") ? 
             CRYPTO_OK : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     }
     else if (out != "" && in != "") // decrypt: file -> file
     {
-        err = libcpp::rsa::decrypt_file(out, in, key, pad, "") ? 
+        err = hj::rsa::decrypt_file(out, in, key, pad, "") ? 
             CRYPTO_OK : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     }
     else if (out != "" && in == "") // decrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
-        err = libcpp::rsa::decrypt(
+        err = hj::rsa::decrypt(
             fout, 
             sin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
@@ -374,7 +374,7 @@ int rsa_decryptor::decrypt(
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = libcpp::rsa::decrypt(
+        err = hj::rsa::decrypt(
             sout, 
             fin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
@@ -390,7 +390,7 @@ int rsa_decryptor::decrypt(
 
 bool rsa_decryptor::_is_key_valid(const std::string& key)
 {
-    return libcpp::rsa::is_key_pair_bits_valid(key.size() * 8);
+    return hj::rsa::is_key_pair_bits_valid(key.size() * 8);
 }
 
 bool rsa_decryptor::_is_padding_valid(const std::string& padding)
@@ -410,13 +410,13 @@ bool rsa_decryptor::_is_input_valid(
     if (out == "")
     {
         auto pad = str_to_rsa_padding(padding);
-        return libcpp::rsa::is_cipher_valid(content, pad, key);
+        return hj::rsa::is_cipher_valid(content, pad, key);
     }
 
     // to file
     std::ifstream fin(in, std::ios::binary);
     auto pad = str_to_rsa_padding(padding);
-    return libcpp::rsa::is_cipher_valid(
+    return hj::rsa::is_cipher_valid(
         fin, 
         pad, 
         reinterpret_cast<const unsigned char*>(key.c_str()),

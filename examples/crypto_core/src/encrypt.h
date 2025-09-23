@@ -7,12 +7,12 @@
 #include <fstream>
 #include <sstream>
 
-#include <libcpp/crypto/aes.hpp>
-#include <libcpp/crypto/base64.hpp>
-#include <libcpp/crypto/des.hpp>
-#include <libcpp/crypto/md5.hpp>
-#include <libcpp/crypto/sha.hpp>
-#include <libcpp/crypto/rsa.hpp>
+#include <hj/crypto/aes.hpp>
+#include <hj/crypto/base64.hpp>
+#include <hj/crypto/des.hpp>
+#include <hj/crypto/md5.hpp>
+#include <hj/crypto/sha.hpp>
+#include <hj/crypto/rsa.hpp>
 
 #include "api.h"
 

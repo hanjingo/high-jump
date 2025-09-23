@@ -1,15 +1,15 @@
 #include <iostream>
 #include <thread>
-#include <libcpp/sync/shared_memory.hpp>
-#include <libcpp/os/options.hpp>
+#include <hj/sync/shared_memory.hpp>
+#include <hj/os/options.hpp>
 
 int main(int argc, char* argv[])
 {
-    libcpp::options opt;
+    hj::options opt;
     opt.add<std::string>("key", std::string("not found"));
     std::string key = opt.parse<std::string>(argc, argv, "key");
 
-    libcpp::shared_memory shm{key.c_str(), 256};
+    hj::shared_memory shm{key.c_str(), 256};
     if (shm.map() == nullptr)
     {
         throw std::runtime_error("shm addr is nullptr");

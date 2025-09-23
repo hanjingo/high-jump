@@ -5,7 +5,7 @@
 #if CLICKHOUSE_ENABLE
 
 // #ifndef _WIN32
-#include <libcpp/db/clickhouse.hpp>
+#include <hj/db/clickhouse.hpp>
 
 std::time_t now()
 {
@@ -14,13 +14,13 @@ std::time_t now()
 
 TEST(clickhouse_client, connect)
 {
-    libcpp::ck::client cli("localhost", 9000, "default", "livermore", "default");
+    hj::ck::client cli("localhost", 9000, "default", "livermore", "default");
     ASSERT_TRUE(cli.is_connected());
 }
 
 TEST(clickhouse_client, create_table)
 {
-    libcpp::ck::client cli("localhost", 9000, "default", "livermore", "default");
+    hj::ck::client cli("localhost", 9000, "default", "livermore", "default");
     cli.execute("DROP TABLE IF EXISTS create_table_test");
     cli.execute(R"(
         CREATE TABLE create_table_test (
@@ -35,7 +35,7 @@ TEST(clickhouse_client, create_table)
 
 TEST(clickhouse_client, insert)
 {
-    libcpp::ck::client cli("localhost", 9000, "default", "livermore", "default");
+    hj::ck::client cli("localhost", 9000, "default", "livermore", "default");
     cli.execute("DROP TABLE IF EXISTS insert_test");
     cli.execute(R"(
         CREATE TABLE insert_test (
@@ -47,12 +47,12 @@ TEST(clickhouse_client, insert)
         ) ENGINE = Memory
     )");
 
-    libcpp::ck::block b;
-    auto id = std::make_shared<libcpp::ck::column_uint64>();
-    auto age = std::make_shared<libcpp::ck::column_int8>();
-    auto salary = std::make_shared<libcpp::ck::column_decimal>(6, 2);
-    auto name = std::make_shared<libcpp::ck::column_string>();
-    auto create_time = std::make_shared<libcpp::ck::column_date_time>();
+    hj::ck::block b;
+    auto id = std::make_shared<hj::ck::column_uint64>();
+    auto age = std::make_shared<hj::ck::column_int8>();
+    auto salary = std::make_shared<hj::ck::column_decimal>(6, 2);
+    auto name = std::make_shared<hj::ck::column_string>();
+    auto create_time = std::make_shared<hj::ck::column_date_time>();
     for (uint32_t i = 1; i <= 5; ++i)
     {
         id->Append(i);
@@ -73,7 +73,7 @@ TEST(clickhouse_client, insert)
 
 TEST(clickhouse_client, select)
 {
-    libcpp::ck::client cli("localhost", 9000, "default", "livermore", "default");
+    hj::ck::client cli("localhost", 9000, "default", "livermore", "default");
     cli.execute("DROP TABLE IF EXISTS select_test");
     cli.execute(R"(
         CREATE TABLE select_test (
@@ -84,11 +84,11 @@ TEST(clickhouse_client, select)
         ) ENGINE = Memory
     )");
 
-    libcpp::ck::block b;
-    auto id = std::make_shared<libcpp::ck::column_uint32>();
-    auto name = std::make_shared<libcpp::ck::column_string>();
-    auto score = std::make_shared<libcpp::ck::column_float64>();
-    auto dt = std::make_shared<libcpp::ck::column_date_time>();
+    hj::ck::block b;
+    auto id = std::make_shared<hj::ck::column_uint32>();
+    auto name = std::make_shared<hj::ck::column_string>();
+    auto score = std::make_shared<hj::ck::column_float64>();
+    auto dt = std::make_shared<hj::ck::column_date_time>();
     for (uint32_t i = 1; i <= 5; ++i)
     {
         id->Append(i);
@@ -107,10 +107,10 @@ TEST(clickhouse_client, select)
     auto result = cli.select("SELECT id, name, score, dt FROM select_test WHERE id = 1");
     ASSERT_EQ(result.GetRowCount(), 1);
     if (result.GetRowCount() > 0) {
-        auto id    = result[0]->As<libcpp::ck::column_uint32>()->At(0);
-        auto name  = result[1]->As<libcpp::ck::column_string>()->At(0);
-        auto score = result[2]->As<libcpp::ck::column_float64>()->At(0);
-        auto dt    = result[3]->As<libcpp::ck::column_date_time>()->At(0);
+        auto id    = result[0]->As<hj::ck::column_uint32>()->At(0);
+        auto name  = result[1]->As<hj::ck::column_string>()->At(0);
+        auto score = result[2]->As<hj::ck::column_float64>()->At(0);
+        auto dt    = result[3]->As<hj::ck::column_date_time>()->At(0);
         ASSERT_EQ(id, 1);
         ASSERT_EQ(score, 81.0);
     }
@@ -118,7 +118,7 @@ TEST(clickhouse_client, select)
 
 TEST(clickhouse_client, drop_table)
 {
-    libcpp::ck::client cli("localhost", 9000, "default", "livermore", "default");
+    hj::ck::client cli("localhost", 9000, "default", "livermore", "default");
     cli.execute("DROP TABLE IF EXISTS drop_table_test");
     cli.execute(R"(
         CREATE TABLE drop_table_test (

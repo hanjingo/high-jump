@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <codecvt>
 #include <locale>
-#include <libcpp/hardware/usb.h>
+#include <hj/hardware/usb.h>
 
 std::string ws2s(const wchar_t* wstr) 
 {

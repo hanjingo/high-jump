@@ -1,7 +1,7 @@
 #include "api.h"
 
-#include <libcpp/testing/crash.hpp>
-#include <libcpp/util/once.hpp>
+#include <hj/testing/crash.hpp>
+#include <hj/util/once.hpp>
 
 C_STYLE_EXPORT void version(context ctx)
 {
@@ -18,8 +18,8 @@ C_STYLE_EXPORT void init(context ctx)
             return;
 
         // add crash handle support
-        libcpp::crash_handler::instance()->prevent_set_unhandled_exception_filter();
-        libcpp::crash_handler::instance()->set_local_path("./");
+        hj::crash_handler::instance()->prevent_set_unhandled_exception_filter();
+        hj::crash_handler::instance()->set_local_path("./");
 
         // add your code here ...
     )

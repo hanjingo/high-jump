@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/testing/telemetry.hpp>
+#include <hj/testing/telemetry.hpp>
 #include <thread>
 #include <chrono>
 #include <map>
@@ -71,7 +71,7 @@ static double _get_mem_usage()
 
 TEST(TelemetryTest, TraceOStreamExportDefault)
 {
-	auto tracer = libcpp::telemetry::make_ostream_tracer("ostream1");
+	auto tracer = hj::telemetry::make_ostream_tracer("ostream1");
 	for (int i = 0; i < 2; ++i)
 	{
 		auto span_hello = tracer.start_span("call_hello");
@@ -86,11 +86,11 @@ TEST(TelemetryTest, TraceOStreamExportDefault)
 
 TEST(TelemetryTest, TraceCustomSpanExporter)
 {
-	using namespace libcpp::telemetry;
-	class my_custom_trace_span_exporter : public libcpp::telemetry::custom_trace_span_exporter_t
+	using namespace hj::telemetry;
+	class my_custom_trace_span_exporter : public hj::telemetry::custom_trace_span_exporter_t
 	{
 	public:
-		my_custom_trace_span_exporter() : libcpp::telemetry::custom_trace_span_exporter_t()
+		my_custom_trace_span_exporter() : hj::telemetry::custom_trace_span_exporter_t()
 		{
 		}
 
@@ -122,8 +122,8 @@ TEST(TelemetryTest, TraceCustomSpanExporter)
 	};
 
 	auto exporter = std::make_unique<my_custom_trace_span_exporter>();
-	auto processor = libcpp::telemetry::make_simple_trace_span_processor(std::move(exporter));
-	auto tracer = libcpp::telemetry::make_custom_tracer("my_custom_span_exporter1", std::move(processor));
+	auto processor = hj::telemetry::make_simple_trace_span_processor(std::move(exporter));
+	auto tracer = hj::telemetry::make_custom_tracer("my_custom_span_exporter1", std::move(processor));
 	for (int i = 0; i < 2; ++i)
 	{
 		auto span_hello = tracer.start_span("call_hello");
@@ -144,11 +144,11 @@ TEST(TelemetryTest, TraceOtlpHttpExport)
     if (endpoint == "http://xxx")
         GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this trace test.";
 
-	auto tracer = libcpp::telemetry::make_otlp_http_tracer(
+	auto tracer = hj::telemetry::make_otlp_http_tracer(
 		"otlp_http_test", 
 		endpoint, 
 		true,
-		libcpp::telemetry::http_request_content_type::kBinary);
+		hj::telemetry::http_request_content_type::kBinary);
 	for (int i = 0; i < 2; ++i)
 	{
 		auto span_hello = tracer.start_span("call_hello");
@@ -164,7 +164,7 @@ TEST(TelemetryTest, TraceOtlpHttpExport)
 TEST(TelemetryTest, TraceOtlpFileExport)
 {
 	std::string file_pattern = "trace-otlp-file.json";
-	auto tracer = libcpp::telemetry::make_otlp_file_tracer("otlp_file_test", file_pattern);
+	auto tracer = hj::telemetry::make_otlp_file_tracer("otlp_file_test", file_pattern);
 	for (int i = 0; i < 2; ++i)
 	{
 		auto span_hello = tracer.start_span("call_hello");
@@ -179,9 +179,9 @@ TEST(TelemetryTest, TraceOtlpFileExport)
 
 TEST(TelemetryTest, MeterOStreamExportDefault)
 {
-	libcpp::telemetry::clean_up_metrics();
+	hj::telemetry::clean_up_metrics();
 
-	auto meter = libcpp::telemetry::make_ostream_meter("meter1", "1.2.0", "", 500, 100);
+	auto meter = hj::telemetry::make_ostream_meter("meter1", "1.2.0", "", 500, 100);
 	auto cpu_counter = meter.create_double_counter("cpu_usage", "count CPU usage", "percent");
 	auto mem_counter = meter.create_double_counter("mem_usage", "count Memory usage", "percent");
 	for (uint32_t i = 0; i < 5; ++i)
@@ -209,11 +209,11 @@ TEST(TelemetryTest, MeterOtlpHttpExport)
 	if (endpoint == "http://xxx")
 		GTEST_SKIP() << "Please configure a valid OTLP endpoint to run this meter test.";
 
-	libcpp::telemetry::clean_up_metrics();
+	hj::telemetry::clean_up_metrics();
 
-	auto meter = libcpp::telemetry::make_otlp_http_meter(
+	auto meter = hj::telemetry::make_otlp_http_meter(
 		"meter_otlp_http_test", "1.2.0", "", endpoint,
-		libcpp::telemetry::http_request_content_type::kBinary, 500, 100, true);
+		hj::telemetry::http_request_content_type::kBinary, 500, 100, true);
 
 	auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage", "CPU usage"); // for aliyun
 	cpu_gauge->AddCallback(async_obs_gauge, nullptr);
@@ -225,9 +225,9 @@ TEST(TelemetryTest, MeterOtlpHttpExport)
 
 TEST(TelemetryTest, MeterOtlpFileExport)
 {
-	libcpp::telemetry::clean_up_metrics();
+	hj::telemetry::clean_up_metrics();
 
-	auto meter = libcpp::telemetry::make_otlp_file_meter(
+	auto meter = hj::telemetry::make_otlp_file_meter(
 		"meter_otlp_file_test", "1.2.0", "", "meter-otlp-file.json", 500, 100, true);
 
 	auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage", "CPU usage");

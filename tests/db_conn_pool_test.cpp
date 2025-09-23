@@ -1,11 +1,11 @@
 #include <gtest/gtest.h>
-#include <libcpp/db/db_conn_pool.hpp>
+#include <hj/db/db_conn_pool.hpp>
 
-#include <libcpp/db/sqlite.hpp>
+#include <hj/db/sqlite.hpp>
 
 TEST(db_conn_pool, capa)
 {
-    libcpp::db_conn_pool<sqlite3> pool{5, []()->libcpp::db_conn_pool<sqlite3>::conn_ptr_t{
+    hj::db_conn_pool<sqlite3> pool{5, []()->hj::db_conn_pool<sqlite3>::conn_ptr_t{
         sqlite3* db;
         int ret = sqlite3_open("007.db", &db);
         if (ret != SQLITE_OK) 
@@ -22,9 +22,9 @@ TEST(db_conn_pool, capa)
 
 TEST(db_conn_pool, acquire)
 {
-    libcpp::db_conn_pool<sqlite3> pool{
+    hj::db_conn_pool<sqlite3> pool{
         5, 
-        []()->libcpp::db_conn_pool<sqlite3>::conn_ptr_t{
+        []()->hj::db_conn_pool<sqlite3>::conn_ptr_t{
             sqlite3* db;
             int ret = sqlite3_open("007.db", &db);
             if (ret != SQLITE_OK) 
@@ -36,7 +36,7 @@ TEST(db_conn_pool, acquire)
                 sqlite3_close(db);
             });
         },
-        [](libcpp::db_conn_pool<sqlite3>::conn_ptr_t conn)->bool {
+        [](hj::db_conn_pool<sqlite3>::conn_ptr_t conn)->bool {
             if (conn == nullptr)
                 return false;
             return true;
@@ -57,9 +57,9 @@ TEST(db_conn_pool, acquire)
 
 TEST(db_conn_pool, release_and_reuse)
 {
-    libcpp::db_conn_pool<sqlite3> pool{
+    hj::db_conn_pool<sqlite3> pool{
         2,
-        []()->libcpp::db_conn_pool<sqlite3>::conn_ptr_t{
+        []()->hj::db_conn_pool<sqlite3>::conn_ptr_t{
             sqlite3* db;
             int ret = sqlite3_open("008.db", &db);
             if (ret != SQLITE_OK)
@@ -84,9 +84,9 @@ TEST(db_conn_pool, release_and_reuse)
 
 TEST(db_conn_pool, timeout)
 {
-    libcpp::db_conn_pool<sqlite3> pool{
+    hj::db_conn_pool<sqlite3> pool{
         1,
-        []()->libcpp::db_conn_pool<sqlite3>::conn_ptr_t{
+        []()->hj::db_conn_pool<sqlite3>::conn_ptr_t{
             sqlite3* db;
             int ret = sqlite3_open("009.db", &db);
             if (ret != SQLITE_OK)
@@ -105,16 +105,16 @@ TEST(db_conn_pool, timeout)
 TEST(db_conn_pool, check_conn)
 {
     int fail_count = 0;
-    libcpp::db_conn_pool<sqlite3> pool{
+    hj::db_conn_pool<sqlite3> pool{
         2,
-        []()->libcpp::db_conn_pool<sqlite3>::conn_ptr_t{
+        []()->hj::db_conn_pool<sqlite3>::conn_ptr_t{
             sqlite3* db;
             int ret = sqlite3_open("010.db", &db);
             if (ret != SQLITE_OK)
                 return nullptr;
             return std::shared_ptr<sqlite3>(db, [](sqlite3* db){ sqlite3_close(db); });
         },
-        [&fail_count](libcpp::db_conn_pool<sqlite3>::conn_ptr_t conn)->bool {
+        [&fail_count](hj::db_conn_pool<sqlite3>::conn_ptr_t conn)->bool {
             if (conn == nullptr) {
                 ++fail_count;
                 return false;

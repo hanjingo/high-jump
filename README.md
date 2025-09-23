@@ -1,4 +1,4 @@
-# libcpp
+# high-jump(hj)
 
 cpp library framework implementationed by c++17.
 
@@ -10,23 +10,23 @@ cpp library framework implementationed by c++17.
 
 | module   | description                                                  |
 | -------- | ------------------------------------------------------------ |
-| algo     | -                                                            |
-| compress | -                                                            |
-| crypto   | -                                                            |
-| db       | -                                                            |
-| encoding | The module includes functions for processing **hex**, **xml**, and other formats. |
-| hardware | -                                                            |
-| io       | The module includes functions for processing **tasks** and other related operations. |
-| log      | This module encapsulates the **spdlog** project.             |
-| math     | This module provides support for **matrix** operations and other related functionalities. |
-| misc     | This module includes miscellaneous components, such as **error codes**, **callback hash tables**, and others. |
-| net      | This module provides support for **TCP**, **ZeroMQ,** and other related functionalities. |
-| os       | -                                                            |
-| sync     | This module provides some thread-safe functions and data structures, including **chan**, **once**, **safe list**, and others. |
-| testing  | This module encapsulates **Google Test**, **Google breakpad**. |
-| time     | This module includes functions for handling **date** and **time** operations. |
-| types    | This module includes some commonly used data types, such as **any**, **byte**, **noncopyable**, **variant**, and others. |
-| util     | This module includes some commonly used components, such as **defer** and others. |
+| algo     | Common algorithms and data structures, including skiplist, bloom filter, state machine, behavior tree, etc. |
+| compress | Compression and decompression utilities, supporting formats like gzip. |
+| crypto   | Cryptography algorithms: AES, DES, RSA, MD5, SHA, Base64, and more. |
+| db       | Database support: connection pools and operations for SQLite, Redis, PostgreSQL, ClickHouse, etc. |
+| encoding | Encoding/decoding tools for hex, xml, json, protobuf, yaml, unicode, and more. |
+| hardware | Hardware info and control: CPU, GPU, memory, disk, USB, and others. |
+| io       | File and buffer operations, task processing, asynchronous IO. |
+| log      | Logging module based on **spdlog**, supporting high-performance logging. |
+| math     | Math and matrix operations, random number generation, vectors, etc. |
+| misc     | Miscellaneous utilities: error codes, callback hash tables, PDF, gRPC, ZeroMQ, etc. |
+| net      | Network communication: TCP, UDP, HTTP, WebSocket, ZeroMQ protocols. |
+| os       | OS-related features: process, signal, environment variables, compatibility, etc. |
+| sync     | Thread-safe utilities and data structures: chan, once, safe containers, coroutine, etc. |
+| testing  | Testing and exception handling: integrates **Google Test**, **breakpad**, unit tests, etc. |
+| time     | Date and time handling, timers, time calculations. |
+| types    | Common data types: any, byte, noncopyable, variant, optional, etc. |
+| util     | Utility components: defer, once, string processing, version info, and more. |
 
 ---
 
@@ -75,6 +75,8 @@ or install 3rd-party project by yourself.
 
 ```sh
 cmake .. -DBUILD_LIB=ON
+
+cmake --build .
 ```
 
 | option    | default | description                     |
@@ -85,6 +87,8 @@ cmake .. -DBUILD_LIB=ON
 
 ```sh
 cmake .. -DBUILD_EXAMPLE=ON
+
+cmake --build .
 ```
 
 | option        | default | description                             |
@@ -95,12 +99,16 @@ cmake .. -DBUILD_EXAMPLE=ON
 
 ```sh
 cmake .. -DBUILD_TEST=ON
+
+cmake --build .
 ```
 
 or
 
 ```sh
 cmake .. -DBUILD_TEST=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake -DASAN=ON
+
+cmake --build .
 ```
 
 | option      | default | description                     |
@@ -111,12 +119,16 @@ cmake .. -DBUILD_TEST=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsyste
 
 ```sh
 cmake .. -DBUILD_BENCH=ON
+
+cmake --build .
 ```
 
 or
 
 ```sh
 cmake .. -DBUILD_BENCH=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
+
+cmake --build .
 ```
 
 ---

@@ -1,8 +1,0 @@
-#ifndef VERSION_HPP
-#define VERSION_HPP
-
-#define LIBCPP_MAJOR_VERSION 1
-#define LIBCPP_MINOR_VERSION 0
-#define LIBCPP_PATCH_VERSION 1
-
-#endif

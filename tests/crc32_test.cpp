@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/crc32.h>
+#include <hj/algo/crc32.h>
 
 TEST(crc32, standard_test_vectors)
 {

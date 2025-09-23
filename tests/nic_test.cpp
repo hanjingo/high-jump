@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/nic.h>
+#include <hj/hardware/nic.h>
 #include <iostream>
 #include <vector>
 #include <string>

@@ -1,7 +1,7 @@
 #ifndef DATA_H
 #define DATA_H
 
-#include <libcpp/sync/object_pool.hpp>
+#include <hj/sync/object_pool.hpp>
 
 #include "api.h"
 
@@ -45,9 +45,9 @@ private:
     data_mgr& operator=(data_mgr&&) = delete;
 
 private:
-    libcpp::object_pool<crypto_param_keygen> _keygen_pool;
-    libcpp::object_pool<crypto_param_encrypt> _encrypt_pool;
-    libcpp::object_pool<crypto_param_decrypt> _decrypt_pool;
+    hj::object_pool<crypto_param_keygen> _keygen_pool;
+    hj::object_pool<crypto_param_encrypt> _encrypt_pool;
+    hj::object_pool<crypto_param_decrypt> _decrypt_pool;
 };
 
 #endif

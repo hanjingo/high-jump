@@ -41,14 +41,14 @@ jobs:
       run: |
         echo "=== Running cppcheck static analysis ==="
         cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
-          --error-exitcode=1 --xml libcpp/ 2> cppcheck-result.xml || true
+          --error-exitcode=1 --xml hj/ 2> cppcheck-result.xml || true
         
         echo "=== Running clang-format check ==="
-        find libcpp -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+        find hj -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
         xargs clang-format --style=file --dry-run --Werror
         
         echo "=== Running cpplint check ==="
-        find libcpp -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+        find hj -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
         xargs cpplint --filter=-build/c++11,-whitespace/braces || true
 
     - name: Upload code quality reports

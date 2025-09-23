@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/sync/safe_vector.hpp>
+#include <hj/sync/safe_vector.hpp>
 
 TEST(safe_vector, emplace)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -20,7 +20,7 @@ TEST(safe_vector, emplace)
 
 TEST(safe_vector, unsafe_clear)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -39,7 +39,7 @@ TEST(safe_vector, unsafe_clear)
 }
 TEST(safe_vector, size)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -55,15 +55,15 @@ TEST(safe_vector, size)
 }
 TEST(safe_vector, empty)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     ASSERT_EQ(vec.empty(), true);
     vec.emplace(1);
     ASSERT_EQ(vec.empty(), false);
 }
 TEST(safe_vector, swap)
 {
-    libcpp::safe_vector<int> vec1;
-    libcpp::safe_vector<int> vec2;
+    hj::safe_vector<int> vec1;
+    hj::safe_vector<int> vec2;
 
     vec1.emplace(1);
     vec1.emplace(2);
@@ -98,7 +98,7 @@ TEST(safe_vector, swap)
 }
 TEST(safe_vector, range)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -130,7 +130,7 @@ TEST(safe_vector, range)
 }
 TEST(safe_vector, sort)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(10);
     vec.emplace(9);
     vec.emplace(8);
@@ -155,7 +155,7 @@ TEST(safe_vector, sort)
 }
 TEST(safe_vector, at)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -175,7 +175,7 @@ TEST(safe_vector, at)
 }
 TEST(safe_vector, at_out_of_range)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -193,7 +193,7 @@ TEST(safe_vector, at_out_of_range)
 }
 TEST(safe_vector, at_negative_index)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -211,7 +211,7 @@ TEST(safe_vector, at_negative_index)
 }
 TEST(safe_vector, front)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -229,7 +229,7 @@ TEST(safe_vector, front)
 }
 TEST(safe_vector, back)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -247,7 +247,7 @@ TEST(safe_vector, back)
 }
 TEST(safe_vector, operator)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -267,7 +267,7 @@ TEST(safe_vector, operator)
 }
 TEST(safe_vector, operator_out_of_range)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);
@@ -284,7 +284,7 @@ TEST(safe_vector, operator_out_of_range)
 }
 TEST(safe_vector, operator_negative_index)
 {
-    libcpp::safe_vector<int> vec;
+    hj::safe_vector<int> vec;
     vec.emplace(1);
     vec.emplace(2);
     vec.emplace(3);

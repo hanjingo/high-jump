@@ -21,10 +21,13 @@
 #pragma comment(lib, "setupapi.lib")
 
 #elif defined(__APPLE__)
+#ifdef __cplusplus
 #include <IOKit/hid/IOHIDManager.h>
 #include <CoreFoundation/CoreFoundation.h>
+#endif
 
 #endif
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -92,9 +95,10 @@ static int keyboard_enumerate(keyboard_info_t* infos, int max_count)
     }
     SetupDiDestroyDeviceInfoList(devs);
 
-#elif defined(__APPLE__)
+    #elif defined(__APPLE__)
+    #ifdef __cplusplus
     IOHIDManagerRef manager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
-    if (!manager) 
+    if (!manager)
         return 0;
 
     CFMutableDictionaryRef match = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
@@ -106,25 +110,50 @@ static int keyboard_enumerate(keyboard_info_t* infos, int max_count)
     CFRelease(match);
 
     CFSetRef device_set = IOHIDManagerCopyDevices(manager);
-    if (device_set) 
+    if (device_set)
     {
         CFIndex num = CFSetGetCount(device_set);
         IOHIDDeviceRef devices[num];
         CFSetGetValues(device_set, (const void**)devices);
-        for (CFIndex i = 0; i < num && count < max_count; ++i) 
+        for (CFIndex i = 0; i < num && count < max_count; ++i)
         {
-            CFStringRef manu = IOHIDDeviceGetProperty(devices[i], CFSTR(kIOHIDManufacturerKey));
-            CFStringRef prod = IOHIDDeviceGetProperty(devices[i], CFSTR(kIOHIDProductKey));
-            CFStringRef ser = IOHIDDeviceGetProperty(devices[i], CFSTR(kIOHIDSerialNumberKey));
+            CFTypeRef manuRef = IOHIDDeviceGetProperty(devices[i], CFSTR(kIOHIDManufacturerKey));
+            CFTypeRef prodRef = IOHIDDeviceGetProperty(devices[i], CFSTR(kIOHIDProductKey));
+            CFTypeRef serRef = IOHIDDeviceGetProperty(devices[i], CFSTR(kIOHIDSerialNumberKey));
             infos[count].device_path[0] = 0;
-            CFStringGetCString(manu, infos[count].manufacturer, sizeof(infos[count].manufacturer), kCFStringEncodingUTF8);
-            CFStringGetCString(prod, infos[count].product, sizeof(infos[count].product), kCFStringEncodingUTF8);
-            CFStringGetCString(ser, infos[count].serial, sizeof(infos[count].serial), kCFStringEncodingUTF8);
+            if (manuRef && CFGetTypeID(manuRef) == CFStringGetTypeID())
+                CFStringGetCString(
+                    (CFStringRef)manuRef, 
+                    infos[count].manufacturer, 
+                    sizeof(infos[count].manufacturer), 
+                    kCFStringEncodingUTF8);
+            else
+                infos[count].manufacturer[0] = 0;
+
+            if (prodRef && CFGetTypeID(prodRef) == CFStringGetTypeID())
+                CFStringGetCString(
+                    (CFStringRef)prodRef, 
+                    infos[count].product, 
+                    sizeof(infos[count].product),
+                    kCFStringEncodingUTF8);
+            else
+                infos[count].product[0] = 0;
+
+            if (serRef && CFGetTypeID(serRef) == CFStringGetTypeID())
+                CFStringGetCString(
+                    (CFStringRef)serRef, 
+                    infos[count].serial, 
+                    sizeof(infos[count].serial), 
+                    kCFStringEncodingUTF8);
+            else
+                infos[count].serial[0] = 0;
+
             count++;
         }
         CFRelease(device_set);
     }
     CFRelease(manager);
+    #endif
 
 #endif
 

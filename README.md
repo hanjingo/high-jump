@@ -48,6 +48,13 @@ for *nix/macos run cmd(if you have already installed this dependencies, skip it!
 python3 scripts/configure.py
 ```
 
+### Code Style PreCheck
+
+```sh
+# for windows run cmd:
+.\scripts\format.ps1 -Check
+```
+
 ### Install 3RD Library
 
 For vcpkg run cmd (reference from: https://learn.microsoft.com/zh-cn/vcpkg/consume/boost-versions):

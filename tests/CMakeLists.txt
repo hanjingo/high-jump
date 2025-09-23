@@ -210,10 +210,22 @@ elseif(CUDA_FOUND)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CUDA_INCLUDE_DIRS})
 endif()
 
-file(COPY cfg.ini DESTINATION ${EXECUTABLE_OUTPUT_PATH})
-file(COPY json_test.json DESTINATION ${EXECUTABLE_OUTPUT_PATH})
-file(COPY crypto.log DESTINATION ${EXECUTABLE_OUTPUT_PATH})
-file(COPY crypto_nopadding.log DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+# test config files copy
+file(GLOB TEST_CONFIG_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/cfg.ini"
+    "${CMAKE_CURRENT_SOURCE_DIR}/json_test.json"
+    "${CMAKE_CURRENT_SOURCE_DIR}/crypto.log"
+    "${CMAKE_CURRENT_SOURCE_DIR}/crypto_nopadding.log"
+)
+add_custom_target(copy_test_configs ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${TEST_CONFIG_FILES}
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    DEPENDS ${TEST_CONFIG_FILES}
+    COMMENT "Copying test config files to output dir"
+)
+add_dependencies(${PROJECT_NAME} copy_test_configs)
 
 add_subdirectory(dll_example)
 add_subdirectory(child)

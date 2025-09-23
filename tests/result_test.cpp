@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/types/result.hpp>
+#include <hj/types/result.hpp>
 
 enum error1 : int 
 {
@@ -10,7 +10,7 @@ enum error1 : int
 
 TEST(result, result)
 {
-    auto fn = []()->libcpp::result<error1>{
+    auto fn = []()->hj::result<error1>{
         return error1::fail;
     };
 

@@ -2,154 +2,154 @@
 
 #include "api.h"
 
-libcpp::aes::mode str_to_aes_mode(const std::string& mode)
+hj::aes::mode str_to_aes_mode(const std::string& mode)
 {
     if (mode == "ecb")
-        return libcpp::aes::mode::ecb;
+        return hj::aes::mode::ecb;
     else if (mode == "cbc")
-        return libcpp::aes::mode::cbc;
+        return hj::aes::mode::cbc;
     else if (mode == "cfb1")
-        return libcpp::aes::mode::cfb1;
+        return hj::aes::mode::cfb1;
     else if (mode == "cfb8")
-        return libcpp::aes::mode::cfb8;
+        return hj::aes::mode::cfb8;
     else if (mode == "cfb128")
-        return libcpp::aes::mode::cfb128;
+        return hj::aes::mode::cfb128;
     else if (mode == "cfb")
-        return libcpp::aes::mode::cfb;
+        return hj::aes::mode::cfb;
     else if (mode == "ofb")
-        return libcpp::aes::mode::ofb;
+        return hj::aes::mode::ofb;
     else if (mode == "ctr")
-        return libcpp::aes::mode::ctr;
+        return hj::aes::mode::ctr;
     else if (mode == "gcm")
-        return libcpp::aes::mode::gcm;
+        return hj::aes::mode::gcm;
     else if (mode == "ccm")
-        return libcpp::aes::mode::ccm;
+        return hj::aes::mode::ccm;
     else if (mode == "xts")
-        return libcpp::aes::mode::xts;
+        return hj::aes::mode::xts;
     else if (mode == "wrap")
-        return libcpp::aes::mode::wrap;
+        return hj::aes::mode::wrap;
     else if (mode == "wrap_pad")
-        return libcpp::aes::mode::wrap_pad;
+        return hj::aes::mode::wrap_pad;
     else if (mode == "cbc_hmac_sha1")
-        return libcpp::aes::mode::cbc_hmac_sha1;
+        return hj::aes::mode::cbc_hmac_sha1;
     else if (mode == "cbc_hmac_sha256")
-        return libcpp::aes::mode::cbc_hmac_sha256;
+        return hj::aes::mode::cbc_hmac_sha256;
     else if (mode == "ocb")
-        return libcpp::aes::mode::ocb;
+        return hj::aes::mode::ocb;
     else
-        return libcpp::aes::mode::ecb; // default
+        return hj::aes::mode::ecb; // default
 }
 
-libcpp::aes::padding str_to_aes_padding(const std::string& padding)
+hj::aes::padding str_to_aes_padding(const std::string& padding)
 {
     if (padding == "pkcs5")
-        return libcpp::aes::padding::pkcs5;
+        return hj::aes::padding::pkcs5;
     else if (padding == "pkcs7")
-        return libcpp::aes::padding::pkcs7;
+        return hj::aes::padding::pkcs7;
     else if (padding == "zero")
-        return libcpp::aes::padding::zero;
+        return hj::aes::padding::zero;
     else if (padding == "iso10126")
-        return libcpp::aes::padding::iso10126;
+        return hj::aes::padding::iso10126;
     else if (padding == "ansix923")
-        return libcpp::aes::padding::ansix923;
+        return hj::aes::padding::ansix923;
     else if (padding == "iso_iec_7816_4")
-        return libcpp::aes::padding::iso_iec_7816_4;
+        return hj::aes::padding::iso_iec_7816_4;
     else if (padding == "no_padding")
-        return libcpp::aes::padding::no_padding;
+        return hj::aes::padding::no_padding;
     else
-        return libcpp::aes::padding::pkcs7; // default
+        return hj::aes::padding::pkcs7; // default
 }
 
-libcpp::des::mode str_to_des_mode(const std::string& mode)
+hj::des::mode str_to_des_mode(const std::string& mode)
 {
     if (mode == "ecb")
-        return libcpp::des::mode::ecb;
+        return hj::des::mode::ecb;
     else if (mode == "cbc")
-        return libcpp::des::mode::cbc;
+        return hj::des::mode::cbc;
     else if (mode == "cfb")
-        return libcpp::des::mode::cfb;
+        return hj::des::mode::cfb;
     else if (mode == "ofb")
-        return libcpp::des::mode::ofb;
+        return hj::des::mode::ofb;
     else if (mode == "ctr")
-        return libcpp::des::mode::ctr;
+        return hj::des::mode::ctr;
     else
-        return libcpp::des::mode::ecb; // default
+        return hj::des::mode::ecb; // default
 }
 
-libcpp::des::padding str_to_des_padding(const std::string& padding)
+hj::des::padding str_to_des_padding(const std::string& padding)
 {
     if (padding == "pkcs5")
-        return libcpp::des::padding::pkcs5;
+        return hj::des::padding::pkcs5;
     else if (padding == "pkcs7")
-        return libcpp::des::padding::pkcs7;
+        return hj::des::padding::pkcs7;
     else if (padding == "zero")
-        return libcpp::des::padding::zero;
+        return hj::des::padding::zero;
     else if (padding == "iso10126")
-        return libcpp::des::padding::iso10126;
+        return hj::des::padding::iso10126;
     else if (padding == "ansix923")
-        return libcpp::des::padding::ansix923;
+        return hj::des::padding::ansix923;
     else if (padding == "iso_iec_7816_4")
-        return libcpp::des::padding::iso_iec_7816_4;
+        return hj::des::padding::iso_iec_7816_4;
     else if (padding == "no_padding")
-        return libcpp::des::padding::no_padding;
+        return hj::des::padding::no_padding;
     else
-        return libcpp::des::padding::pkcs7; // default
+        return hj::des::padding::pkcs7; // default
 }
 
-libcpp::rsa::padding str_to_rsa_padding(const std::string& padding)
+hj::rsa::padding str_to_rsa_padding(const std::string& padding)
 {
     if (padding == "pkcs1")
-        return libcpp::rsa::padding::pkcs1;
+        return hj::rsa::padding::pkcs1;
     else if (padding == "pkcs1_oaep")
-        return libcpp::rsa::padding::pkcs1_oaep;
+        return hj::rsa::padding::pkcs1_oaep;
     else if (padding == "no_padding")
-        return libcpp::rsa::padding::no_padding;
+        return hj::rsa::padding::no_padding;
     else if (padding == "x931")
-        return libcpp::rsa::padding::x931;
+        return hj::rsa::padding::x931;
     else if (padding == "pkcs1_pss")
-        return libcpp::rsa::padding::pkcs1_pss;
+        return hj::rsa::padding::pkcs1_pss;
     else
-        return libcpp::rsa::padding::pkcs1; // default
+        return hj::rsa::padding::pkcs1; // default
 }
 
-libcpp::rsa::key_format str_to_rsa_key_format(const std::string& fmt)
+hj::rsa::key_format str_to_rsa_key_format(const std::string& fmt)
 {
     if (fmt == "x509")
-        return libcpp::rsa::key_format::x509;
+        return hj::rsa::key_format::x509;
     else if (fmt == "pkcs1")
-        return libcpp::rsa::key_format::pkcs1;
+        return hj::rsa::key_format::pkcs1;
     else
-        return libcpp::rsa::key_format::x509; // default
+        return hj::rsa::key_format::x509; // default
 }
 
-libcpp::rsa::mode str_to_rsa_mode(const std::string& mode)
+hj::rsa::mode str_to_rsa_mode(const std::string& mode)
 {
     if (mode == "none")
-        return libcpp::rsa::mode::none;
+        return hj::rsa::mode::none;
     else if (mode == "aes_128_ecb")
-        return libcpp::rsa::mode::aes_128_ecb;
+        return hj::rsa::mode::aes_128_ecb;
     else if (mode == "aes_192_ecb")
-        return libcpp::rsa::mode::aes_192_ecb;
+        return hj::rsa::mode::aes_192_ecb;
     else if (mode == "aes_256_ecb")
-        return libcpp::rsa::mode::aes_256_ecb;
+        return hj::rsa::mode::aes_256_ecb;
     else if (mode == "aes_128_cbc")
-        return libcpp::rsa::mode::aes_128_cbc;
+        return hj::rsa::mode::aes_128_cbc;
     else if (mode == "aes_192_cbc")
-        return libcpp::rsa::mode::aes_192_cbc;
+        return hj::rsa::mode::aes_192_cbc;
     else if (mode == "aes_256_cbc")
-        return libcpp::rsa::mode::aes_256_cbc;
+        return hj::rsa::mode::aes_256_cbc;
     else if (mode == "aes_128_cfb")
-        return libcpp::rsa::mode::aes_128_cfb;
+        return hj::rsa::mode::aes_128_cfb;
     else if (mode == "aes_192_cfb")
-        return libcpp::rsa::mode::aes_192_cfb;
+        return hj::rsa::mode::aes_192_cfb;
     else if (mode == "aes_256_cfb")
-        return libcpp::rsa::mode::aes_256_cfb;
+        return hj::rsa::mode::aes_256_cfb;
     else if (mode == "aes_128_ofb")
-        return libcpp::rsa::mode::aes_128_ofb;
+        return hj::rsa::mode::aes_128_ofb;
     else if (mode == "aes_192_ofb")
-        return libcpp::rsa::mode::aes_192_ofb;
+        return hj::rsa::mode::aes_192_ofb;
     else if (mode == "aes_256_ofb")
-        return libcpp::rsa::mode::aes_256_ofb;
+        return hj::rsa::mode::aes_256_ofb;
     else
-        return libcpp::rsa::mode::none; // default
+        return hj::rsa::mode::none; // default
 }

@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/io/chain_buffer.hpp>
+#include <hj/io/chain_buffer.hpp>
 #include <cstring>
 #include <string>
 
-using libcpp::chain_buffer;
+using hj::chain_buffer;
 
 TEST(ChainBufferTest, AppendAndRead) {
     chain_buffer buf;

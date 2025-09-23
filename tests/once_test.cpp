@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/util/once.hpp>
+#include <hj/util/once.hpp>
 
 static int once_num = 0;
 

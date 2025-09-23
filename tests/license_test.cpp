@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/util/license.hpp>
+#include <hj/util/license.hpp>
 
 TEST(license, issue)
 {
@@ -13,14 +13,14 @@ Ugl3Etuc1Ux9AiA+OYz0CP4lFG3RvlJ6Mzr93V8G6aUVpU20RkPpbzwsWQIhAKXc
 afQ0WRgZier6MrdwlXd70JZIpgc6kLeOz2GuV4lX
 -----END RSA PRIVATE KEY-----)";
 
-    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {"", prikey, "", ""}, 2};
-    libcpp::license::token_t token;
+    hj::license::issuer isu{"issuer1", hj::license::sign_algo::rsa256, {"", prikey, "", ""}, 2};
+    hj::license::token_t token;
     auto err = isu.issue(
         token,
         "harry", 
         30, 
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_TRUE(err.value() == 0);
@@ -30,7 +30,7 @@ afQ0WRgZier6MrdwlXd70JZIpgc6kLeOz2GuV4lX
         "harry", 
         30, 
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_TRUE(err.value() == 0);
@@ -53,25 +53,25 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 8h/RQTcsk06WYYQJB6CZcjLeXwVsoIC5T8Ph3lvRIGmVCEQQ0peBowIDAQAB
 -----END PUBLIC KEY-----)";
 
-    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 2};
-    libcpp::license::token_t token;
+    hj::license::issuer isu{"issuer1", hj::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 2};
+    hj::license::token_t token;
     auto err = isu.issue(
         token,
         "harry", 
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}
+            {"disk_sn", hj::license::get_disk_sn()}
         }
     );
     ASSERT_TRUE(err.value() == 0);
 
-    libcpp::license::verifier vefer{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}};
+    hj::license::verifier vefer{"issuer1", hj::license::sign_algo::rsa256, {pubkey, prikey, "", ""}};
     err = vefer.verify(
         token,
         "harry",
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_TRUE(err.value() == 0);
@@ -81,7 +81,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
         "harry1",
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_FALSE(err.value() == 0);
@@ -91,7 +91,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
         "harry", 
         30, 
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_TRUE(err.value() == 0);
@@ -101,7 +101,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
         "harry",
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_TRUE(err.value() == 0);
@@ -111,7 +111,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
         "harry1",
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_FALSE(err.value() == 0);
@@ -134,36 +134,36 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 8h/RQTcsk06WYYQJB6CZcjLeXwVsoIC5T8Ph3lvRIGmVCEQQ0peBowIDAQAB
 -----END PUBLIC KEY-----)";
 
-    libcpp::license::issuer isu{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 2};
-    libcpp::license::token_t token;
+    hj::license::issuer isu{"issuer1", hj::license::sign_algo::rsa256, {pubkey, prikey, "", ""}, 2};
+    hj::license::token_t token;
     auto err = isu.issue(
         token,
         "harry", 
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}
+            {"disk_sn", hj::license::get_disk_sn()}
         }
     );
     ASSERT_TRUE(err.value() == 0);
 
-    libcpp::license::verifier vefer{"issuer1", libcpp::license::sign_algo::rsa256, {pubkey, prikey, "", ""}};
+    hj::license::verifier vefer{"issuer1", hj::license::sign_algo::rsa256, {pubkey, prikey, "", ""}};
     err = vefer.verify(
         token,
         "harry",
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_TRUE(err.value() == 0);
 
-    isu.release(libcpp::license::sign_algo::none, {});
+    isu.release(hj::license::sign_algo::none, {});
     err = isu.issue(
         token,
         "harry", 
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}
+            {"disk_sn", hj::license::get_disk_sn()}
         }
     );
     ASSERT_TRUE(err.value() == 0);
@@ -173,7 +173,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
         "harry",
         30,
         {
-            {"disk_sn", libcpp::license::get_disk_sn()}, 
+            {"disk_sn", hj::license::get_disk_sn()}, 
         }
     );
     ASSERT_FALSE(err.value() == 0);

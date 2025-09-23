@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/astar.hpp>
+#include <hj/algo/astar.hpp>
 #include <vector>
 #include <iostream>
 #include <chrono>
 #include <cmath>
 #include <algorithm>
 
-using namespace libcpp::astar;
+using namespace hj::astar;
 
 class AStarTest : public ::testing::Test {
 protected:

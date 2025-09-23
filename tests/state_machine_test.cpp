@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/state_machine.hpp>
+#include <hj/algo/state_machine.hpp>
 #include <string>
 
 // Events
@@ -27,7 +27,7 @@ auto on_reset = []() { /* Reset action */ };
 
 // State machine definition
 auto state_machine = []() {
-    using namespace libcpp::sml;
+    using namespace hj::sml;
     
     return make_transition_table(
         *state<IdleState> + event<StartEvent> / on_start = state<RunningState>,
@@ -42,68 +42,68 @@ auto state_machine = []() {
 class StateMachineTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        sm = std::make_unique<libcpp::sml::sm<decltype(state_machine)>>(state_machine);
+        sm = std::make_unique<hj::sml::sm<decltype(state_machine)>>(state_machine);
     }
 
-    std::unique_ptr<libcpp::sml::sm<decltype(state_machine)>> sm;
+    std::unique_ptr<hj::sml::sm<decltype(state_machine)>> sm;
 };
 
 TEST_F(StateMachineTest, InitialState) {
-    EXPECT_TRUE(sm->is(libcpp::sml::state<IdleState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<IdleState>));
 }
 
 TEST_F(StateMachineTest, StartTransition) {
     sm->process_event(StartEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<RunningState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<RunningState>));
 }
 
 TEST_F(StateMachineTest, PauseTransition) {
     sm->process_event(StartEvent{});
     sm->process_event(PauseEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<PausedState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<PausedState>));
 }
 
 TEST_F(StateMachineTest, ResumeTransition) {
     sm->process_event(StartEvent{});
     sm->process_event(PauseEvent{});
     sm->process_event(ResumeEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<RunningState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<RunningState>));
 }
 
 TEST_F(StateMachineTest, StopFromRunning) {
     sm->process_event(StartEvent{});
     sm->process_event(StopEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<StoppedState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<StoppedState>));
 }
 
 TEST_F(StateMachineTest, StopFromPaused) {
     sm->process_event(StartEvent{});
     sm->process_event(PauseEvent{});
     sm->process_event(StopEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<StoppedState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<StoppedState>));
 }
 
 TEST_F(StateMachineTest, ResetTransition) {
     sm->process_event(StartEvent{});
     sm->process_event(StopEvent{});
     sm->process_event(ResetEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<IdleState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<IdleState>));
 }
 
 TEST_F(StateMachineTest, CompleteWorkflow) {
     // Start -> Pause -> Resume -> Stop -> Reset
     sm->process_event(StartEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<RunningState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<RunningState>));
     
     sm->process_event(PauseEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<PausedState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<PausedState>));
     
     sm->process_event(ResumeEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<RunningState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<RunningState>));
     
     sm->process_event(StopEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<StoppedState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<StoppedState>));
     
     sm->process_event(ResetEvent{});
-    EXPECT_TRUE(sm->is(libcpp::sml::state<IdleState>));
+    EXPECT_TRUE(sm->is(hj::sml::state<IdleState>));
 }

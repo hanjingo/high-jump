@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/rom.h>
+#include <hj/hardware/rom.h>
 #include <cstdio>
 #include <cstring>
 #include <string>

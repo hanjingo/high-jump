@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/io/ring_buffer.hpp>
+#include <hj/io/ring_buffer.hpp>
 
 TEST(ring_buffer, push_back)
 {
-    libcpp::ring_buffer<int> buf{3};
+    hj::ring_buffer<int> buf{3};
     buf.push_back(1);
     buf.push_back(2);
     buf.push_back(3);
@@ -13,7 +13,7 @@ TEST(ring_buffer, push_back)
 
 TEST(ring_buffer, front)
 {
-    libcpp::ring_buffer<int> buf{3};
+    hj::ring_buffer<int> buf{3};
     buf.push_back(1);
     buf.push_back(2);
     buf.push_back(3);
@@ -22,7 +22,7 @@ TEST(ring_buffer, front)
 
 TEST(ring_buffer, back)
 {
-    libcpp::ring_buffer<int> buf{3};
+    hj::ring_buffer<int> buf{3};
     buf.push_back(1);
     buf.push_back(2);
     buf.push_back(3);
@@ -31,7 +31,7 @@ TEST(ring_buffer, back)
 
 TEST(ring_buffer, at)
 {
-    libcpp::ring_buffer<int> buf{3};
+    hj::ring_buffer<int> buf{3};
     buf.push_back(1);
     buf.push_back(2);
     buf.push_back(3);
@@ -41,7 +41,7 @@ TEST(ring_buffer, at)
 
 TEST(ring_buffer, full)
 {
-    libcpp::ring_buffer<int> buf{3};
+    hj::ring_buffer<int> buf{3};
     buf.push_back(1);
     buf.push_back(2);
     buf.push_back(3);
@@ -50,7 +50,7 @@ TEST(ring_buffer, full)
 
 TEST(ring_buffer, size)
 {
-    libcpp::ring_buffer<int> buf{3};
+    hj::ring_buffer<int> buf{3};
     buf.push_back(1);
     buf.push_back(2);
     ASSERT_EQ(buf.size(), 2);
@@ -58,7 +58,7 @@ TEST(ring_buffer, size)
 
 TEST(ring_buffer, capacity)
 {
-    libcpp::ring_buffer<int> buf{3};
+    hj::ring_buffer<int> buf{3};
     buf.push_back(1);
     buf.push_back(2);
     ASSERT_EQ(buf.capacity(), 3);

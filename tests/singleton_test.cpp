@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/types/singleton.hpp>
+#include <hj/types/singleton.hpp>
 
 static int singleton_num = 0;
 
@@ -21,7 +21,7 @@ private:
 };
 
 
-class B : public libcpp::singleton<B>
+class B : public hj::singleton<B>
 {
 public:
     void static static_inc()
@@ -40,12 +40,12 @@ private:
 
 TEST(singleton, singleton)
 {
-    libcpp::singleton<A>::get_const_instance().static_inc();
+    hj::singleton<A>::get_const_instance().static_inc();
     ASSERT_EQ(singleton_num, 1);
 
-    libcpp::singleton<A>::get_mutable_instance()->inc();
+    hj::singleton<A>::get_mutable_instance()->inc();
     ASSERT_EQ(singleton_num, 1);
-    ASSERT_EQ(libcpp::singleton<A>::get_mutable_instance()->value(), 2);
+    ASSERT_EQ(hj::singleton<A>::get_mutable_instance()->value(), 2);
 
     B b;
     b.get_const_instance().static_inc();

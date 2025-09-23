@@ -2,7 +2,7 @@
 #define COMM_H
 
 #include <iostream>
-#include <libcpp/encoding/i18n.hpp>
+#include <hj/encoding/i18n.hpp>
 
 #include "err.h"
 
@@ -14,16 +14,16 @@ enum class output_type
 
 static inline std::string tr(const std::string& key, const std::string& default_text = "") 
 {
-    return libcpp::tr(key, default_text);
+    return hj::tr(key, default_text);
 }
 
 template<typename... Args>
 static inline std::string tr(const std::string& key, Args... args) 
 {
-    return libcpp::tr(key, args...);
+    return hj::tr(key, args...);
 }
 
-static inline err_t error(const int e) { return libcpp::make_err(e, "crypto"); }
+static inline err_t error(const int e) { return hj::make_err(e, "crypto"); }
 
 output_type select_output_type(const std::string& out);
 

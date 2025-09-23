@@ -1,7 +1,7 @@
 #ifndef DATA_MGR_H
 #define DATA_MGR_H
 
-#include <libcpp/sync/object_pool.hpp>
+#include <hj/sync/object_pool.hpp>
 
 #include "api.h"
 
@@ -41,8 +41,8 @@ private:
     data_mgr& operator=(data_mgr&&) = delete;
 
 private:
-    libcpp::object_pool<db_param_exec> _exec_pool;
-    libcpp::object_pool<db_param_query> _query_pool;
+    hj::object_pool<db_param_exec> _exec_pool;
+    hj::object_pool<db_param_query> _query_pool;
 };
 
 #endif

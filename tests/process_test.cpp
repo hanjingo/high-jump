@@ -1,20 +1,20 @@
 #include <gtest/gtest.h>
-#include <libcpp/os/process.hpp>
+#include <hj/os/process.hpp>
 #include <thread>
 #include <chrono>
 #include <fstream>
 
 TEST(process, getpid)
 {
-    ASSERT_EQ(libcpp::process::getpid() >= 0, true);
+    ASSERT_EQ(hj::process::getpid() >= 0, true);
 }
 
 TEST(process, getppid)
 {
 #if defined(_WIN32)
-    ASSERT_EQ(libcpp::process::getppid() == 0, true);
+    ASSERT_EQ(hj::process::getppid() == 0, true);
 #else
-    ASSERT_EQ(libcpp::process::getppid() > -1, true);
+    ASSERT_EQ(hj::process::getppid() > -1, true);
 #endif
 }
 
@@ -25,7 +25,7 @@ TEST(process, child)
 #else
     std::string exe = "./child";
 #endif
-    auto pid = libcpp::process::child(exe);
+    auto pid = hj::process::child(exe);
     ASSERT_GT(pid, 0);
 #if !defined(_WIN32)
     int status = 0;
@@ -41,7 +41,7 @@ TEST(process, daemon)
 #else
     std::string exe = "./daemon";
 #endif
-    libcpp::process::daemon(exe);
+    hj::process::daemon(exe);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::ifstream fin("daemon_test.txt");
     ASSERT_TRUE(fin.is_open());
@@ -51,8 +51,8 @@ TEST(process, daemon)
     ASSERT_TRUE(line.find("daemon") != std::string::npos);
     std::remove("daemon_test.txt");
 
-    std::vector<libcpp::process::pid_t> vec;
-    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+    std::vector<hj::process::pid_t> vec;
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
         if (arg.size() < 2)
             return false;
         if (arg[0].find("daemon") == std::string::npos)
@@ -60,7 +60,7 @@ TEST(process, daemon)
         return true;
     });
     for (auto pid : vec) {
-        libcpp::process::kill(pid);
+        hj::process::kill(pid);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 }
@@ -72,7 +72,7 @@ TEST(process, spawn)
 #else
     std::string exe = "./child";
 #endif
-    libcpp::process::spawn(exe);
+    hj::process::spawn(exe);
 }
 
 TEST(process, list)
@@ -84,8 +84,8 @@ TEST(process, list)
 #endif
 
     // clear env
-    std::vector<libcpp::process::pid_t> vec;
-    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+    std::vector<hj::process::pid_t> vec;
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
         if (arg.size() < 2)
             return false;
         if (arg[0].find("child") == std::string::npos)
@@ -93,14 +93,14 @@ TEST(process, list)
         return true;
     });
     for (auto var : vec) {
-        libcpp::process::kill(var);
+        hj::process::kill(var);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // test start
     vec.clear();
-    libcpp::process::spawn(exe);
-    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+    hj::process::spawn(exe);
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
         if (arg.size() < 2)
             return false;
         if (arg[0].find("child") == std::string::npos)
@@ -122,9 +122,9 @@ TEST(process, kill)
 #else
     std::string exe = "./child";
 #endif
-    libcpp::process::spawn(exe);
-    std::vector<libcpp::process::pid_t> vec;
-    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+    hj::process::spawn(exe);
+    std::vector<hj::process::pid_t> vec;
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
         if (arg.size() < 2)
             return false;
         if (arg[0].find("child") == std::string::npos)
@@ -132,11 +132,11 @@ TEST(process, kill)
         return true;
     });
     for (auto var : vec) {
-        libcpp::process::kill(var);
+        hj::process::kill(var);
     }
     vec.clear();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    libcpp::process::list(vec, [](std::vector<std::string> arg) -> bool{
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
         if (arg.size() < 2)
             return false;
         if (arg[0].find("child") == std::string::npos)

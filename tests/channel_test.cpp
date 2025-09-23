@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include <libcpp/sync/channel.hpp>
+#include <hj/sync/channel.hpp>
 #include <thread>
 
 TEST(channel, wait_dequeue)
 {
-    static libcpp::channel<int> ch{1};
+    static hj::channel<int> ch{1};
     
     ch << 0;
     std::thread t1([&](){
@@ -36,7 +36,7 @@ TEST(channel, wait_dequeue)
 
 TEST(channel, try_dequeue)
 {
-    libcpp::channel<int> ch{1};
+    hj::channel<int> ch{1};
     ch << 0;
     std::thread t1([&](){
         int num = 0;
@@ -75,7 +75,7 @@ TEST(channel, enqueue)
 {
     static int n = 0;
     static int i = 0;
-    static libcpp::channel<int> ch{2};
+    static hj::channel<int> ch{2};
 
     std::thread t1([&](){
         ch << 1;

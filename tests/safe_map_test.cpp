@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/sync/safe_map.hpp>
+#include <hj/sync/safe_map.hpp>
 
 TEST(safe_map, insert)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.insert(1, "one"), true);
     ASSERT_EQ(map.insert(1, "one"), false);
 
@@ -20,7 +20,7 @@ TEST(safe_map, insert)
 
 TEST(safe_map, emplace)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(1, "one"), false);
 
@@ -36,7 +36,7 @@ TEST(safe_map, emplace)
 }
 TEST(safe_map, replace)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(2, "two"), true);
     ASSERT_EQ(map.emplace(3, "three"), true);
@@ -51,7 +51,7 @@ TEST(safe_map, replace)
 }
 TEST(safe_map, find)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(2, "two"), true);
     ASSERT_EQ(map.emplace(3, "three"), true);
@@ -69,7 +69,7 @@ TEST(safe_map, find)
 }
 TEST(safe_map, erase)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(2, "two"), true);
     ASSERT_EQ(map.emplace(3, "three"), true);
@@ -85,7 +85,7 @@ TEST(safe_map, erase)
 }
 TEST(safe_map, range)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(2, "two"), true);
     ASSERT_EQ(map.emplace(3, "three"), true);
@@ -105,7 +105,7 @@ TEST(safe_map, range)
 }
 TEST(safe_map, count)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(2, "two"), true);
     ASSERT_EQ(map.emplace(3, "three"), true);
@@ -121,7 +121,7 @@ TEST(safe_map, count)
 }
 TEST(safe_map, size)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(2, "two"), true);
     ASSERT_EQ(map.emplace(3, "three"), true);
@@ -137,14 +137,14 @@ TEST(safe_map, size)
 }
 TEST(safe_map, empty)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.empty(), true);
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.empty(), false);
 }
 TEST(safe_map, clear)
 {
-    libcpp::safe_map<int, std::string> map;
+    hj::safe_map<int, std::string> map;
     ASSERT_EQ(map.emplace(1, "one"), true);
     ASSERT_EQ(map.emplace(2, "two"), true);
     ASSERT_EQ(map.emplace(3, "three"), true);
@@ -160,8 +160,8 @@ TEST(safe_map, clear)
 }
 TEST(safe_map, swap)
 {
-    libcpp::safe_map<int, std::string> map1;
-    libcpp::safe_map<int, std::string> map2;
+    hj::safe_map<int, std::string> map1;
+    hj::safe_map<int, std::string> map2;
     ASSERT_EQ(map1.emplace(1, "one"), true);
     ASSERT_EQ(map1.emplace(2, "two"), true);
     ASSERT_EQ(map1.emplace(3, "three"), true);
@@ -177,8 +177,8 @@ TEST(safe_map, swap)
 }
 TEST(safe_map, swap2)
 {
-    libcpp::safe_map<int, std::string> map1;
-    libcpp::safe_map<int, std::string> map2;
+    hj::safe_map<int, std::string> map1;
+    hj::safe_map<int, std::string> map2;
     ASSERT_EQ(map1.emplace(1, "one"), true);
     ASSERT_EQ(map1.emplace(2, "two"), true);
     ASSERT_EQ(map1.emplace(3, "three"), true);

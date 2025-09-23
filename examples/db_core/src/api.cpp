@@ -1,8 +1,8 @@
 #include "api.h"
 
 #include <iostream>
-#include <libcpp/util/once.hpp>
-#include <libcpp/encoding/ini.hpp>
+#include <hj/util/once.hpp>
+#include <hj/encoding/ini.hpp>
 
 #include "comm.h"
 #include "db_mgr.h"
@@ -47,7 +47,7 @@ C_STYLE_EXPORT void db_init(db_context ctx)
         }
 
         // parse config
-        libcpp::ini cfg = libcpp::ini::parse(ret->option);
+        hj::ini cfg = hj::ini::parse(ret->option);
         for (auto& child : cfg) 
         {
             auto& section = child.second;

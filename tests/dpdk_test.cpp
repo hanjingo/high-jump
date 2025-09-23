@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/dpdk.h>
+#include <hj/hardware/dpdk.h>
 
 #ifdef DPDK_ENABLE
 

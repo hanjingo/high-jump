@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/bloom_filter.hpp>
+#include <hj/algo/bloom_filter.hpp>
 
-using namespace libcpp;
+using namespace hj;
 
 TEST(BloomFilterTest, BasicAddContains) {
 	bloom_filter bf(100, 0.01);

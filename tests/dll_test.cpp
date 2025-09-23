@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/os/dll.h>
+#include <hj/os/dll.h>
 
 typedef int(*hello)(void);
 typedef int(*world)(void);

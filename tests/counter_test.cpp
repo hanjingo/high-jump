@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/sync/counter.hpp>
+#include <hj/sync/counter.hpp>
 
 TEST(counter, operator)
 {
@@ -8,13 +8,13 @@ TEST(counter, operator)
 
 TEST(counter, inc)
 {
-    libcpp::counter<int> ct(0);
+    hj::counter<int> ct(0);
     ASSERT_EQ(ct.inc().value(), 1);
 }
 
 TEST(counter, dec)
 {
-    libcpp::counter<int> ct(1);
+    hj::counter<int> ct(1);
     ASSERT_EQ(ct.dec().value(), 0);
 }
 

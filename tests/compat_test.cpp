@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/os/compat.hpp>
+#include <hj/os/compat.hpp>
 
 #ifdef FORCE_INLINE
 FORCE_INLINE int add(int a, int b) { return a + b; }

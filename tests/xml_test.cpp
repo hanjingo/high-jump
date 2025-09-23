@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/xml.hpp>
+#include <hj/encoding/xml.hpp>
 #include <string>
 #include <cstdio>
 
-using namespace libcpp;
+using namespace hj;
 
 TEST(XmlTest, LoadFromString) {
 	const char* text = "<root><item>42</item></root>";

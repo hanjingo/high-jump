@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19.2)
 
 # set environment param
-project(libcpp 
+project(hj 
     VERSION 1.0.0
     DESCRIPTION "Modern C++ Library for C++17 and above"
     LANGUAGES CXX
@@ -10,7 +10,7 @@ project(libcpp
 # set options
 option(ASAN "Enable AddressSanitizer" OFF)
 option(BUILD_TEST "Build the tests and benchmarks" OFF)
-option(BUILD_LIB "Build the libcpp library" OFF)
+option(BUILD_LIB "Build the hj library" OFF)
 option(BUILD_EXAMPLE "Build the example application" OFF)
 
 # import vcpkg module
@@ -57,7 +57,7 @@ endif()
 
 # build lib
 if (BUILD_LIB)
-    add_subdirectory(libcpp/binding)
+    # DODO
 endif()
 
 # build example
@@ -80,39 +80,39 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-add_library(libcpp INTERFACE)
-target_include_directories(libcpp INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libcpp>
+add_library(hj INTERFACE)
+target_include_directories(hj INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/hj>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 configure_package_config_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmakes/libcppConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/libcpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmakes/hjConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/hjConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/hj
     # Passes the includedir install path
     PATH_VARS CMAKE_INSTALL_FULL_INCLUDEDIR
 )
 write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfigVersion.cmake
-    VERSION ${LIBCPP_VERSION}
+    ${CMAKE_CURRENT_BINARY_DIR}/hjConfigVersion.cmake
+    VERSION ${HJ_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
 install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/libcppConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/libcpp
+    ${CMAKE_CURRENT_BINARY_DIR}/hjConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/hjConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/hj
 )
 
-install(DIRECTORY libcpp/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcpp)
+install(DIRECTORY hj/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hj)
 
-install(TARGETS libcpp 
-        EXPORT libcppTargets
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcpp
+install(TARGETS hj
+        EXPORT hjTargets
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hj
 )
 
-install(EXPORT libcppTargets 
-    FILE libcppTargets.cmake
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/libcpp
+install(EXPORT hjTargets
+    FILE hjTargets.cmake
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/hj
 )

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/bios.h>
+#include <hj/hardware/bios.h>
 
 TEST(bios, vendor)
 {

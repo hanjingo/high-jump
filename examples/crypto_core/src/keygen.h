@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "api.h"
-#include <libcpp/crypto/rsa.hpp>
+#include <hj/crypto/rsa.hpp>
 
 class keymaker
 {
@@ -75,8 +75,8 @@ public:
         const int bits) override;
 
 private:
-    libcpp::rsa::key_format _to_key_format(const std::string& fmt);
-    libcpp::rsa::mode _to_mode(const std::string& mode);
+    hj::rsa::key_format _to_key_format(const std::string& fmt);
+    hj::rsa::mode _to_mode(const std::string& mode);
 };
 
 #endif

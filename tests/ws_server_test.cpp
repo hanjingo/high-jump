@@ -1,18 +1,18 @@
 #include <gtest/gtest.h>
-#include <libcpp/net/http/ws_server.hpp>
+#include <hj/net/http/ws_server.hpp>
 #include <thread>
 #include <chrono>
 
 // TEST(WebSocketServerTest, Echo) {
-//     libcpp::ws_server::io_t io;
-//     libcpp::ws_server server(io);
+//     hj::ws_server::io_t io;
+//     hj::ws_server server(io);
 
 //     // 监听本地9003端口
-//     libcpp::ws_server::endpoint_t ep(libcpp::ws_server::address_t::from_string("127.0.0.1"), 9003);
+//     hj::ws_server::endpoint_t ep(hj::ws_server::address_t::from_string("127.0.0.1"), 9003);
 //     bool accepted = false;
-//     std::shared_ptr<libcpp::ws_server::ws_stream_t> ws_conn;
+//     std::shared_ptr<hj::ws_server::ws_stream_t> ws_conn;
 
-//     server.async_accept(ep, [&](const libcpp::ws_server::err_t& ec, std::shared_ptr<libcpp::ws_server::ws_stream_t> ws) {
+//     server.async_accept(ep, [&](const hj::ws_server::err_t& ec, std::shared_ptr<hj::ws_server::ws_stream_t> ws) {
 //         accepted = !ec;
 //         ws_conn = ws;
 //     });
@@ -28,11 +28,11 @@
 //     // 接收消息并回显
 //     bool recv_ok = false, send_ok = false;
 //     std::string recv_msg;
-//     server.async_recv(ws_conn, [&](const libcpp::ws_server::err_t& ec, std::shared_ptr<libcpp::ws_server::ws_stream_t> ws, std::string msg){
+//     server.async_recv(ws_conn, [&](const hj::ws_server::err_t& ec, std::shared_ptr<hj::ws_server::ws_stream_t> ws, std::string msg){
 //         recv_ok = !ec;
 //         recv_msg = msg;
 //         // 回显
-//         server.async_send(ws, msg, [&](const libcpp::ws_server::err_t& ec2, std::shared_ptr<libcpp::ws_server::ws_stream_t>, std::size_t){
+//         server.async_send(ws, msg, [&](const hj::ws_server::err_t& ec2, std::shared_ptr<hj::ws_server::ws_stream_t>, std::size_t){
 //             send_ok = !ec2;
 //         });
 //     });

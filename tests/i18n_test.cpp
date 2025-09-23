@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/i18n.hpp>
+#include <hj/encoding/i18n.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 
-using namespace libcpp;
+using namespace hj;
 
 class I18nTest : public ::testing::Test {
 protected:

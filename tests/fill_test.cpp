@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/fill.hpp>
+#include <hj/algo/fill.hpp>
 #include <vector>
 
 TEST(fill, fill)
 {
     // fill 
     std::vector<int> buf{0, 0, 0, 0, 0};
-    libcpp::fill(buf, [](const unsigned long idx) -> int {
+    hj::fill(buf, [](const unsigned long idx) -> int {
         if (idx % 2 == 0)
             return 2;
         else
@@ -21,7 +21,7 @@ TEST(fill, fill)
 
     // fill iterator
     std::vector<int> buf1{0, 1, 2, 3, 4};
-    libcpp::fill(buf1.begin(), buf1.end(), [](const unsigned long idx) -> int {
+    hj::fill(buf1.begin(), buf1.end(), [](const unsigned long idx) -> int {
         if (idx % 2 == 0)
             return 2;
         else
@@ -36,7 +36,7 @@ TEST(fill, fill)
 
     // fill n
     std::vector<int> buf2{0, 0, 0, 0, 0};
-    libcpp::fill(buf2, [](const unsigned long idx) -> int {
+    hj::fill(buf2, [](const unsigned long idx) -> int {
         if (idx % 2 == 0)
             return 2;
         else

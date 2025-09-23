@@ -4,10 +4,10 @@
 #include <string>
 #include <vector>
 
-#include <libcpp/crypto/aes.hpp>
-#include <libcpp/crypto/base64.hpp>
-#include <libcpp/crypto/des.hpp>
-#include <libcpp/crypto/rsa.hpp>
+#include <hj/crypto/aes.hpp>
+#include <hj/crypto/base64.hpp>
+#include <hj/crypto/des.hpp>
+#include <hj/crypto/rsa.hpp>
 
 #include "api.h"
 

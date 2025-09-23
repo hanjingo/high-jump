@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/skiplist.hpp>
+#include <hj/algo/skiplist.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -7,7 +7,7 @@
 #include <chrono>
 #include <random>
 
-using namespace libcpp;
+using namespace hj;
 
 class SkipListTest : public ::testing::Test {
 protected:

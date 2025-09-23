@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include <libcpp/algo/striped_map.hpp>
+#include <hj/algo/striped_map.hpp>
 #include <string>
 
 TEST(striped_map, emplace)
 {
-    libcpp::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -19,7 +19,7 @@ TEST(striped_map, emplace)
 
 TEST(striped_map, replace)
 {
-    libcpp::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -35,7 +35,7 @@ TEST(striped_map, replace)
 
 TEST(striped_map, find)
 {
-    libcpp::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -50,7 +50,7 @@ TEST(striped_map, find)
 
 TEST(striped_map, erase)
 {
-    libcpp::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -61,7 +61,7 @@ TEST(striped_map, erase)
 
 TEST(striped_map, range)
 {
-    libcpp::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");

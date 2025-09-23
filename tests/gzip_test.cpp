@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/compress/gzip.hpp>
+#include <hj/compress/gzip.hpp>
 #include <string>
 #include <sstream>
 #include <fstream>
@@ -7,7 +7,7 @@
 #include <random>
 #include <chrono>
 
-using namespace libcpp;
+using namespace hj;
 
 class GzipTest : public ::testing::Test {
 protected:
@@ -301,7 +301,7 @@ TEST_F(GzipTest, CompressionRatio) {
 
 //     constexpr size_t huge_size = std::numeric_limits<size_t>::max() / 2;
 //     size_t decompress_reserve_huge = gzip::decompress_reserve_sz(huge_size, 0);
-//     EXPECT_EQ(decompress_reserve_huge, libcpp::GZIP_MAX_SAFE_SZ);
+//     EXPECT_EQ(decompress_reserve_huge, hj::GZIP_MAX_SAFE_SZ);
 // }
 
 TEST_F(GzipTest, ErrorHandling) {

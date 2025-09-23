@@ -1,9 +1,9 @@
 #ifndef CORE_H
 #define CORE_H
 
-#include <libcpp/os/dll.h>
-#include <libcpp/log/log.hpp>
-#include <libcpp/util/defer.hpp>
+#include <hj/os/dll.h>
+#include <hj/log/log.hpp>
+#include <hj/util/defer.hpp>
 
 #include "comm.h"
 #include "examples/crypto_core/src/api.h"

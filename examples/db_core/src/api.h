@@ -1,7 +1,7 @@
 #ifndef DB_CORE_API_H
 #define DB_CORE_API_H
 
-#include <libcpp/os/dll.h>
+#include <hj/os/dll.h>
 
 typedef struct db_context
 {

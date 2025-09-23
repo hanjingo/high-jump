@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/encoding/endian.hpp>
+#include <hj/encoding/endian.hpp>
 
 bool is_big_endian()
 {
@@ -9,17 +9,17 @@ bool is_big_endian()
 
 TEST(endian, is_big_endian)
 {
-    ASSERT_EQ(libcpp::is_big_endian(), is_big_endian());
+    ASSERT_EQ(hj::is_big_endian(), is_big_endian());
 }
 
 TEST(endian, big_endian_covert)
 {
     unsigned int n = 0x1;
-    ASSERT_EQ(libcpp::big_endian::covert(n), 0x01000000);
+    ASSERT_EQ(hj::big_endian::covert(n), 0x01000000);
 }
 
 TEST(endian, little_endian_covert)
 {
     unsigned int n = 0x1;
-    ASSERT_EQ(libcpp::little_endian::covert(n), 0x01000000);
+    ASSERT_EQ(hj::little_endian::covert(n), 0x01000000);
 }

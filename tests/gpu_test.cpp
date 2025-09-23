@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libcpp/hardware/gpu.h>
+#include <hj/hardware/gpu.h>
 #include <iostream>
 
 bool device_foreach_cb(const gpu_device_info_t* info, void* user_data)

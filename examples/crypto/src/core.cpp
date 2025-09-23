@@ -1,7 +1,7 @@
 #include "core.h"
 #include "comm.h"
 
-#include <libcpp/util/defer.hpp>
+#include <hj/util/defer.hpp>
 
 // ------------------------------ crypto core ------------------------------
 crypto_core::crypto_core()

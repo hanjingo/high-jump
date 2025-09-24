@@ -7,6 +7,8 @@
 
 #include <hj/testing/error.hpp>
 
+#include <hj/testing/error_handler.hpp>
+
 #include <hj/testing/exception.hpp>
 
 #include <hj/testing/stacktrace.hpp>

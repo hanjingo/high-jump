@@ -1187,6 +1187,12 @@ TEST(des, decrypt_file)
     std::string key("12345678");
     std::string iv("abcdefgh");
 
+    str_src = "./crypto.log";
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test des encrypt_file not exist: " << str_src;
+    }
+
     // ECB padding PKCS#5
     str_src = "./des_ecb_pkcs5_padding_encrypt.log";
     str_dst = "./des_ecb_pkcs5_padding.log";

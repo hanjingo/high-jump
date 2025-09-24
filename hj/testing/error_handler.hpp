@@ -1,9 +1,11 @@
-#ifndef ERR_HANDLER_HPP
-#define ERR_HANDLER_HPP
+#ifndef ERROR_HANDLER_HPP
+#define ERROR_HANDLER_HPP
 
 #include <string>
 #include <memory>
 #include <functional>
+#include <system_error>
+#include <unordered_map>
 #include <boost/sml.hpp>
 
 namespace hj 
@@ -12,11 +14,13 @@ namespace detail
 {
 
 // event
-template<typename T>
+template<typename T = std::error_code>
 struct err_event 
 {
 	T ec;
-	explicit err_event(T e) : ec(e) {}
+	std::function<void(const T&)> cb;
+
+	explicit err_event(T e, std::function<void(const T&)>&& cb) : ec(e), cb(std::move(cb)) {}
 };
 struct finish {};
 struct abort {};
@@ -29,29 +33,26 @@ struct failed {};
 struct succed {};
 
 // boost::sml
-template<typename T>
-struct err_handler_impl
+template<typename T = std::error_code>
+struct error_handler_impl
 {
-	err_handler_impl(std::function<void(const T&)>&& f_err)
-		: on_err(std::move(f_err))
-	{}
+	error_handler_impl() = default;
 
-	std::function<void(const T&)> on_err;
 	auto operator()() const 
 	{
 		using namespace boost::sml;
 		return make_transition_table(
 			*state<idle> + event<finish> = state<succed>,
 			*state<idle> + event<abort> = state<failed>,
-			*state<idle> + event<err_event<T>> / [this](const err_event<T>& e) { on_err(e.ec); } = state<handling>,
+			*state<idle> + event<err_event<T>> / [](const auto& e){ e.cb(e.ec); } = state<handling>,
 
 			*state<succed> + event<finish> = state<succed>,
 			*state<succed> + event<abort> = state<succed>,
-			*state<succed> + event<err_event<T>> / [this](const err_event<T>& e) { on_err(e.ec); } = state<handling>,
+			*state<succed> + event<err_event<T>> / [](const auto& e){ e.cb(e.ec); } = state<handling>,
 
 			state<handling> + event<finish> = state<succed>,
 			state<handling> + event<abort> = state<failed>,
-			state<handling> + event<err_event<T>> / [this](const err_event<T>& e) { on_err(e.ec); } = state<handling>,
+			state<handling> + event<err_event<T>> / [](const auto& e){ e.cb(e.ec); } = state<handling>,
 
 			state<succed> + event<reset> = state<idle>,
 			state<failed> + event<reset> = state<idle>,
@@ -71,28 +72,28 @@ enum class err_state
 	failed
 };
 
-template<typename T>
-class err_handler
+template<typename T = std::error_code>
+class error_handler
 {
 public:
-	err_handler(std::function<void(const T&)>&& err_cb)
-		: _base{std::move(err_cb)}
+	error_handler()
+		: _base{}
 		, _sm{_base}
+		, _is_ok{[](const T& t){ return !t; }}
 	{}
-	err_handler(std::function<void(const T&)>&& err_cb, 
-				std::function<bool(const T&)>&& is_ok)
-		: _base{std::move(err_cb)}
+	error_handler(std::function<bool(const T&)>&& is_ok)
+		: _base{}
 		, _sm{_base}
 		, _is_ok{std::move(is_ok)}
 	{}
-	~err_handler() = default;
+	~error_handler() = default;
 
-	inline void match(const T& err)
+	inline void match(const T& err, std::function<void(const T&)> cb = [](const T&){})
 	{
 		if (_is_ok(err))
 			_sm.process_event(detail::finish{});
 		else
-			_sm.process_event(detail::err_event<T>{err});
+			_sm.process_event(detail::err_event<T>{err, std::move(cb)});
 	}
 
 	inline void abort()
@@ -116,10 +117,10 @@ public:
 	}
 
 private:
-	detail::err_handler_impl<T> _base;
-	boost::sml::sm<detail::err_handler_impl<T>> _sm;
+	detail::error_handler_impl<T> _base;
+	boost::sml::sm<detail::error_handler_impl<T>> _sm;
 
-	std::function<bool(const T&)> _is_ok = [](const T& t){ return !t; };
+	std::function<bool(const T&)> _is_ok;
 };
 
 } // namespace hj

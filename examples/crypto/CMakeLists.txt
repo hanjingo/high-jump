@@ -181,7 +181,7 @@ target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
 # copy resource files
 file(GLOB PROPERTY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties")
-add_custom_target(copy_properties ALL
+add_custom_target(${PACKAGE_NAME}_copy_properties ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${PROPERTY_FILES}
@@ -190,35 +190,7 @@ add_custom_target(copy_properties ALL
     COMMENT "Copying .properties files to output dir"
 )
 
-add_dependencies(${PROJECT_NAME} copy_properties)
-
-# copy library files
-if (WIN32)
-    file(GLOB CRYPTO_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../crypto_core/bin/${CMAKE_BUILD_TYPE}/*.dll")
-    file(GLOB DB_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../db_core/bin/${CMAKE_BUILD_TYPE}/*.dll")
-else()
-    file(GLOB CRYPTO_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../crypto_core/bin/*.so")
-    file(GLOB DB_LIBRARY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/../db_core/bin/*.so")
-endif()
-add_custom_target(copy_crypto_librarys ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CRYPTO_LIBRARY_FILES}
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    DEPENDS ${CRYPTO_LIBRARY_FILES}
-    COMMENT "Copying crypto library files to output dir"
-)
-add_custom_target(copy_db_librarys ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${DB_LIBRARY_FILES}
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    DEPENDS ${DB_LIBRARY_FILES}
-    COMMENT "Copying db library files to output dir"
-)
-
-add_dependencies(${PROJECT_NAME} copy_crypto_librarys)
-add_dependencies(${PROJECT_NAME} copy_db_librarys)
+add_dependencies(${PROJECT_NAME} ${PACKAGE_NAME}_copy_properties)
 
 # Deploy dependencies
 # for windows + vs2019:

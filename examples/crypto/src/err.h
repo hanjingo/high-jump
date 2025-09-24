@@ -8,6 +8,7 @@
 
 #define OK                 10000
 #define ERR_INVALID_SUBCMD 10001
+#define ERR_ARGC_TOO_LESS  10002
 
 using err_t = std::error_code;
 
@@ -59,6 +60,7 @@ INIT(
 
 INIT(
     hj::register_err("crypto", ERR_INVALID_SUBCMD, "invalid subcmd");
+    hj::register_err("crypto", ERR_ARGC_TOO_LESS, "argc too less");
 )
 
 #endif

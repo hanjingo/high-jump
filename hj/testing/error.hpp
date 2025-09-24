@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 #include <sstream>
+#include <memory>
 #include <system_error>
 
 namespace hj
@@ -52,6 +53,31 @@ inline error_category& category(const char* name)
     return *cat;
 }
 
+// nested error code
+struct nested_error_code 
+{
+    std::error_code ec;
+    std::shared_ptr<nested_error_code> cause;
+
+    nested_error_code(const std::error_code& e, 
+                      std::shared_ptr<nested_error_code> c = nullptr)
+        : ec(e)
+        , cause(std::move(c)) 
+    {}
+
+    nested_error_code(int e, 
+                      const std::error_category& cat, 
+                      std::shared_ptr<nested_error_code> c = nullptr)
+        : ec(e, cat)
+        , cause(std::move(c)) 
+    {}
+
+    nested_error_code(const nested_error_code&) = default;
+    nested_error_code(nested_error_code&&) noexcept = default;
+    nested_error_code& operator=(const nested_error_code&) = default;
+    nested_error_code& operator=(nested_error_code&&) noexcept = default;
+};
+
 } // namespace err_detail
 
 static inline void register_err(const char* category, int ec, const std::string& desc = "") 
@@ -62,6 +88,15 @@ static inline void register_err(const char* category, int ec, const std::string&
 static inline std::error_code make_err(int e, const char* catname = "") 
 {
     return std::error_code(e, err_detail::category(catname));
+}
+
+static inline hj::err_detail::nested_error_code make_err(
+    const std::error_code& e, 
+    const std::error_code& c, 
+    const char* catname = "") 
+{
+    return hj::err_detail::nested_error_code(
+        e, std::make_shared<hj::err_detail::nested_error_code>(c));
 }
 
 template <typename T>

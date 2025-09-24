@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <hj/crypto/base64.hpp>
+#include <filesystem>
 
 // for OpenSSL compatibility on Windows
 #ifdef _WIN32
@@ -54,20 +55,32 @@ TEST(base64, decode)
 TEST(base64, encode_file)
 {
     // base64 file -> file
-    ASSERT_TRUE(hj::base64::encode_file(
-        std::string("./base64_file_test_encode.log"), 
-        std::string("./crypto.log")));
+    std::string str_src = "./crypto.log";
+    std::string str_dst = "./base64_file_test_encode.log";
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test base64 encrypt_file not exist: " << str_src;
+    }
+    ASSERT_TRUE(hj::base64::encode_file(str_dst, str_src));
 }
 
 TEST(base64, decode_file)
 {
-    ASSERT_TRUE(hj::base64::encode_file(
-        std::string("./base64_file_test_encode1.log"), 
-        std::string("./crypto.log")));
+    std::string str_src = "./crypto.log";
+    std::string str_dst = "./base64_file_test_encode1.log";
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test base64 decode_file not exist: " << str_src;
+    }
+    ASSERT_TRUE(hj::base64::encode_file(str_dst, str_src));
 
-    ASSERT_TRUE(hj::base64::decode_file(
-        std::string("./base64_file_test_decode.log"), 
-        std::string("./base64_file_test_encode1.log")));
+    str_src = "./base64_file_test_encode1.log";
+    str_dst = "./base64_file_test_decode.log";
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test base64 decode_file not exist: " << str_src;
+    }
+    ASSERT_TRUE(hj::base64::decode_file(str_dst, str_src));
 }
 
 TEST(base64, is_valid)

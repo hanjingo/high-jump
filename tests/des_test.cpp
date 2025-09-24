@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
 
 std::string calc_file_md5(const std::string& file_path)
 {
@@ -991,148 +992,189 @@ TEST(des, decrypt_n)
 TEST(des, encrypt_file)
 {
     std::string str_src("./crypto.log");
+    std::string str_dst;
     std::string str_src_nopadding("./crypto_nopadding.log");
     std::string key("12345678");
     std::string iv("abcdefgh");
 
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test base64 decode_file not exist: " << str_src;
+    }
+
     // ECB padding PKCS#5
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ecb_pkcs5_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ecb_pkcs5_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ecb, hj::des::padding::pkcs5), true);
 
     // ECB padding PKCS#7
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ecb_pkcs7_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ecb_pkcs7_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ecb, hj::des::padding::pkcs7), true);
 
     // ECB padding 0
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ecb_zero_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ecb_zero_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ecb, hj::des::padding::zero), true);
 
     // ECB padding ISO10126 （random result）
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ecb_iso10126_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ecb_iso10126_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ecb, hj::des::padding::iso10126), true);
 
     // ECB padding ANSIX923
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ecb_ansix923_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ecb_ansix923_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ecb, hj::des::padding::ansix923), true);
 
     // ECB padding ISO/IEC 7816-4
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ecb_iso_iec_7816_4_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ecb_iso_iec_7816_4_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ecb, hj::des::padding::iso_iec_7816_4), true);
 
     // ECB padding NOPADDING
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ecb_no_padding_encrypt.log"), 
-        str_src_nopadding, key, hj::des::mode::ecb, hj::des::padding::no_padding), true);
+    str_dst = "./des_ecb_no_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src_nopadding, 
+        key, hj::des::mode::ecb, hj::des::padding::no_padding), true);
 
     // CBC padding PKCS#5
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cbc_pkcs5_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cbc_pkcs5_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cbc, hj::des::padding::pkcs5, iv), true);
 
     // CBC padding PKCS#7
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cbc_pkcs7_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cbc_pkcs7_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cbc, hj::des::padding::pkcs7, iv), true);
 
     // CBC padding 0
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cbc_zero_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cbc_zero_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cbc, hj::des::padding::zero, iv), true);
 
     // CBC padding ISO10126 （random result）
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cbc_iso10126_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cbc_iso10126_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cbc, hj::des::padding::iso10126, iv), true);
 
     // CBC padding ANSIX923
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cbc_ansix923_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cbc_ansix923_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cbc, hj::des::padding::ansix923, iv), true);
 
     // CBC padding ISO/IEC 7816-4
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cbc_iso_iec_7816_4_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cbc_iso_iec_7816_4_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cbc, hj::des::padding::iso_iec_7816_4, iv), true);
 
     // CBC padding NOPADDING
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cbc_no_padding_encrypt.log"), str_src_nopadding, 
+    str_dst = "./des_cbc_no_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src_nopadding, 
         key, hj::des::mode::cbc, hj::des::padding::no_padding, iv), true);
 
     // CFB padding PKCS#5
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cfb_pkcs5_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cfb_pkcs5_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cfb, hj::des::padding::pkcs5, iv), true);
 
     // CFB padding PKCS#7
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cfb_pkcs7_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cfb_pkcs7_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cfb, hj::des::padding::pkcs7, iv), true);
 
     // CFB padding 0
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cfb_zero_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cfb_zero_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cfb, hj::des::padding::zero, iv), true);
 
     // CFB padding ISO10126 （random result）
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cfb_iso10126_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cfb_iso10126_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cfb, hj::des::padding::iso10126, iv), true);
 
     // CFB padding ANSIX923
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cfb_ansix923_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cfb_ansix923_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cfb, hj::des::padding::ansix923, iv), true);
 
     // CFB padding ISO/IEC 7816-4
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cfb_iso_iec_7816_4_padding_encrypt.log"), str_src, 
+    str_dst = "./des_cfb_iso_iec_7816_4_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::cfb, hj::des::padding::iso_iec_7816_4, iv), true);
 
     // CFB padding NOPADDING
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_cfb_no_padding_encrypt.log"), str_src_nopadding, 
+    str_dst = "./des_cfb_no_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src_nopadding, 
         key, hj::des::mode::cfb, hj::des::padding::no_padding, iv), true);
 
     // OFB padding PKCS#5
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ofb_pkcs5_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ofb_pkcs5_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ofb, hj::des::padding::pkcs5, iv), true);
 
     // OFB padding PKCS#7
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ofb_pkcs7_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ofb_pkcs7_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ofb, hj::des::padding::pkcs7, iv), true);
 
     // OFB padding 0
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ofb_zero_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ofb_zero_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ofb, hj::des::padding::zero, iv), true);
 
     // OFB padding ISO10126 （random result）
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ofb_iso10126_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ofb_iso10126_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ofb, hj::des::padding::iso10126, iv), true);
 
     // OFB padding ANSIX923
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ofb_ansix923_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ofb_ansix923_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ofb, hj::des::padding::ansix923, iv), true);
 
     // OFB padding ISO/IEC 7816-4
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ofb_iso_iec_7816_4_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ofb_iso_iec_7816_4_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ofb, hj::des::padding::iso_iec_7816_4, iv), true);
 
     // OFB padding NOPADDING
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ofb_no_padding_encrypt.log"), str_src_nopadding, 
+    str_dst = "./des_ofb_no_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src_nopadding, 
         key, hj::des::mode::ofb, hj::des::padding::no_padding, iv), true);
 
     // CTR padding PKCS#5
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ctr_pkcs5_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ctr_pkcs5_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ctr, hj::des::padding::pkcs5, iv), true);
 
     // CTR padding PKCS#7
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ctr_pkcs7_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ctr_pkcs7_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ctr, hj::des::padding::pkcs7, iv), true);
 
     // CTR padding 0
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ctr_zero_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ctr_zero_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ctr, hj::des::padding::zero, iv), true);
 
     // CTR padding ISO10126 （random result）
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ctr_iso10126_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ctr_iso10126_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ctr, hj::des::padding::iso10126, iv), true);
 
     // CTR padding ANSIX923
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ctr_ansix923_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ctr_ansix923_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ctr, hj::des::padding::ansix923, iv), true);
 
     // CTR padding ISO/IEC 7816-4
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ctr_iso_iec_7816_4_padding_encrypt.log"), str_src, 
+    str_dst = "./des_ctr_iso_iec_7816_4_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src, 
         key, hj::des::mode::ctr, hj::des::padding::iso_iec_7816_4, iv), true);
 
     // CTR padding NOPADDING
-    ASSERT_EQ(hj::des::encrypt_file(std::string("./des_ctr_no_padding_encrypt.log"), str_src_nopadding, 
+    str_dst = "./des_ctr_no_padding_encrypt.log";
+    ASSERT_EQ(hj::des::encrypt_file(str_dst, str_src_nopadding, 
         key, hj::des::mode::ctr, hj::des::padding::no_padding, iv), true);
 }
 

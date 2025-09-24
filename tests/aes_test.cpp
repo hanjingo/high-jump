@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <hj/crypto/aes.hpp>
 
+#include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -1199,7 +1200,12 @@ TEST(aes, encrypt_file)
     // ECB padding PKCS#5
     str_src = "./crypto.log";
     str_dst = "./aes_ecb_pkcs5_padding_encrypt.log";
-    ASSERT_EQ(hj::aes::encrypt_file(std::string("./aes_ecb_pkcs5_padding_encrypt.log"), str_src, 
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test aes encrypt_file not exist: " << str_src;
+    }
+
+    ASSERT_EQ(hj::aes::encrypt_file(str_dst, str_src, 
         key128, hj::aes::mode::ecb, hj::aes::padding::pkcs5, iv), true);
 }
 
@@ -1216,6 +1222,11 @@ TEST(aes, decrypt_file)
     // ECB padding PKCS#5
     str_src = "./crypto.log";
     str_dst = "./aes_ecb_pkcs5_padding_encrypt1.log";
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test aes decrypt_file not exist: " << str_src;
+    }
+
     ASSERT_EQ(hj::aes::encrypt_file(str_dst, str_src, 
         key128, hj::aes::mode::ecb, hj::aes::padding::pkcs5, iv), true);
 

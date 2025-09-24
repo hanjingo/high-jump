@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <hj/encoding/json.hpp>
+#include <filesystem>
 
 struct json_obj
 {
@@ -39,7 +40,12 @@ TEST(json, parse)
     ASSERT_EQ(js1["happy"].get<bool>(), true);
 
     // from ifstream
-    std::ifstream f("./json_test.json");
+    std::string str_src = "./json_test.json";
+    if (!std::filesystem::exists(str_src))
+    {
+        GTEST_SKIP() << "skip test json parse not exist: " << str_src;
+    }
+    std::ifstream f(str_src);
     auto js2 = hj::json::parse(f);
 
     ASSERT_EQ(js2.contains("pi"), true);

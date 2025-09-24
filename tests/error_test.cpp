@@ -10,6 +10,7 @@ enum class err1
 
 enum err2 {
     err2_ok = 0,
+    err2_io_fail = 1,
     err2_net_fail = 1001,
     err2_db_fail = 2001,
 };
@@ -47,7 +48,7 @@ TEST(error, ec_to_hex)
     ASSERT_EQ(hj::ec_to_hex(err3, false, "err-") == "err-ffff", true);
 }
 
-TEST(error, reg_err_and_make_err)
+TEST(error, reg_and_make_err)
 {
     hj::register_err("net", err2_net_fail, "network error");
     hj::register_err("db", err2_db_fail, "db error");
@@ -65,4 +66,32 @@ TEST(error, reg_err_and_make_err)
     ASSERT_EQ(ec2.message(), std::string("db error"));
 
     ASSERT_EQ(ec3.message(), std::string("unknown error"));
+}
+
+TEST(error, reg_and_make_nested_err)
+{
+    hj::register_err("io", err2_io_fail, "read/write io error");
+    hj::register_err("net", err2_net_fail, "network error");
+    hj::register_err("db", err2_db_fail, "db error");
+
+    auto nested1 = hj::make_err(hj::make_err(err2_net_fail, "net"), hj::make_err(err2_io_fail, "io"));
+    auto nested2 = hj::make_err(hj::make_err(err2_db_fail, "db"), hj::make_err(err2_io_fail, "io"));
+
+    ASSERT_EQ(nested1.ec.value(), 1001);
+    ASSERT_EQ(nested1.ec.category().name(), std::string("net"));
+    ASSERT_EQ(nested1.ec.message(), std::string("network error"));
+    ASSERT_NE(nested1.cause, nullptr);
+    ASSERT_EQ(nested1.cause->ec.value(), 1);
+    ASSERT_EQ(nested1.cause->ec.category().name(), std::string("io"));
+    ASSERT_EQ(nested1.cause->ec.message(), std::string("read/write io error"));
+    ASSERT_EQ(nested1.cause->cause, nullptr);
+
+    ASSERT_EQ(nested2.ec.value(), 2001);
+    ASSERT_EQ(nested2.ec.category().name(), std::string("db"));
+    ASSERT_EQ(nested2.ec.message(), std::string("db error"));
+    ASSERT_NE(nested2.cause, nullptr);
+    ASSERT_EQ(nested2.cause->ec.value(), 1);
+    ASSERT_EQ(nested2.cause->ec.category().name(), std::string("io"));
+    ASSERT_EQ(nested2.cause->ec.message(), std::string("read/write io error"));
+    ASSERT_EQ(nested2.cause->cause, nullptr);
 }

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <hj/testing/err_handler.hpp>
+#include <hj/testing/error_handler.hpp>
 #include <system_error>
 
 enum class err1
@@ -10,16 +10,13 @@ enum class err1
     mem_leak,
 };
 
-TEST(err_handler, match)
+TEST(error_handler, match)
 {
     err1 last_err = err1::unknow;
     err1 ok = err1::ok;
     err1 timeout = err1::timeout;
     err1 mem_leak = err1::mem_leak;
-    hj::err_handler<err1> h(
-        [&](const err1& ec) { last_err = ec; },
-        [](const err1& e) -> bool { return e == err1::ok; }
-    );
+    hj::error_handler<err1> h([](const err1& e) -> bool { return e == err1::ok; });
 
     // ok
     last_err = err1::unknow;
@@ -29,12 +26,13 @@ TEST(err_handler, match)
 
     // timeout -> handling
     last_err = err1::unknow;
-    h.match(timeout);
+    h.match(timeout, [&](const err1& e) { last_err = e; });
     EXPECT_EQ(last_err, timeout);
     EXPECT_EQ(h.status(), hj::err_state::handling);
 
-    // timeout + mem_leak -> handling
-    h.match(mem_leak);
+    // handling + mem_leak -> handling
+    last_err = err1::unknow;
+    h.match(mem_leak, [&](const err1& e) { last_err = e; });
     EXPECT_EQ(last_err, mem_leak);
     EXPECT_EQ(h.status(), hj::err_state::handling);
 
@@ -52,7 +50,7 @@ TEST(err_handler, match)
 
     // idle + mem_leak -> handling
     last_err = err1::unknow;
-    h.match(mem_leak);
+    h.match(mem_leak, [&](const err1& e) { last_err = e; });
     EXPECT_EQ(last_err, mem_leak);
     EXPECT_EQ(h.status(), hj::err_state::handling);
 
@@ -63,17 +61,14 @@ TEST(err_handler, match)
     EXPECT_EQ(h.status(), hj::err_state::succed);
 }
 
-TEST(err_handler, match_std_error_code)
+TEST(error_handler, match_std_error_code)
 {
     std::error_code unknow(static_cast<int>(err1::unknow), std::generic_category());
     std::error_code ok;
     std::error_code timeout(static_cast<int>(err1::timeout), std::generic_category());
     std::error_code mem_leak(static_cast<int>(err1::mem_leak), std::generic_category());
     std::error_code last_err = unknow;
-    hj::err_handler<std::error_code> h(
-        [&](const std::error_code& ec) { last_err = ec; },
-        [](const std::error_code& e) -> bool { return !e; }
-    );
+    hj::error_handler<std::error_code> h([](const std::error_code& e) -> bool { return !e; });
 
     // ok
     last_err = unknow;
@@ -83,12 +78,13 @@ TEST(err_handler, match_std_error_code)
 
     // timeout -> handling
     last_err = unknow;
-    h.match(timeout);
+    h.match(timeout, [&](const std::error_code& e) { last_err = e; });
     EXPECT_EQ(last_err, timeout);
     EXPECT_EQ(h.status(), hj::err_state::handling);
 
     // timeout + mem_leak -> handling
-    h.match(mem_leak);
+    last_err = unknow;
+    h.match(mem_leak, [&](const std::error_code& e) { last_err = e; });
     EXPECT_EQ(last_err, mem_leak);
     EXPECT_EQ(h.status(), hj::err_state::handling);
 
@@ -106,7 +102,7 @@ TEST(err_handler, match_std_error_code)
 
     // idle + mem_leak -> handling
     last_err = unknow;
-    h.match(mem_leak);
+    h.match(mem_leak, [&](const std::error_code& e) { last_err = e; });
     EXPECT_EQ(last_err, mem_leak);
     EXPECT_EQ(h.status(), hj::err_state::handling);
 

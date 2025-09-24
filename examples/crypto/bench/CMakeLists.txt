@@ -1,7 +1,7 @@
 
 cmake_minimum_required(VERSION 3.19.2)
 
-project(bench)
+project(${PACKAGE_NAME}_bench)
 
 # utf-8 support
 if (MSVC)

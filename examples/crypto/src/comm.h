@@ -2,9 +2,18 @@
 #define COMM_H
 
 #include <iostream>
+#include <vector>
+#include <string>
+
 #include <hj/encoding/i18n.hpp>
 
 #include "err.h"
+
+static const std::vector<std::string> all_subcmds{"encrypt", "decrypt", "keygen", "guess", "add", "list", "help"};
+static const std::vector<std::string> all_keygen_algos{"rsa"};
+static const std::vector<std::string> all_encrypt_algos{"aes", "des", "rsa", "sha256", "md5", "base64"};
+static const std::vector<std::string> all_decrypt_algos{"aes", "des", "rsa", "sha256", "md5", "base64"};
+static const std::vector<std::string> all_encrypt_fmts{"hex", "base64", "none"};
 
 enum class output_type
 {

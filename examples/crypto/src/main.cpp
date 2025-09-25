@@ -9,10 +9,12 @@
 
 // add your code here...
 #include <iostream>
+#include <hj/testing/error.hpp>
+#include <hj/testing/error_handler.hpp>
+#include <hj/util/defer.hpp>
 
 #include "err.h"
 #include "core.h"
-#include "handle.h"
 #include "comm.h"
 
 int main(int argc, char* argv[])
@@ -47,9 +49,14 @@ int main(int argc, char* argv[])
     // }
 
     // add your code here...
+    hj::error_handler<err_t> h{[](const char* src, const char* dst){
+        LOG_DEBUG("error handler state transition: {} -> {}", src, dst);
+    }};
     if (argc < 2) 
     {
-        LOG_ERROR("{}", tr("log.err_argc_too_less"));
+        h.match(error(ERR_ARGC_TOO_LESS), [&](const err_t& e){
+            LOG_ERROR(tr("app.err_argc_too_less").c_str(), argc);
+        });
         return 1;
     }
 
@@ -58,44 +65,95 @@ int main(int argc, char* argv[])
     // version check
     int major, minor, patch;
     auto err = crypto_sdk.version(major, minor, patch);
+    if (!err && (major < CRYPTO_CORE_VERSION_MAJOR_MIN 
+            || minor < CRYPTO_CORE_VERSION_MINOR_MIN 
+            || patch < CRYPTO_CORE_VERSION_PATCH_MIN))
+        err = error(CRYPTO_ERR_VERSION_MISMATCH);
     if (err) 
     {
-        handle_err(err);
+        h.match(err, [&](const err_t& e){
+            switch (e.value())
+            {
+                case CRYPTO_ERR_CORE_NOT_LOAD:
+                {
+                    LOG_ERROR(tr("log.crypto_err_core_not_load").c_str());
+                    break;
+                }
+                case CRYPTO_ERR_VERSION_MISMATCH:
+                {
+                    LOG_ERROR(tr("log.crypto_err_version_mismatch").c_str(), major, minor, patch, 
+                        CRYPTO_CORE_VERSION_MAJOR_MIN, CRYPTO_CORE_VERSION_MINOR_MIN, CRYPTO_CORE_VERSION_PATCH_MIN);
+                    break;
+                }
+                default:
+                {
+                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    break;
+                }
+            }
+        });
         return 1;
     }
-    if (major < CRYPTO_CORE_VERSION_MAJOR_MIN 
-            || minor < CRYPTO_CORE_VERSION_MINOR_MIN 
-            || patch < CRYPTO_CORE_VERSION_PATCH_MIN)
-    {
-        handle_err(error(CRYPTO_ERR_VERSION_MISMATCH), major, minor, patch);
-        return 1;
-    }
+
     major = 0; minor = 0; patch = 0;
     err = db_sdk.version(major, minor, patch);
+    if (!err && (major < DB_CORE_VERSION_MAJOR_MIN 
+            || minor < DB_CORE_VERSION_MINOR_MIN 
+            || patch < DB_CORE_VERSION_PATCH_MIN))
+        err = error(DB_ERR_VERSION_MISMATCH);
     if (err) 
     {
-        handle_err(err);
-        return 1;
-    }
-    if (major < DB_CORE_VERSION_MAJOR_MIN 
-            || minor < DB_CORE_VERSION_MINOR_MIN 
-            || patch < DB_CORE_VERSION_PATCH_MIN)
-    {
-        handle_err(error(DB_ERR_VERSION_MISMATCH), major, minor, patch);
+        h.match(err, [&](const err_t& e){
+            switch (e.value())
+            {
+                case DB_ERR_CORE_NOT_LOAD:
+                {
+                    LOG_ERROR(tr("log.db_err_core_not_load").c_str());
+                    break;
+                }
+                case DB_ERR_VERSION_MISMATCH:
+                {
+                    LOG_ERROR(tr("log.db_err_version_mismatch").c_str(), major, minor, patch, 
+                        DB_CORE_VERSION_MAJOR_MIN, DB_CORE_VERSION_MINOR_MIN, DB_CORE_VERSION_PATCH_MIN);
+                    break;
+                }
+                default:
+                {
+                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    break;
+                }
+            }
+        });
         return 1;
     }
 
     // init
     err = crypto_sdk.init();
+    if (!err) 
+        err = db_sdk.init();
+    
     if (err) 
     {
-        handle_err(err);
-        return 1;
-    }
-    err = db_sdk.init();
-    if (err) 
-    {
-        handle_err(err);
+        h.match(err, [&](const err_t& e){
+            switch (e.value())
+            {
+                case CRYPTO_ERR_INIT_FAIL:
+                {
+                    LOG_ERROR(tr("log.crypto_err_init_fail").c_str());
+                    break;
+                }
+                case DB_ERR_INIT_FAIL:
+                {
+                    LOG_ERROR(tr("log.db_err_init_fail").c_str());
+                    break;
+                }
+                default:
+                {
+                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    break;
+                }
+            }
+        });
         return 1;
     }
 
@@ -149,10 +207,97 @@ int main(int argc, char* argv[])
         auto otype = select_output_type(output);
         auto ofmt = select_encrypt_output_fmt(fmt, output, algo);
         auto err = crypto_sdk.encrypt(output, input, content, algo, mode, key, padding, iv, ofmt);
-        if (err)
-            handle_err(err, output, input, content, algo, mode, key, padding, iv, ofmt);
-        else
+        if (!err)
+        {
             print(output, otype);
+        }
+        else
+        {
+            h.match(err, [&](const err_t& e){
+                switch (e.value())
+                {
+                    case CRYPTO_ERR_INVALID_FMT: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_fmt").c_str(), 
+                            ofmt, fmt_strs(std::vector<std::string>{"hex", "base64", "none"}));
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_INPUT: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_input").c_str(), input);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_OUTPUT: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_output").c_str(), output);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_ALGO: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_algo").c_str(), algo, fmt_strs(all_encrypt_algos));
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_KEY: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_key").c_str(), key);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_PADDING: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_padding").c_str(), padding);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_IV:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_iv").c_str(), iv);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_MODE:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_mode").c_str(), mode);
+                        break;
+                    }
+                    case CRYPTO_ERR_ENCRYPT_AES_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_encrypt_aes_failed").c_str(), 
+                            output, input, content, algo, mode, key, padding, iv);
+                        break;
+                    }
+                    case CRYPTO_ERR_ENCRYPT_BASE64_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_encrypt_base64_failed").c_str(), output, input, content);
+                        break;
+                    }
+                    case CRYPTO_ERR_ENCRYPT_DES_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_encrypt_des_failed").c_str(), 
+                            output, input, content, algo, mode, key, padding, iv);
+                        break;
+                    }
+                    case CRYPTO_ERR_ENCRYPT_MD5_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_encrypt_md5_failed").c_str(), output, input, content);
+                        break;
+                    }
+                    case CRYPTO_ERR_ENCRYPT_SHA256_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_encrypt_sha256_failed").c_str(), output, input, content);
+                        break;
+                    }
+                    case CRYPTO_ERR_ENCRYPT_RSA_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_encrypt_rsa_failed").c_str(), 
+                            output, input, content, algo, mode, key, padding, iv);
+                        break;
+                    }
+                    default:
+                    {
+                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        break;
+                    }
+                }
+            });
+        }
     } 
     else if (subcmd == "decrypt")
     {
@@ -169,10 +314,96 @@ int main(int argc, char* argv[])
 
         auto otype = select_output_type(output);
         auto err = crypto_sdk.decrypt(output, input, content, algo, mode, key, passwd, padding, iv, fmt);
-        if (err)
-            handle_err(err, output, input, content, algo, mode, key, padding, iv, fmt);
-        else
+        if (!err)
+        {
             print(output, otype);
+        }
+        else
+        {
+            h.match(err, [&](const err_t& e){
+                switch (e.value())
+                {
+                    case CRYPTO_ERR_INVALID_FMT: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_fmt").c_str(), fmt, fmt_strs(all_encrypt_fmts));
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_INPUT: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_input").c_str(), input);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_OUTPUT: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_output").c_str(), output);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_ALGO: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_algo").c_str(), algo, fmt_strs(all_decrypt_algos));
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_KEY: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_key").c_str(), key);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_PADDING: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_padding").c_str(), padding);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_IV:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_iv").c_str(), iv);
+                        break;
+                    }
+                    case CRYPTO_ERR_INVALID_MODE:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_mode").c_str(), mode);
+                        break;
+                    }
+                    case CRYPTO_ERR_DECRYPT_AES_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_decrypt_aes_failed").c_str(), 
+                            output, input, content, algo, mode, key, padding, iv);
+                        break;
+                    }
+                    case CRYPTO_ERR_DECRYPT_BASE64_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_decrypt_base64_failed").c_str(), output, input, content);
+                        break;
+                    }
+                    case CRYPTO_ERR_DECRYPT_DES_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_decrypt_des_failed").c_str(), 
+                            output, input, content, algo, mode, key, padding, iv);
+                        break;
+                    }
+                    case CRYPTO_ERR_DECRYPT_MD5_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_decrypt_md5_failed").c_str(), output, input, content);
+                        break;
+                    }
+                    case CRYPTO_ERR_DECRYPT_SHA256_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_decrypt_sha256_failed").c_str(), output, input, content);
+                        break;
+                    }
+                    case CRYPTO_ERR_DECRYPT_RSA_FAILED:
+                    {
+                        LOG_ERROR(tr("log.crypto_err_decrypt_rsa_failed").c_str(), 
+                            output, input, content, algo, mode, key, padding, iv);
+                        break;
+                    }
+                    default:
+                    {
+                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        break;
+                    }
+                }
+            });
+        }
     }
     else if (subcmd == "keygen")
     {
@@ -187,10 +418,33 @@ int main(int argc, char* argv[])
         std::vector<std::string> keys;
         auto otype = select_output_type(output);
         auto err = crypto_sdk.keygen(keys, algo, fmt, mode, bits);
-        if (err)
-            handle_err(err, algo, fmt, mode, bits);
-        else
+        if (!err)
+        {
             print(keys, otype);
+        }
+        else
+        {
+            h.match(err, [&](const err_t& e){
+                switch (e.value())
+                {
+                    case CRYPTO_ERR_INVALID_ALGO: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_invalid_algo").c_str(), algo, fmt_strs(all_keygen_algos));
+                        break;
+                    }
+                    case CRYPTO_ERR_KEYGEN_FAIL: 
+                    {
+                        LOG_ERROR(tr("log.crypto_err_keygen_fail").c_str(), algo, fmt, mode, bits);
+                        break;
+                    }
+                    default:
+                    {
+                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        break;
+                    }
+                }
+            });
+        }   
     }
     else if (subcmd == "guess")
     {
@@ -229,10 +483,33 @@ int main(int argc, char* argv[])
         std::vector<std::string> contents{content};
         auto otype = select_output_type(output);
         auto err = db_sdk.query(outs, "dict", "passwords", contents, num);
-        if (err)
-            handle_err(err, content, num);
-        else
+        if (!err)
+        {
             print(outs, otype);
+        }
+        else
+        {
+            h.match(err, [&](const err_t& e){
+                switch (e.value())
+                {
+                    case DB_ERR_DB_NOT_EXIST: 
+                    {
+                        LOG_ERROR(tr("log.db_err_db_not_exist").c_str(), "dict");
+                        break;
+                    }
+                    case DB_ERR_SQLITE_GET_CONN_FAIL: 
+                    {
+                        LOG_ERROR(tr("log.db_err_sqlite_get_conn_fail").c_str());
+                        break;
+                    }
+                    default:
+                    {
+                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        break;
+                    }
+                }
+            });
+        }
     }
     else if (subcmd == "attach") 
     {
@@ -246,7 +523,9 @@ int main(int argc, char* argv[])
     } 
     else 
     {
-        handle_err(error(ERR_INVALID_SUBCMD), subcmd);
+        h.match(error(ERR_INVALID_SUBCMD), [&](const err_t& e){
+            LOG_ERROR(tr("app.err_invalid_subcmd").c_str(), subcmd, fmt_strs(all_subcmds));
+        });
         return 1;
     }
 }

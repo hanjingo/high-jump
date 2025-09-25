@@ -25,7 +25,10 @@
     "eigen3",
     "flatbuffers",
     "fmt",
-    "grpc",
+    {
+      "name": "grpc",
+      "default-features": false
+    },
     "gtest",
     "hffix",
     "hidapi",
@@ -46,7 +49,10 @@
         "otlp-file"
       ]
     },
-    "protobuf",
+    {
+      "name": "protobuf",
+      "default-features": false
+    },
     "abseil",
     "pugixml",
     "spdlog",

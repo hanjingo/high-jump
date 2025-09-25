@@ -18,47 +18,50 @@ TEST(error_handler, match)
     err1 mem_leak = err1::mem_leak;
     hj::error_handler<err1> h([](const err1& e) -> bool { return e == err1::ok; });
 
-    // ok
+    // idle + ok -> succed
     last_err = err1::unknow;
     h.match(ok);
     EXPECT_EQ(last_err, err1::unknow);
-    EXPECT_EQ(h.status(), hj::err_state::succed);
+    EXPECT_STREQ(h.status(), "succed");
 
-    // timeout -> handling
+    // succed + timeout -> handling
     last_err = err1::unknow;
     h.match(timeout, [&](const err1& e) { last_err = e; });
     EXPECT_EQ(last_err, timeout);
-    EXPECT_EQ(h.status(), hj::err_state::handling);
+    EXPECT_STREQ(h.status(), "handling");
 
-    // handling + mem_leak -> handling
+    // handling + mem_leak -(defer)-> handling
     last_err = err1::unknow;
     h.match(mem_leak, [&](const err1& e) { last_err = e; });
+    EXPECT_EQ(last_err, err1::unknow);
+    EXPECT_STREQ(h.status(), "handling");
+    h.match(ok); // last handling state finished, deferred event processed
     EXPECT_EQ(last_err, mem_leak);
-    EXPECT_EQ(h.status(), hj::err_state::handling);
+    EXPECT_STREQ(h.status(), "handling");
 
     // handling + abort -> failed
     last_err = err1::unknow;
     h.abort();
     EXPECT_EQ(last_err, err1::unknow);
-    EXPECT_EQ(h.status(), hj::err_state::failed);
+    EXPECT_STREQ(h.status(), "failed");
 
     // failed + reset -> idle
     last_err = err1::unknow;
     h.reset();
     EXPECT_EQ(last_err, err1::unknow);
-    EXPECT_EQ(h.status(), hj::err_state::idle);
+    EXPECT_STREQ(h.status(), "idle");
 
     // idle + mem_leak -> handling
     last_err = err1::unknow;
     h.match(mem_leak, [&](const err1& e) { last_err = e; });
     EXPECT_EQ(last_err, mem_leak);
-    EXPECT_EQ(h.status(), hj::err_state::handling);
+    EXPECT_STREQ(h.status(), "handling");
 
     // handling + ok -> succed
     last_err = err1::unknow;
     h.match(ok);
     EXPECT_EQ(last_err, err1::unknow);
-    EXPECT_EQ(h.status(), hj::err_state::succed);
+    EXPECT_STREQ(h.status(), "succed");
 }
 
 TEST(error_handler, match_std_error_code)
@@ -70,45 +73,48 @@ TEST(error_handler, match_std_error_code)
     std::error_code last_err = unknow;
     hj::error_handler<std::error_code> h([](const std::error_code& e) -> bool { return !e; });
 
-    // ok
+    // idle + ok -> succed
     last_err = unknow;
     h.match(ok);
     EXPECT_EQ(last_err, unknow);
-    EXPECT_EQ(h.status(), hj::err_state::succed);
+    EXPECT_STREQ(h.status(), "succed");
 
-    // timeout -> handling
+    // succed + timeout -> handling
     last_err = unknow;
     h.match(timeout, [&](const std::error_code& e) { last_err = e; });
     EXPECT_EQ(last_err, timeout);
-    EXPECT_EQ(h.status(), hj::err_state::handling);
+    EXPECT_STREQ(h.status(), "handling");
 
-    // timeout + mem_leak -> handling
+    // handling + mem_leak -(defer)-> handling
     last_err = unknow;
     h.match(mem_leak, [&](const std::error_code& e) { last_err = e; });
+    EXPECT_EQ(last_err, unknow);
+    EXPECT_STREQ(h.status(), "handling");
+    h.match(ok); // last handling state finished, deferred event processed
     EXPECT_EQ(last_err, mem_leak);
-    EXPECT_EQ(h.status(), hj::err_state::handling);
+    EXPECT_STREQ(h.status(), "handling");
 
     // handling + abort -> failed
     last_err = unknow;
     h.abort();
     EXPECT_EQ(last_err, unknow);
-    EXPECT_EQ(h.status(), hj::err_state::failed);
+    EXPECT_STREQ(h.status(), "failed");
 
     // failed + reset -> idle
     last_err = unknow;
     h.reset();
     EXPECT_EQ(last_err, unknow);
-    EXPECT_EQ(h.status(), hj::err_state::idle);
+    EXPECT_STREQ(h.status(), "idle");
 
     // idle + mem_leak -> handling
     last_err = unknow;
     h.match(mem_leak, [&](const std::error_code& e) { last_err = e; });
     EXPECT_EQ(last_err, mem_leak);
-    EXPECT_EQ(h.status(), hj::err_state::handling);
+    EXPECT_STREQ(h.status(), "handling");
 
     // handling + ok -> succed
     last_err = unknow;
     h.match(ok);
     EXPECT_EQ(last_err, unknow);
-    EXPECT_EQ(h.status(), hj::err_state::succed);
+    EXPECT_STREQ(h.status(), "succed");
 }

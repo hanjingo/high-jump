@@ -24,6 +24,7 @@
 #ifdef __cplusplus
 #include <IOKit/hid/IOHIDManager.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <ApplicationServices/ApplicationServices.h>
 #endif
 
 #endif
@@ -218,7 +219,6 @@ static int keyboard_read_event(int handle, key_event_t* event)
     return -1;
 
 #elif defined(__APPLE__)
-    #include <ApplicationServices/ApplicationServices.h>
     for (int key = 0; key < 128; ++key) 
     {
         if (CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState, key)) 

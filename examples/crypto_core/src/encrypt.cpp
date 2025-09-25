@@ -20,7 +20,7 @@ int encryptor_mgr::add(std::unique_ptr<encryptor>&& enc)
             return CRYPTO_ERR_FAIL;
 
     _encryptors.emplace_back(std::move(enc));
-    return CRYPTO_OK;
+    return OK;
 }
 
 int encryptor_mgr::encrypt(
@@ -82,15 +82,15 @@ int aes_encryptor::encrypt(
     {
         std::string tmp;
         err = hj::aes::encrypt(tmp, content, key, mod, pad, iv) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
-        if (err == CRYPTO_OK)
+            OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
+        if (err == OK)
             err = formator::format(out, tmp, fmt, fmt_target::memory);
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
         err = hj::aes::encrypt_file(out, in, key, mod, pad, iv) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
-        if (err == CRYPTO_OK)
+            OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
+        if (err == OK)
             err = formator::format(out, out, fmt, fmt_target::file);
     }
     else if (out != "" && in == "") // encrypt: mem -> file
@@ -105,8 +105,8 @@ int aes_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
-        if (err == CRYPTO_OK)
+            iv.size()) ? OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
+        if (err == OK)
             err = formator::format(out, out, fmt, fmt_target::file);
     }
     else // encrypt: file -> mem
@@ -121,9 +121,9 @@ int aes_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
+            iv.size()) ? OK : CRYPTO_ERR_ENCRYPT_AES_FAILED;
 
-        if (err == CRYPTO_OK)
+        if (err == OK)
             err = formator::format(out, sout.str(), fmt, fmt_target::memory);
     }
 
@@ -208,26 +208,26 @@ int base64_encryptor::encrypt(
     if (out == "" && in == "") // encrypt: mem -> mem
     {
         err = hj::base64::encode(out, content) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
         err = hj::base64::encode_file(out, in) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
         err = hj::base64::encode(fout, sin) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
     }
     else // encrypt: file -> mem
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
         err = hj::base64::encode(sout, fin) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_BASE64_FAILED;
         out = sout.str();
     }
 
@@ -274,12 +274,12 @@ int des_encryptor::encrypt(
     if (out == "" && in == "") // encrypt: mem -> mem
     {
         err = hj::des::encrypt(out, content, key, mod, pad, iv) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
         err = hj::des::encrypt_file(out, in, key, mod, pad, iv) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
@@ -293,7 +293,7 @@ int des_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
+            iv.size()) ? OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
     }
     else // encrypt: file -> mem
     {
@@ -307,7 +307,7 @@ int des_encryptor::encrypt(
             mod, 
             pad, 
             reinterpret_cast<const unsigned char*>(iv.c_str()), 
-            iv.size()) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
+            iv.size()) ? OK : CRYPTO_ERR_ENCRYPT_DES_FAILED;
         out = sout.str();
     }
 
@@ -384,23 +384,23 @@ int md5_encryptor::encrypt(
     int err = CRYPTO_ERR_FAIL;
     if (out == "" && in == "") // encrypt: mem -> mem
     {
-        err = hj::md5::encode(out, content) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
+        err = hj::md5::encode(out, content) ? OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
-        err = hj::md5::encode_file(out, in) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
+        err = hj::md5::encode_file(out, in) ? OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
-        err = hj::md5::encode(fout, sin) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
+        err = hj::md5::encode(fout, sin) ? OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
     }
     else // encrypt: file -> mem
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = hj::md5::encode(sout, fin) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
+        err = hj::md5::encode(sout, fin) ? OK : CRYPTO_ERR_ENCRYPT_MD5_FAILED;
         out = sout.str();
     }
 
@@ -430,26 +430,26 @@ int sha256_encryptor::encrypt(
     if (out == "" && in == "") // encrypt: mem -> mem
     {
         err = hj::sha::encode(out, content, hj::sha::algorithm::sha256) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
         err = hj::sha::encode_file(out, in, hj::sha::algorithm::sha256) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
         std::ofstream fout(out, std::ios::binary);
         std::istringstream sin(content);
         err = hj::sha::encode(fout, sin, hj::sha::algorithm::sha256) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
     }
     else // encrypt: file -> mem
     {
         std::ifstream fin(in, std::ios::binary);
         std::ostringstream sout(out);
         err = hj::sha::encode(sout, fin, hj::sha::algorithm::sha256) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_SHA256_FAILED;
         out = sout.str();
     }
 
@@ -489,12 +489,12 @@ int rsa_encryptor::encrypt(
     if (out == "" && in == "") // encrypt: mem -> mem
     {
         err = hj::rsa::encrypt(out, content, key, pad) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
     }
     else if (out != "" && in != "") // encrypt: file -> file
     {
         err = hj::rsa::encrypt_file(out, in, key, pad) ? 
-            CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
+            OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
     }
     else if (out != "" && in == "") // encrypt: mem -> file
     {
@@ -505,7 +505,7 @@ int rsa_encryptor::encrypt(
             sin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
             key.size(), 
-            pad) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
+            pad) ? OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
     }
     else // encrypt: file -> mem
     {
@@ -516,7 +516,7 @@ int rsa_encryptor::encrypt(
             fin, 
             reinterpret_cast<const unsigned char*>(key.c_str()), 
             key.size(), 
-            pad) ? CRYPTO_OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
+            pad) ? OK : CRYPTO_ERR_ENCRYPT_RSA_FAILED;
         out = sout.str();
     }
 

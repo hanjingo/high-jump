@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "api.h"
+#include "crypto_core.h"
 #include <hj/crypto/rsa.hpp>
 
 class keymaker

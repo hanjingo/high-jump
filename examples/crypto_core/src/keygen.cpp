@@ -18,7 +18,7 @@ int keymaker_mgr::add(std::unique_ptr<keymaker>&& km)
             return CRYPTO_ERR_FAIL;
 
     _keymakers.emplace_back(std::move(km));
-    return CRYPTO_OK;
+    return OK;
 }
 
 int keymaker_mgr::make(
@@ -54,7 +54,7 @@ int rsa_keymaker::make(
 
     keys.push_back(pubkey);
     keys.push_back(prikey);
-    return CRYPTO_OK;
+    return OK;
 }
 
 hj::rsa::key_format rsa_keymaker::_to_key_format(const std::string& fmt)

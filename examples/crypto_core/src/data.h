@@ -3,7 +3,7 @@
 
 #include <hj/sync/object_pool.hpp>
 
-#include "api.h"
+#include "crypto_core.h"
 
 class data_mgr
 {

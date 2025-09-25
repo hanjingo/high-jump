@@ -26,14 +26,14 @@ err_t crypto_core::load()
     if (_dll == nullptr)
         return error(CRYPTO_ERR_CORE_LOAD_FAIL);
 
-    _require = static_cast<crypto_api>(dll_get(_dll, "crypto_require"));
-    _release = static_cast<crypto_api>(dll_get(_dll, "crypto_release"));
-    _version = static_cast<crypto_api>(dll_get(_dll, "crypto_version"));
-    _init = static_cast<crypto_api>(dll_get(_dll, "crypto_init"));
-    _quit = static_cast<crypto_api>(dll_get(_dll, "crypto_quit"));
-    _encrypt = static_cast<crypto_api>(dll_get(_dll, "crypto_encrypt"));
-    _decrypt = static_cast<crypto_api>(dll_get(_dll, "crypto_decrypt"));
-    _keygen = static_cast<crypto_api>(dll_get(_dll, "crypto_keygen"));
+    _require = static_cast<sdk_api>(dll_get(_dll, "crypto_require"));
+    _release = static_cast<sdk_api>(dll_get(_dll, "crypto_release"));
+    _version = static_cast<sdk_api>(dll_get(_dll, "crypto_version"));
+    _init = static_cast<sdk_api>(dll_get(_dll, "crypto_init"));
+    _quit = static_cast<sdk_api>(dll_get(_dll, "crypto_quit"));
+    _encrypt = static_cast<sdk_api>(dll_get(_dll, "crypto_encrypt"));
+    _decrypt = static_cast<sdk_api>(dll_get(_dll, "crypto_decrypt"));
+    _keygen = static_cast<sdk_api>(dll_get(_dll, "crypto_keygen"));
     return err_t();
 }
 
@@ -77,10 +77,10 @@ err_t crypto_core::version(int& major, int& minor, int& patch)
     auto param = new crypto_param_version{};
     DEFER(delete param; param = nullptr;);
 
-    crypto_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(crypto_context);
+    ctx.sz = sizeof(sdk_context);
     _version(ctx);
     major = param->major;
     minor = param->minor;
@@ -99,12 +99,12 @@ err_t crypto_core::init(
 
     param->data_pool_size = data_pool_size;
 
-    crypto_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(crypto_context);
+    ctx.sz = sizeof(sdk_context);
     _init(ctx);
-    if (param->result != CRYPTO_OK)
+    if (param->result != OK)
         return error(param->result);
 
     return err_t();
@@ -118,12 +118,12 @@ err_t crypto_core::quit()
     auto param = new crypto_param_quit{};
     DEFER(delete param; param = nullptr;);
 
-    crypto_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(crypto_context);
+    ctx.sz = sizeof(sdk_context);
     _quit(ctx);
-    if (param->result != CRYPTO_OK)
+    if (param->result != OK)
         return error(param->result);
 
     return err_t();
@@ -160,12 +160,12 @@ err_t crypto_core::encrypt(
     param->iv = iv.c_str();
     param->fmt = fmt.c_str();
 
-    crypto_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(crypto_context);
+    ctx.sz = sizeof(sdk_context);
     _encrypt(ctx);
-    if (param->result != CRYPTO_OK)
+    if (param->result != OK)
         return error(param->result);
 
     out.assign(param->out, *param->out_len);
@@ -205,12 +205,12 @@ err_t crypto_core::decrypt(
     param->iv = iv.c_str();
     param->fmt = fmt.c_str();
 
-    crypto_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(crypto_context);
+    ctx.sz = sizeof(sdk_context);
     _decrypt(ctx);
-    if (param->result != CRYPTO_OK)
+    if (param->result != OK)
         return error(param->result);
 
     out.assign(param->out, *param->out_len);
@@ -235,12 +235,12 @@ err_t crypto_core::keygen(
     param->mode = mode.c_str();
     param->bits = bits;
 
-    crypto_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(crypto_context);
+    ctx.sz = sizeof(sdk_context);
     _keygen(ctx);
-    if (param->result != CRYPTO_OK)
+    if (param->result != OK)
         return error(param->result);
 
     for (size_t i = 0; i < CRYPTO_MAX_KEY_NUM; i++)
@@ -279,13 +279,13 @@ err_t db_core::load()
     if (_dll == nullptr)
         return error(DB_ERR_CORE_LOAD_FAIL);
 
-    _require = static_cast<db_api>(dll_get(_dll, "db_require"));
-    _release = static_cast<db_api>(dll_get(_dll, "db_release"));
-    _version = static_cast<db_api>(dll_get(_dll, "db_version"));
-    _init = static_cast<db_api>(dll_get(_dll, "db_init"));
-    _quit = static_cast<db_api>(dll_get(_dll, "db_quit"));
-    _exec = static_cast<db_api>(dll_get(_dll, "db_exec"));
-    _query = static_cast<db_api>(dll_get(_dll, "db_query"));
+    _require = static_cast<sdk_api>(dll_get(_dll, "db_require"));
+    _release = static_cast<sdk_api>(dll_get(_dll, "db_release"));
+    _version = static_cast<sdk_api>(dll_get(_dll, "db_version"));
+    _init = static_cast<sdk_api>(dll_get(_dll, "db_init"));
+    _quit = static_cast<sdk_api>(dll_get(_dll, "db_quit"));
+    _exec = static_cast<sdk_api>(dll_get(_dll, "db_exec"));
+    _query = static_cast<sdk_api>(dll_get(_dll, "db_query"));
     return err_t();
 }
 
@@ -328,10 +328,10 @@ err_t db_core::version(int& major, int& minor, int& patch)
     auto param = new db_param_version{};
     DEFER(delete param; param = nullptr;);
 
-    db_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(db_context);
+    ctx.sz = sizeof(sdk_context);
     _version(ctx);
     major = param->major;
     minor = param->minor;
@@ -361,12 +361,12 @@ db_path=dict.db
 db_conn_capa=1)";// ini style
     param->option = opt_str.c_str(); 
 
-    db_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(db_context);
+    ctx.sz = sizeof(sdk_context);
     _init(ctx);
-    if (param->result != DB_OK)
+    if (param->result != OK)
         return error(param->result);
 
     return err_t();
@@ -380,12 +380,12 @@ err_t db_core::quit()
     auto param = new db_param_quit{};
     DEFER(delete param; param = nullptr;);
 
-    db_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(db_context);
+    ctx.sz = sizeof(sdk_context);
     _quit(ctx);
-    if (param->result != DB_OK)
+    if (param->result != OK)
         return error(param->result);
 
     return err_t();
@@ -407,12 +407,12 @@ err_t db_core::exec(
     param->db_id = db_id.c_str();
     param->sql = sql.c_str();
 
-    db_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(db_context);
+    ctx.sz = sizeof(sdk_context);
     _exec(ctx);
-    if (param->result != DB_OK)
+    if (param->result != OK)
         return error(param->result);
 
     return err_t();
@@ -452,12 +452,12 @@ err_t db_core::query(
     param->db_id = db_id.c_str();
     param->sql = sql.c_str();
 
-    db_context ctx;
+    sdk_context ctx;
     ctx.user_data = param;
     ctx.cb = nullptr;
-    ctx.sz = sizeof(db_context);
+    ctx.sz = sizeof(sdk_context);
     _query(ctx);
-    if (param->result != DB_OK)
+    if (param->result != OK)
         return error(param->result);
 
     for (size_t i = 0; i < DB_MAX_QUERY_OUTPUT_NUM_LVL1; i++)

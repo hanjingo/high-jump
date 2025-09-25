@@ -9,7 +9,7 @@
 #include <hj/crypto/des.hpp>
 #include <hj/crypto/rsa.hpp>
 
-#include "api.h"
+#include "crypto_core.h"
 
 class decryptor
 {

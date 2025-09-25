@@ -14,7 +14,7 @@
 #include <hj/crypto/sha.hpp>
 #include <hj/crypto/rsa.hpp>
 
-#include "api.h"
+#include "crypto_core.h"
 
 class encryptor
 {

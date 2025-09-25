@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 
-#include "api.h"
+#include "db_core.h"
 #include "comm.h"
 #include "sqlite.h"
 

@@ -13,7 +13,7 @@ int db_mgr::add(std::unique_ptr<db>&& elem)
             return DB_ERR_DB_EXISTED;
 
     _dbs.emplace_back(std::move(elem));
-    return DB_OK;
+    return OK;
 }
 
 int db_mgr::exec(

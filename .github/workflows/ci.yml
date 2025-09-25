@@ -100,7 +100,7 @@ jobs:
           source ~/.bashrc
         fi
 
-        bash scripts/dpdk.sh
+        # bash scripts/dpdk.sh  # (disabled for now, re-enable if DPDK is needed)
 
         # Source environment variables for current session
         if [ -f ~/.bashrc ]; then

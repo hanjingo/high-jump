@@ -1,0 +1,21 @@
+{
+  "dependencies": [
+    "benchmark",
+    "gtest",
+    "jwt-cpp"
+  ],
+  "overrides": [
+    {
+      "name": "benchmark",
+      "version": "1.9.4"
+    },
+    {
+      "name": "gtest",
+      "version": "1.17.0"
+    },
+    {
+      "name": "jwt-cpp",
+      "version": "0.7.1"
+    }
+  ]
+}

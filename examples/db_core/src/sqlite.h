@@ -8,7 +8,7 @@
 #include <hj/db/db_conn_pool.hpp>
 
 #include "comm.h"
-#include "api.h"
+#include "db_core.h"
 
 class sqlite : public db
 {

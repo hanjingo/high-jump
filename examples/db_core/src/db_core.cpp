@@ -1,4 +1,4 @@
-#include "api.h"
+#include "db_core.h"
 
 #include <iostream>
 #include <hj/util/once.hpp>
@@ -8,7 +8,7 @@
 #include "db_mgr.h"
 #include "data_mgr.h"
 
-C_STYLE_EXPORT void db_version(db_context ctx)
+C_STYLE_EXPORT void db_version(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -26,13 +26,12 @@ C_STYLE_EXPORT void db_version(db_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void db_init(db_context ctx)
+C_STYLE_EXPORT void db_init(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
 
     ONCE(
-        // add your code here ...
         if (ctx.user_data == NULL)
             return;
 
@@ -75,32 +74,30 @@ C_STYLE_EXPORT void db_init(db_context ctx)
             // init more ...
         }
 
-        ret->result = DB_OK;
+        ret->result = OK;
         if (ctx.cb != NULL)
             ctx.cb(static_cast<void*>(ret));
     )
 }
 
-C_STYLE_EXPORT void db_quit(db_context ctx)
+C_STYLE_EXPORT void db_quit(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
 
     ONCE(
-        // add your code here ...
         if (ctx.user_data == NULL)
             return;
 
         auto ret = static_cast<db_param_quit*>(ctx.user_data);
-        ret->result = DB_OK;
+        ret->result = OK;
 
         if (ctx.cb != NULL)
             ctx.cb(static_cast<void*>(ret));
     )
 }
 
-// add your code here...
-C_STYLE_EXPORT void db_require(db_context ctx)
+C_STYLE_EXPORT void db_require(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -115,7 +112,7 @@ C_STYLE_EXPORT void db_require(db_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void db_release(db_context ctx)
+C_STYLE_EXPORT void db_release(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -129,7 +126,7 @@ C_STYLE_EXPORT void db_release(db_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void db_exec(db_context ctx)
+C_STYLE_EXPORT void db_exec(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -143,7 +140,7 @@ C_STYLE_EXPORT void db_exec(db_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void db_query(db_context ctx)
+C_STYLE_EXPORT void db_query(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -154,7 +151,7 @@ C_STYLE_EXPORT void db_query(db_context ctx)
     auto param = static_cast<db_param_query*>(ctx.user_data);
     std::vector<std::vector<std::string>> outs;
     param->result = db_mgr::instance().query(outs, param->db_id, param->sql);
-    if (param->result == DB_OK)
+    if (param->result == OK)
     {
         for (int i = 0; i < outs.size(); i++)
         {

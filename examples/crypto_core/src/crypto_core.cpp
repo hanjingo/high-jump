@@ -1,4 +1,4 @@
-#include "api.h"
+#include "crypto_core.h"
 
 #include <string.h>
 
@@ -13,7 +13,7 @@
 #include "keygen.h"
 #include "data.h"
 
-C_STYLE_EXPORT void crypto_version(crypto_context ctx)
+C_STYLE_EXPORT void crypto_version(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -31,7 +31,7 @@ C_STYLE_EXPORT void crypto_version(crypto_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void crypto_init(crypto_context ctx)
+C_STYLE_EXPORT void crypto_init(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -49,7 +49,7 @@ C_STYLE_EXPORT void crypto_init(crypto_context ctx)
             return;
 
         auto ret = static_cast<crypto_param_init*>(ctx.user_data);
-        ret->result = CRYPTO_OK;
+        ret->result = OK;
 
         encryptor_mgr::instance().add(std::make_unique<aes_encryptor>());
         encryptor_mgr::instance().add(std::make_unique<base64_encryptor>());
@@ -72,7 +72,7 @@ C_STYLE_EXPORT void crypto_init(crypto_context ctx)
     )
 }
 
-C_STYLE_EXPORT void crypto_quit(crypto_context ctx)
+C_STYLE_EXPORT void crypto_quit(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -83,7 +83,7 @@ C_STYLE_EXPORT void crypto_quit(crypto_context ctx)
             return;
 
         auto ret = static_cast<crypto_param_quit*>(ctx.user_data);
-        ret->result = CRYPTO_OK;
+        ret->result = OK;
 
         if (ctx.cb != NULL)
             ctx.cb(static_cast<void*>(ret));
@@ -91,7 +91,7 @@ C_STYLE_EXPORT void crypto_quit(crypto_context ctx)
 }
 
 // add your code here...
-C_STYLE_EXPORT void crypto_require(crypto_context ctx)
+C_STYLE_EXPORT void crypto_require(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -106,7 +106,7 @@ C_STYLE_EXPORT void crypto_require(crypto_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void crypto_release(crypto_context ctx)
+C_STYLE_EXPORT void crypto_release(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -120,7 +120,7 @@ C_STYLE_EXPORT void crypto_release(crypto_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void crypto_encrypt(crypto_context ctx)
+C_STYLE_EXPORT void crypto_encrypt(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -141,7 +141,7 @@ C_STYLE_EXPORT void crypto_encrypt(crypto_context ctx)
     auto fmt = (ret->fmt == NULL) ? std::string() : std::string(ret->fmt);
     ret->result = encryptor_mgr::instance().encrypt(
         out, in, content, algo, mode, key, padding, iv, fmt);
-    if (ret->result == CRYPTO_OK && ret->out != NULL)
+    if (ret->result == OK && ret->out != NULL)
     {
         if (ret->out_len != NULL)
             *ret->out_len = out.size();
@@ -152,7 +152,7 @@ C_STYLE_EXPORT void crypto_encrypt(crypto_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void crypto_decrypt(crypto_context ctx)
+C_STYLE_EXPORT void crypto_decrypt(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -174,7 +174,7 @@ C_STYLE_EXPORT void crypto_decrypt(crypto_context ctx)
     auto fmt = (ret->fmt == NULL) ? std::string() : std::string(ret->fmt);
     ret->result = decryptor_mgr::instance().decrypt(
         out, in, content, algo, mode, key, passwd, padding, iv, fmt);
-    if (ret->result == CRYPTO_OK && ret->out != NULL)
+    if (ret->result == OK && ret->out != NULL)
     {
         if (ret->out_len != NULL)
             *ret->out_len = out.size();
@@ -185,7 +185,7 @@ C_STYLE_EXPORT void crypto_decrypt(crypto_context ctx)
         ctx.cb(static_cast<void*>(ret));
 }
 
-C_STYLE_EXPORT void crypto_keygen(crypto_context ctx)
+C_STYLE_EXPORT void crypto_keygen(sdk_context ctx)
 {
     if (sizeof(ctx) != ctx.sz)
         return;
@@ -204,7 +204,7 @@ C_STYLE_EXPORT void crypto_keygen(crypto_context ctx)
     for (auto e : keys)
         LOG_DEBUG("key:{}", e);
 
-    if (ret->result == CRYPTO_OK)
+    if (ret->result == OK)
     {
         for (size_t i = 0; i < keys.size() && i < CRYPTO_MAX_KEY_NUM; i++)
         {

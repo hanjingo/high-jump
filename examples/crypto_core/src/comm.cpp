@@ -1,6 +1,6 @@
 #include "comm.h"
 
-#include "api.h"
+#include "crypto_core.h"
 
 hj::aes::mode str_to_aes_mode(const std::string& mode)
 {

@@ -6,8 +6,8 @@
 #include <hj/util/defer.hpp>
 
 #include "comm.h"
-#include "examples/crypto_core/src/api.h"
-#include "examples/db_core/src/api.h"
+#include "examples/crypto_core/src/crypto_core.h"
+#include "examples/db_core/src/db_core.h"
 
 // // virtual base class
 // class core
@@ -69,7 +69,7 @@ protected:
         if (_require == nullptr)
             return nullptr;
 
-        crypto_context ctx;
+        sdk_context ctx;
         crypto_param_require* param = new crypto_param_require{};
         DEFER(delete param; param = nullptr;);
         param->type = typ;
@@ -77,7 +77,7 @@ protected:
 
         ctx.user_data = param;
         ctx.cb = nullptr;
-        ctx.sz = sizeof(crypto_context);
+        ctx.sz = sizeof(sdk_context);
         _require(ctx);
         return param->value;
     }
@@ -87,7 +87,7 @@ protected:
         if (_release == nullptr)
             return;
 
-        crypto_context ctx;
+        sdk_context ctx;
         crypto_param_release* param = new crypto_param_release{};
         DEFER(delete param; param = nullptr;);
         param->type = typ;
@@ -95,20 +95,20 @@ protected:
 
         ctx.user_data = param;
         ctx.cb = nullptr;
-        ctx.sz = sizeof(crypto_context);
+        ctx.sz = sizeof(sdk_context);
         _release(ctx);
     }
 
 private:
     void* _dll = nullptr;
-    crypto_api _require = nullptr;
-    crypto_api _release = nullptr;
-    crypto_api _version = nullptr;
-    crypto_api _init = nullptr;
-    crypto_api _quit = nullptr;
-    crypto_api _encrypt = nullptr;
-    crypto_api _decrypt = nullptr;
-    crypto_api _keygen = nullptr;
+    sdk_api _require = nullptr;
+    sdk_api _release = nullptr;
+    sdk_api _version = nullptr;
+    sdk_api _init = nullptr;
+    sdk_api _quit = nullptr;
+    sdk_api _encrypt = nullptr;
+    sdk_api _decrypt = nullptr;
+    sdk_api _keygen = nullptr;
 };
 
 // db core
@@ -150,7 +150,7 @@ protected:
         if (_require == nullptr)
             return nullptr;
 
-        db_context ctx;
+        sdk_context ctx;
         db_param_require* param = new db_param_require{};
         DEFER(delete param; param = nullptr;);
         param->type = typ;
@@ -158,7 +158,7 @@ protected:
 
         ctx.user_data = param;
         ctx.cb = nullptr;
-        ctx.sz = sizeof(db_context);
+        ctx.sz = sizeof(sdk_context);
         _require(ctx);
         return param->value;
     }
@@ -168,7 +168,7 @@ protected:
         if (_release == nullptr)
             return;
 
-        db_context ctx;
+        sdk_context ctx;
         db_param_release* param = new db_param_release{};
         DEFER(delete param; param = nullptr;);
         param->type = typ;
@@ -176,19 +176,19 @@ protected:
 
         ctx.user_data = param;
         ctx.cb = nullptr;
-        ctx.sz = sizeof(db_context);
+        ctx.sz = sizeof(sdk_context);
         _release(ctx);
     }
 
 private:
     void* _dll = nullptr;
-    db_api _require = nullptr;
-    db_api _release = nullptr;
-    db_api _version = nullptr;
-    db_api _init = nullptr;
-    db_api _quit = nullptr;
-    db_api _exec = nullptr;
-    db_api _query = nullptr;
+    sdk_api _require = nullptr;
+    sdk_api _release = nullptr;
+    sdk_api _version = nullptr;
+    sdk_api _init = nullptr;
+    sdk_api _quit = nullptr;
+    sdk_api _exec = nullptr;
+    sdk_api _query = nullptr;
 };
 
 #endif

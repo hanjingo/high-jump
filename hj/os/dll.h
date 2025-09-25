@@ -64,6 +64,18 @@
 #define C_STYLE_IMPORT DLL_IMPORT
 #endif
 
+// define sdk common api
+typedef struct sdk_context
+{
+    unsigned long sz;
+    void* user_data;
+    void (*cb)(void*);
+} sdk_context;
+
+typedef void(*sdk_callback)(void*);
+typedef void(*sdk_api)(sdk_context);
+
+// dll operations
 static void* dll_open(const char* filename, int flag)
 {
 #if defined(_WIN32)

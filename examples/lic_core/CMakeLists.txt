@@ -93,6 +93,8 @@ add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
 add_definitions(-DPATCH_VERSION=${PACKAGE_VERSION_PATCH})
+add_definitions(-DERR_START=${ERR_START})
+add_definitions(-DERR_END=${ERR_END})
 add_definitions(-DEMAIL="${PACKAGE_CONTACT}")
 
 # windows specific settings

@@ -3,35 +3,30 @@
 
 #include <hj/os/dll.h>
 
-// ---------------- error code --------------------
-#ifndef DB_ERR_START
-#define DB_ERR_START 0
-#endif
-
+// ---------------- error code [2000, 2999] --------------------
 #ifndef OK
-#define OK                                     (DB_ERR_START)
+#define OK                                     0
 #endif
 
-#define DB_ERR_FAIL                            (DB_ERR_START + 1)
-#define DB_ERR_CORE_NOT_LOAD                   (DB_ERR_START + 2)
-#define DB_ERR_CORE_LOAD_FAIL                  (DB_ERR_START + 3)
-#define DB_ERR_VERSION_MISMATCH                (DB_ERR_START + 4)
-#define DB_ERR_INIT_FAIL                       (DB_ERR_START + 5)
-#define DB_ERR_QUIT_FAIL                       (DB_ERR_START + 6)
-#define DB_ERR_DB_EXISTED                      (DB_ERR_START + 7)
-#define DB_ERR_DB_NOT_EXIST                    (DB_ERR_START + 8)
-#define DB_ERR_REQUIRE_FAIL                    (DB_ERR_START + 9)
-#define DB_ERR_PARSE_INIT_OPTION_FAIL          (DB_ERR_START + 10)
+#define DB_ERR_START                           2000
+#define DB_ERR_FAIL                            2001
+#define DB_ERR_CORE_NOT_LOAD                   2002
+#define DB_ERR_CORE_LOAD_FAIL                  2003
+#define DB_ERR_VERSION_MISMATCH                2004
+#define DB_ERR_INIT_FAIL                       2005
+#define DB_ERR_QUIT_FAIL                       2006
+#define DB_ERR_DB_EXISTED                      2007
+#define DB_ERR_DB_NOT_EXIST                    2008
+#define DB_ERR_REQUIRE_FAIL                    2009
+#define DB_ERR_PARSE_INIT_OPTION_FAIL          2010
 
-#define DB_ERR_SQLITE_EXEC_FAIL                (DB_ERR_START + 101)
-#define DB_ERR_SQLITE_NOT_OPEN                 (DB_ERR_START + 102)
-#define DB_ERR_SQLITE_ALREADY_OPEN             (DB_ERR_START + 103)
-#define DB_ERR_SQLITE_OPEN_FAIL                (DB_ERR_START + 104)
-#define DB_ERR_SQLITE_GET_CONN_FAIL            (DB_ERR_START + 105)
+#define DB_ERR_SQLITE_EXEC_FAIL                2101
+#define DB_ERR_SQLITE_NOT_OPEN                 2102
+#define DB_ERR_SQLITE_ALREADY_OPEN             2103
+#define DB_ERR_SQLITE_OPEN_FAIL                2104
+#define DB_ERR_SQLITE_GET_CONN_FAIL            2105
 
-#ifndef DB_ERR_END
-#define DB_ERR_END                             (DB_ERR_START + 999)
-#endif
+#define DB_ERR_END                             2999
 
 // --------------- const --------------------
 #define DB_MAX_DATA_POOL_SIZE 1024

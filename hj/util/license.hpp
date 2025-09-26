@@ -85,7 +85,7 @@ static err_t issue(token_t& token,
                    const std::size_t leeway_secs,
                    const sign_algo algo,
                    const std::vector<std::string>& keys,
-                   const std::initializer_list<pair_t>& claims)
+                   const std::vector<pair_t>& claims)
 {
     err_t err;
     auto lic = jwt::create<json_traits>();
@@ -123,7 +123,7 @@ static err_t verify(const token_t& token,
                     const std::size_t leeway_secs,
                     const sign_algo algo,
                     const std::vector<std::string>& keys,
-                    const std::initializer_list<pair_t>& claims)
+                    const std::vector<pair_t>& claims)
 {
     err_t err;
     auto decoded = jwt::decode<json_traits>(token);
@@ -279,10 +279,14 @@ public:
         return *this;
     }
 
+    inline const std::string& id() const { return _id; }
+    inline sign_algo algo() const { return _algo; }
+    inline std::size_t valid_times() const { return _valid_times; }
+
     err_t issue(token_t& token,
                 const std::string& licensee,
                 const std::size_t leeway_days,
-                const std::initializer_list<pair_t>& claims = {})
+                const std::vector<pair_t>& claims = {})
     {
         err_t err;
         if (_valid_times < 1)
@@ -302,7 +306,7 @@ public:
     err_t issue(std::ostream& out,
                 const std::string& licensee,
                 const std::size_t leeway_days,
-                const std::initializer_list<pair_t>& claims = {})
+                const std::vector<pair_t>& claims = {})
     {
         if (!out || !out.good())
             return detail::make_err(err::output_stream_invalid);
@@ -321,7 +325,7 @@ public:
     err_t issue_file(const std::string& filepath,
                      const std::string& licensee,
                      const std::size_t leeway_days,
-                     const std::initializer_list<pair_t>& claims = {})
+                     const std::vector<pair_t>& claims = {})
     {
         std::ofstream out(filepath, std::ios::binary);
         if (!out || !out.is_open())
@@ -373,7 +377,7 @@ public:
     err_t verify(const token_t& token,
                  const std::string& licensee,
                  const std::size_t leeway_days,
-                 const std::initializer_list<pair_t>& claims = {})
+                 const std::vector<pair_t>& claims = {})
     {
         return detail::verify(token, 
                               _id, 
@@ -387,7 +391,7 @@ public:
     err_t verify(std::istream& in, 
                  const std::string& licensee,
                  const std::size_t leeway_days,
-                 const std::initializer_list<pair_t>& claims = {})
+                 const std::vector<pair_t>& claims = {})
     {
         if (!in)
             return detail::make_err(err::input_stream_invalid);
@@ -406,7 +410,7 @@ public:
     err_t verify_file(const token_t& filepath,
                       const std::string& licensee,
                       const std::size_t leeway_days,
-                      const std::initializer_list<pair_t>& claims = {})
+                      const std::vector<pair_t>& claims = {})
     {
         std::ifstream in(filepath, std::ios::binary);
         if (!in || !in.is_open())

@@ -169,6 +169,8 @@ elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} 
         pthread
         hidapi::hidapi
+
+        "-framework CoreGraphics" # for keyboard,mouse api
     )
 else() # Linux
     target_link_libraries(${PROJECT_NAME} 

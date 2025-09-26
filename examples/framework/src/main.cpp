@@ -23,11 +23,15 @@ int main(int argc, char* argv[])
     hj::crash_handler::instance()->set_local_path("./");
 
     // add log support
+#ifdef DEBUG
     hj::logger::instance()->set_level(hj::log_lvl::debug);
+#else
+    hj::logger::instance()->set_level(hj::log_lvl::info);
+#endif
 
     // add i18n support
     hj::i18n::instance().set_locale(I18N_LOCALE);
-    hj::i18n::instance().load_translation_auto("./", "framework");
+    hj::i18n::instance().load_translation_auto("./", PACKAGE);
 
     // add telemetry support
     auto tracer = hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
@@ -36,11 +40,11 @@ int main(int argc, char* argv[])
     hj::sigcatch({SIGABRT, SIGTERM}, [](int sig){});
 
     // add license check support
-    hj::license::verifier vef{"tourist", hj::license::sign_algo::none, {}};
-    auto err = vef.verify_file("./license.lic", "tourist", 30, {{"sn", hj::license::get_disk_sn()}});
+    hj::license::verifier vef{LIC_ISSUER, hj::license::sign_algo::none, {}};
+    auto err = vef.verify_file(LIC_FPATH, PACKAGE, 1);
     if (err)
     {
-        LOG_ERROR("license verify failed with err: {}, please check your license file: {}", err.message(), "./license.lic");
+        LOG_ERROR("license verify failed with err: {}, please check your license file: {}", err.message(), LIC_FPATH);
         return -1;
     }
 

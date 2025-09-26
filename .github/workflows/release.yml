@@ -1,0 +1,316 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ================================ Create Release ================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      package_name: ${{ steps.version.outputs.package_name }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Extract version information
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "Invalid version format. Expected format: v1.2.3"
+            exit 1
+          fi
+        else
+          VERSION="${{ github.ref_name }}"
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "package_name=high-jump-source-$VERSION" >> $GITHUB_OUTPUT
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "Using version: $VERSION"
+
+    - name: Create comprehensive source package
+      run: |
+        echo "=== Creating comprehensive source package ==="
+        
+        PACKAGE_NAME="high-jump-source-${{ env.VERSION }}"
+        mkdir -p dist
+        
+        # Create detailed exclusion list
+        cat > .package_exclude << 'EOF'
+        # Build artifacts
+        build/*
+        tools/vcpkg/buildtrees/*
+        tools/vcpkg/packages/*  
+        tools/vcpkg/downloads/*
+        tools/vcpkg/installed/*
+        
+        # IDE and editor files
+        .vscode/settings.json
+        .idea/*
+        *.swp
+        *.swo
+        *~
+        
+        # System files
+        .DS_Store
+        Thumbs.db
+        desktop.ini
+        
+        # Logs and temporary files
+        *.log
+        *.tmp
+        *.temp
+        
+        # Python cache
+        __pycache__/*
+        *.pyc
+        *.pyo
+        .pytest_cache/*
+        
+        # Version control
+        .git/*
+        .gitmodules
+        
+        # CI cache
+        .github/workflows/cache/*
+        EOF
+        
+        # Create source tarball with proper structure
+        echo "Creating source archive: ${PACKAGE_NAME}.tar.gz"
+        tar --exclude-from=.package_exclude \
+            -czf "dist/${PACKAGE_NAME}.tar.gz" \
+            --transform "s,^,${PACKAGE_NAME}/," \
+            --exclude=".package_exclude" \
+            * .[^.]*
+        
+        # Create ZIP archive
+        echo "Creating ZIP archive: ${PACKAGE_NAME}.zip"  
+        zip -r "dist/${PACKAGE_NAME}.zip" . \
+            -x@.package_exclude \
+            -x ".package_exclude" \
+            > /dev/null
+        
+        # Create package info file
+        cat > "dist/${PACKAGE_NAME}.info" << EOF
+        Package: high-jump
+        Version: ${{ env.VERSION }}
+        Architecture: source
+        Maintainer: ${{ github.repository_owner }}
+        Description: C++17 library framework - Source Code Package
+        Homepage: https://github.com/${{ github.repository }}
+        Source: https://github.com/${{ github.repository }}/archive/${{ env.VERSION }}.tar.gz
+        License: See LICENSE file
+        Build-Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        Commit: ${{ github.sha }}
+        EOF
+        
+        # Generate checksums and metadata
+        cd dist
+        echo "Generating checksums..."
+        sha256sum "${PACKAGE_NAME}.tar.gz" > "${PACKAGE_NAME}.tar.gz.sha256"
+        sha256sum "${PACKAGE_NAME}.zip" > "${PACKAGE_NAME}.zip.sha256"
+        md5sum "${PACKAGE_NAME}.tar.gz" > "${PACKAGE_NAME}.tar.gz.md5"
+        md5sum "${PACKAGE_NAME}.zip" > "${PACKAGE_NAME}.zip.md5"
+        
+        # Create manifest file
+        cat > "${PACKAGE_NAME}.manifest" << EOF
+        {
+          "name": "high-jump-source",
+          "version": "${{ env.VERSION }}",
+          "description": "High Jump C++17 Library Framework - Source Code",
+          "repository": "${{ github.repository }}",
+          "commit": "${{ github.sha }}",
+          "build_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+          "packages": [
+            {
+              "file": "${PACKAGE_NAME}.tar.gz",
+              "format": "tar.gz",
+              "size": $(stat -c%s "${PACKAGE_NAME}.tar.gz"),
+              "sha256": "$(cat ${PACKAGE_NAME}.tar.gz.sha256 | cut -d' ' -f1)"
+            },
+            {
+              "file": "${PACKAGE_NAME}.zip", 
+              "format": "zip",
+              "size": $(stat -c%s "${PACKAGE_NAME}.zip"),
+              "sha256": "$(cat ${PACKAGE_NAME}.zip.sha256 | cut -d' ' -f1)"
+            }
+          ]
+        }
+        EOF
+        
+        # Display package information
+        echo "=== Package Information ==="
+        ls -lh
+        echo "Total package size:"
+        du -sh .
+        echo "=========================="
+
+    - name: Upload to GitHub Container Registry
+      run: |
+        echo "=== Uploading to GitHub Container Registry ==="
+        
+        # Login to GitHub Container Registry  
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+        
+        cd dist
+        PACKAGE_NAME="high-jump-source-${{ env.VERSION }}"
+        
+        # Create a simple container with the source package
+        cat > Dockerfile << EOF
+        FROM scratch
+        COPY ${PACKAGE_NAME}.tar.gz /
+        COPY ${PACKAGE_NAME}.zip /
+        COPY ${PACKAGE_NAME}.manifest /
+        COPY ${PACKAGE_NAME}.info /
+        COPY ${PACKAGE_NAME}.*.sha256 /
+        COPY ${PACKAGE_NAME}.*.md5 /
+        EOF
+        
+        # Build and push container
+        IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-source:${{ env.VERSION }}"
+        IMAGE_TAG_LATEST="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-source:latest"
+        
+        docker build -t "$IMAGE_TAG" .
+        docker tag "$IMAGE_TAG" "$IMAGE_TAG_LATEST"
+        
+        docker push "$IMAGE_TAG"
+        docker push "$IMAGE_TAG_LATEST"
+        
+        echo "Uploaded to: $IMAGE_TAG"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.VERSION }}
+        name: High Jump ${{ env.VERSION }}
+        files: |
+          dist/high-jump-source-${{ env.VERSION }}.tar.gz
+          dist/high-jump-source-${{ env.VERSION }}.zip
+          dist/high-jump-source-${{ env.VERSION }}.*.sha256
+          dist/high-jump-source-${{ env.VERSION }}.*.md5
+          dist/high-jump-source-${{ env.VERSION }}.manifest
+          dist/high-jump-source-${{ env.VERSION }}.info
+        body: |
+          ## High Jump ${{ env.VERSION }}
+          
+          This release contains the complete source code for the High Jump C++17 library framework.
+          
+          ### 📦 Source Code Packages
+          
+          | Package | Description | Size |
+          |---------|-------------|------|
+          | `high-jump-source-${{ env.VERSION }}.tar.gz` | Source archive (tar.gz format, recommended for Linux/macOS) | ![Size](https://img.shields.io/github/size/${{ github.repository }}/high-jump-source-${{ env.VERSION }}.tar.gz) |
+          | `high-jump-source-${{ env.VERSION }}.zip` | Source archive (ZIP format, recommended for Windows) | ![Size](https://img.shields.io/github/size/${{ github.repository }}/high-jump-source-${{ env.VERSION }}.zip) |
+          
+          ### 🔐 Verification
+          
+          SHA256 and MD5 checksums are provided for package verification:
+          - `high-jump-source-${{ env.VERSION }}.tar.gz.sha256`
+          - `high-jump-source-${{ env.VERSION }}.zip.sha256`
+          - `high-jump-source-${{ env.VERSION }}.tar.gz.md5`
+          - `high-jump-source-${{ env.VERSION }}.zip.md5`
+          
+          ### 📋 Package Information
+          
+          - **Version**: ${{ env.VERSION }}
+          - **Commit**: [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          - **Build Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - **Container Registry**: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-source:${{ env.VERSION }}`
+          
+          ### 📖 Usage
+          
+          #### Download and Extract
+          
+          ```bash
+          # Using wget (Linux/macOS)
+          wget https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/high-jump-source-${{ env.VERSION }}.tar.gz
+          tar -xzf high-jump-source-${{ env.VERSION }}.tar.gz
+          cd high-jump-source-${{ env.VERSION }}
+          
+          # Using GitHub Container Registry
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-source:${{ env.VERSION }}
+          ```
+          
+          #### Verify Package Integrity
+          
+          ```bash
+          # Verify SHA256 checksum
+          sha256sum -c high-jump-source-${{ env.VERSION }}.tar.gz.sha256
+          ```
+          
+          #### Build Instructions
+          
+          See the included `README.md` for comprehensive build instructions.
+          
+          ### 🚀 Quick Start
+          
+          ```bash
+          # Extract and build (requires vcpkg)
+          tar -xzf high-jump-source-${{ env.VERSION }}.tar.gz
+          cd high-jump-source-${{ env.VERSION }}
+          
+          # Configure build environment
+          python3 scripts/configure.py
+          
+          # Build
+          mkdir build && cd build
+          cmake .. -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          cmake --build .
+          ```
+        draft: false
+        prerelease: ${{ github.event.inputs.prerelease || contains(env.VERSION, 'beta') || contains(env.VERSION, 'alpha') || contains(env.VERSION, 'rc') }}
+        make_latest: ${{ !contains(env.VERSION, 'beta') && !contains(env.VERSION, 'alpha') && !contains(env.VERSION, 'rc') }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-packages-${{ env.VERSION }}
+        path: dist/
+        retention-days: 90
+        compression-level: 6
+
+  # ================================ Notify Success ================================  
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: release
+    if: success()
+    
+    steps:
+    - name: Summary
+      run: |
+        echo "🎉 Successfully created release: ${{ needs.release.outputs.version }}"
+        echo "📦 Package: ${{ needs.release.outputs.package_name }}"
+        echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release.outputs.version }}"
+        echo "🐳 Container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-source:${{ needs.release.outputs.version }}"

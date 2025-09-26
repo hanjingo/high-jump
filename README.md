@@ -85,8 +85,8 @@ For Debug:
 ```sh
 # windows
 cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019"
-# other
-cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+# macOS/Linux
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
 cmake --build .
 ```
@@ -96,8 +96,8 @@ For Release:
 ```sh
 # windows
 cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019" -DCMAKE_BUILD_TYPE=Release
-# other
-cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
+# macOS/Linux
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
 
 cmake --build . --config Release
 ```
@@ -161,6 +161,24 @@ cmake .. -DBUILD_BENCH=ON -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsyst
 
 cmake --build .
 ```
+
+---
+
+
+
+## Commit
+
+### Tag
+
+To create a new tag and push it to the remote repository, use the following commands:
+
+```sh
+git tag v1.0.0
+
+git push origin v1.0.0
+```
+
+
 
 ---
 

@@ -67,3 +67,26 @@ add_test(
     NAME ${PROJECT_NAME}
     COMMAND $<TARGET_FILE:${PROJECT_NAME}> --benchmark_min_time=0.1
 )
+
+# Create results directory
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/results)
+
+# Custom target to run benchmark with JSON output
+add_custom_target(benchmark_run
+    COMMAND ${CMAKE_COMMAND} -E env 
+        $<TARGET_FILE:${PROJECT_NAME}> 
+        --benchmark_format=json 
+        --benchmark_out=${CMAKE_CURRENT_SOURCE_DIR}/results/benchmark_$<SHELL_PATH:$ENV{TIMESTAMP}>.json
+        --benchmark_min_time=0.1
+    DEPENDS ${PROJECT_NAME}
+    COMMENT "Running benchmarks with JSON output"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Custom target to run benchmark with console output (default)
+add_custom_target(benchmark_console
+    COMMAND $<TARGET_FILE:${PROJECT_NAME}> --benchmark_min_time=0.1
+    DEPENDS ${PROJECT_NAME}
+    COMMENT "Running benchmarks with console output"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)

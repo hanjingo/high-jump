@@ -551,11 +551,185 @@ jobs:
           build/compile_commands.json
         retention-days: 7
 
+  # ================================ Source Code Packaging ================================
+  package-source:
+    name: Package Source Code
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-macos, build-windows]
+    if: |
+      always() && 
+      (github.ref_type == 'tag' || 
+       github.ref == 'refs/heads/main' || 
+       github.ref == 'refs/heads/master' ||
+       github.ref == 'refs/heads/v1.x')
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Extract version information
+      id: version
+      run: |
+        if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          VERSION="${{ github.ref_name }}"
+          echo "Using tag version: $VERSION"
+        else
+          # Use branch name + short commit hash for non-tag builds
+          BRANCH_NAME="${{ github.ref_name }}"
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          VERSION="${BRANCH_NAME}-${SHORT_SHA}"
+          echo "Using branch version: $VERSION"
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Create source package
+      run: |
+        echo "=== Creating source code package ==="
+        
+        # Create package directory
+        PACKAGE_NAME="high-jump-source-${{ env.VERSION }}"
+        mkdir -p packages
+        
+        # Create exclusion list for files we don't want in source package
+        cat > .exclude_list << 'EOF'
+        .git
+        .github/workflows/cache
+        build
+        tools/vcpkg/buildtrees
+        tools/vcpkg/packages
+        tools/vcpkg/downloads
+        tools/vcpkg/installed
+        *.log
+        .DS_Store
+        Thumbs.db
+        .vscode/settings.json
+        .idea
+        __pycache__
+        *.pyc
+        *.pyo
+        .pytest_cache
+        EOF
+        
+        # Create source archive
+        echo "Creating source archive: ${PACKAGE_NAME}.tar.gz"
+        tar --exclude-from=.exclude_list \
+            -czf "packages/${PACKAGE_NAME}.tar.gz" \
+            --transform "s,^,${PACKAGE_NAME}/," \
+            * .gitignore .clang-format 2>/dev/null || \
+        tar --exclude-from=.exclude_list \
+            -czf "packages/${PACKAGE_NAME}.tar.gz" \
+            --transform "s,^,${PACKAGE_NAME}/," \
+            *
+        
+        # Create ZIP archive for Windows users
+        echo "Creating ZIP archive: ${PACKAGE_NAME}.zip"
+        zip -r "packages/${PACKAGE_NAME}.zip" . \
+            -x@.exclude_list \
+            -x ".exclude_list"
+        
+        # Generate checksums
+        cd packages
+        echo "Generating checksums..."
+        sha256sum "${PACKAGE_NAME}.tar.gz" > "${PACKAGE_NAME}.tar.gz.sha256"
+        sha256sum "${PACKAGE_NAME}.zip" > "${PACKAGE_NAME}.zip.sha256"
+        
+        # Display package info
+        echo "=== Package Information ==="
+        ls -lh
+        echo "=========================="
+        
+        echo "package_name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
+
+    - name: Upload packages to GitHub Packages (Generic)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PACKAGE_NAME: ${{ steps.version.outputs.package_name || format('high-jump-source-{0}', env.VERSION) }}
+      run: |
+        echo "=== Uploading packages to GitHub Packages ==="
+        
+        cd packages
+        
+        # Upload tar.gz package
+        echo "Uploading ${PACKAGE_NAME}.tar.gz..."
+        curl -X PUT \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Content-Type: application/gzip" \
+          --data-binary "@${PACKAGE_NAME}.tar.gz" \
+          "https://nuget.pkg.github.com/${{ github.repository_owner }}/download/high-jump-source/${{ env.VERSION }}/${PACKAGE_NAME}.tar.gz"
+        
+        # Upload ZIP package
+        echo "Uploading ${PACKAGE_NAME}.zip..."
+        curl -X PUT \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Content-Type: application/zip" \
+          --data-binary "@${PACKAGE_NAME}.zip" \
+          "https://nuget.pkg.github.com/${{ github.repository_owner }}/download/high-jump-source/${{ env.VERSION }}/${PACKAGE_NAME}.zip"
+        
+        # Upload checksums
+        echo "Uploading checksums..."
+        curl -X PUT \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Content-Type: text/plain" \
+          --data-binary "@${PACKAGE_NAME}.tar.gz.sha256" \
+          "https://nuget.pkg.github.com/${{ github.repository_owner }}/download/high-jump-source/${{ env.VERSION }}/${PACKAGE_NAME}.tar.gz.sha256"
+          
+        curl -X PUT \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Content-Type: text/plain" \
+          --data-binary "@${PACKAGE_NAME}.zip.sha256" \
+          "https://nuget.pkg.github.com/${{ github.repository_owner }}/download/high-jump-source/${{ env.VERSION }}/${PACKAGE_NAME}.zip.sha256"
+        
+        echo "=== Package upload completed ==="
+
+    - name: Create GitHub Release (for tags)
+      if: github.ref_type == 'tag'
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: |
+          packages/high-jump-source-${{ env.VERSION }}.tar.gz
+          packages/high-jump-source-${{ env.VERSION }}.zip
+          packages/high-jump-source-${{ env.VERSION }}.tar.gz.sha256
+          packages/high-jump-source-${{ env.VERSION }}.zip.sha256
+        body: |
+          ## High Jump ${{ env.VERSION }}
+          
+          ### Source Code Packages
+          - `high-jump-source-${{ env.VERSION }}.tar.gz` - Source code archive (Linux/macOS)
+          - `high-jump-source-${{ env.VERSION }}.zip` - Source code archive (Windows)
+          - SHA256 checksums are provided for verification
+          
+          ### Build Status
+          - ✅ Linux Build: ${{ needs.build-linux.result }}
+          - ✅ macOS Build: ${{ needs.build-macos.result }}  
+          - ✅ Windows Build: ${{ needs.build-windows.result }}
+          
+          Generated from commit: ${{ github.sha }}
+        draft: false
+        prerelease: ${{ contains(env.VERSION, 'beta') || contains(env.VERSION, 'alpha') || contains(env.VERSION, 'rc') }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: source-packages-${{ env.VERSION }}
+        path: packages/
+        retention-days: 30
+
   # ================================ Build Summary ================================
   build-summary:
     name: Build Summary
     runs-on: ubuntu-latest
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos, build-windows, package-source]
     if: always()
     
     steps:
@@ -565,11 +739,12 @@ jobs:
         echo "Linux build: ${{ needs.build-linux.result }}"
         echo "macOS build: ${{ needs.build-macos.result }}"
         echo "Windows build: ${{ needs.build-windows.result }}"
+        echo "Source packaging: ${{ needs.package-source.result }}"
         echo "===================="
 
         # Set overall status
         success_count=0
-        total_count=3
+        total_count=3  # Only count the main build jobs, not packaging
 
         if [[ "${{ needs.build-linux.result }}" == "success" ]]; then
           success_count=$((success_count + 1))

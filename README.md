@@ -28,6 +28,8 @@ cpp library framework implementationed by c++17.
 | types    | Common data types: any, byte, noncopyable, variant, optional, etc. |
 | util     | Utility components: defer, once, string processing, version info, and more. |
 
+📖 **[Detailed Module Documentation](docs/modules.md)** | **[模块详细文档](docs/modules_zh.md)**
+
 ---
 
 

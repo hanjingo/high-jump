@@ -1,0 +1,6 @@
+# Ignore benchmark result files - results vary by machine and are for local testing only
+results/
+
+# Windows specific patterns (kept for compatibility)
+results\*.json
+results\*.txt

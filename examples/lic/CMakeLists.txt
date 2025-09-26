@@ -102,6 +102,8 @@ add_definitions(-DLIC_CORE_VERSION_MAJOR_MIN=${LIC_CORE_VERSION_MAJOR_MIN})
 add_definitions(-DLIC_CORE_VERSION_MINOR_MIN=${LIC_CORE_VERSION_MINOR_MIN})
 add_definitions(-DLIC_CORE_VERSION_PATCH_MIN=${LIC_CORE_VERSION_PATCH_MIN})
 add_definitions(-DEMAIL="${PACKAGE_CONTACT}")
+add_definitions(-DLIC_ISSUER="${LIC_ISSUER}")
+add_definitions(-DLIC_FPATH="${LIC_FPATH}")
 
 # windows specific settings
 if (WIN32)

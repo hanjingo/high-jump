@@ -26,20 +26,18 @@
 #include <locale>
 #include <codecvt>
 
-#include <fmt/core.h>
-
 namespace hj
 {
 
 namespace string_util
 {
 
-bool contains(const std::string& src, const std::string& sub)
+inline bool contains(const std::string& src, const std::string& sub)
 {
     return src.find(sub) != std::string::npos;
 }
 
-bool end_with(const std::string& src, const std::string& suffix)
+inline bool end_with(const std::string& src, const std::string& suffix)
 {
     if (src.length() >= suffix.length())
         return (0 == src.compare(src.length() - suffix.length(), suffix.length(), suffix));
@@ -47,14 +45,14 @@ bool end_with(const std::string& src, const std::string& suffix)
         return false;
 }
 
-std::string search(const std::string& src, const std::string& regex)
+inline std::string search(const std::string& src, const std::string& regex)
 {
     std::smatch match;
     std::regex_search(src, match, std::regex(regex));
     return match[0];
 }
 
-std::vector<std::string> search_n(const std::string& src, const std::string& regex)
+inline std::vector<std::string> search_n(const std::string& src, const std::string& regex)
 {
     std::regex pattern(regex);
     std::sregex_iterator begin(src.begin(), src.end(), pattern), end;
@@ -65,30 +63,30 @@ std::vector<std::string> search_n(const std::string& src, const std::string& reg
     return results;
 }
 
-void search(const std::string& src, std::smatch& match, const std::string& regex)
+inline void search(const std::string& src, std::smatch& match, const std::string& regex)
 {
     std::regex_search(src, match, std::regex(regex));
 }
 
-std::vector<std::string> split(const std::string& str, const std::string& regex)
+inline std::vector<std::string> split(const std::string& str, const std::string& regex)
 {
     std::regex patten(regex);
     std::sregex_token_iterator first{str.begin(), str.end(), patten, -1}, last;
     return {first, last};
 }
 
-std::string& replace(std::string& str, const std::string& from, const std::string& to)
+inline std::string& replace(std::string& str, const std::string& from, const std::string& to)
 {
     str = std::regex_replace(str, std::regex(from), to);
     return str;
 }
 
-bool equal(const char* a, const char* b)
+inline bool equal(const char* a, const char* b)
 {
     return strcmp(a, b) == 0;
 }
 
-std::wstring to_wchar(const std::string& src)
+inline std::wstring to_wchar(const std::string& src)
 {
 #if defined(_MSC_VER)
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -99,7 +97,7 @@ std::wstring to_wchar(const std::string& src)
 #endif
 }
 
-std::wstring to_wstring(const std::string& src)
+inline std::wstring to_wstring(const std::string& src)
 {
 #if defined(_MSC_VER)
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -110,7 +108,7 @@ std::wstring to_wstring(const std::string& src)
 #endif
 }
 
-std::string from_wchar(const wchar_t* src)
+inline std::string from_wchar(const wchar_t* src)
 {
     if (!src) 
         return std::string();
@@ -124,7 +122,7 @@ std::string from_wchar(const wchar_t* src)
 #endif
 }
 
-std::string from_wstring(const std::wstring& src)
+inline std::string from_wstring(const std::wstring& src)
 {
 #if defined(_MSC_VER)
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
@@ -135,7 +133,7 @@ std::string from_wstring(const std::wstring& src)
 #endif
 }
 
-std::string from_ptr_addr(const void* ptr, bool is_hex = true)
+inline std::string from_ptr_addr(const void* ptr, bool is_hex = true)
 {
     std::ostringstream oss;
     if (is_hex)
@@ -145,13 +143,7 @@ std::string from_ptr_addr(const void* ptr, bool is_hex = true)
     return oss.str();
 }
 
-template <typename... Args>
-std::string fmt(const char* style, Args&&... args)
-{
-    return fmt::vformat(style, fmt::make_format_args(std::forward<Args>(args)...));
-}
+} // namespace string_util
+} // namespace hj
 
-}
-}
-
-#endif
+#endif // STRING_UTIL_HPP

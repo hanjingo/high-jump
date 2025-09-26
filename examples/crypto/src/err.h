@@ -4,17 +4,12 @@
 #include <hj/testing/error.hpp>
 #include <hj/util/init.hpp>
 
+#include "examples/crypto_core/src/crypto_core.h"
+#include "examples/db_core/src/db_core.h"
+
 #define OK                 0
 #define ERR_INVALID_SUBCMD 1
 #define ERR_ARGC_TOO_LESS  2
-
-#define CRYPTO_ERR_START 1000
-#define CRYPTO_ERR_END   1999
-#include "examples/crypto_core/src/crypto_core.h"
-
-#define DB_ERR_START 2000
-#define DB_ERR_END   2999
-#include "examples/db_core/src/db_core.h"
 
 using err_t = std::error_code;
 

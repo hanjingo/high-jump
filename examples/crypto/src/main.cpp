@@ -27,11 +27,15 @@ int main(int argc, char* argv[])
     hj::crash_handler::instance()->set_local_path("./");
 
     // add log support
+#ifdef DEBUG
     hj::logger::instance()->set_level(hj::log_lvl::debug);
+#else
+    hj::logger::instance()->set_level(hj::log_lvl::info);
+#endif
 
     // add i18n support
     hj::i18n::instance().set_locale("en_US");
-    hj::i18n::instance().load_translation_auto("./", "crypto");
+    hj::i18n::instance().load_translation_auto("./", PACKAGE);
 
     // add telemetry support
     auto tracer = hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
@@ -40,13 +44,13 @@ int main(int argc, char* argv[])
     hj::sigcatch({SIGABRT, SIGTERM}, [](int sig){});
 
     // add license check support
-    // hj::license::verifier vef{lic_issuer, hj::license::sign_algo::none, {}};
-    // auto err = vef.verify_file(lic_fpath, user, 30, {{"sn", hj::license::get_disk_sn()}});
-    // if (err)
-    // {
-    //     LOG_ERROR("license verify failed with err: {}, please check your license file: {}", err.message(), lic_fpath);
-    //     return -1;
-    // }
+    hj::license::verifier vef{LIC_ISSUER, hj::license::sign_algo::none, {}};
+    auto err = vef.verify_file(LIC_FPATH, PACKAGE, 1);
+    if (err)
+    {
+        LOG_ERROR("license verify failed with err: {}, please check your license file: {}", err.message(), LIC_FPATH);
+        return -1;
+    }
 
     // add your code here...
     hj::error_handler<err_t> h{[](const char* src, const char* dst){
@@ -64,7 +68,7 @@ int main(int argc, char* argv[])
     db_core db_sdk;
     // version check
     int major, minor, patch;
-    auto err = crypto_sdk.version(major, minor, patch);
+    err = crypto_sdk.version(major, minor, patch);
     if (!err && (major < CRYPTO_CORE_VERSION_MAJOR_MIN 
             || minor < CRYPTO_CORE_VERSION_MINOR_MIN 
             || patch < CRYPTO_CORE_VERSION_PATCH_MIN))

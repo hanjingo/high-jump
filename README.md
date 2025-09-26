@@ -78,6 +78,30 @@ vcpkg install
 
 or install 3rd-party project by yourself.
 
+### Build Debug/Release
+
+For Debug:
+
+```sh
+# windows
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019"
+# other
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+cmake --build .
+```
+
+For Release:
+
+```sh
+# windows
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019" -DCMAKE_BUILD_TYPE=Release
+# other
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
+
+cmake --build . --config Release
+```
+
 ### Build Library
 
 ```sh

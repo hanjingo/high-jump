@@ -79,9 +79,3 @@ TEST(string_util, from_ptr_addr)
 
     delete ptr;
 }
-
-TEST(string_util, fmt)
-{
-    ASSERT_EQ(hj::string_util::fmt("{}-{}", "hello", "world") == std::string("hello-world"), true);
-    ASSERT_EQ(hj::string_util::fmt("{1}-{0}", "hello", "world") == std::string("world-hello"), true);
-}

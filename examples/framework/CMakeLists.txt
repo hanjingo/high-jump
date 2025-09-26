@@ -99,6 +99,8 @@ add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
 add_definitions(-DPATCH_VERSION=${PACKAGE_VERSION_PATCH})
 add_definitions(-DEMAIL="${PACKAGE_CONTACT}")
+add_definitions(-DLIC_ISSUER="${LIC_ISSUER}")
+add_definitions(-DLIC_FPATH="${LIC_FPATH}")
 
 # windows specific settings
 if (WIN32)
@@ -177,14 +179,16 @@ endif()
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
 # copy resource files
-file(GLOB PROPERTY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties")
+file(GLOB PROPERTY_FILES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties" 
+    "${CMAKE_CURRENT_SOURCE_DIR}/res/*.lic")
 add_custom_target(${PACKAGE_NAME}_copy_properties ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${PROPERTY_FILES}
         $<TARGET_FILE_DIR:${PROJECT_NAME}>
     DEPENDS ${PROPERTY_FILES}
-    COMMENT "Copying .properties files to output dir"
+    COMMENT "Copying .properties .lic files to output dir"
 )
 
 add_dependencies(${PROJECT_NAME} ${PACKAGE_NAME}_copy_properties)

@@ -16,7 +16,7 @@ blue() { echo -e "\033[34m$*\033[0m"; }
 # Usage function
 usage() {
     cat << EOF
-Usage: $0 [OPTIONS]
+Usage: $0 [OPTIONS] [FILES...]
 
 Format C++ code using clang-format
 
@@ -25,16 +25,22 @@ Options:
     -h, --help      Show this help message
     -v, --verbose   Enable verbose output
 
+Arguments:
+    FILES...        Specific files to format (optional, defaults to all C++ files)
+
 Examples:
-    $0              Format all C++ files
-    $0 --check      Check formatting without changes
-    $0 -c -v        Check formatting with verbose output
+    $0                              Format all C++ files
+    $0 --check                      Check formatting of all files
+    $0 -c -v                        Check formatting with verbose output
+    $0 file1.hpp file2.cpp          Format specific files
+    $0 --check --verbose file.hpp   Check specific file with details
 EOF
 }
 
 # Parse command line arguments
 CHECK_ONLY=false
 VERBOSE=false
+SPECIFIED_FILES=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -50,10 +56,15 @@ while [[ $# -gt 0 ]]; do
             usage
             exit 0
             ;;
-        *)
+        -*)
             echo "Unknown option: $1" >&2
             usage >&2
             exit 1
+            ;;
+        *)
+            # This is a file argument
+            SPECIFIED_FILES+=("$1")
+            shift
             ;;
     esac
 done
@@ -97,11 +108,38 @@ fi
 CLANG_FORMAT_VERSION=$(clang-format --version)
 log_verbose "Using: $CLANG_FORMAT_VERSION"
 
-# Find all C++ files
-log_verbose "Searching for C++ files in hj/ and tests/ directories..."
-
-# Use find to locate C++ files
-mapfile -t files < <(find hj tests -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" -o -name "*.cxx" \) 2>/dev/null || true)
+# Determine which files to process
+if [[ ${#SPECIFIED_FILES[@]} -gt 0 ]]; then
+    # Use specified files
+    log_verbose "Processing specified files..."
+    files=()
+    for file in "${SPECIFIED_FILES[@]}"; do
+        # Check if file exists and is a regular file
+        if [[ -f "$file" ]]; then
+            # Check if it's a C++ file
+            case "$file" in
+                *.cpp|*.hpp|*.h|*.cc|*.cxx)
+                    files+=("$file")
+                    ;;
+                *)
+                    yellow "Warning: Skipping non-C++ file: $file"
+                    ;;
+            esac
+        else
+            red "Error: File not found: $file"
+            exit 1
+        fi
+    done
+else
+    # Find all C++ files in default directories
+    log_verbose "Searching for C++ files in hj/ and tests/ directories..."
+    
+    # Use find to locate C++ files - compatible with all shell environments
+    files=()
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(find hj tests -type f \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" -o -name "*.cxx" \) -print0 2>/dev/null || true)
+fi
 
 if [[ ${#files[@]} -eq 0 ]]; then
     yellow "Warning: No C++ files found"
@@ -126,18 +164,48 @@ if [[ "$CHECK_ONLY" == "true" ]]; then
         # Use a temporary file to capture clang-format output
         temp_file=$(mktemp)
         
+        # For .h files, force C++ language to avoid Objective-C issues
+        temp_cpp_file=""
+        if [[ "$file" == *.h ]]; then
+            # Create temporary .cpp file to avoid Objective-C detection
+            temp_cpp_file=$(mktemp)
+            mv "$temp_cpp_file" "${temp_cpp_file}.cpp"
+            temp_cpp_file="${temp_cpp_file}.cpp"
+            cp "$file" "$temp_cpp_file"
+            check_file="$temp_cpp_file"
+        else
+            check_file="$file"
+        fi
+        
         # Run clang-format and capture both stdout and stderr
-        if ! clang-format --style=file --dry-run --Werror "$file" 2>"$temp_file"; then
+        if ! clang-format --style=file --dry-run --Werror "$check_file" 2>"$temp_file"; then
             has_errors=true
             error_files+=("$file")
             
             red "Format issues in $(basename "$file"):"
             if [[ -s "$temp_file" ]]; then
-                yellow "$(cat "$temp_file")"
+                # Show warnings from clang-format, clean up paths
+                echo "  Specific format issues:"
+                cat "$temp_file" | head -10 | sed "s|${temp_cpp_file:-$file}:|Line |g" | while read -r line; do
+                    case "$line" in
+                        *"error: code should be clang-formatted"*) 
+                            echo "    $(echo "$line" | sed 's/error: code should be clang-formatted.*/does not conform to formatting standards/')"
+                            ;;
+                        *) 
+                            echo "    $line"
+                            ;;
+                    esac
+                done | head -5
+                if [[ $(cat "$temp_file" | wc -l) -gt 5 ]]; then
+                    yellow "  ... (showing first 5 issue locations, total $(cat "$temp_file" | wc -l) format issues)"
+                fi
             else
-                yellow "  File needs formatting"
+                yellow "  File needs formatting (unable to show details)"
             fi
         fi
+        
+        # Cleanup temporary file
+        [[ -n "$temp_cpp_file" ]] && rm -f "$temp_cpp_file"
         
         rm -f "$temp_file"
     done
@@ -172,15 +240,45 @@ else
         cp "$file" "$temp_backup"
         
         # Apply formatting
-        if clang-format --style=file -i "$file"; then
-            # Check if the file actually changed
-            if ! cmp -s "$file" "$temp_backup"; then
-                echo "Formatted: $(basename "$file")"
-                ((formatted_count++))
+        if [[ "$file" == *.h ]]; then
+            # For .h files, create temporary .cpp file to ensure consistent processing
+            temp_cpp=$(mktemp)
+            mv "$temp_cpp" "${temp_cpp}.cpp"
+            temp_cpp="${temp_cpp}.cpp"
+            cp "$file" "$temp_cpp"
+            
+            # Apply formatting to temporary file then copy back
+            if clang-format --style=file -i "$temp_cpp" 2>/dev/null; then
+                # Check if formatting changed anything
+                if ! cmp -s "$file" "$temp_cpp"; then
+                    cp "$temp_cpp" "$file"
+                    format_success=true
+                    echo "Formatted: $(basename "$file")"
+                    ((formatted_count++))
+                else
+                    format_success=true
+                    log_verbose "No changes: $(basename "$file")"
+                fi
             else
-                log_verbose "No changes: $(basename "$file")"
+                format_success=false
             fi
+            rm -f "$temp_cpp"
         else
+            format_success=true
+            clang-format --style=file -i "$file" || format_success=false
+            
+            # Check if the file actually changed
+            if [[ "$format_success" == "true" ]]; then
+                if ! cmp -s "$file" "$temp_backup"; then
+                    echo "Formatted: $(basename "$file")"
+                    ((formatted_count++))
+                else
+                    log_verbose "No changes: $(basename "$file")"
+                fi
+            fi
+        fi
+        
+        if [[ "$format_success" == "false" ]]; then
             red "Error formatting: $file"
         fi
         

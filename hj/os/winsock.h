@@ -30,6 +30,6 @@
 #pragma warning(push)
 #pragma warning(disable : 4996)
 
-#endif  // _WIN32
+#endif // _WIN32
 
-#endif  // WINSOCK_H
+#endif // WINSOCK_H

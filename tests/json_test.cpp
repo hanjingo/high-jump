@@ -12,7 +12,9 @@ struct json_obj
 TEST(json, get)
 {
     json_obj obj;
-    auto js = hj::json{{"name", "harry potter"}, {"age", 30}, {"email", "hehehunanchina@live.com"}};
+    auto     js = hj::json{{"name", "harry potter"},
+                           {"age", 30},
+                           {"email", "hehehunanchina@live.com"}};
     js.at("name").get_to(obj.name);
     ASSERT_EQ(obj.name, std::string("harry potter"));
     ASSERT_EQ(js.at("name").get<std::string>(), std::string("harry potter"));
@@ -21,7 +23,8 @@ TEST(json, get)
     ASSERT_EQ(obj.age, 30);
     ASSERT_EQ(js.at("age").get<int>(), 30);
 
-    ASSERT_STREQ(js.at("email").get<std::string>().c_str(), "hehehunanchina@live.com");
+    ASSERT_STREQ(js.at("email").get<std::string>().c_str(),
+                 "hehehunanchina@live.com");
 }
 
 TEST(json, parse)
@@ -41,12 +44,12 @@ TEST(json, parse)
 
     // from ifstream
     std::string str_src = "./json_test.json";
-    if (!std::filesystem::exists(str_src))
+    if(!std::filesystem::exists(str_src))
     {
         GTEST_SKIP() << "skip test json parse not exist: " << str_src;
     }
     std::ifstream f(str_src);
-    auto js2 = hj::json::parse(f);
+    auto          js2 = hj::json::parse(f);
 
     ASSERT_EQ(js2.contains("pi"), true);
     ASSERT_EQ(js2["pi"].get<double>(), 3.141);
@@ -56,10 +59,8 @@ TEST(json, parse)
 
 TEST(json, make_object)
 {
-
 }
 
 TEST(json, make_array)
 {
-
 }

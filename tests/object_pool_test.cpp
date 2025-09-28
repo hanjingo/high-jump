@@ -5,24 +5,28 @@
 
 class worker
 {
-public:
+  public:
     worker(std::string _name, int _age, float _salary, std::string _email)
-        : name{_name}, age{_age}, salary{_salary}, email{_email}
-    {}
-    ~worker(){}
+        : name{_name}
+        , age{_age}
+        , salary{_salary}
+        , email{_email}
+    {
+    }
+    ~worker() {}
 
     std::string name;
-    int age;
-    float salary;
+    int         age;
+    float       salary;
     std::string email;
 };
 
 struct c_worker
 {
-    const char* name;
-    int* age;
-    float* salary;
-    const char* email;
+    const char *name;
+    int        *age;
+    float      *salary;
+    const char *email;
 };
 
 TEST(object_pool, construct)
@@ -38,11 +42,11 @@ TEST(object_pool, construct)
     pool.push(obj1);
 
     hj::object_pool<c_worker> cpool;
-    c_worker* cw = cpool.allocate();
-    cw->name = "lucy";
-    cw->age = new int(18);
-    cw->salary = new float(5000.0f);
-    cw->email = "lucy@abc.com";
+    c_worker                 *cw = cpool.allocate();
+    cw->name                     = "lucy";
+    cw->age                      = new int(18);
+    cw->salary                   = new float(5000.0f);
+    cw->email                    = "lucy@abc.com";
     cpool.push(cw);
     auto cw2 = cpool.pop();
     ASSERT_STREQ(cw2->name, "lucy");
@@ -65,11 +69,11 @@ TEST(object_pool, push)
     pool.push(obj2);
 
     hj::object_pool<c_worker> cpool;
-    c_worker* cw = cpool.allocate();
-    cw->name = "lucy";
-    cw->age = new int(18);
-    cw->salary = new float(5000.0f);
-    cw->email = "lucy@abc.com";
+    c_worker                 *cw = cpool.allocate();
+    cw->name                     = "lucy";
+    cw->age                      = new int(18);
+    cw->salary                   = new float(5000.0f);
+    cw->email                    = "lucy@abc.com";
     cpool.push(cw);
     auto cw2 = cpool.pop();
     ASSERT_STREQ(cw2->name, "lucy");
@@ -89,11 +93,11 @@ TEST(object_pool, pop)
     pool.push(obj);
 
     hj::object_pool<c_worker> cpool;
-    c_worker* cw = cpool.allocate();
-    cw->name = "bob";
-    cw->age = new int(22);
-    cw->salary = new float(6000.0f);
-    cw->email = "bob@abc.com";
+    c_worker                 *cw = cpool.allocate();
+    cw->name                     = "bob";
+    cw->age                      = new int(22);
+    cw->salary                   = new float(6000.0f);
+    cw->email                    = "bob@abc.com";
     cpool.push(cw);
     auto cw2 = cpool.pop();
     ASSERT_NE(cw2, nullptr);
@@ -114,11 +118,11 @@ TEST(object_pool, size)
 
     hj::object_pool<c_worker> cpool;
     ASSERT_EQ(cpool.size(), 0);
-    c_worker* cw = cpool.allocate();
-    cw->name = "eve";
-    cw->age = new int(28);
-    cw->salary = new float(7000.0f);
-    cw->email = "eve@abc.com";
+    c_worker *cw = cpool.allocate();
+    cw->name     = "eve";
+    cw->age      = new int(28);
+    cw->salary   = new float(7000.0f);
+    cw->email    = "eve@abc.com";
     cpool.push(cw);
     ASSERT_EQ(cpool.size(), 1);
     auto cw2 = cpool.pop();

@@ -11,14 +11,14 @@
 
 using err = std::error_code;
 
-hj::aes::mode str_to_aes_mode(const std::string& mode);
-hj::aes::padding str_to_aes_padding(const std::string& padding);
+hj::aes::mode    str_to_aes_mode(const std::string &mode);
+hj::aes::padding str_to_aes_padding(const std::string &padding);
 
-hj::des::mode str_to_des_mode(const std::string& mode);
-hj::des::padding str_to_des_padding(const std::string& padding);
+hj::des::mode    str_to_des_mode(const std::string &mode);
+hj::des::padding str_to_des_padding(const std::string &padding);
 
-hj::rsa::padding str_to_rsa_padding(const std::string& padding);
-hj::rsa::key_format str_to_rsa_key_format(const std::string& fmt);
-hj::rsa::mode str_to_rsa_mode(const std::string& mode);
+hj::rsa::padding    str_to_rsa_padding(const std::string &padding);
+hj::rsa::key_format str_to_rsa_key_format(const std::string &fmt);
+hj::rsa::mode       str_to_rsa_mode(const std::string &mode);
 
 #endif

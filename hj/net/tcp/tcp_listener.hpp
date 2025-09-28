@@ -18,53 +18,50 @@ namespace hj
 
 class tcp_listener
 {
-public:
+  public:
 #if BOOST_VERSION < 108700
-    using io_work_t         = tcp_socket::io_work_t;
-    using address_t         = tcp_socket::address_t;
+    using io_work_t = tcp_socket::io_work_t;
+    using address_t = tcp_socket::address_t;
 #else
-    using address_t         = boost::asio::ip::address;
+    using address_t = boost::asio::ip::address;
 #endif
 
-    using io_t              = tcp_socket::io_t;
-    using err_t             = tcp_socket::err_t;
-    using sock_t            = tcp_socket::sock_t;
-    using endpoint_t        = tcp_socket::endpoint_t;
-    using acceptor_t        = boost::asio::ip::tcp::acceptor;
+    using io_t       = tcp_socket::io_t;
+    using err_t      = tcp_socket::err_t;
+    using sock_t     = tcp_socket::sock_t;
+    using endpoint_t = tcp_socket::endpoint_t;
+    using acceptor_t = boost::asio::ip::tcp::acceptor;
 
     using opt_reuse_address = boost::asio::socket_base::reuse_address;
 
-    using accept_handler_t  = std::function<void(const err_t&, tcp_socket*)>;
+    using accept_handler_t = std::function<void(const err_t &, tcp_socket *)>;
 
-public:
+  public:
     tcp_listener() = delete;
 
-    explicit tcp_listener(io_t& io)
-        : io_{io}
-        , accept_handler_{}
+    explicit tcp_listener(io_t &io)
+        : _io{io}
+        , _accept_handler{}
     {
     }
-    tcp_listener(io_t& io, const accept_handler_t&& fn)
-        : io_{io}
-        , accept_handler_{std::move(fn)}
+    tcp_listener(io_t &io, const accept_handler_t &&fn)
+        : _io{io}
+        , _accept_handler{std::move(fn)}
     {
     }
-    virtual ~tcp_listener()
-    {
-        close();
-    }
+    virtual ~tcp_listener() { close(); }
 
-    inline bool is_closed() { return closed_.load(); }
+    inline bool is_closed() { return _closed.load(); }
 
-    template<typename T>
+    template <typename T>
     inline bool set_option(T opt)
     {
-        if (acceptor_ == nullptr || !acceptor_->is_open())
+        if(_acceptor == nullptr || !_acceptor->is_open())
             return false;
 
         err_t err;
-        acceptor_->set_option(opt, err);
-        if (!err.failed())
+        _acceptor->set_option(opt, err);
+        if(!err.failed())
             return true;
 
         assert(false);
@@ -72,13 +69,13 @@ public:
         return false;
     }
 
-    tcp_socket* accept(uint16_t port)
+    tcp_socket *accept(uint16_t port)
     {
         endpoint_t ep{boost::asio::ip::tcp::v4(), port};
         return accept(ep);
     }
 
-    tcp_socket* accept(const char* ip, uint16_t port)
+    tcp_socket *accept(const char *ip, uint16_t port)
     {
 #if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
@@ -88,73 +85,76 @@ public:
         return accept(ep);
     }
 
-    tcp_socket* accept(const endpoint_t& ep)
+    tcp_socket *accept(const endpoint_t &ep)
     {
-        if (binded_endpoint_ == ep) 
+        if(_binded_endpoint == ep)
             return accept();
 
-        if (acceptor_ != nullptr) 
+        if(_acceptor != nullptr)
         {
-            acceptor_->close();
-            delete acceptor_;
-            acceptor_ = nullptr;
+            _acceptor->close();
+            delete _acceptor;
+            _acceptor = nullptr;
         }
 
-        acceptor_ = new acceptor_t(io_, ep);
-        acceptor_->set_option(opt_reuse_address(true));
-        binded_endpoint_ = ep;
+        _acceptor = new acceptor_t(_io, ep);
+        _acceptor->set_option(opt_reuse_address(true));
+        _binded_endpoint = ep;
         return accept();
     }
 
-    tcp_socket* accept()
+    tcp_socket *accept()
     {
-        assert(acceptor_ != nullptr);
+        assert(_acceptor != nullptr);
 
         err_t err;
-        auto sock = new sock_t(io_);
-        try {
-            acceptor_->accept(*sock, err);
-        } catch (...) {
+        auto  sock = new sock_t(_io);
+        try
+        {
+            _acceptor->accept(*sock, err);
+        }
+        catch(...)
+        {
             assert(false);
         }
 
-        if (err.failed()) 
+        if(err.failed())
         {
             delete sock;
             sock = nullptr;
             return nullptr;
         }
 
-        auto ret = new tcp_socket(io_, sock);
+        auto ret = new tcp_socket(_io, sock);
         ret->set_conn_status(true);
         return ret;
     }
 
     void async_accept(uint16_t port)
     {
-        endpoint_t ep{boost::asio::ip::tcp::v4(), port};
-        accept_handler_t fn = accept_handler_;
+        endpoint_t       ep{boost::asio::ip::tcp::v4(), port};
+        accept_handler_t fn = _accept_handler;
         async_accept(ep, std::move(fn));
     }
 
-    void async_accept(uint16_t port, accept_handler_t&& fn)
+    void async_accept(uint16_t port, accept_handler_t &&fn)
     {
         endpoint_t ep{boost::asio::ip::tcp::v4(), port};
         async_accept(ep, std::move(fn));
     }
 
-    void async_accept(const char* ip, uint16_t port)
+    void async_accept(const char *ip, uint16_t port)
     {
 #if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
 #else
         endpoint_t ep{boost::asio::ip::make_address(ip), port};
 #endif
-        accept_handler_t fn = accept_handler_;
+        accept_handler_t fn = _accept_handler;
         async_accept(ep, std::move(fn));
     }
 
-    void async_accept(const char* ip, uint16_t port, accept_handler_t&& fn)
+    void async_accept(const char *ip, uint16_t port, accept_handler_t &&fn)
     {
 #if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
@@ -166,36 +166,37 @@ public:
 
     void async_accept(endpoint_t ep)
     {
-        accept_handler_t fn = accept_handler_;
+        accept_handler_t fn = _accept_handler;
         async_accept(ep, std::move(fn));
     }
 
-    void async_accept(endpoint_t ep, accept_handler_t&& fn)
+    void async_accept(endpoint_t ep, accept_handler_t &&fn)
     {
-        if (binded_endpoint_ == ep) 
+        if(_binded_endpoint == ep)
         {
             async_accept(std::move(fn));
             return;
         }
 
-        if (acceptor_ != nullptr) 
-            acceptor_->close();
+        if(_acceptor != nullptr)
+            _acceptor->close();
 
-        acceptor_ = new acceptor_t(io_, ep);
-        acceptor_->set_option(opt_reuse_address(true));
-        binded_endpoint_ = ep;
+        _acceptor = new acceptor_t(_io, ep);
+        _acceptor->set_option(opt_reuse_address(true));
+        _binded_endpoint = ep;
         async_accept(std::move(fn));
     }
 
-    void async_accept(accept_handler_t&& fn)
+    void async_accept(accept_handler_t &&fn)
     {
-        assert(acceptor_ != nullptr);
+        assert(_acceptor != nullptr);
 
-        sock_t* base = new sock_t(io_);
-        tcp_socket* sock = new tcp_socket(io_, base);
-        try {
-            acceptor_->async_accept(*base, [fn, sock](const err_t& err) {
-                if (err.failed()) 
+        sock_t     *base = new sock_t(_io);
+        tcp_socket *sock = new tcp_socket(_io, base);
+        try
+        {
+            _acceptor->async_accept(*base, [fn, sock](const err_t &err) {
+                if(err.failed())
                 {
                     delete sock;
                     fn(err, nullptr);
@@ -203,37 +204,39 @@ public:
                 }
 
                 sock->set_conn_status(true);
-                fn(err, sock);                
+                fn(err, sock);
             });
-        } catch (...) {
+        }
+        catch(...)
+        {
             assert(false);
-            if (sock != nullptr)
+            if(sock != nullptr)
                 delete sock;
         }
     }
 
     void close()
     {
-        if (closed_.load())
+        if(_closed.load())
             return;
 
-        closed_.store(true);
-        if (acceptor_ != nullptr) 
+        _closed.store(true);
+        if(_acceptor != nullptr)
         {
-            acceptor_->close();
-            delete acceptor_;
-            acceptor_ = nullptr;
+            _acceptor->close();
+            delete _acceptor;
+            _acceptor = nullptr;
         }
-        binded_endpoint_ = endpoint_t();
+        _binded_endpoint = endpoint_t();
     }
 
-private:
-    io_t&                io_;
-    acceptor_t*          acceptor_ = nullptr;
-    endpoint_t           binded_endpoint_;
-    std::atomic<bool>    closed_{false};
+  private:
+    io_t             &_io;
+    acceptor_t       *_acceptor = nullptr;
+    endpoint_t        _binded_endpoint;
+    std::atomic<bool> _closed{false};
 
-    accept_handler_t     accept_handler_;
+    accept_handler_t _accept_handler;
 };
 
 }

@@ -1,14 +1,14 @@
-#ifndef DLL_EXAMPLE_H  
-#define DLL_EXAMPLE_H  
+#ifndef DLL_EXAMPLE_H
+#define DLL_EXAMPLE_H
 
-#include <hj/os/dll.h>  
+#include <hj/os/dll.h>
 
-C_STYLE_EXPORT int hello();  
+C_STYLE_EXPORT int hello();
 
-#ifdef _WIN32  
+#ifdef _WIN32
 extern "C" __declspec(dllexport) int world();
-#else  
-extern "C" __attribute__((visibility("default"))) int world();  
-#endif  
+#else
+extern "C" __attribute__((visibility("default"))) int world();
+#endif
 
 #endif

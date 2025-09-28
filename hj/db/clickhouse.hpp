@@ -30,57 +30,56 @@ using column_decimal   = clickhouse::ColumnDecimal;
 
 class client
 {
-public:
-    explicit client(const client_options& opt)
+  public:
+    explicit client(const client_options &opt)
         : _client{std::make_unique<clickhouse::Client>(opt)}
     {
     }
-	client(const std::string& host, 
-           const uint16_t port, 
-           const std::string& user, 
-           const std::string& password, 
-           const std::string& db)
-	{
-		client_options opts;
-		opts.SetHost(host);
-		opts.SetPort(port);
-		opts.SetUser(user);
-		opts.SetPassword(password);
-		opts.SetDefaultDatabase(db);
-		_client = std::make_unique<clickhouse::Client>(opts);
-	}
-    ~client()
+    client(const std::string &host,
+           const uint16_t     port,
+           const std::string &user,
+           const std::string &password,
+           const std::string &db)
     {
-        _client.release();
+        client_options opts;
+        opts.SetHost(host);
+        opts.SetPort(port);
+        opts.SetUser(user);
+        opts.SetPassword(password);
+        opts.SetDefaultDatabase(db);
+        _client = std::make_unique<clickhouse::Client>(opts);
     }
+    ~client() { _client.release(); }
 
     inline bool is_connected() const
     {
         return _client->GetCurrentEndpoint().has_value();
     }
 
-	inline void execute(const std::string& sql)
-	{
-		_client->Execute(clickhouse::Query(sql));
-	}
+    inline void execute(const std::string &sql)
+    {
+        _client->Execute(clickhouse::Query(sql));
+    }
 
-	inline block select(const std::string& sql)
-	{
-		block result;
-		_client->Select(sql, [&](const block& b) { result = b; });
-		return result;
-	}
+    inline block select(const std::string &sql)
+    {
+        block result;
+        _client->Select(sql, [&](const block &b) { result = b; });
+        return result;
+    }
 
-	inline void insert(const std::string& table, const block& b)
-	{
-		_client->Insert(table, b);
-	}
+    inline void insert(const std::string &table, const block &b)
+    {
+        _client->Insert(table, b);
+    }
 
-private:
-	std::unique_ptr<clickhouse::Client> _client;
+  private:
+    std::unique_ptr<clickhouse::Client> _client;
 };
 
-static void append_column(block& b, const std::string& name, const clickhouse::ColumnRef& col)
+static void append_column(block                       &b,
+                          const std::string           &name,
+                          const clickhouse::ColumnRef &col)
 {
     b.AppendColumn(name, col);
 }

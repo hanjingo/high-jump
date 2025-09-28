@@ -4,7 +4,9 @@
 
 TEST(striped_map, emplace)
 {
-    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{
+        [](const int &key) -> int { return key % 10; },
+        10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -19,7 +21,9 @@ TEST(striped_map, emplace)
 
 TEST(striped_map, replace)
 {
-    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{
+        [](const int &key) -> int { return key % 10; },
+        10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -35,7 +39,9 @@ TEST(striped_map, replace)
 
 TEST(striped_map, find)
 {
-    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{
+        [](const int &key) -> int { return key % 10; },
+        10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -50,7 +56,9 @@ TEST(striped_map, find)
 
 TEST(striped_map, erase)
 {
-    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{
+        [](const int &key) -> int { return key % 10; },
+        10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
@@ -61,17 +69,19 @@ TEST(striped_map, erase)
 
 TEST(striped_map, range)
 {
-    hj::striped_map<int, std::string> m{[](const int& key)->int{ return key % 10; }, 10};
+    hj::striped_map<int, std::string> m{
+        [](const int &key) -> int { return key % 10; },
+        10};
     m.emplace(1, "e1");
     m.emplace(11, "e11");
     m.emplace(123, "e123");
     bool equal = false;
-    m.range([&](const int& key, const std::string& value)->bool{
-        if (key == 1) 
+    m.range([&](const int &key, const std::string &value) -> bool {
+        if(key == 1)
             equal = (value == std::string("e1"));
-        if (key == 11) 
+        if(key == 11)
             equal = (value == std::string("e11"));
-        if (key == 123) 
+        if(key == 123)
             equal = (value == std::string("e123"));
         return equal;
     });
@@ -80,5 +90,4 @@ TEST(striped_map, range)
 
 TEST(striped_map, size)
 {
-    
 }

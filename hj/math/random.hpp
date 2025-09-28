@@ -10,9 +10,9 @@ static std::random_device default_seed;
 
 class random
 {
-public:
+  public:
     template <int64_t Min, int64_t Max>
-    static int64_t range(std::random_device& seed = default_seed)
+    static int64_t range(std::random_device &seed = default_seed)
     {
         std::default_random_engine engine(seed());
 
@@ -21,7 +21,7 @@ public:
     }
 
     template <typename T>
-    static T range(T min, T max, std::random_device& seed = default_seed)
+    static T range(T min, T max, std::random_device &seed = default_seed)
     {
         std::default_random_engine engine(seed());
 
@@ -29,8 +29,8 @@ public:
         return uniform_dist(engine);
     }
 
-private:
-    random() = default;
+  private:
+    random()  = default;
     ~random() = default;
 };
 

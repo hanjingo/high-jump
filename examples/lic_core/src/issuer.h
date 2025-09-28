@@ -9,17 +9,14 @@
 
 class issuer_mgr
 {
-public:
+  public:
     issuer_mgr()
         : _issuers{}
     {
     }
-    ~issuer_mgr()
-    {
-        _issuers.clear();
-    }
+    ~issuer_mgr() { _issuers.clear(); }
 
-    static issuer_mgr& instance()
+    static issuer_mgr &instance()
     {
         static issuer_mgr inst;
         return inst;
@@ -27,16 +24,16 @@ public:
 
     const std::vector<std::string> supported_issuers();
 
-    int add(std::unique_ptr<hj::license::issuer>&& issuer);
+    int add(std::unique_ptr<hj::license::issuer> &&issuer);
 
-    int issue(std::string& output,
-              const std::string& licensee,
-              const std::string& issuer_id,
-              const std::size_t leeway_days,
-              const std::vector<hj::license::pair_t>& claims = {});
+    int issue(std::string                            &output,
+              const std::string                      &licensee,
+              const std::string                      &issuer_id,
+              const std::size_t                       leeway_days,
+              const std::vector<hj::license::pair_t> &claims = {});
 
-private:
-    std::vector<std::unique_ptr<hj::license::issuer>> _issuers;
+  private:
+    std::vector<std::unique_ptr<hj::license::issuer> > _issuers;
 };
 
 #endif

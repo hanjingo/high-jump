@@ -19,7 +19,7 @@
 #include <boost/asio/deadline_timer.hpp>
 
 #if BOOST_VERSION >= 108700
-    #include <boost/asio/ip/address.hpp>
+#include <boost/asio/ip/address.hpp>
 #endif
 
 namespace hj
@@ -27,73 +27,70 @@ namespace hj
 
 class tcp_socket
 {
-public:
+  public:
 #ifdef SMART_PTR_ENABLE
-    using tcp_socket_ptr_t  = std::shared_ptr<tcp_socket>;
+    using tcp_socket_ptr_t = std::shared_ptr<tcp_socket>;
 #else
-    using tcp_socket_ptr_t  = tcp_socket*;
+    using tcp_socket_ptr_t = tcp_socket *;
 #endif
 
-    using io_t              = boost::asio::io_context;
+    using io_t = boost::asio::io_context;
 #if BOOST_VERSION < 108700
-    using io_work_t         = boost::asio::io_service::work;
+    using io_work_t = boost::asio::io_service::work;
 #endif
-    using err_t             = boost::system::error_code;
-    
-    using const_buffer_t    = boost::asio::const_buffer;
-    using multi_buffer_t    = boost::asio::mutable_buffer;
-    using streambuf_t       = boost::asio::streambuf;
+    using err_t = boost::system::error_code;
 
-    using sock_t            = boost::asio::ip::tcp::socket;
+    using const_buffer_t = boost::asio::const_buffer;
+    using multi_buffer_t = boost::asio::mutable_buffer;
+    using streambuf_t    = boost::asio::streambuf;
+
+    using sock_t = boost::asio::ip::tcp::socket;
 #if BOOST_VERSION < 108700
-    using address_t         = boost::asio::ip::address;
+    using address_t = boost::asio::ip::address;
 #else
-    using address_t         = boost::asio::ip::address;
+    using address_t = boost::asio::ip::address;
 #endif
-    using endpoint_t        = boost::asio::ip::tcp::endpoint;
+    using endpoint_t = boost::asio::ip::tcp::endpoint;
 
-    using steady_timer_t    = boost::asio::steady_timer;
-    using deadline_timer_t  = boost::asio::deadline_timer;
-    using ms_t              = std::chrono::milliseconds;
+    using steady_timer_t   = boost::asio::steady_timer;
+    using deadline_timer_t = boost::asio::deadline_timer;
+    using ms_t             = std::chrono::milliseconds;
 
-    using opt_no_delay      = boost::asio::ip::tcp::no_delay;
-    using opt_send_buf_sz   = boost::asio::ip::tcp::socket::send_buffer_size;
-    using opt_recv_buf_sz   = boost::asio::ip::tcp::socket::receive_buffer_size;
-    using opt_reuse_addr    = boost::asio::ip::tcp::socket::reuse_address;
-    using opt_keep_alive    = boost::asio::ip::tcp::socket::keep_alive;
-    using opt_broadcast     = boost::asio::ip::tcp::socket::broadcast;
+    using opt_no_delay    = boost::asio::ip::tcp::no_delay;
+    using opt_send_buf_sz = boost::asio::ip::tcp::socket::send_buffer_size;
+    using opt_recv_buf_sz = boost::asio::ip::tcp::socket::receive_buffer_size;
+    using opt_reuse_addr  = boost::asio::ip::tcp::socket::reuse_address;
+    using opt_keep_alive  = boost::asio::ip::tcp::socket::keep_alive;
+    using opt_broadcast   = boost::asio::ip::tcp::socket::broadcast;
 
-    using conn_handler_t    = std::function<void(const err_t&)>;
-    using send_handler_t    = std::function<void(const err_t&, std::size_t)>;
-    using recv_handler_t    = std::function<void(const err_t&, std::size_t)>;
+    using conn_handler_t = std::function<void(const err_t &)>;
+    using send_handler_t = std::function<void(const err_t &, std::size_t)>;
+    using recv_handler_t = std::function<void(const err_t &, std::size_t)>;
 
-public:
+  public:
     tcp_socket() = delete;
-    explicit tcp_socket(io_t& io)
-        : io_{io}
+    explicit tcp_socket(io_t &io)
+        : _io{io}
     {
     }
-    explicit tcp_socket(io_t& io, sock_t* sock)
-        : io_{io}
-        , sock_{sock}
+    explicit tcp_socket(io_t &io, sock_t *sock)
+        : _io{io}
+        , _sock{sock}
     {
     }
-    virtual ~tcp_socket()
-    {
-        close();
-    }
+    virtual ~tcp_socket() { close(); }
 
-    inline io_t& io() { return io_; }
+    inline io_t &io() { return _io; }
 
-    template<typename T>
+    template <typename T>
     inline bool set_option(T opt)
     {
-        if (sock_ == nullptr || !sock_->is_open())
+        if(_sock == nullptr || !_sock->is_open())
             return false;
 
         err_t err;
-        sock_->set_option(opt, err);
-        if (!err.failed())
+        _sock->set_option(opt, err);
+        if(!err.failed())
             return true;
 
         assert(false);
@@ -101,27 +98,31 @@ public:
         return false;
     }
 
-    inline bool is_connected() { return sock_ != nullptr && is_connected_.load(); }
-    
+    inline bool is_connected()
+    {
+        return _sock != nullptr && _is_connected.load();
+    }
+
     bool check_connected()
     {
         err_t err;
         return check_connected(err);
     }
 
-    bool check_connected(err_t& err)
+    bool check_connected(err_t &err)
     {
-        if (sock_ == nullptr)
+        if(_sock == nullptr)
             return false;
 
-        sock_->remote_endpoint(err);
+        _sock->remote_endpoint(err);
         return !err.failed();
     }
 
-    bool connect(const char* ip, 
-                 uint16_t port, 
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
-                 int try_times = 1)
+    bool
+    connect(const char               *ip,
+            uint16_t                  port,
+            std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+            int                       try_times = 1)
     {
 #if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
@@ -131,63 +132,63 @@ public:
         return connect(ep, timeout, try_times);
     }
 
-    bool connect(endpoint_t ep, 
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
-                 int try_times = 1)
+    bool
+    connect(endpoint_t                ep,
+            std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+            int                       try_times = 1)
     {
-        for (int i = 0; i < try_times; ++i)
+        for(int i = 0; i < try_times; ++i)
         {
             set_conn_status(false);
 
-            if (sock_ != nullptr)
+            if(_sock != nullptr)
             {
-                sock_->close();
-                delete sock_;
-                sock_ = nullptr;
+                _sock->close();
+                delete _sock;
+                _sock = nullptr;
             }
-            sock_ = new sock_t(io_);
+            _sock = new sock_t(_io);
 
             std::atomic_bool finished{false};
             std::atomic_bool success{false};
 
-            steady_timer_t timer(io_);
+            steady_timer_t timer(_io);
             timer.expires_after(timeout);
 
-            sock_->async_connect(ep, [&](const err_t& err) {
-                if (finished.exchange(true)) 
+            _sock->async_connect(ep, [&](const err_t &err) {
+                if(finished.exchange(true))
                     return;
 
-                if (!err.failed())
+                if(!err.failed())
                 {
                     set_conn_status(true);
                     success.exchange(true);
-                }
-                else
+                } else
                     set_conn_status(false);
                 timer.cancel();
             });
 
-            timer.async_wait([&](const err_t& err) {
-                (void)err; // ignore timer error
-                if (finished.exchange(true)) 
+            timer.async_wait([&](const err_t &err) {
+                (void) err; // ignore timer error
+                if(finished.exchange(true))
                     return;
 
-                if (sock_)
-                    sock_->close();
+                if(_sock)
+                    _sock->close();
 
                 set_conn_status(false);
             });
 
-            io_.restart();
-            io_.run();
+            _io.restart();
+            _io.run();
 
-            if (success.load())
+            if(success.load())
                 return true;
         }
         return false;
     }
 
-    void async_connect(const char* ip, const uint16_t port, conn_handler_t&& fn)
+    void async_connect(const char *ip, const uint16_t port, conn_handler_t &&fn)
     {
 #if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
@@ -197,23 +198,24 @@ public:
         async_connect(ep, std::move(fn));
     }
 
-    void async_connect(endpoint_t ep, conn_handler_t&& fn)
+    void async_connect(endpoint_t ep, conn_handler_t &&fn)
     {
-        if (is_connected()) 
+        if(is_connected())
         {
-            fn(boost::system::errc::make_error_code(boost::system::errc::already_connected));
+            fn(boost::system::errc::make_error_code(
+                boost::system::errc::already_connected));
             return;
         }
 
-        if (this->sock_ != nullptr)
+        if(this->_sock != nullptr)
         {
-            this->sock_->close();
-            delete this->sock_;
-            this->sock_ = nullptr;
+            this->_sock->close();
+            delete this->_sock;
+            this->_sock = nullptr;
         }
-        sock_ = new sock_t(io_);
-        sock_->async_connect(ep, [this, fn](const err_t & err) {
-            if (!err.failed())
+        _sock = new sock_t(_io);
+        _sock->async_connect(ep, [this, fn](const err_t &err) {
+            if(!err.failed())
                 set_conn_status(true);
             else
                 set_conn_status(false);
@@ -224,102 +226,117 @@ public:
 
     void disconnect()
     {
-        if (!is_connected())
+        if(!is_connected())
             return;
 
         _disconnect_anyway();
     }
 
-    size_t send(const const_buffer_t& buf)
+    size_t send(const const_buffer_t &buf)
     {
-        if (!is_connected())
+        if(!is_connected())
             return 0;
 
-        try{
-            return sock_->send(buf);
-        } catch (...) {
+        try
+        {
+            return _sock->send(buf);
+        }
+        catch(...)
+        {
             return 0;
         }
     }
 
-    size_t send(const unsigned char* data, size_t len)
+    size_t send(const unsigned char *data, size_t len)
     {
         return send(boost::asio::buffer(data, len));
     }
 
-    void async_send(const const_buffer_t& buf, send_handler_t&& fn)
+    void async_send(const const_buffer_t &buf, send_handler_t &&fn)
     {
-        if (!is_connected()) 
+        if(!is_connected())
         {
-            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
+            fn(boost::system::errc::make_error_code(
+                   boost::system::errc::not_connected),
+               0);
             return;
         }
 
-        try {
-            sock_->async_send(buf, std::move(fn));
-        } catch (const boost::system::error_code& ec) {
+        try
+        {
+            _sock->async_send(buf, std::move(fn));
+        }
+        catch(const boost::system::error_code &ec)
+        {
             assert(false);
             std::cerr << ec << std::endl;
             return;
         }
     }
 
-    void async_send(const unsigned char* data, size_t len, send_handler_t&& fn)
+    void async_send(const unsigned char *data, size_t len, send_handler_t &&fn)
     {
-        if (!is_connected()) 
+        if(!is_connected())
         {
-            fn(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
+            fn(boost::system::errc::make_error_code(
+                   boost::system::errc::not_connected),
+               0);
             return;
         }
 
         return async_send(boost::asio::buffer(data, len), std::move(fn));
     }
 
-    size_t recv(multi_buffer_t& buf)
+    size_t recv(multi_buffer_t &buf)
     {
-        if (!is_connected()) 
+        if(!is_connected())
             return 0;
 
         err_t err;
-        auto sz = sock_->read_some(buf, err);
-        if (err.failed())
+        auto  sz = _sock->read_some(buf, err);
+        if(err.failed())
             assert(false);
 
         return sz;
     }
 
-    size_t recv(unsigned char* data, size_t len)
+    size_t recv(unsigned char *data, size_t len)
     {
         multi_buffer_t buf{data, len};
         return recv(buf);
     }
 
-    size_t recv_until(streambuf_t& buf, size_t least)
+    size_t recv_until(streambuf_t &buf, size_t least)
     {
-        if (!is_connected())
+        if(!is_connected())
             return 0;
 
         err_t err;
-        auto sz = boost::asio::read(*sock_, buf, boost::asio::transfer_at_least(least), err);
-        if (err.failed())
+        auto  sz = boost::asio::read(*_sock,
+                                    buf,
+                                    boost::asio::transfer_at_least(least),
+                                    err);
+        if(err.failed())
             assert(false);
 
         return sz;
     }
 
-    void async_recv(multi_buffer_t& buf, recv_handler_t&& fn)
+    void async_recv(multi_buffer_t &buf, recv_handler_t &&fn)
     {
         auto cb = std::move(fn);
-        if (!is_connected()) 
+        if(!is_connected())
         {
-            cb(boost::system::errc::make_error_code(boost::system::errc::not_connected), 0);
+            cb(boost::system::errc::make_error_code(
+                   boost::system::errc::not_connected),
+               0);
             return;
         }
 
-        sock_->async_read_some(buf, cb);
+        _sock->async_read_some(buf, cb);
     }
 
-    void async_recv(unsigned char* data, size_t len, recv_handler_t&& fn)
+    void async_recv(unsigned char *data, size_t len, recv_handler_t &&fn)
     {
         multi_buffer_t buf{data, len};
         async_recv(buf, std::move(fn));
@@ -327,31 +344,28 @@ public:
 
     bool set_conn_status(bool is_connected)
     {
-        bool old = is_connected_.load();
-        return is_connected_.compare_exchange_strong(old, is_connected);
+        bool old = _is_connected.load();
+        return _is_connected.compare_exchange_strong(old, is_connected);
     }
 
-    void close()
-    {
-        _disconnect_anyway();
-    }
+    void close() { _disconnect_anyway(); }
 
-private:
+  private:
     void _disconnect_anyway()
     {
         set_conn_status(false);
-        if (sock_ != nullptr)
+        if(_sock != nullptr)
         {
-            sock_->close();
-            delete sock_;
-            sock_ = nullptr;
+            _sock->close();
+            delete _sock;
+            _sock = nullptr;
         }
     }
 
-private:
-    io_t&                 io_;
-    sock_t*               sock_ = nullptr;
-    std::atomic_bool      is_connected_{false};
+  private:
+    io_t            &_io;
+    sock_t          *_sock = nullptr;
+    std::atomic_bool _is_connected{false};
 };
 
 }

@@ -5,9 +5,7 @@ static int once_num = 0;
 
 void inc()
 {
-    ONCE(
-        once_num += 1;
-    )
+    ONCE(once_num += 1;)
 }
 
 TEST(once, once)

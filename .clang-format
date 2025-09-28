@@ -19,13 +19,14 @@ AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
 AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: true
-BinPackArguments: true
+BinPackArguments: false
 BinPackParameters: false
+AllowAllArgumentsOnNextLine: false
 AlignTrailingComments: true
 AllowShortBlocksOnASingleLine: false
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortFunctionsOnASingleLine: InlineOnly
-AlwaysBreakTemplateDeclarations: false
+AlwaysBreakTemplateDeclarations: true
 ColumnLimit: 80
 MaxEmptyLinesToKeep: 2
 KeepEmptyLinesAtTheStartOfBlocks: false
@@ -33,7 +34,7 @@ ContinuationIndentWidth: 4
 PointerAlignment: Right
 ReflowComments: false
 SpaceBeforeAssignmentOperators: true
-SpaceBeforeParens: Always
+SpaceBeforeParens: Never
 SpaceInEmptyParentheses: false
 SpacesInAngles: false
 SpacesInParentheses: false
@@ -47,7 +48,7 @@ BreakBeforeBinaryOperators: NonAssignment
 SpaceAfterTemplateKeyword: true
 AlignAfterOpenBracket: Align
 AlignOperands: true
-BreakConstructorInitializers: AfterColon
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
+BreakConstructorInitializers: BeforeComma
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
 SpaceAfterCStyleCast: true
 BreakBeforeTernaryOperators: true

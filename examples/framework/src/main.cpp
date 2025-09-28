@@ -8,12 +8,12 @@
 #include <hj/testing/telemetry.hpp>
 
 #ifndef I18N_LOCALE
-    #define I18N_LOCALE "en_US"
+#define I18N_LOCALE "en_US"
 #endif
 
 // add your code here...
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     // add options parse support
     hj::options opts;
@@ -34,17 +34,21 @@ int main(int argc, char* argv[])
     hj::i18n::instance().load_translation_auto("./", PACKAGE);
 
     // add telemetry support
-    auto tracer = hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
+    auto tracer =
+        hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
 
     // add signals handle support
-    hj::sigcatch({SIGABRT, SIGTERM}, [](int sig){});
+    hj::sigcatch({SIGABRT, SIGTERM}, [](int sig) {});
 
     // add license check support
     hj::license::verifier vef{LIC_ISSUER, hj::license::sign_algo::none, {}};
-    auto err = vef.verify_file(LIC_FPATH, PACKAGE, 1);
-    if (err)
+    auto                  err = vef.verify_file(LIC_FPATH, PACKAGE, 1);
+    if(err)
     {
-        LOG_ERROR("license verify failed with err: {}, please check your license file: {}", err.message(), LIC_FPATH);
+        LOG_ERROR("license verify failed with err: {}, please check your "
+                  "license file: {}",
+                  err.message(),
+                  LIC_FPATH);
         return -1;
     }
 

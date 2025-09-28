@@ -5,8 +5,6 @@
 
 #include <hj/algo/behavior_tree.hpp>
 
-#include <hj/algo/cmp.hpp>
-
 #include <hj/algo/crc16.h>
 
 #include <hj/algo/crc32.h>

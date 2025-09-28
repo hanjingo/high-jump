@@ -18,6 +18,9 @@ using stack_alloc = boost::context::fixedsize_stack;
 #define __coroutine_cat(a, b) a##b
 #define _coroutine_cat(a, b) __coroutine_cat(a, b)
 
-#define COROUTINE(cmd) hj::coroutine<void>::pull_type __coroutine_cat(__coroutine__, __COUNTER__)([&](hj::coroutine<void>::push_type&) { cmd; });
+#define COROUTINE(cmd)                                                         \
+    hj::coroutine<void>::pull_type __coroutine_cat(__coroutine__,              \
+                                                   __COUNTER__)(               \
+        [&](hj::coroutine<void>::push_type &) { cmd; });
 
 #endif

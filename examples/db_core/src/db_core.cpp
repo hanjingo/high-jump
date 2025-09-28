@@ -10,49 +10,46 @@
 
 C_STYLE_EXPORT void db_version(sdk_context ctx)
 {
-    if (sizeof(ctx) != ctx.sz)
+    if(sizeof(ctx) != ctx.sz)
         return;
 
     // add your code here ...
-    if (ctx.user_data == NULL)
+    if(ctx.user_data == NULL)
         return;
 
-    auto ret = static_cast<db_param_version*>(ctx.user_data);
+    auto ret   = static_cast<db_param_version *>(ctx.user_data);
     ret->major = MAJOR_VERSION;
     ret->minor = MINOR_VERSION;
     ret->patch = PATCH_VERSION;
 
-    if (ctx.cb != NULL)
-        ctx.cb(static_cast<void*>(ret));
+    if(ctx.cb != NULL)
+        ctx.cb(static_cast<void *>(ret));
 }
 
 C_STYLE_EXPORT void db_init(sdk_context ctx)
 {
-    if (sizeof(ctx) != ctx.sz)
+    if(sizeof(ctx) != ctx.sz)
         return;
 
     ONCE(
-        if (ctx.user_data == NULL)
-            return;
+        if(ctx.user_data == NULL) return;
 
-        auto ret = static_cast<db_param_init*>(ctx.user_data);
-        if (ret->option == NULL || strlen(ret->option) == 0)
-        {
+        auto ret = static_cast<db_param_init *>(ctx.user_data);
+        if(ret->option == NULL || strlen(ret->option) == 0) {
             ret->result = DB_ERR_PARSE_INIT_OPTION_FAIL;
-            if (ctx.cb != NULL)
-                ctx.cb(static_cast<void*>(ret));
+            if(ctx.cb != NULL)
+                ctx.cb(static_cast<void *>(ret));
 
             return;
         }
 
         // parse config
         hj::ini cfg = hj::ini::parse(ret->option);
-        for (auto& child : cfg) 
-        {
-            auto& section = child.second;
-            auto typ = section.get<std::string>("type", "");
+        for(auto &child : cfg) {
+            auto &section = child.second;
+            auto  typ     = section.get<std::string>("type", "");
             // init data mgr
-            if (typ == "data_pool")
+            if(typ == "data_pool")
             {
                 auto data_pool_size = section.get<size_t>("data_pool_size", 1);
                 data_mgr::instance().init(data_pool_size);
@@ -60,118 +57,115 @@ C_STYLE_EXPORT void db_init(sdk_context ctx)
             // init sqlite db
             else if(typ == "sqlite")
             {
-                std::string db_id = section.get<std::string>("db_id", "");
-                std::string db_path = section.get<std::string>("db_path", "");
-                size_t conn_capa = section.get<size_t>("db_conn_capa", 0);
-                if (db_id.empty() || db_path.empty() || conn_capa == 0)
+                std::string db_id     = section.get<std::string>("db_id", "");
+                std::string db_path   = section.get<std::string>("db_path", "");
+                size_t      conn_capa = section.get<size_t>("db_conn_capa", 0);
+                if(db_id.empty() || db_path.empty() || conn_capa == 0)
                     continue;
 
-                db_mgr::instance().add(std::make_unique<sqlite>(
-                    db_id.c_str(),
-                    db_path.c_str(), 
-                    conn_capa));
+                db_mgr::instance().add(std::make_unique<sqlite>(db_id.c_str(),
+                                                                db_path.c_str(),
+                                                                conn_capa));
             }
             // init more ...
         }
 
         ret->result = OK;
-        if (ctx.cb != NULL)
-            ctx.cb(static_cast<void*>(ret));
-    )
+        if(ctx.cb != NULL) ctx.cb(static_cast<void *>(ret));)
 }
 
 C_STYLE_EXPORT void db_quit(sdk_context ctx)
 {
-    if (sizeof(ctx) != ctx.sz)
+    if(sizeof(ctx) != ctx.sz)
         return;
 
-    ONCE(
-        if (ctx.user_data == NULL)
-            return;
+    ONCE(if(ctx.user_data == NULL) return;
 
-        auto ret = static_cast<db_param_quit*>(ctx.user_data);
-        ret->result = OK;
+         auto ret    = static_cast<db_param_quit *>(ctx.user_data);
+         ret->result = OK;
 
-        if (ctx.cb != NULL)
-            ctx.cb(static_cast<void*>(ret));
-    )
+         if(ctx.cb != NULL) ctx.cb(static_cast<void *>(ret));)
 }
 
 C_STYLE_EXPORT void db_require(sdk_context ctx)
 {
-    if (sizeof(ctx) != ctx.sz)
+    if(sizeof(ctx) != ctx.sz)
         return;
 
-    if (ctx.user_data == NULL)
+    if(ctx.user_data == NULL)
         return;
-     
-    auto ret = static_cast<db_param_require*>(ctx.user_data);
+
+    auto ret   = static_cast<db_param_require *>(ctx.user_data);
     ret->value = data_mgr::instance().require(ret->type);
 
-    if (ctx.cb != NULL)
-        ctx.cb(static_cast<void*>(ret));
+    if(ctx.cb != NULL)
+        ctx.cb(static_cast<void *>(ret));
 }
 
 C_STYLE_EXPORT void db_release(sdk_context ctx)
 {
-    if (sizeof(ctx) != ctx.sz)
+    if(sizeof(ctx) != ctx.sz)
         return;
 
-    if (ctx.user_data == NULL)
+    if(ctx.user_data == NULL)
         return;
-     
-    auto ret = static_cast<db_param_release*>(ctx.user_data);
+
+    auto ret = static_cast<db_param_release *>(ctx.user_data);
     data_mgr::instance().release(ret->type, ret->value);
-    if (ctx.cb != NULL)
-        ctx.cb(static_cast<void*>(ret));
+    if(ctx.cb != NULL)
+        ctx.cb(static_cast<void *>(ret));
 }
 
 C_STYLE_EXPORT void db_exec(sdk_context ctx)
 {
-    if (sizeof(ctx) != ctx.sz)
+    if(sizeof(ctx) != ctx.sz)
         return;
 
-    if (ctx.user_data == NULL)
+    if(ctx.user_data == NULL)
         return;
 
-    auto ret = static_cast<db_param_exec*>(ctx.user_data);
+    auto ret    = static_cast<db_param_exec *>(ctx.user_data);
     ret->result = db_mgr::instance().exec(ret->db_id, ret->sql);
-    if (ctx.cb != NULL)
-        ctx.cb(static_cast<void*>(ret));
+    if(ctx.cb != NULL)
+        ctx.cb(static_cast<void *>(ret));
 }
 
 C_STYLE_EXPORT void db_query(sdk_context ctx)
 {
-    if (sizeof(ctx) != ctx.sz)
+    if(sizeof(ctx) != ctx.sz)
         return;
 
-    if (ctx.user_data == NULL)
+    if(ctx.user_data == NULL)
         return;
 
-    auto param = static_cast<db_param_query*>(ctx.user_data);
-    std::vector<std::vector<std::string>> outs;
+    auto param = static_cast<db_param_query *>(ctx.user_data);
+    std::vector<std::vector<std::string> > outs;
     param->result = db_mgr::instance().query(outs, param->db_id, param->sql);
-    if (param->result == OK)
+    if(param->result == OK)
     {
-        for (int i = 0; i < outs.size(); i++)
+        for(int i = 0; i < outs.size(); i++)
         {
-            for (int j = 0; j < outs[i].size(); j++) 
+            for(int j = 0; j < outs[i].size(); j++)
             {
-                if (param->out == nullptr || param->out_len == nullptr)
+                if(param->out == nullptr || param->out_len == nullptr)
                     continue;
 
-                if (param->out[i] == nullptr || param->out_len[i] == nullptr)
+                if(param->out[i] == nullptr || param->out_len[i] == nullptr)
                     continue;
 
-                if (param->out[i][j] == nullptr || param->out_len[i][j] == nullptr)
+                if(param->out[i][j] == nullptr
+                   || param->out_len[i][j] == nullptr)
                     continue;
 
-                strncpy_s(param->out[i][j], DB_MAX_OUTPUT_SIZE, outs[i][j].c_str(), outs[i][j].size());
+                strncpy_s(param->out[i][j],
+                          DB_MAX_OUTPUT_SIZE,
+                          outs[i][j].c_str(),
+                          outs[i][j].size());
                 *(param->out_len[i][j]) = outs[i][j].size();
             }
         }
     }
 
-    if (ctx.cb != NULL)
-        ctx.cb(static_cast<void*>(param));
+    if(ctx.cb != NULL)
+        ctx.cb(static_cast<void *>(param));
 }

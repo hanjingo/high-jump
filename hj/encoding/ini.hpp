@@ -5,32 +5,34 @@
 
 // c++ std::unary_function compatibility
 #ifndef HJ_UNARY_FUNCTION_DEFINED
-    #if defined(_MSC_VER)
-        #if (_MSC_VER >= 1910)
-            #define HJ_UNARY_FUNCTION_DEFINED 0
-        #else
-            #define HJ_UNARY_FUNCTION_DEFINED 1
-        #endif
-    #elif (__cplusplus >= 201703L)
-        #if defined(__GLIBCXX__)
-            #define HJ_UNARY_FUNCTION_DEFINED 1
-        #elif defined(_HJ_VERSION)
-            #define HJ_UNARY_FUNCTION_DEFINED 0
-        #else
-            #define HJ_UNARY_FUNCTION_DEFINED 0
-        #endif
-    #else
-        #define HJ_UNARY_FUNCTION_DEFINED 1
-    #endif
+#if defined(_MSC_VER)
+#if (_MSC_VER >= 1910)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#endif
+#elif (__cplusplus >= 201703L)
+#if defined(__GLIBCXX__)
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#elif defined(_HJ_VERSION)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#endif
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#endif
 #endif
 
 #if !HJ_UNARY_FUNCTION_DEFINED
-namespace std {
-    template <class Arg, class Result>
-    struct unary_function {
-        typedef Arg argument_type;
-        typedef Result result_type;
-    };
+namespace std
+{
+template <class Arg, class Result>
+struct unary_function
+{
+    typedef Arg    argument_type;
+    typedef Result result_type;
+};
 }
 #undef HJ_UNARY_FUNCTION_DEFINED
 #define HJ_UNARY_FUNCTION_DEFINED 1
@@ -46,35 +48,41 @@ namespace hj
 
 class ini : public boost::property_tree::ptree
 {
-public:
+  public:
     ini() {}
-    ini(const ini& rhs) : boost::property_tree::ptree(rhs) {}
-    ini(const boost::property_tree::ptree& tree) : boost::property_tree::ptree(tree) {}
+    ini(const ini &rhs)
+        : boost::property_tree::ptree(rhs)
+    {
+    }
+    ini(const boost::property_tree::ptree &tree)
+        : boost::property_tree::ptree(tree)
+    {
+    }
     ~ini() {}
 
-    ini& operator=(const ini& rhs) 
+    ini &operator=(const ini &rhs)
     {
         boost::property_tree::ptree::operator=(rhs);
         return *this;
     }
 
-    ini& operator=(const boost::property_tree::ptree& rhs) 
+    ini &operator=(const boost::property_tree::ptree &rhs)
     {
         boost::property_tree::ptree::operator=(rhs);
         return *this;
     }
 
-    static ini parse(const char* text)
+    static ini parse(const char *text)
     {
-        std::stringstream ss(text);
+        std::stringstream           ss(text);
         boost::property_tree::ptree tree;
         boost::property_tree::ini_parser::read_ini(ss, tree);
         return ini(tree);
     }
 
-    bool read_file(const char* filepath)
+    bool read_file(const char *filepath)
     {
-        if (!boost::filesystem::exists(filepath))
+        if(!boost::filesystem::exists(filepath))
             return false;
 
         boost::property_tree::ptree tree;
@@ -83,7 +91,7 @@ public:
         return true;
     }
 
-    void write_file(const char* filepath)
+    void write_file(const char *filepath)
     {
         boost::property_tree::ini_parser::write_ini(filepath, *this);
     }

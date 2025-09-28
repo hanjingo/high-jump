@@ -112,16 +112,16 @@ TEST(safe_vector, range)
 
     ASSERT_EQ(vec.size(), 10);
 
-    int sum = 0;
-    auto fn = [&](int& value) -> bool {
+    int  sum = 0;
+    auto fn  = [&](int &value) -> bool {
         sum += value;
         return true;
     };
     vec.range(fn);
     ASSERT_EQ(sum, 55);
 
-    sum = 0;
-    auto const_fn = [&](const int& value) -> bool {
+    sum           = 0;
+    auto const_fn = [&](const int &value) -> bool {
         sum += value;
         return true;
     };
@@ -144,9 +144,7 @@ TEST(safe_vector, sort)
 
     ASSERT_EQ(vec.size(), 10);
 
-    auto fn = [](int a, int b) -> bool {
-        return a < b;
-    };
+    auto fn = [](int a, int b) -> bool { return a < b; };
     vec.sort(fn);
 
     ASSERT_EQ(vec.at(0), 1);
@@ -280,7 +278,6 @@ TEST(safe_vector, operator_out_of_range)
     vec.emplace(10);
 
     ASSERT_EQ(vec.size(), 10);
-
 }
 TEST(safe_vector, operator_negative_index)
 {

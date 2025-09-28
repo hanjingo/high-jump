@@ -9,39 +9,40 @@
 
 // c++ std::unary_function compatibility
 #ifndef HJ_UNARY_FUNCTION_DEFINED
-    #if defined(_MSC_VER)
-        #if (_MSC_VER >= 1910)
-            #define HJ_UNARY_FUNCTION_DEFINED 0
-        #else
-            #define HJ_UNARY_FUNCTION_DEFINED 1
-        #endif
-    #elif (__cplusplus >= 201703L)
-        #if defined(__GLIBCXX__)
-            #define HJ_UNARY_FUNCTION_DEFINED 1
-        #elif defined(_HJ_VERSION)
-            #define HJ_UNARY_FUNCTION_DEFINED 0
-        #else
-            #define HJ_UNARY_FUNCTION_DEFINED 0
-        #endif
-    #else
-        #define HJ_UNARY_FUNCTION_DEFINED 1
-    #endif
+#if defined(_MSC_VER)
+#if (_MSC_VER >= 1910)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#endif
+#elif (__cplusplus >= 201703L)
+#if defined(__GLIBCXX__)
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#elif defined(_HJ_VERSION)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#endif
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#endif
 #endif
 
 #if !HJ_UNARY_FUNCTION_DEFINED
-namespace std {
-    template <class Arg, class Result>
-    struct unary_function {
-        typedef Arg argument_type;
-        typedef Result result_type;
-    };
+namespace std
+{
+template <class Arg, class Result>
+struct unary_function
+{
+    typedef Arg    argument_type;
+    typedef Result result_type;
+};
 }
 #undef HJ_UNARY_FUNCTION_DEFINED
 #define HJ_UNARY_FUNCTION_DEFINED 1
 #endif
 
 #endif
-
 
 
 // ------------------------------------ for c/c++ --------------------------------------
@@ -64,28 +65,28 @@ extern "C" {
 
 // inline
 #if defined(_MSC_VER)
-    #define FORCE_INLINE __forceinline
-    #define NO_INLINE __declspec(noinline)
+#define FORCE_INLINE __forceinline
+#define NO_INLINE __declspec(noinline)
 #elif defined(__GNUC__) || defined(__clang__)
-    #define FORCE_INLINE __attribute__((always_inline)) inline
-    #define NO_INLINE __attribute__((noinline))
+#define FORCE_INLINE __attribute__((always_inline)) inline
+#define NO_INLINE __attribute__((noinline))
 #else
-    #define FORCE_INLINE inline
-    #define NO_INLINE
+#define FORCE_INLINE inline
+#define NO_INLINE
 #endif
 
 
 // branch prediction hints (gcc and clang only)
 #if defined(__GNUC__) || defined(__clang__)
-    #define LIKELY(x)   __builtin_expect(!!(x), 1)
-    #define UNLIKELY(x) __builtin_expect(!!(x), 0)
-    #define HOT         __attribute__((hot))
-    #define COLD        __attribute__((cold))
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define HOT __attribute__((hot))
+#define COLD __attribute__((cold))
 #else
-    #define LIKELY(x)   (x)
-    #define UNLIKELY(x) (x)
-    #define HOT
-    #define COLD
+#define LIKELY(x) (x)
+#define UNLIKELY(x) (x)
+#define HOT
+#define COLD
 #endif
 
 #ifdef __cplusplus

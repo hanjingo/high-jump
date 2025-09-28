@@ -3,16 +3,17 @@
 #include <locale>
 #include <hj/hardware/usb.h>
 
-std::string ws2s(const wchar_t* wstr) 
+std::string ws2s(const wchar_t *wstr)
 {
-    if (!wstr) return "";
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+    if(!wstr)
+        return "";
+    std::wstring_convert<std::codecvt_utf8<wchar_t> > conv;
     return conv.to_bytes(wstr);
 }
 
-bool dev_range(usb_info_t* info)
+bool dev_range(usb_info_t *info)
 {
-    if (!info) 
+    if(!info)
         return false;
 
     // std::cout << "{"

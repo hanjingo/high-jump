@@ -22,98 +22,102 @@ namespace hj
 class timer;
 
 #if BOOST_VERSION < 108700
-static boost::asio::io_service io_global;
+static boost::asio::io_service       io_global;
 static boost::asio::io_service::work worker_global{io_global};
 #else
 static boost::asio::io_context io_global;
-static boost::asio::executor_work_guard<boost::asio::io_context::executor_type> worker_global{io_global.get_executor()};
+static boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
+    worker_global{io_global.get_executor()};
 #endif
 
-static std::once_flag io_run_once;
-static std::unordered_map<int64_t, std::shared_ptr<hj::timer>> tm_map_global{};
-static std::mutex tm_map_mu;
-static std::atomic<int64_t> tm_id_tag;
+static std::once_flag                                           io_run_once;
+static std::unordered_map<int64_t, std::shared_ptr<hj::timer> > tm_map_global{};
+static std::mutex                                               tm_map_mu;
+static std::atomic<int64_t>                                     tm_id_tag;
 
 class timer
 {
-public:
+  public:
     template <typename F>
-    timer(unsigned long long us, F&& f, int64_t id = -1)
-        : id_{id}
-        , tm_{io_global, boost::posix_time::microseconds(us)}
-        , fn_{}
+    timer(unsigned long long us, F &&f, int64_t id = -1)
+        : _id{id}
+        , _tm{io_global, boost::posix_time::microseconds(us)}
+        , _fn{}
     {
         auto fn = std::move(f);
-        fn_ = std::bind([ = ](const boost::system::error_code & err) {
-            if (id != -1) {
-                tm_map_mu.lock();
-                tm_map_global.erase(id);
-                tm_map_mu.unlock();
-            }
+        _fn     = std::bind(
+            [=](const boost::system::error_code &err) {
+                if(id != -1)
+                {
+                    tm_map_mu.lock();
+                    tm_map_global.erase(id);
+                    tm_map_mu.unlock();
+                }
 
-            if (err.failed()) {
-                return;
-            }
-            fn();
-        }, std::placeholders::_1);
+                if(err.failed())
+                {
+                    return;
+                }
+                fn();
+            },
+            std::placeholders::_1);
 
         hj::timer::run();
 
-        tm_.async_wait(fn_);
+        _tm.async_wait(_fn);
     }
 
-    timer(timer&& rhs)
-        : id_{std::move(rhs.id_)}
-        , tm_{std::move(rhs.tm_)}
-        , fn_{std::move(rhs.fn_)}
-    {}
+    timer(timer &&rhs)
+        : _id{std::move(rhs._id)}
+        , _tm{std::move(rhs._tm)}
+        , _fn{std::move(rhs._fn)}
+    {
+    }
 
     ~timer() {}
 
-    inline int64_t id()
-    {
-        return id_;
-    }
+    inline int64_t id() { return _id; }
 
     inline void cancel()
     {
-        tm_.cancel();
+        _tm.cancel();
 
-        if (id_ != -1) {
+        if(_id != -1)
+        {
             tm_map_mu.lock();
-            tm_map_global.erase(id_);
+            tm_map_global.erase(_id);
             tm_map_mu.unlock();
         }
     }
 
     inline void reset(unsigned long long us)
     {
-        tm_.expires_at(boost::posix_time::microsec_clock::universal_time()
+        _tm.expires_at(boost::posix_time::microsec_clock::universal_time()
                        + boost::posix_time::microseconds(us));
-        tm_.async_wait(fn_);
+        _tm.async_wait(_fn);
     }
 
-    template<typename F>
-    inline void reset(unsigned long long us, F&& f)
+    template <typename F>
+    inline void reset(unsigned long long us, F &&f)
     {
         auto fn = std::move(f);
-        fn_ = std::bind([ = ](const boost::system::error_code & err) {
-            if (err.failed()) {
-                return;
-            }
-            fn();
-        }, std::placeholders::_1);
+        _fn     = std::bind(
+            [=](const boost::system::error_code &err) {
+                if(err.failed())
+                {
+                    return;
+                }
+                fn();
+            },
+            std::placeholders::_1);
 
         reset(us);
     }
 
-    inline void wait()
-    {
-        tm_.wait();
-    }
+    inline void wait() { _tm.wait(); }
 
     template <typename F>
-    static std::shared_ptr<timer> create_global(unsigned long long us, F&& f)
+    static std::shared_ptr<timer> create_global(unsigned long long us, F &&f)
     {
         auto tm = std::make_shared<hj::timer>(us, std::move(f), tm_id_tag++);
 
@@ -126,11 +130,10 @@ public:
 
     static void run(bool async = true)
     {
-        std::call_once(io_run_once, [ = ]() {
-            if (async) {
-                std::thread([]() {
-                    io_global.run();
-                }).detach();
+        std::call_once(io_run_once, [=]() {
+            if(async)
+            {
+                std::thread([]() { io_global.run(); }).detach();
                 return;
             }
 
@@ -138,10 +141,10 @@ public:
         });
     }
 
-private:
-    int64_t                                                   id_{-1};
-    boost::asio::deadline_timer                               tm_;
-    std::function<void(const boost::system::error_code& err)> fn_;
+  private:
+    int64_t                                                   _id{-1};
+    boost::asio::deadline_timer                               _tm;
+    std::function<void(const boost::system::error_code &err)> _fn;
 };
 }
 

@@ -8,14 +8,16 @@ enum class err1
     unknown,
 };
 
-enum err2 {
-    err2_ok = 0,
-    err2_io_fail = 1,
+enum err2
+{
+    err2_ok       = 0,
+    err2_io_fail  = 1,
     err2_net_fail = 1001,
-    err2_db_fail = 2001,
+    err2_db_fail  = 2001,
 };
 
-enum err3 {
+enum err3
+{
     err3_e1 = 10,
     err3_e2 = 20
 };
@@ -74,8 +76,10 @@ TEST(error, reg_and_make_nested_err)
     hj::register_err("net", err2_net_fail, "network error");
     hj::register_err("db", err2_db_fail, "db error");
 
-    auto nested1 = hj::make_err(hj::make_err(err2_net_fail, "net"), hj::make_err(err2_io_fail, "io"));
-    auto nested2 = hj::make_err(hj::make_err(err2_db_fail, "db"), hj::make_err(err2_io_fail, "io"));
+    auto nested1 = hj::make_err(hj::make_err(err2_net_fail, "net"),
+                                hj::make_err(err2_io_fail, "io"));
+    auto nested2 = hj::make_err(hj::make_err(err2_db_fail, "db"),
+                                hj::make_err(err2_io_fail, "io"));
 
     ASSERT_EQ(nested1.ec.value(), 1001);
     ASSERT_EQ(nested1.ec.category().name(), std::string("net"));

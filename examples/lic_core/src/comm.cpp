@@ -2,7 +2,7 @@
 
 int hj_err_to_int(hj::license::err_t e)
 {
-    switch (static_cast<hj::license::err>(e.value()))
+    switch(static_cast<hj::license::err>(e.value()))
     {
         case 0:
             return OK;
@@ -25,11 +25,11 @@ int hj_err_to_int(hj::license::err_t e)
     }
 }
 
-hj::license::sign_algo str_to_sign_algo(const std::string& algo)
+hj::license::sign_algo str_to_sign_algo(const std::string &algo)
 {
-    if (algo == "none")
+    if(algo == "none")
         return hj::license::sign_algo::none;
-    else if (algo == "rsa256")
+    else if(algo == "rsa256")
         return hj::license::sign_algo::rsa256;
     else
         return hj::license::sign_algo::none;

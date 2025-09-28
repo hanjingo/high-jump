@@ -3,8 +3,6 @@
 
 #include <hj/net/http.hpp>
 
-#include <hj/net/stun.hpp>
-
 #include <hj/net/tcp.hpp>
 
 #include <hj/net/udp.hpp>

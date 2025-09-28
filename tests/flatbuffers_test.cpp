@@ -7,11 +7,14 @@
 TEST(flatbuffers, flatbuffers)
 {
     hj::flatbuffer_builder builder;
-    auto monster = MyGame::CreateMonster(
-        builder, 1, builder.CreateString("Dragon"), 100, 35.5f);
+    auto                   monster = MyGame::CreateMonster(builder,
+                                         1,
+                                         builder.CreateString("Dragon"),
+                                         100,
+                                         35.5f);
     builder.Finish(monster);
-    uint8_t *buf = builder.GetBufferPointer();
-    size_t size = builder.GetSize();
+    uint8_t *buf  = builder.GetBufferPointer();
+    size_t   size = builder.GetSize();
     std::cout << "size=" << size << std::endl;
 
     auto dmonster = MyGame::GetMonster(buf);

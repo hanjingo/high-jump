@@ -16,21 +16,17 @@ TEST(thread_pool, size)
 TEST(thread_pool, enqueue)
 {
     hj::thread_pool tp{1};
-    auto ret = tp.enqueue([]()->int{
-        return 5;
-    });
+    auto            ret = tp.enqueue([]() -> int { return 5; });
     ASSERT_EQ(ret.get(), 5);
 }
 
 TEST(thread_pool, clear)
 {
     hj::thread_pool tp{1};
-    int n = 0;
-    for (int i = 0; i < 100; ++i)
+    int             n = 0;
+    for(int i = 0; i < 100; ++i)
     {
-        tp.enqueue([&]() {
-            n++;
-        });
+        tp.enqueue([&]() { n++; });
     }
     // Elegant Exit
     tp.clear();

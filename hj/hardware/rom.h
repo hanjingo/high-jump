@@ -13,92 +13,95 @@ extern "C" {
 #endif
 
 // ROM structure definition
-typedef struct {
-    void* data;      // Pointer to ROM data
-    size_t size;     // Size of ROM in bytes
-    bool loaded;     // Whether ROM is loaded
+typedef struct
+{
+    void  *data;   // Pointer to ROM data
+    size_t size;   // Size of ROM in bytes
+    bool   loaded; // Whether ROM is loaded
 } rom_t;
 
 // Initialize ROM structure
-static inline void rom_init(rom_t* rom) {
-    if (rom) {
-        rom->data = NULL;
-        rom->size = 0;
+inline void rom_init(rom_t *rom)
+{
+    if(rom)
+    {
+        rom->data   = NULL;
+        rom->size   = 0;
         rom->loaded = false;
     }
 }
 
 // ----------------------------- ROM API define ------------------------------------
-static bool rom_load(rom_t* rom, const char* filename) 
+inline bool rom_load(rom_t *rom, const char *filename)
 {
-    if (!rom || !filename) 
+    if(!rom || !filename)
         return false;
 
-    if (rom->data) 
+    if(rom->data)
     {
         free(rom->data);
-        rom->data = NULL;
-        rom->size = 0;
+        rom->data   = NULL;
+        rom->size   = 0;
         rom->loaded = false;
     }
 
-    FILE* fp = fopen(filename, "rb");
-    if (!fp) 
+    FILE *fp = fopen(filename, "rb");
+    if(!fp)
         return false;
-        
+
     fseek(fp, 0, SEEK_END);
     size_t sz = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    if (sz == 0) 
+    if(sz == 0)
     {
         fclose(fp);
         return false;
     }
 
-    void* buf = malloc(sz);
-    if (!buf) 
+    void *buf = malloc(sz);
+    if(!buf)
     {
         fclose(fp);
         return false;
     }
 
-    if (fread(buf, 1, sz, fp) != sz) 
+    if(fread(buf, 1, sz, fp) != sz)
     {
         free(buf);
         fclose(fp);
         return false;
     }
-    
+
     fclose(fp);
-    rom->data = buf;
-    rom->size = sz;
+    rom->data   = buf;
+    rom->size   = sz;
     rom->loaded = true;
     return true;
 }
 
-static size_t rom_read(const rom_t* rom, size_t offset, void* buf, size_t len) 
+inline size_t rom_read(const rom_t *rom, size_t offset, void *buf, size_t len)
 {
-    if (!rom || !rom->loaded || !buf) 
+    if(!rom || !rom->loaded || !buf)
         return 0;
 
-    if (offset >= rom->size) 
+    if(offset >= rom->size)
         return 0;
 
     size_t to_read = len;
-    if (offset + len > rom->size)
+    if(offset + len > rom->size)
         to_read = rom->size - offset;
-    memcpy(buf, (const uint8_t*)rom->data + offset, to_read);
+    memcpy(buf, (const uint8_t *) rom->data + offset, to_read);
     return to_read;
 }
 
-static void rom_free(rom_t* rom) 
+inline void rom_free(rom_t *rom)
 {
-    if (!rom || !rom->data) 
+    if(!rom || !rom->data)
         return;
 
     free(rom->data);
-    rom->data = NULL;
-    rom->size = 0;
+    rom->data   = NULL;
+    rom->size   = 0;
     rom->loaded = false;
 }
 

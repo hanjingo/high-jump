@@ -13,12 +13,19 @@ TEST(logger, create_stdout_sink)
 
 TEST(logger, create_rotate_file_sink)
 {
-    ASSERT_EQ(hj::logger::create_rotate_file_sink("./007.log", 512 * 1024 * 1024, 3, true) != nullptr, true);
+    ASSERT_EQ(hj::logger::create_rotate_file_sink("./007.log",
+                                                  512 * 1024 * 1024,
+                                                  3,
+                                                  true)
+                  != nullptr,
+              true);
 }
 
 TEST(logger, create_daily_file_sink)
 {
-    ASSERT_EQ(hj::logger::create_daily_file_sink("./007.log", 1, 1, true, 2) != nullptr, true);
+    ASSERT_EQ(hj::logger::create_daily_file_sink("./007.log", 1, 1, true, 2)
+                  != nullptr,
+              true);
 }
 
 TEST(logger, add_sink)
@@ -47,7 +54,6 @@ TEST(logger, get_level)
 
 TEST(logger, set_pattern)
 {
-
 }
 
 TEST(logger, flush)
@@ -72,25 +78,20 @@ TEST(logger, trace)
 
 TEST(logger, debug)
 {
-
 }
 
 TEST(logger, info)
 {
-
 }
 
 TEST(logger, warn)
 {
-
 }
 
 TEST(logger, error)
 {
-
 }
 
 TEST(logger, critical)
 {
-
 }

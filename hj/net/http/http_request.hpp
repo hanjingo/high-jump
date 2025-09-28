@@ -10,13 +10,13 @@
 namespace hj
 {
 
-using http_request = httplib::Request;
+using http_request        = httplib::Request;
 using http_content_reader = httplib::ContentReader;
 
 using http_params = httplib::Params;
 
 using http_multipart_form_data_items = httplib::MultipartFormDataItems;
-using http_multipart_form_data = httplib::MultipartFormData;
+using http_multipart_form_data       = httplib::MultipartFormData;
 
 }
 

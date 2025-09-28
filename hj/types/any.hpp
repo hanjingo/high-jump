@@ -10,25 +10,25 @@ namespace hj
 using any = std::any;
 
 template <class T>
-constexpr T* any_cast(any* operand)
+constexpr T *any_cast(any *operand)
 {
     return std::any_cast<T>(operand);
 }
 
 template <class T>
-constexpr const T* any_cast(const any* operand)
+constexpr const T *any_cast(const any *operand)
 {
     return std::any_cast<T>(operand);
 }
 
 template <class T>
-constexpr T any_cast(any& operand)
+constexpr T any_cast(any &operand)
 {
     return std::any_cast<T>(operand);
 }
 
 template <class T>
-constexpr T any_cast(const any& operand)
+constexpr T any_cast(const any &operand)
 {
     return std::any_cast<T>(operand);
 }
@@ -44,25 +44,25 @@ namespace hj
 using any = boost::any;
 
 template <class T>
-constexpr T* any_cast(any* operand)
+constexpr T *any_cast(any *operand)
 {
     return boost::any_cast<T>(operand);
 }
 
 template <class T>
-constexpr const T* any_cast(const any* operand)
+constexpr const T *any_cast(const any *operand)
 {
     return boost::any_cast<T>(operand);
 }
 
 template <class T>
-constexpr T any_cast(any& operand)
+constexpr T any_cast(any &operand)
 {
     return boost::any_cast<T>(operand);
 }
 
 template <class T>
-constexpr T any_cast(const any& operand)
+constexpr T any_cast(const any &operand)
 {
     return boost::any_cast<T>(operand);
 }

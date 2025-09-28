@@ -6,12 +6,11 @@
 
 class db
 {
-public:
-    virtual const std::string id() = 0;
-    virtual int exec(const char* sql) = 0;
-    virtual int query(
-        std::vector<std::vector<std::string>>& outs, 
-        const char* sql) = 0;
+  public:
+    virtual const std::string id()                  = 0;
+    virtual int               exec(const char *sql) = 0;
+    virtual int query(std::vector<std::vector<std::string> > &outs,
+                      const char                             *sql)              = 0;
 };
 
 #endif

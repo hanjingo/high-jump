@@ -14,40 +14,28 @@ static const int endian_tag = 1;
 
 inline bool is_big_endian()
 {
-    return *(char*)(&endian_tag) == 1;
+    return *(char *) (&endian_tag) == 1;
 }
 
 class big_endian
 {
-public:
+  public:
     big_endian() {}
     ~big_endian() {}
 
-    template<typename T>
+    template <typename T>
     T operator<<(const T n)
     {
         return hj::big_endian::covert(n);
     }
 
-    static uint16_t covert(const uint16_t n)
-    {
-        return htons(n);
-    }
+    static uint16_t covert(const uint16_t n) { return htons(n); }
 
-    static int16_t covert(const int16_t n)
-    {
-        return (int16_t)(htons(n));
-    }
+    static int16_t covert(const int16_t n) { return (int16_t) (htons(n)); }
 
-    static uint32_t covert(const uint32_t n)
-    {
-        return htonl(n);
-    }
+    static uint32_t covert(const uint32_t n) { return htonl(n); }
 
-    static int32_t covert(const int32_t n)
-    {
-        return (int32_t)(htonl(n));
-    }
+    static int32_t covert(const int32_t n) { return (int32_t) (htonl(n)); }
 
     static uint64_t covert(const uint64_t n)
     {
@@ -63,35 +51,23 @@ static hj::big_endian BE;
 
 class little_endian
 {
-public:
+  public:
     little_endian() {}
     ~little_endian() {}
 
-    template<typename T>
+    template <typename T>
     T operator<<(const T n)
     {
         return hj::little_endian::covert(n);
     }
 
-    static uint16_t covert(const uint16_t n)
-    {
-        return ntohs(n);
-    }
+    static uint16_t covert(const uint16_t n) { return ntohs(n); }
 
-    static int16_t covert(const int16_t n)
-    {
-        return (int16_t)(ntohs(n));
-    }
+    static int16_t covert(const int16_t n) { return (int16_t) (ntohs(n)); }
 
-    static uint32_t covert(const uint32_t n)
-    {
-        return ntohl(n);
-    }
+    static uint32_t covert(const uint32_t n) { return ntohl(n); }
 
-    static int32_t covert(const int32_t n)
-    {
-        return (int32_t)(ntohl(n));
-    }
+    static int32_t covert(const int32_t n) { return (int32_t) (ntohl(n)); }
 
     static uint64_t covert(const uint64_t n)
     {

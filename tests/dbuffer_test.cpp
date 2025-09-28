@@ -9,75 +9,81 @@
 TEST(dbuffer, read)
 {
     hj::dbuffer<std::vector<int> > dbuf{};
-    std::vector<int> buf1{1, 2, 3};
-    std::vector<int> buf2{0, 0, 0};
-    ASSERT_EQ(dbuf.write(buf1), true);
-    ASSERT_EQ(dbuf.read(buf2), true);
-    for (std::size_t i = 0; i < buf1.size(); ++i)
+    std::vector<int>               buf1{1, 2, 3};
+    std::vector<int>               buf2{0, 0, 0};
+    ASSERT_TRUE(dbuf.write(buf1));
+    ASSERT_TRUE(dbuf.read(buf2));
+    for(std::size_t i = 0; i < buf1.size(); ++i)
     {
         ASSERT_EQ(buf1[i], buf2[i]);
-        ASSERT_EQ(buf2[i], i+1);
+        ASSERT_EQ(buf2[i], i + 1);
     }
 
     std::vector<int> buf3{4, 5, 6};
-    ASSERT_EQ(dbuf.write(buf3), true);
-    ASSERT_EQ(dbuf.read(buf2), true);
-    for (std::size_t i = 0; i < buf3.size(); ++i)
+    ASSERT_TRUE(dbuf.write(buf3));
+    ASSERT_TRUE(dbuf.read(buf2));
+    for(std::size_t i = 0; i < buf3.size(); ++i)
         ASSERT_EQ(buf3[i], buf2[i]);
 
-    int times = 100000;
-    auto dbuffer_total_start = std::chrono::system_clock::now();
-    std::thread t1([&](){
+    int         times               = 100000;
+    auto        dbuffer_total_start = std::chrono::system_clock::now();
+    std::thread t1([&]() {
         auto start = std::chrono::system_clock::now();
-        for (int n = 0; n < times; ++n)
+        for(int n = 0; n < times; ++n)
         {
             dbuf.write(buf1);
         }
         auto end = std::chrono::system_clock::now();
-        std::cout << "dbuffer write time passed:" << (end - start).count() << std::endl;
+        std::cout << "dbuffer write time passed:" << (end - start).count()
+                  << std::endl;
     });
-    std::thread t2([&](){
+    std::thread t2([&]() {
         auto start = std::chrono::system_clock::now();
-        for (int n = 0; n < times; ++n)
+        for(int n = 0; n < times; ++n)
         {
             dbuf.read(buf2);
         }
         auto end = std::chrono::system_clock::now();
-        std::cout << "dbuffer read time passed:" << (end - start).count() << std::endl;
+        std::cout << "dbuffer read time passed:" << (end - start).count()
+                  << std::endl;
     });
     t1.join();
     t2.join();
     auto dbuffer_total_end = std::chrono::system_clock::now();
-    std::cout << "dbuffer total read/write time passed:" << (dbuffer_total_end - dbuffer_total_start).count() << std::endl;
+    std::cout << "dbuffer total read/write time passed:"
+              << (dbuffer_total_end - dbuffer_total_start).count() << std::endl;
 
-    std::mutex mu;
-    auto rwlock_total_start = std::chrono::system_clock::now();
-    std::thread t3([&](){
+    std::mutex  mu;
+    auto        rwlock_total_start = std::chrono::system_clock::now();
+    std::thread t3([&]() {
         auto start = std::chrono::system_clock::now();
-        for (int n = 0; n < times; ++n)
+        for(int n = 0; n < times; ++n)
         {
             mu.lock();
             buf3 = buf1; // write
             mu.unlock();
         }
         auto end = std::chrono::system_clock::now();
-        std::cout << "rwlock write time passed:" << (end - start).count() << std::endl;
+        std::cout << "rwlock write time passed:" << (end - start).count()
+                  << std::endl;
     });
-    std::thread t4([&](){
+    std::thread t4([&]() {
         auto start = std::chrono::system_clock::now();
-        for (int n = 0; n < times; ++n)
+        for(int n = 0; n < times; ++n)
         {
             mu.lock();
             buf2 = buf3; // read
             mu.unlock();
         }
         auto end = std::chrono::system_clock::now();
-        std::cout << "rwlock read time passed:" << (end - start).count() << std::endl;
+        std::cout << "rwlock read time passed:" << (end - start).count()
+                  << std::endl;
     });
     t3.join();
     t4.join();
     auto rwlock_total_end = std::chrono::system_clock::now();
-    std::cout << "rwlock total read/write time passed:" << (rwlock_total_end - rwlock_total_start).count() << std::endl;
+    std::cout << "rwlock total read/write time passed:"
+              << (rwlock_total_end - rwlock_total_start).count() << std::endl;
 }
 
 TEST(dbuffer, write)

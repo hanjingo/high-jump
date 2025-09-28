@@ -47,8 +47,8 @@ namespace hj
 
 class aes
 {
-public:
-    enum class mode 
+  public:
+    enum class mode
     {
         ecb,
         cbc,
@@ -65,8 +65,8 @@ public:
         wrap_pad,
         cbc_hmac_sha1,
         cbc_hmac_sha256,
-        
-# ifndef OPENSSL_NO_OCB
+
+#ifndef OPENSSL_NO_OCB
         ocb,
 #endif
     };
@@ -82,66 +82,80 @@ public:
         no_padding
     };
 
-public:
-    static bool encrypt(unsigned char* dst,
-                        std::size_t& dst_len,
-                        const unsigned char* src, 
-                        const std::size_t src_len, 
-                        const unsigned char* key, 
-                        const std::size_t key_len,
-                        const mode mod = mode::ecb,
-                        const padding pad_style = padding::pkcs7,
-                        const unsigned char* iv = nullptr,
-                        const std::size_t iv_len = 16)
+  public:
+    static bool encrypt(unsigned char       *dst,
+                        std::size_t         &dst_len,
+                        const unsigned char *src,
+                        const std::size_t    src_len,
+                        const unsigned char *key,
+                        const std::size_t    key_len,
+                        const mode           mod       = mode::ecb,
+                        const padding        pad_style = padding::pkcs7,
+                        const unsigned char *iv        = nullptr,
+                        const std::size_t    iv_len    = 16)
     {
-        if (!is_plain_valid(mod, key_len, pad_style, src_len) 
-            || !is_key_valid(mod, key, key_len) 
-            || !is_iv_valid(mod, iv, iv_len))
+        if(!is_plain_valid(mod, key_len, pad_style, src_len)
+           || !is_key_valid(mod, key, key_len) || !is_iv_valid(mod, iv, iv_len))
             return false;
 
         std::vector<unsigned char> padded_src;
-        std::size_t padded_len;
-        _padding_block(padded_src, padded_len, mod, key_len, pad_style, src, src_len);
+        std::size_t                padded_len;
+        _padding_block(padded_src,
+                       padded_len,
+                       mod,
+                       key_len,
+                       pad_style,
+                       src,
+                       src_len);
 
-        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-        if (!ctx)
+        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+        if(!ctx)
             return false;
 
         // preinit iv & iv_len
-        const EVP_CIPHER* cipher = _select_cipher(mod, key_len);
-        if (!cipher || 1 != EVP_EncryptInit_ex(ctx, cipher, NULL, NULL, NULL)) 
+        const EVP_CIPHER *cipher = _select_cipher(mod, key_len);
+        if(!cipher || 1 != EVP_EncryptInit_ex(ctx, cipher, NULL, NULL, NULL))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (is_aead_mode(mod) && iv && iv_len > 0) 
+        if(is_aead_mode(mod) && iv && iv_len > 0)
         {
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
+            if(1
+               != EVP_CIPHER_CTX_ctrl(ctx,
+                                      EVP_CTRL_GCM_SET_IVLEN,
+                                      static_cast<int>(iv_len),
+                                      NULL))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
         }
 
-        if (1 != EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv)) 
+        if(1 != EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
         // disable openssl auto padding
-        if (!is_aead_mode(mod))
+        if(!is_aead_mode(mod))
             EVP_CIPHER_CTX_set_padding(ctx, 0);
 
         int outlen1 = 0, outlen2 = 0;
-        if (1 != EVP_EncryptUpdate(ctx, dst, &outlen1, padded_src.data(), static_cast<int>(padded_len))) 
+        if(1
+           != EVP_EncryptUpdate(ctx,
+                                dst,
+                                &outlen1,
+                                padded_src.data(),
+                                static_cast<int>(padded_len)))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (1 != EVP_EncryptFinal_ex(ctx, dst + outlen1, &outlen2)) 
+        if(1 != EVP_EncryptFinal_ex(ctx, dst + outlen1, &outlen2))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -150,11 +164,12 @@ public:
         dst_len = outlen1 + outlen2;
 
         // add tag
-        if (is_aead_mode(mod))
+        if(is_aead_mode(mod))
         {
             unsigned char tag[16] = {0};
-            int tag_len = 16;
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) 
+            int           tag_len = 16;
+            if(1
+               != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag_len, tag))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
@@ -167,260 +182,301 @@ public:
         return true;
     }
 
-    static bool encrypt(std::ostream& out,
-                        std::istream& in,
-                        const unsigned char* key, 
-                        const std::size_t key_len,
-                        const mode mod = mode::ecb,
-                        const padding pad_style = padding::pkcs7,
-                        const unsigned char* iv = nullptr,
-                        const std::size_t iv_len = 16)
+    static bool encrypt(std::ostream        &out,
+                        std::istream        &in,
+                        const unsigned char *key,
+                        const std::size_t    key_len,
+                        const mode           mod       = mode::ecb,
+                        const padding        pad_style = padding::pkcs7,
+                        const unsigned char *iv        = nullptr,
+                        const std::size_t    iv_len    = 16)
     {
-        if (!in || !out)
+        if(!in || !out)
             return false;
 
-        if (!is_plain_valid(mod, key_len, pad_style, in) 
-            || !is_key_valid(mod, key, key_len) 
-            || !is_iv_valid(mod, iv, iv_len))
+        if(!is_plain_valid(mod, key_len, pad_style, in)
+           || !is_key_valid(mod, key, key_len) || !is_iv_valid(mod, iv, iv_len))
             return false;
 
-        int block_size = _get_block_size(mod, key_len);
-        bool is_aead = is_aead_mode(mod);
-        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-        if (!ctx)
+        int             block_size = _get_block_size(mod, key_len);
+        bool            is_aead    = is_aead_mode(mod);
+        EVP_CIPHER_CTX *ctx        = EVP_CIPHER_CTX_new();
+        if(!ctx)
             return false;
 
-        const EVP_CIPHER* cipher = _select_cipher(mod, key_len);
-        if (!cipher || 1 != EVP_EncryptInit_ex(ctx, cipher, NULL, NULL, NULL)) 
+        const EVP_CIPHER *cipher = _select_cipher(mod, key_len);
+        if(!cipher || 1 != EVP_EncryptInit_ex(ctx, cipher, NULL, NULL, NULL))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (is_aead && iv && iv_len > 0)
+        if(is_aead && iv && iv_len > 0)
         {
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
+            if(1
+               != EVP_CIPHER_CTX_ctrl(ctx,
+                                      EVP_CTRL_GCM_SET_IVLEN,
+                                      static_cast<int>(iv_len),
+                                      NULL))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
         }
 
-        if (1 != EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv)) 
+        if(1 != EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (!is_aead)
+        if(!is_aead)
             EVP_CIPHER_CTX_set_padding(ctx, 0);
 
         std::vector<unsigned char> inbuf(AES_BUF_SIZE);
         std::vector<unsigned char> outbuf(AES_BUF_SIZE + block_size * 2);
-        std::size_t total_read = 0;
-        bool last_block = false;
+        std::size_t                total_read = 0;
+        bool                       last_block = false;
         std::vector<unsigned char> last_plain;
 
-        while (!last_block) 
+        while(!last_block)
         {
-            in.read(reinterpret_cast<char*>(inbuf.data()), AES_BUF_SIZE);
+            in.read(reinterpret_cast<char *>(inbuf.data()), AES_BUF_SIZE);
             std::streamsize read_len = in.gcount();
             total_read += static_cast<std::size_t>(read_len);
 
-            if (read_len < AES_BUF_SIZE)
+            if(read_len < AES_BUF_SIZE)
                 last_block = true;
 
-            if (!last_block) 
+            if(!last_block)
             {
                 int outlen = 0;
-                if (1 != EVP_EncryptUpdate(ctx, outbuf.data(), &outlen, inbuf.data(), static_cast<int>(read_len))) 
+                if(1
+                   != EVP_EncryptUpdate(ctx,
+                                        outbuf.data(),
+                                        &outlen,
+                                        inbuf.data(),
+                                        static_cast<int>(read_len)))
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
                 }
-                out.write(reinterpret_cast<char*>(outbuf.data()), outlen);
+                out.write(reinterpret_cast<char *>(outbuf.data()), outlen);
                 continue;
             }
 
-            last_plain.assign(inbuf.begin(), inbuf.begin() + static_cast<int>(read_len));
+            last_plain.assign(inbuf.begin(),
+                              inbuf.begin() + static_cast<int>(read_len));
         }
 
         std::vector<unsigned char> padded_plain;
-        std::size_t padded_len;
-        _padding_block(padded_plain, padded_len, mod, key_len, pad_style, last_plain.data(), last_plain.size());
+        std::size_t                padded_len;
+        _padding_block(padded_plain,
+                       padded_len,
+                       mod,
+                       key_len,
+                       pad_style,
+                       last_plain.data(),
+                       last_plain.size());
 
         int outlen1 = 0, outlen2 = 0;
-        if (padded_len > 0) 
+        if(padded_len > 0)
         {
-            if (1 != EVP_EncryptUpdate(ctx, outbuf.data(), &outlen1, padded_plain.data(), static_cast<int>(padded_len))) 
+            if(1
+               != EVP_EncryptUpdate(ctx,
+                                    outbuf.data(),
+                                    &outlen1,
+                                    padded_plain.data(),
+                                    static_cast<int>(padded_len)))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
-            out.write(reinterpret_cast<char*>(outbuf.data()), outlen1);
+            out.write(reinterpret_cast<char *>(outbuf.data()), outlen1);
         }
 
-        if (1 != EVP_EncryptFinal_ex(ctx, outbuf.data(), &outlen2)) 
+        if(1 != EVP_EncryptFinal_ex(ctx, outbuf.data(), &outlen2))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
-        
-        if (outlen2 > 0)
-            out.write(reinterpret_cast<char*>(outbuf.data()), outlen2);
 
-        if (is_aead) 
+        if(outlen2 > 0)
+            out.write(reinterpret_cast<char *>(outbuf.data()), outlen2);
+
+        if(is_aead)
         {
             unsigned char tag[16] = {0};
-            int tag_len = 16;
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) 
+            int           tag_len = 16;
+            if(1
+               != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag_len, tag))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
-            out.write(reinterpret_cast<char*>(tag), tag_len);
+            out.write(reinterpret_cast<char *>(tag), tag_len);
         }
 
         EVP_CIPHER_CTX_free(ctx);
         return true;
     }
 
-    static bool encrypt(std::string& dst,
-                        const std::string& src, 
-                        const std::string& key, 
-                        const mode mod = mode::ecb,
-                        const padding pad_style = padding::pkcs7,
-                        const std::string& iv = std::string())
+    static bool encrypt(std::string       &dst,
+                        const std::string &src,
+                        const std::string &key,
+                        const mode         mod       = mode::ecb,
+                        const padding      pad_style = padding::pkcs7,
+                        const std::string &iv        = std::string())
     {
         std::size_t dst_len = encrypt_len_reserve(src.size(), mod, key.size());
         dst.resize(dst_len);
-        const unsigned char* iv_ptr = (mod == mode::ecb) ? 
-            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned char *iv_ptr =
+            (mod == mode::ecb)
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
-        if (!encrypt(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
-                     dst_len, 
-                     reinterpret_cast<const unsigned char*>(src.c_str()), 
-                     src.size(), 
-                     reinterpret_cast<const unsigned char*>(key.c_str()), 
-                     key.size(), 
-                     mod,
-                     pad_style,
-                     iv_ptr,
-                     iv_len))
+        if(!encrypt(reinterpret_cast<unsigned char *>(
+                        const_cast<char *>(dst.data())),
+                    dst_len,
+                    reinterpret_cast<const unsigned char *>(src.c_str()),
+                    src.size(),
+                    reinterpret_cast<const unsigned char *>(key.c_str()),
+                    key.size(),
+                    mod,
+                    pad_style,
+                    iv_ptr,
+                    iv_len))
             return false;
 
         dst.resize(dst_len);
         return true;
     }
 
-    static bool encrypt_file(const char* dst_file_path,
-                             const char* src_file_path, 
-                             const unsigned char* key, 
-                             const std::size_t key_len,
-                             const mode mod = mode::ecb,
-                             const padding pad_style = padding::pkcs7,
-                             const unsigned char* iv = nullptr,
-                             const std::size_t iv_len = 16)
+    static bool encrypt_file(const char          *dst_file_path,
+                             const char          *src_file_path,
+                             const unsigned char *key,
+                             const std::size_t    key_len,
+                             const mode           mod       = mode::ecb,
+                             const padding        pad_style = padding::pkcs7,
+                             const unsigned char *iv        = nullptr,
+                             const std::size_t    iv_len    = 16)
     {
         std::ifstream in(src_file_path, std::ios::binary);
         std::ofstream out(dst_file_path, std::ios::binary);
-        if (!in.is_open() || !out.is_open())
+        if(!in.is_open() || !out.is_open())
             return false;
 
         return encrypt(out, in, key, key_len, mod, pad_style, iv, iv_len);
     }
 
-    static bool encrypt_file(const std::string& dst_file_path,
-                             const std::string& src_file_path,
-                             const std::string& key,
-                             const mode mod = mode::ecb,
-                             const padding pad_style = padding::pkcs7,
-                             const std::string& iv = std::string())
+    static bool encrypt_file(const std::string &dst_file_path,
+                             const std::string &src_file_path,
+                             const std::string &key,
+                             const mode         mod       = mode::ecb,
+                             const padding      pad_style = padding::pkcs7,
+                             const std::string &iv        = std::string())
     {
-        const unsigned char* iv_ptr = (mod == mode::ecb) ? 
-            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned char *iv_ptr =
+            (mod == mode::ecb)
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
-        return encrypt_file(dst_file_path.c_str(),
-                            src_file_path.c_str(),
-                            reinterpret_cast<const unsigned char*>(key.c_str()),
-                            key.size(),
-                            mod,
-                            pad_style,
-                            iv_ptr,
-                            iv_len);
+        return encrypt_file(
+            dst_file_path.c_str(),
+            src_file_path.c_str(),
+            reinterpret_cast<const unsigned char *>(key.c_str()),
+            key.size(),
+            mod,
+            pad_style,
+            iv_ptr,
+            iv_len);
     }
 
-    static bool decrypt(unsigned char* dst,
-                        std::size_t& dst_len,
-                        const unsigned char* src,
-                        const std::size_t src_len,
-                        const unsigned char* key,
-                        const std::size_t key_len,
-                        const mode mod = mode::ecb,
-                        const padding pad_style = padding::pkcs7,
-                        const unsigned char* iv = nullptr,
-                        const std::size_t iv_len = 16)
+    static bool decrypt(unsigned char       *dst,
+                        std::size_t         &dst_len,
+                        const unsigned char *src,
+                        const std::size_t    src_len,
+                        const unsigned char *key,
+                        const std::size_t    key_len,
+                        const mode           mod       = mode::ecb,
+                        const padding        pad_style = padding::pkcs7,
+                        const unsigned char *iv        = nullptr,
+                        const std::size_t    iv_len    = 16)
     {
-        if (!is_key_valid(mod, key, key_len) || !is_iv_valid(mod, iv, iv_len))
+        if(!is_key_valid(mod, key, key_len) || !is_iv_valid(mod, iv, iv_len))
             return false;
 
         int block_size = _get_block_size(mod, key_len);
-        if (pad_style == padding::no_padding && src_len % block_size != 0) 
+        if(pad_style == padding::no_padding && src_len % block_size != 0)
             return false;
 
-        std::size_t cipher_len = src_len;
-        const unsigned char* tag_ptr = nullptr;
-        if (is_aead_mode(mod) && src_len > 16) 
+        std::size_t          cipher_len = src_len;
+        const unsigned char *tag_ptr    = nullptr;
+        if(is_aead_mode(mod) && src_len > 16)
         {
             cipher_len = src_len - 16;
-            tag_ptr = src + cipher_len;
+            tag_ptr    = src + cipher_len;
         }
 
-        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-        if (!ctx)
+        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+        if(!ctx)
             return false;
 
-        const EVP_CIPHER* cipher = _select_cipher(mod, key_len);
-        if (!cipher || 1 != EVP_DecryptInit_ex(ctx, cipher, NULL, NULL, NULL)) 
+        const EVP_CIPHER *cipher = _select_cipher(mod, key_len);
+        if(!cipher || 1 != EVP_DecryptInit_ex(ctx, cipher, NULL, NULL, NULL))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (is_aead_mode(mod) && iv && iv_len > 0) 
+        if(is_aead_mode(mod) && iv && iv_len > 0)
         {
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
+            if(1
+               != EVP_CIPHER_CTX_ctrl(ctx,
+                                      EVP_CTRL_GCM_SET_IVLEN,
+                                      static_cast<int>(iv_len),
+                                      NULL))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
         }
 
-        if (1 != EVP_DecryptInit_ex(ctx, NULL, NULL, key, iv)) 
+        if(1 != EVP_DecryptInit_ex(ctx, NULL, NULL, key, iv))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (!is_aead_mode(mod))
+        if(!is_aead_mode(mod))
             EVP_CIPHER_CTX_set_padding(ctx, 0);
 
-        if (is_aead_mode(mod) && tag_ptr) 
+        if(is_aead_mode(mod) && tag_ptr)
         {
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void*)tag_ptr)) {
+            if(1
+               != EVP_CIPHER_CTX_ctrl(ctx,
+                                      EVP_CTRL_GCM_SET_TAG,
+                                      16,
+                                      (void *) tag_ptr))
+            {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
         }
 
         int outlen1 = 0, outlen2 = 0;
-        if (1 != EVP_DecryptUpdate(ctx, dst, &outlen1, src, static_cast<int>(cipher_len))) 
+        if(1
+           != EVP_DecryptUpdate(ctx,
+                                dst,
+                                &outlen1,
+                                src,
+                                static_cast<int>(cipher_len)))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (1 != EVP_DecryptFinal_ex(ctx, dst + outlen1, &outlen2)) 
+        if(1 != EVP_DecryptFinal_ex(ctx, dst + outlen1, &outlen2))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -433,68 +489,72 @@ public:
         return true;
     }
 
-    static bool decrypt(std::ostream& out,
-                        std::istream& in,
-                        const unsigned char* key, 
-                        const std::size_t key_len,
-                        const mode mod = mode::ecb,
-                        const padding pad_style = padding::pkcs7,
-                        const unsigned char* iv = nullptr,
-                        const std::size_t iv_len = 16)
+    static bool decrypt(std::ostream        &out,
+                        std::istream        &in,
+                        const unsigned char *key,
+                        const std::size_t    key_len,
+                        const mode           mod       = mode::ecb,
+                        const padding        pad_style = padding::pkcs7,
+                        const unsigned char *iv        = nullptr,
+                        const std::size_t    iv_len    = 16)
     {
-        if (!in || !out)
+        if(!in || !out)
             return false;
 
-        if (!is_key_valid(mod, key, key_len) || !is_iv_valid(mod, iv, iv_len))
+        if(!is_key_valid(mod, key, key_len) || !is_iv_valid(mod, iv, iv_len))
             return false;
 
         std::streamsize file_size = in.tellg();
         in.seekg(0, std::ios::beg);
-        int block_size = _get_block_size(mod, key_len);
-        bool is_aead = is_aead_mode(mod);
+        int  block_size = _get_block_size(mod, key_len);
+        bool is_aead    = is_aead_mode(mod);
 
-        EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-        if (!ctx)
+        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+        if(!ctx)
             return false;
 
-        unsigned char tag[16] = {0};
+        unsigned char   tag[16]    = {0};
         std::streamsize cipher_len = file_size;
-        if (is_aead && file_size > 16) 
+        if(is_aead && file_size > 16)
         {
             cipher_len = file_size - 16;
             in.seekg(cipher_len, std::ios::beg);
-            in.read(reinterpret_cast<char*>(tag), 16);
+            in.read(reinterpret_cast<char *>(tag), 16);
             in.seekg(0, std::ios::beg);
         }
 
-        const EVP_CIPHER* cipher = _select_cipher(mod, key_len);
-        if (!cipher || 1 != EVP_DecryptInit_ex(ctx, cipher, NULL, NULL, NULL)) 
+        const EVP_CIPHER *cipher = _select_cipher(mod, key_len);
+        if(!cipher || 1 != EVP_DecryptInit_ex(ctx, cipher, NULL, NULL, NULL))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (is_aead && iv && iv_len > 0) 
+        if(is_aead && iv && iv_len > 0)
         {
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, static_cast<int>(iv_len), NULL)) 
+            if(1
+               != EVP_CIPHER_CTX_ctrl(ctx,
+                                      EVP_CTRL_GCM_SET_IVLEN,
+                                      static_cast<int>(iv_len),
+                                      NULL))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
         }
 
-        if (1 != EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv)) 
+        if(1 != EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
         }
 
-        if (!is_aead)
+        if(!is_aead)
             EVP_CIPHER_CTX_set_padding(ctx, 0);
-        
-        if (is_aead) 
+
+        if(is_aead)
         {
-            if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag)) 
+            if(1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
@@ -504,44 +564,58 @@ public:
         std::vector<unsigned char> inbuf(AES_BUF_SIZE + block_size * 2);
         std::vector<unsigned char> outbuf(AES_BUF_SIZE + block_size * 2);
         std::vector<unsigned char> last_cipher;
-        std::streamsize total_read = 0;
-        bool last_block = false;
-        while (total_read < cipher_len) 
+        std::streamsize            total_read = 0;
+        bool                       last_block = false;
+        while(total_read < cipher_len)
         {
-            std::streamsize to_read = std::min(static_cast<std::streamsize>(AES_BUF_SIZE), cipher_len - total_read);
-            in.read(reinterpret_cast<char*>(inbuf.data()), to_read);
+            std::streamsize to_read =
+                std::min(static_cast<std::streamsize>(AES_BUF_SIZE),
+                         cipher_len - total_read);
+            in.read(reinterpret_cast<char *>(inbuf.data()), to_read);
             std::streamsize read_len = in.gcount();
             total_read += read_len;
 
-            if (total_read == cipher_len)
+            if(total_read == cipher_len)
                 last_block = true;
 
-            if (!last_block) 
+            if(!last_block)
             {
                 int outlen = 0;
-                if (1 != EVP_DecryptUpdate(ctx, outbuf.data(), &outlen, inbuf.data(), static_cast<int>(read_len)))
+                if(1
+                   != EVP_DecryptUpdate(ctx,
+                                        outbuf.data(),
+                                        &outlen,
+                                        inbuf.data(),
+                                        static_cast<int>(read_len)))
                 {
                     EVP_CIPHER_CTX_free(ctx);
                     return false;
                 }
-                out.write(reinterpret_cast<char*>(outbuf.data()), outlen);
+                out.write(reinterpret_cast<char *>(outbuf.data()), outlen);
                 continue;
             }
 
-            last_cipher.assign(inbuf.begin(), inbuf.begin() + static_cast<std::size_t>(read_len));
+            last_cipher.assign(inbuf.begin(),
+                               inbuf.begin()
+                                   + static_cast<std::size_t>(read_len));
         }
 
         int outlen1 = 0, outlen2 = 0;
-        if (!last_cipher.empty()) 
+        if(!last_cipher.empty())
         {
-            if (1 != EVP_DecryptUpdate(ctx, outbuf.data(), &outlen1, last_cipher.data(), static_cast<int>(last_cipher.size()))) 
+            if(1
+               != EVP_DecryptUpdate(ctx,
+                                    outbuf.data(),
+                                    &outlen1,
+                                    last_cipher.data(),
+                                    static_cast<int>(last_cipher.size())))
             {
                 EVP_CIPHER_CTX_free(ctx);
                 return false;
             }
         }
 
-        if (1 != EVP_DecryptFinal_ex(ctx, outbuf.data() + outlen1, &outlen2)) 
+        if(1 != EVP_DecryptFinal_ex(ctx, outbuf.data() + outlen1, &outlen2))
         {
             EVP_CIPHER_CTX_free(ctx);
             return false;
@@ -550,35 +624,38 @@ public:
         std::size_t plain_len = outlen1 + outlen2;
         _unpadding_block(outbuf.data(), plain_len, mod, pad_style, block_size);
 
-        if (plain_len > 0)
-            out.write(reinterpret_cast<char*>(outbuf.data()), plain_len);
+        if(plain_len > 0)
+            out.write(reinterpret_cast<char *>(outbuf.data()), plain_len);
 
         EVP_CIPHER_CTX_free(ctx);
         return true;
     }
 
-    static bool decrypt(std::string& dst,
-                        const std::string& src, 
-                        const std::string& key, 
-                        const mode mod = mode::ecb,
-                        const padding pad_style = padding::pkcs7,
-                        const std::string& iv = std::string())
+    static bool decrypt(std::string       &dst,
+                        const std::string &src,
+                        const std::string &key,
+                        const mode         mod       = mode::ecb,
+                        const padding      pad_style = padding::pkcs7,
+                        const std::string &iv        = std::string())
     {
         dst.resize(decrypt_len_reserve(src.size()));
-        std::size_t dst_len = dst.size();
-        const unsigned char* iv_ptr = (mod == mode::ecb) ? 
-            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        std::size_t          dst_len = dst.size();
+        const unsigned char *iv_ptr =
+            (mod == mode::ecb)
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
-        if (!decrypt(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
-                     dst_len, 
-                     reinterpret_cast<const unsigned char*>(src.c_str()), 
-                     src.size(), 
-                     reinterpret_cast<const unsigned char*>(key.c_str()), 
-                     key.size(), 
-                     mod,
-                     pad_style,
-                     iv_ptr,
-                     iv_len))
+        if(!decrypt(reinterpret_cast<unsigned char *>(
+                        const_cast<char *>(dst.data())),
+                    dst_len,
+                    reinterpret_cast<const unsigned char *>(src.c_str()),
+                    src.size(),
+                    reinterpret_cast<const unsigned char *>(key.c_str()),
+                    key.size(),
+                    mod,
+                    pad_style,
+                    iv_ptr,
+                    iv_len))
         {
             dst.clear();
             return false;
@@ -588,97 +665,104 @@ public:
         return true;
     }
 
-    static bool decrypt_file(const char* dst_file_path,
-                             const char* src_file_path, 
-                             const unsigned char* key, 
-                             const std::size_t key_len,
-                             const mode mod = mode::ecb,
-                             const padding pad_style = padding::pkcs7,
-                             const unsigned char* iv = nullptr,
-                             const std::size_t iv_len = 16)
+    static bool decrypt_file(const char          *dst_file_path,
+                             const char          *src_file_path,
+                             const unsigned char *key,
+                             const std::size_t    key_len,
+                             const mode           mod       = mode::ecb,
+                             const padding        pad_style = padding::pkcs7,
+                             const unsigned char *iv        = nullptr,
+                             const std::size_t    iv_len    = 16)
     {
         std::ifstream in(src_file_path, std::ios::binary | std::ios::ate);
         std::ofstream out(dst_file_path, std::ios::binary);
-        if (!in.is_open() || !out.is_open())
+        if(!in.is_open() || !out.is_open())
             return false;
 
         return decrypt(out, in, key, key_len, mod, pad_style, iv, iv_len);
     }
 
-    static bool decrypt_file(const std::string& dst_file_path,
-                             const std::string& src_file_path,
-                             const std::string& key,
-                             const mode mod = mode::ecb,
-                             const padding pad_style = padding::pkcs7,
-                             const std::string& iv = std::string())
+    static bool decrypt_file(const std::string &dst_file_path,
+                             const std::string &src_file_path,
+                             const std::string &key,
+                             const mode         mod       = mode::ecb,
+                             const padding      pad_style = padding::pkcs7,
+                             const std::string &iv        = std::string())
     {
-        const unsigned char* iv_ptr = (mod == mode::ecb) ? 
-            nullptr : reinterpret_cast<const unsigned char*>(iv.c_str());
+        const unsigned char *iv_ptr =
+            (mod == mode::ecb)
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(iv.c_str());
         const std::size_t iv_len = (iv_ptr == nullptr) ? 0 : iv.size();
-        return decrypt_file(dst_file_path.c_str(),
-                            src_file_path.c_str(),
-                            reinterpret_cast<const unsigned char*>(key.c_str()),
-                            key.size(),
-                            mod,
-                            pad_style,
-                            iv_ptr,
-                            iv_len);
+        return decrypt_file(
+            dst_file_path.c_str(),
+            src_file_path.c_str(),
+            reinterpret_cast<const unsigned char *>(key.c_str()),
+            key.size(),
+            mod,
+            pad_style,
+            iv_ptr,
+            iv_len);
     }
 
     // reserve encrypt dst buf size
-	static std::size_t encrypt_len_reserve(const std::size_t src_len, 
-										   const mode mod,
-										   const std::size_t key_len)
-	{
+    static std::size_t encrypt_len_reserve(const std::size_t src_len,
+                                           const mode        mod,
+                                           const std::size_t key_len)
+    {
         int block_size = _get_block_size(mod, key_len);
-        if (block_size >= 8)
+        if(block_size >= 8)
             return ((src_len / block_size) + 2) * block_size;
 
         return src_len + 16;
-	}
+    }
 
-	// reserve decrypt dst buf size
-	static std::size_t decrypt_len_reserve(const std::size_t src_len)
-	{
-		return src_len;
-	}
+    // reserve decrypt dst buf size
+    static std::size_t decrypt_len_reserve(const std::size_t src_len)
+    {
+        return src_len;
+    }
 
     // make key with password or random bytes
-    static bool make_key(unsigned char* key, 
-                         const std::size_t key_len, 
-                         const unsigned char* password = nullptr, 
-                         const std::size_t password_len = 0, 
-                         const unsigned char* salt = nullptr, 
-                         const std::size_t salt_len = 0, 
-                         const int iterations = 10000)
+    static bool make_key(unsigned char       *key,
+                         const std::size_t    key_len,
+                         const unsigned char *password     = nullptr,
+                         const std::size_t    password_len = 0,
+                         const unsigned char *salt         = nullptr,
+                         const std::size_t    salt_len     = 0,
+                         const int            iterations   = 10000)
     {
-        if (key == nullptr || (key_len != 16 && key_len != 24 && key_len != 32))
+        if(key == nullptr || (key_len != 16 && key_len != 24 && key_len != 32))
             return false;
 
         // random
-        if (password == nullptr || password_len == 0)
+        if(password == nullptr || password_len == 0)
             return RAND_bytes(key, static_cast<int>(key_len)) == 1;
-        
+
         // Use PBKDF2 to derive the key from the password
-        return PKCS5_PBKDF2_HMAC(reinterpret_cast<const char*>(password), 
-                                 password_len, 
-                                 salt, 
-                                 salt_len, 
-                                 iterations, EVP_sha256(),
-                                 key_len, 
-                                 key) == 1;
+        return PKCS5_PBKDF2_HMAC(reinterpret_cast<const char *>(password),
+                                 password_len,
+                                 salt,
+                                 salt_len,
+                                 iterations,
+                                 EVP_sha256(),
+                                 key_len,
+                                 key)
+               == 1;
     }
 
     // check key format
-    static bool is_key_valid(const mode mod, const unsigned char* key, const std::size_t key_len)
+    static bool is_key_valid(const mode           mod,
+                             const unsigned char *key,
+                             const std::size_t    key_len)
     {
-        if (key == nullptr) 
+        if(key == nullptr)
             return false;
 
-        switch (mod)
+        switch(mod)
         {
-            case mode::ecb: 
-            case mode::gcm: 
+            case mode::ecb:
+            case mode::gcm:
             case mode::cbc:
             case mode::cfb1:
             case mode::cfb8:
@@ -693,18 +777,21 @@ public:
             case mode::cbc_hmac_sha1:
             case mode::cbc_hmac_sha256:
                 return (key_len == 16 || key_len == 32);
-# ifndef OPENSSL_NO_OCB
+#ifndef OPENSSL_NO_OCB
             case mode::ocb:
                 return (key_len == 16 || key_len == 24 || key_len == 32);
-# endif
-            default: return false; // unsupported algorithm
+#endif
+            default:
+                return false; // unsupported algorithm
         }
     }
 
     // check iv format
-    static bool is_iv_valid(const mode mod, const unsigned char* iv, const std::size_t iv_len)
+    static bool is_iv_valid(const mode           mod,
+                            const unsigned char *iv,
+                            const std::size_t    iv_len)
     {
-        switch (mod) 
+        switch(mod)
         {
             case mode::ecb:
                 return iv == nullptr;
@@ -729,11 +816,11 @@ public:
             case mode::cbc_hmac_sha1:
             case mode::cbc_hmac_sha256:
                 return iv != nullptr && iv_len == 16;
-                
-    #ifndef OPENSSL_NO_OCB
+
+#ifndef OPENSSL_NO_OCB
             case mode::ocb:
                 return iv != nullptr && iv_len >= 1 && iv_len <= 15;
-    #endif
+#endif
 
             case mode::cbc:
             case mode::cfb128:
@@ -745,34 +832,35 @@ public:
     }
 
     // check plain
-    static bool is_plain_valid(const mode mod, 
+    static bool is_plain_valid(const mode        mod,
                                const std::size_t key_len,
-                               const padding pad_style, 
+                               const padding     pad_style,
                                const std::size_t plain_len)
     {
         int block_sz = _get_block_size(mod, key_len);
-        if (pad_style == padding::no_padding && plain_len % block_sz != 0)
+        if(pad_style == padding::no_padding && plain_len % block_sz != 0)
             return false;
 
         return true;
     }
 
     // check stream plain
-    static bool is_plain_valid(const mode mod, 
-                               const std::size_t key_len, 
-                               const padding pad_style, 
-                               std::istream& in)
+    static bool is_plain_valid(const mode        mod,
+                               const std::size_t key_len,
+                               const padding     pad_style,
+                               std::istream     &in)
     {
-        if (!in)
+        if(!in)
             return false;
 
-        if (pad_style == padding::no_padding)
+        if(pad_style == padding::no_padding)
         {
             std::streampos current_pos = in.tellg();
             in.seekg(0, std::ios::end);
             std::streampos end_pos = in.tellg();
             in.seekg(current_pos);
-            std::size_t total_length = static_cast<std::size_t>(end_pos - current_pos);
+            std::size_t total_length =
+                static_cast<std::size_t>(end_pos - current_pos);
             int block_size = _get_block_size(mod, key_len);
             return total_length % block_size == 0;
         }
@@ -783,221 +871,300 @@ public:
     // check stream mode
     static bool is_stream_mode(const mode mod)
     {
-        switch (mod)
+        switch(mod)
         {
-        case mode::cfb1:
-        case mode::cfb8:
-        case mode::cfb128:
-        case mode::ofb:
-        case mode::ctr:
-            return true;
-        default:
-            return false;
+            case mode::cfb1:
+            case mode::cfb8:
+            case mode::cfb128:
+            case mode::ofb:
+            case mode::ctr:
+                return true;
+            default:
+                return false;
         }
     }
 
     // check aead mode
     static bool is_aead_mode(const mode mod)
     {
-        switch (mod)
+        switch(mod)
         {
-        case mode::gcm:
-        case mode::ccm:
-            return true;
-        default:
-            return false;
+            case mode::gcm:
+            case mode::ccm:
+                return true;
+            default:
+                return false;
         }
     }
 
-private:
-    static const EVP_CIPHER* _select_cipher(const mode mod, const std::size_t key_len)
+  private:
+    static const EVP_CIPHER *_select_cipher(const mode        mod,
+                                            const std::size_t key_len)
     {
-            switch (mod)
-            {
+        switch(mod)
+        {
             case mode::ecb: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_ecb();
-                case 24: return EVP_aes_192_ecb();
-                case 32: return EVP_aes_256_ecb();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_ecb();
+                    case 24:
+                        return EVP_aes_192_ecb();
+                    case 32:
+                        return EVP_aes_256_ecb();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::gcm: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_gcm();
-                case 24: return EVP_aes_192_gcm();
-                case 32: return EVP_aes_256_gcm();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_gcm();
+                    case 24:
+                        return EVP_aes_192_gcm();
+                    case 32:
+                        return EVP_aes_256_gcm();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::cbc: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_cbc();
-                case 24: return EVP_aes_192_cbc();
-                case 32: return EVP_aes_256_cbc();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_cbc();
+                    case 24:
+                        return EVP_aes_192_cbc();
+                    case 32:
+                        return EVP_aes_256_cbc();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::cfb1: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_cfb1();
-                case 24: return EVP_aes_192_cfb1();
-                case 32: return EVP_aes_256_cfb1();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_cfb1();
+                    case 24:
+                        return EVP_aes_192_cfb1();
+                    case 32:
+                        return EVP_aes_256_cfb1();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::cfb8: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_cfb8();
-                case 24: return EVP_aes_192_cfb8();
-                case 32: return EVP_aes_256_cfb8();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_cfb8();
+                    case 24:
+                        return EVP_aes_192_cfb8();
+                    case 32:
+                        return EVP_aes_256_cfb8();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::cfb128: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_cfb128();
-                case 24: return EVP_aes_192_cfb128();
-                case 32: return EVP_aes_256_cfb128();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_cfb128();
+                    case 24:
+                        return EVP_aes_192_cfb128();
+                    case 32:
+                        return EVP_aes_256_cfb128();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::ofb: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_ofb();
-                case 24: return EVP_aes_192_ofb();
-                case 32: return EVP_aes_256_ofb();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_ofb();
+                    case 24:
+                        return EVP_aes_192_ofb();
+                    case 32:
+                        return EVP_aes_256_ofb();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::ctr: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_ctr();
-                case 24: return EVP_aes_192_ctr();
-                case 32: return EVP_aes_256_ctr();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_ctr();
+                    case 24:
+                        return EVP_aes_192_ctr();
+                    case 32:
+                        return EVP_aes_256_ctr();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::ccm: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_ccm();
-                case 24: return EVP_aes_192_ccm();
-                case 32: return EVP_aes_256_ccm();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_ccm();
+                    case 24:
+                        return EVP_aes_192_ccm();
+                    case 32:
+                        return EVP_aes_256_ccm();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::xts: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_xts();
-                case 32: return EVP_aes_256_xts();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_xts();
+                    case 32:
+                        return EVP_aes_256_xts();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::wrap: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_wrap();
-                case 24: return EVP_aes_192_wrap();
-                case 32: return EVP_aes_256_wrap();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_wrap();
+                    case 24:
+                        return EVP_aes_192_wrap();
+                    case 32:
+                        return EVP_aes_256_wrap();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::wrap_pad: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_wrap_pad();
-                case 24: return EVP_aes_192_wrap_pad();
-                case 32: return EVP_aes_256_wrap_pad();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_wrap_pad();
+                    case 24:
+                        return EVP_aes_192_wrap_pad();
+                    case 32:
+                        return EVP_aes_256_wrap_pad();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::cbc_hmac_sha1: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_cbc_hmac_sha1();
-                case 32: return EVP_aes_256_cbc_hmac_sha1();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_cbc_hmac_sha1();
+                    case 32:
+                        return EVP_aes_256_cbc_hmac_sha1();
+                    default:
+                        return nullptr;
                 }
             }
             case mode::cbc_hmac_sha256: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_cbc_hmac_sha256();
-                case 32: return EVP_aes_256_cbc_hmac_sha256();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_cbc_hmac_sha256();
+                    case 32:
+                        return EVP_aes_256_cbc_hmac_sha256();
+                    default:
+                        return nullptr;
                 }
             }
-# ifndef OPENSSL_NO_OCB
+#ifndef OPENSSL_NO_OCB
             case mode::ocb: {
-                switch (key_len) {
-                case 16: return EVP_aes_128_ocb();
-                case 24: return EVP_aes_192_ocb();
-                case 32: return EVP_aes_256_ocb();
-                default: return nullptr;
+                switch(key_len)
+                {
+                    case 16:
+                        return EVP_aes_128_ocb();
+                    case 24:
+                        return EVP_aes_192_ocb();
+                    case 32:
+                        return EVP_aes_256_ocb();
+                    default:
+                        return nullptr;
                 }
             }
-# endif
-            default: return nullptr; // unsupported algorithm
+#endif
+            default:
+                return nullptr; // unsupported algorithm
         }
     }
 
     // get block size
     static int _get_block_size(const mode mod, const std::size_t key_len)
     {
-        switch (mod) {
-        case mode::ecb:
-        case mode::cbc:
-        case mode::cfb128:
-        case mode::ofb:
-        case mode::ctr:
-            return 16;
-        case mode::cfb8:
-        case mode::cfb1:
-            return 1;
-        default:
-            return EVP_CIPHER_block_size(_select_cipher(mod, key_len));
+        switch(mod)
+        {
+            case mode::ecb:
+            case mode::cbc:
+            case mode::cfb128:
+            case mode::ofb:
+            case mode::ctr:
+                return 16;
+            case mode::cfb8:
+            case mode::cfb1:
+                return 1;
+            default:
+                return EVP_CIPHER_block_size(_select_cipher(mod, key_len));
         }
     }
 
     // pad block
-    static void _padding_block(std::vector<unsigned char>& padded_src, 
-                               std::size_t& padded_len,
-                               const mode mod, 
-                               const std::size_t key_len,
-                               const padding pad_style, 
-                               const unsigned char* src, 
-                               const std::size_t src_len)
+    static void _padding_block(std::vector<unsigned char> &padded_src,
+                               std::size_t                &padded_len,
+                               const mode                  mod,
+                               const std::size_t           key_len,
+                               const padding               pad_style,
+                               const unsigned char        *src,
+                               const std::size_t           src_len)
     {
         int block_size = static_cast<int>(_get_block_size(mod, key_len));
-        padded_len = src_len;
-        if (pad_style != padding::no_padding && block_size > 1) 
+        padded_len     = src_len;
+        if(pad_style != padding::no_padding && block_size > 1)
         {
-            unsigned char pad_val = static_cast<unsigned char>(block_size - (src_len % block_size));
-            if (pad_val == 0) 
+            unsigned char pad_val =
+                static_cast<unsigned char>(block_size - (src_len % block_size));
+            if(pad_val == 0)
                 pad_val = static_cast<unsigned char>(block_size);
 
             padded_len = src_len + pad_val;
             padded_src.resize(padded_len, 0);
             memcpy(padded_src.data(), src, src_len);
-            switch (pad_style) {
-            case padding::pkcs5:
-            case padding::pkcs7:
-                for (std::size_t i = src_len; i < padded_len; ++i)
-                    padded_src[i] = pad_val;
-                break;
-            case padding::zero:
-                break;
-            case padding::iso10126:
-                for (std::size_t i = src_len; i < padded_len - 1; ++i)
-                    padded_src[i] = static_cast<unsigned char>(rand() % 256);
-                padded_src[padded_len - 1] = pad_val;
-                break;
-            case padding::ansix923:
-                padded_src[padded_len - 1] = pad_val;
-                break;
-            case padding::iso_iec_7816_4:
-                padded_src[src_len] = 0x80;
-                break;
-            default:
-                break;
+            switch(pad_style)
+            {
+                case padding::pkcs5:
+                case padding::pkcs7:
+                    for(std::size_t i = src_len; i < padded_len; ++i)
+                        padded_src[i] = pad_val;
+                    break;
+                case padding::zero:
+                    break;
+                case padding::iso10126:
+                    for(std::size_t i = src_len; i < padded_len - 1; ++i)
+                        padded_src[i] =
+                            static_cast<unsigned char>(rand() % 256);
+                    padded_src[padded_len - 1] = pad_val;
+                    break;
+                case padding::ansix923:
+                    padded_src[padded_len - 1] = pad_val;
+                    break;
+                case padding::iso_iec_7816_4:
+                    padded_src[src_len] = 0x80;
+                    break;
+                default:
+                    break;
             }
-        } else {
+        } else
+        {
             // no padding
             padded_src.assign(src, src + src_len);
             padded_len = src_len;
@@ -1005,91 +1172,93 @@ private:
     }
 
     // unpad block
-    static void _unpadding_block(unsigned char* dst, 
-                                 std::size_t& dst_len,
-                                 const mode mod, 
-                                 const padding pad_style, 
+    static void _unpadding_block(unsigned char    *dst,
+                                 std::size_t      &dst_len,
+                                 const mode        mod,
+                                 const padding     pad_style,
                                  const std::size_t block_size)
     {
-        if (!is_aead_mode(mod) && pad_style != padding::no_padding && block_size > 1) 
+        if(!is_aead_mode(mod) && pad_style != padding::no_padding
+           && block_size > 1)
         {
             std::size_t unpad_len = dst_len;
-            switch (pad_style) {
-            case padding::pkcs5:
-            case padding::pkcs7: {
-                if (unpad_len == 0) 
+            switch(pad_style)
+            {
+                case padding::pkcs5:
+                case padding::pkcs7: {
+                    if(unpad_len == 0)
+                        break;
+
+                    unsigned char pad = dst[unpad_len - 1];
+                    if(pad == 0 || pad > block_size)
+                        break;
+
+                    bool valid = true;
+                    for(std::size_t i = unpad_len - pad; i < unpad_len; ++i)
+                        if(dst[i] != pad)
+                            valid = false;
+
+                    if(valid)
+                        dst_len = unpad_len - pad;
                     break;
+                }
+                case padding::zero: {
+                    while(dst_len > 0 && dst[dst_len - 1] == 0)
+                        --dst_len;
 
-                unsigned char pad = dst[unpad_len - 1];
-                if (pad == 0 || pad > block_size) 
                     break;
+                }
+                case padding::iso10126: {
+                    if(unpad_len == 0)
+                        break;
 
-                bool valid = true;
-                for (std::size_t i = unpad_len - pad; i < unpad_len; ++i)
-                    if (dst[i] != pad) 
-                        valid = false;
+                    unsigned char pad = dst[unpad_len - 1];
+                    if(pad == 0 || pad > block_size)
+                        break;
 
-                if (valid) 
                     dst_len = unpad_len - pad;
-                break;
-            }
-            case padding::zero: {
-                while (dst_len > 0 && dst[dst_len - 1] == 0)
-                    --dst_len;
-
-                break;
-            }
-            case padding::iso10126: {
-                if (unpad_len == 0) 
                     break;
+                }
+                case padding::ansix923: {
+                    if(unpad_len == 0)
+                        break;
 
-                unsigned char pad = dst[unpad_len - 1];
-                if (pad == 0 || pad > block_size) 
+                    unsigned char pad = dst[unpad_len - 1];
+                    if(pad == 0 || pad > block_size)
+                        break;
+
+                    bool valid = true;
+                    for(std::size_t i = unpad_len - pad; i < unpad_len - 1; ++i)
+                        if(dst[i] != 0)
+                            valid = false;
+
+                    if(valid)
+                        dst_len = unpad_len - pad;
                     break;
+                }
+                case padding::iso_iec_7816_4: {
+                    int i = dst_len - 1;
+                    while(i >= 0 && dst[i] == 0)
+                        --i;
 
-                dst_len = unpad_len - pad;
-                break;
-            }
-            case padding::ansix923: {
-                if (unpad_len == 0) 
+                    if(i >= 0 && dst[i] == 0x80)
+                        dst_len = static_cast<std::size_t>(i);
+
                     break;
-
-                unsigned char pad = dst[unpad_len - 1];
-                if (pad == 0 || pad > block_size) 
+                }
+                default:
                     break;
-
-                bool valid = true;
-                for (std::size_t i = unpad_len - pad; i < unpad_len - 1; ++i)
-                    if (dst[i] != 0) 
-                        valid = false;
-
-                if (valid) 
-                    dst_len = unpad_len - pad;
-                break;
-            }
-            case padding::iso_iec_7816_4: {
-                int i = dst_len - 1;
-                while (i >= 0 && dst[i] == 0) 
-                    --i;
-
-                if (i >= 0 && dst[i] == 0x80)
-                    dst_len = static_cast<std::size_t>(i);
-                
-                break;
-            }
-            default:
-                break;
             }
         }
     }
 
-private:
-    aes() = default;
-    ~aes() = default;
-    aes(const aes&) = delete;
-    aes& operator=(const aes&) = delete;
-    aes(aes&&) = delete;
-    aes& operator=(aes&&) = delete;
+  private:
+    aes()                       = default;
+    ~aes()                      = default;
+    aes(const aes &)            = delete;
+    aes &operator=(const aes &) = delete;
+    aes(aes &&)                 = delete;
+    aes &operator=(aes &&)      = delete;
 };
 
 }

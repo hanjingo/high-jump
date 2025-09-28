@@ -6,31 +6,34 @@
 // NOTE: Requires a running PostgreSQL server and a test database/user.
 // Example connection string: "host=localhost port=5432 dbname=testdb user=testuser password=testpass"
 
-const std::string conninfo = "host=localhost port=5432 dbname=postgres user=postgres password=postgres";
+const std::string conninfo =
+    "host=localhost port=5432 dbname=postgres user=postgres password=postgres";
 
 static bool _is_pg_server_running()
 {
     // Check if PostgreSQL server is running
     try
     {
-        hj::pg_connection conn("dbname=postgres user=postgres password=postgres");
-        if (conn.is_open())
+        hj::pg_connection conn(
+            "dbname=postgres user=postgres password=postgres");
+        if(conn.is_open())
         {
             conn.disconnect();
             return true;
         }
     }
-    catch (const std::exception& e)
+    catch(const std::exception &e)
     {
         // Handle exception (e.g., log it)
     }
     return false;
 }
 
-TEST(PostgreSQLTest, ConnectAndDisconnect) 
+TEST(PostgreSQLTest, ConnectAndDisconnect)
 {
-    if (!_is_pg_server_running())
-        GTEST_SKIP() << "PostgreSQL server is not running or connection failed.";
+    if(!_is_pg_server_running())
+        GTEST_SKIP()
+            << "PostgreSQL server is not running or connection failed.";
 
     hj::pg_connection db(conninfo);
     ASSERT_TRUE(db.is_open());
@@ -38,10 +41,11 @@ TEST(PostgreSQLTest, ConnectAndDisconnect)
     ASSERT_FALSE(db.is_open());
 }
 
-TEST(PostgreSQLTest, ExecAndQuery) 
+TEST(PostgreSQLTest, ExecAndQuery)
 {
-    if (!_is_pg_server_running())
-        GTEST_SKIP() << "PostgreSQL server is not running or connection failed.";
+    if(!_is_pg_server_running())
+        GTEST_SKIP()
+            << "PostgreSQL server is not running or connection failed.";
 
     hj::pg_connection db(conninfo);
     ASSERT_TRUE(db.is_open());

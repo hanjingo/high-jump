@@ -7,8 +7,6 @@
 
 #include <hj/misc/pdf.hpp>
 
-#include <hj/misc/ros.hpp>
-
 #include <hj/misc/zmq.hpp>
 
 #endif // MISC_HPP

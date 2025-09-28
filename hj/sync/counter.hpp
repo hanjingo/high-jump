@@ -8,53 +8,56 @@
 namespace hj
 {
 
-template<typename T>
+template <typename T>
 class counter
 {
-public:
-    counter(const counter& rhs) 
-        : value_{rhs.value_.load()}, 
-          step_{rhs.step_},
-          min_{rhs.min_},
-          max_{rhs.max_}
-    {}
-    counter(const T value) 
-        : value_{value}, 
-          step_{1}
+  public:
+    counter(const counter &rhs)
+        : _value{rhs._value.load()}
+        , _step{rhs._step}
+        , _min{rhs._min}
+        , _max{rhs._max}
     {
-        min_ = std::numeric_limits<T>::min();
-        max_ = std::numeric_limits<T>::max();
     }
-    counter(const T value, const T min) 
-        : value_{value}, 
-          step_{1},
-          min_{min}
+    counter(const T value)
+        : _value{value}
+        , _step{1}
     {
-        max_ = std::numeric_limits<T>::max();
+        _min = std::numeric_limits<T>::min();
+        _max = std::numeric_limits<T>::max();
     }
-    counter(const T value, const T min, const T step) 
-        : value_{value}, 
-          step_{step},
-          min_{min}
+    counter(const T value, const T min)
+        : _value{value}
+        , _step{1}
+        , _min{min}
     {
-        max_ = std::numeric_limits<T>::max();
+        _max = std::numeric_limits<T>::max();
     }
-    counter(const T value, const T min, const T max, const T step) 
-        : value_{value}, 
-          step_{step},
-          min_{min},
-          max_{max}
-    {}
+    counter(const T value, const T min, const T step)
+        : _value{value}
+        , _step{step}
+        , _min{min}
+    {
+        _max = std::numeric_limits<T>::max();
+    }
+    counter(const T value, const T min, const T max, const T step)
+        : _value{value}
+        , _step{step}
+        , _min{min}
+        , _max{max}
+    {
+    }
     ~counter() {}
 
-    inline counter& operator++()
+    inline counter &operator++()
     {
         T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp + step_ > max_ || tmp + step_ < min_)
+        do
+        {
+            tmp = _value.load();
+            if(tmp + _step > _max || tmp + _step < _min)
                 return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp + step_));
+        } while(!_value.compare_exchange_weak(tmp, tmp + _step));
 
         return *this;
     }
@@ -62,67 +65,72 @@ public:
     inline counter operator++(int)
     {
         T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp + step_ > max_ || tmp + step_ < min_)
-                return counter(tmp, min_, max_, step_);
-        } while(!value_.compare_exchange_weak(tmp, tmp + step_));
+        do
+        {
+            tmp = _value.load();
+            if(tmp + _step > _max || tmp + _step < _min)
+                return counter(tmp, _min, _max, _step);
+        } while(!_value.compare_exchange_weak(tmp, tmp + _step));
 
-        return counter(tmp, min_, max_, step_);
+        return counter(tmp, _min, _max, _step);
     }
 
-    inline counter operator+(const counter& ct)
+    inline counter operator+(const counter &ct)
     {
-        T tmp = value_.load();
-        T arg = ct.value_.load();
-        if (tmp + arg > max_ || tmp + arg < min_)
-            return counter(tmp, min_, max_, step_);
-            
-        return counter(tmp + arg, min_, max_, step_);
+        T tmp = _value.load();
+        T arg = ct._value.load();
+        if(tmp + arg > _max || tmp + arg < _min)
+            return counter(tmp, _min, _max, _step);
+
+        return counter(tmp + arg, _min, _max, _step);
     }
 
-    inline counter operator+(const T& arg)
+    inline counter operator+(const T &arg)
     {
-        T tmp = value_.load();
-        if (tmp + arg > max_ || tmp + arg < min_)
-            return counter(tmp, min_, max_, step_);
-            
-        return counter(tmp + arg, min_, max_, step_);
+        T tmp = _value.load();
+        if(tmp + arg > _max || tmp + arg < _min)
+            return counter(tmp, _min, _max, _step);
+
+        return counter(tmp + arg, _min, _max, _step);
     }
 
-    inline counter& operator+=(const counter& ct)
+    inline counter &operator+=(const counter &ct)
     {
-        T tmp; T arg;
-        do {
-            tmp = value_.load();
-            arg = ct.value_.load();
-            if (tmp + arg > max_ || tmp + arg < min_)
+        T tmp;
+        T arg;
+        do
+        {
+            tmp = _value.load();
+            arg = ct._value.load();
+            if(tmp + arg > _max || tmp + arg < _min)
                 return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp + arg));
+        } while(!_value.compare_exchange_weak(tmp, tmp + arg));
 
         return *this;
     }
 
-    inline counter& operator+=(const T& arg)
+    inline counter &operator+=(const T &arg)
     {
         T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp + arg > max_ || tmp + arg < min_)
+        do
+        {
+            tmp = _value.load();
+            if(tmp + arg > _max || tmp + arg < _min)
                 return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp + arg));
+        } while(!_value.compare_exchange_weak(tmp, tmp + arg));
 
         return *this;
     }
 
-    inline counter& operator--()
+    inline counter &operator--()
     {
         T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp - step_ > max_ || tmp - step_ < min_)
+        do
+        {
+            tmp = _value.load();
+            if(tmp - _step > _max || tmp - _step < _min)
                 return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp - step_));
+        } while(!_value.compare_exchange_weak(tmp, tmp - _step));
 
         return *this;
     }
@@ -130,314 +138,315 @@ public:
     inline counter operator--(int)
     {
         T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp - step_ > max_ || tmp - step_ < min_)
-                return counter(tmp, min_, max_, step_);
-        } while(!value_.compare_exchange_weak(tmp, tmp - step_));
-
-        return counter(tmp, min_, max_, step_);
-    }
-
-    inline counter operator-(const counter& ct)
-    {
-        T tmp = value_.load();
-        T arg = ct.value_.load();
-        if (tmp - arg > max_ || tmp - arg < min_)
-            return counter(tmp, min_, max_, step_);
-            
-        return counter(tmp - arg, min_, max_, step_);
-    }
-
-    inline counter operator-(const T& arg)
-    {
-        T tmp = value_.load();
-        if (tmp - arg > max_ || tmp - arg < min_)
-            return counter(tmp, min_, max_, step_);
-            
-        return counter(tmp - arg, min_, max_, step_);
-    }
-
-    inline counter& operator-=(const counter& ct)
-    {
-        T tmp; T arg;
-        do {
-            tmp = value_.load();
-            arg = ct.value_.load();
-            if (tmp - arg > max_ || tmp - arg < min_)
-                return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp - arg));
-
-        return *this;
-    }
-
-    inline counter& operator-=(const T& arg)
-    {
-        T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp - arg > max_ || tmp - arg < min_)
-                return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp - arg));
-
-        return *this;
-    }
-
-    inline counter operator*(const counter& ct)
-    {
-        T tmp = value_.load();
-        T arg = ct.value_.load();
-        if (tmp * arg > max_ || tmp * arg < min_)
-            return counter(tmp, min_, max_, step_);
-
-        return counter(tmp * arg, min_, max_, step_);
-    }
-
-    inline counter operator*(const T& arg)
-    {
-        T tmp = value_.load();
-        if (tmp * arg > max_ || tmp * arg < min_)
-            return counter(tmp, min_, max_, step_);
-
-        return counter(tmp * arg, min_, max_, step_);
-    }
-
-    inline counter& operator*=(const counter& ct)
-    {
-        T tmp; T arg;
-        do {
-            tmp = value_.load();
-            arg = ct.value_.load();
-            if (tmp * arg > max_ || tmp * arg < min_)
-                return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp * arg));
-
-        return *this;
-    }
-
-    inline counter& operator*=(const T& arg)
-    {
-        T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp * arg > max_ || tmp * arg < min_)
-                return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp * arg));
-
-        return *this;
-    }
-
-    inline counter& operator=(const counter& ct)
-    {
-        min_ = ct.min_;
-        max_ = ct.max_;
-        step_ = ct.step_;
-
-        T tmp = value_.load();
-        while (!value_.compare_exchange_weak(tmp, ct.value_.load()))
+        do
         {
-            tmp = value_.load();
+            tmp = _value.load();
+            if(tmp - _step > _max || tmp - _step < _min)
+                return counter(tmp, _min, _max, _step);
+        } while(!_value.compare_exchange_weak(tmp, tmp - _step));
+
+        return counter(tmp, _min, _max, _step);
+    }
+
+    inline counter operator-(const counter &ct)
+    {
+        T tmp = _value.load();
+        T arg = ct._value.load();
+        if(tmp - arg > _max || tmp - arg < _min)
+            return counter(tmp, _min, _max, _step);
+
+        return counter(tmp - arg, _min, _max, _step);
+    }
+
+    inline counter operator-(const T &arg)
+    {
+        T tmp = _value.load();
+        if(tmp - arg > _max || tmp - arg < _min)
+            return counter(tmp, _min, _max, _step);
+
+        return counter(tmp - arg, _min, _max, _step);
+    }
+
+    inline counter &operator-=(const counter &ct)
+    {
+        T tmp;
+        T arg;
+        do
+        {
+            tmp = _value.load();
+            arg = ct._value.load();
+            if(tmp - arg > _max || tmp - arg < _min)
+                return *this;
+        } while(!_value.compare_exchange_weak(tmp, tmp - arg));
+
+        return *this;
+    }
+
+    inline counter &operator-=(const T &arg)
+    {
+        T tmp;
+        do
+        {
+            tmp = _value.load();
+            if(tmp - arg > _max || tmp - arg < _min)
+                return *this;
+        } while(!_value.compare_exchange_weak(tmp, tmp - arg));
+
+        return *this;
+    }
+
+    inline counter operator*(const counter &ct)
+    {
+        T tmp = _value.load();
+        T arg = ct._value.load();
+        if(tmp * arg > _max || tmp * arg < _min)
+            return counter(tmp, _min, _max, _step);
+
+        return counter(tmp * arg, _min, _max, _step);
+    }
+
+    inline counter operator*(const T &arg)
+    {
+        T tmp = _value.load();
+        if(tmp * arg > _max || tmp * arg < _min)
+            return counter(tmp, _min, _max, _step);
+
+        return counter(tmp * arg, _min, _max, _step);
+    }
+
+    inline counter &operator*=(const counter &ct)
+    {
+        T tmp;
+        T arg;
+        do
+        {
+            tmp = _value.load();
+            arg = ct._value.load();
+            if(tmp * arg > _max || tmp * arg < _min)
+                return *this;
+        } while(!_value.compare_exchange_weak(tmp, tmp * arg));
+
+        return *this;
+    }
+
+    inline counter &operator*=(const T &arg)
+    {
+        T tmp;
+        do
+        {
+            tmp = _value.load();
+            if(tmp * arg > _max || tmp * arg < _min)
+                return *this;
+        } while(!_value.compare_exchange_weak(tmp, tmp * arg));
+
+        return *this;
+    }
+
+    inline counter &operator=(const counter &ct)
+    {
+        _min  = ct._min;
+        _max  = ct._max;
+        _step = ct._step;
+
+        T tmp = _value.load();
+        while(!_value.compare_exchange_weak(tmp, ct._value.load()))
+        {
+            tmp = _value.load();
         }
 
         return *this;
     }
 
-    inline counter& operator=(const T& value)
+    inline counter &operator=(const T &value)
     {
-        min_ = std::numeric_limits<T>::min();
-        max_ = std::numeric_limits<T>::max();
-        step_ = 1;
+        _min  = std::numeric_limits<T>::min();
+        _max  = std::numeric_limits<T>::max();
+        _step = 1;
 
-        T tmp = value_.load();
-        while (!value_.compare_exchange_weak(tmp, value))
+        T tmp = _value.load();
+        while(!_value.compare_exchange_weak(tmp, value))
         {
-            tmp = value_.load();
+            tmp = _value.load();
         }
 
         return *this;
     }
 
-    inline friend counter operator/(const counter& ct1, const counter& ct2)
+    inline friend counter operator/(const counter &ct1, const counter &ct2)
     {
-        T arg1 = ct1.value_.load();
-        T arg2 = ct2.value_.load();
-        if (arg1 / arg2 > ct1.max_ || arg1 / arg2 < ct1.min_)
-            return counter(arg1, ct1.min_, ct1.max_, ct1.step_);
+        T arg1 = ct1._value.load();
+        T arg2 = ct2._value.load();
+        if(arg1 / arg2 > ct1._max || arg1 / arg2 < ct1._min)
+            return counter(arg1, ct1._min, ct1._max, ct1._step);
 
-        return counter(arg1 / arg2, ct1.min_, ct1.max_, ct1.step_);
+        return counter(arg1 / arg2, ct1._min, ct1._max, ct1._step);
     }
 
-    inline friend counter operator/(const counter& ct, const T& arg)
+    inline friend counter operator/(const counter &ct, const T &arg)
     {
-        T value = ct.value_.load();
-        if (value / arg > ct.max_ || value / arg < ct.min_)
-            return counter(value, ct.min_, ct.max_, ct.step_);
+        T value = ct._value.load();
+        if(value / arg > ct._max || value / arg < ct._min)
+            return counter(value, ct._min, ct._max, ct._step);
 
-        return counter(value / arg, ct.min_, ct.max_, ct.step_);
+        return counter(value / arg, ct._min, ct._max, ct._step);
     }
 
-    inline friend counter operator/(const T& arg, const counter& ct)
+    inline friend counter operator/(const T &arg, const counter &ct)
     {
-        T value = ct.value_.load();
-        if (arg / value > ct.max_ || arg / value < ct.min_)
-            return counter(arg, ct.min_, ct.max_, ct.step_);
+        T value = ct._value.load();
+        if(arg / value > ct._max || arg / value < ct._min)
+            return counter(arg, ct._min, ct._max, ct._step);
 
-        return counter(arg / value, ct.min_, ct.max_, ct.step_);
+        return counter(arg / value, ct._min, ct._max, ct._step);
     }
 
-    inline friend counter& operator/=(counter& ct1, const counter& ct2)
+    inline friend counter &operator/=(counter &ct1, const counter &ct2)
     {
-        T arg1; T arg2;
-        do {
-            arg1 = ct1.value_.load();
-            arg2 = ct2.value_.load();
-            if (arg1 / arg2 > ct1.max_ || arg1 / arg2 < ct1.min_)
+        T arg1;
+        T arg2;
+        do
+        {
+            arg1 = ct1._value.load();
+            arg2 = ct2._value.load();
+            if(arg1 / arg2 > ct1._max || arg1 / arg2 < ct1._min)
                 return ct1;
-        } while(!ct1.value_.compare_exchange_weak(arg1, arg1 / arg2));
+        } while(!ct1._value.compare_exchange_weak(arg1, arg1 / arg2));
 
         return ct1;
     }
 
-    inline friend counter& operator/=(counter& ct, const T& arg)
+    inline friend counter &operator/=(counter &ct, const T &arg)
     {
         T value;
-        do {
-            value = ct.value_.load();
-            if (value / arg > ct.max_ || value / arg < ct.min_)
+        do
+        {
+            value = ct._value.load();
+            if(value / arg > ct._max || value / arg < ct._min)
                 return ct;
-        } while(!ct.value_.compare_exchange_weak(value, value / arg));
+        } while(!ct._value.compare_exchange_weak(value, value / arg));
 
         return ct;
     }
 
-    inline friend bool operator==(const counter& ct1, const counter& ct2)
+    inline friend bool operator==(const counter &ct1, const counter &ct2)
     {
-        return ct1.value_.load() == ct2.value_.load();
+        return ct1._value.load() == ct2._value.load();
     }
 
-    inline friend bool operator==(const counter& ct, const T& value)
+    inline friend bool operator==(const counter &ct, const T &value)
     {
-        return ct.value_.load() == value;
+        return ct._value.load() == value;
     }
 
-    inline friend bool operator!=(const counter& ct1, const counter& ct2)
+    inline friend bool operator!=(const counter &ct1, const counter &ct2)
     {
-        return ct1.value_.load() != ct2.value_.load();
+        return ct1._value.load() != ct2._value.load();
     }
 
-    inline friend bool operator!=(const counter& ct, const T& value)
+    inline friend bool operator!=(const counter &ct, const T &value)
     {
-        return ct.value_.load() != value;
+        return ct._value.load() != value;
     }
 
-    inline friend bool operator<(const counter& ct1, const counter& ct2)
+    inline friend bool operator<(const counter &ct1, const counter &ct2)
     {
-        return ct1.value_.load() < ct2.value_.load();
+        return ct1._value.load() < ct2._value.load();
     }
 
-    inline friend bool operator<(const counter& ct, const T& value)
+    inline friend bool operator<(const counter &ct, const T &value)
     {
-        return ct.value_.load() < value;
+        return ct._value.load() < value;
     }
 
-    inline friend bool operator<=(const counter& ct1, const counter& ct2)
+    inline friend bool operator<=(const counter &ct1, const counter &ct2)
     {
-        return ct1.value_.load() <= ct2.value_.load();
+        return ct1._value.load() <= ct2._value.load();
     }
 
-    inline friend bool operator<=(const counter& ct, const T& value)
+    inline friend bool operator<=(const counter &ct, const T &value)
     {
-        return ct.value_.load() <= value;
+        return ct._value.load() <= value;
     }
 
-    inline friend bool operator>(const counter& ct1, const counter& ct2)
+    inline friend bool operator>(const counter &ct1, const counter &ct2)
     {
-        return ct1.value_.load() > ct2.value_.load();
+        return ct1._value.load() > ct2._value.load();
     }
 
-    inline friend bool operator>(const counter& ct, const T& value)
+    inline friend bool operator>(const counter &ct, const T &value)
     {
-        return ct.value_.load() > value;
+        return ct._value.load() > value;
     }
 
-    inline friend bool operator>=(const counter& ct1, const counter& ct2)
+    inline friend bool operator>=(const counter &ct1, const counter &ct2)
     {
-        return ct1.value_.load() >= ct2.value_.load();
+        return ct1._value.load() >= ct2._value.load();
     }
 
-    inline friend bool operator>=(const counter& ct, const T& value)
+    inline friend bool operator>=(const counter &ct, const T &value)
     {
-        return ct.value_.load() >= value;
+        return ct._value.load() >= value;
     }
 
-    inline friend std::ostream& operator<<(std::ostream& out, const counter& ct)
+    inline friend std::ostream &operator<<(std::ostream &out, const counter &ct)
     {
-        out << ct.value_.load();
+        out << ct._value.load();
         return out;
     }
 
-public:
-    inline counter& inc()
+  public:
+    inline counter &inc()
     {
         T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp + step_ > max_ || tmp + step_ < min_)
+        do
+        {
+            tmp = _value.load();
+            if(tmp + _step > _max || tmp + _step < _min)
                 return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp + step_));
+        } while(!_value.compare_exchange_weak(tmp, tmp + _step));
 
         return *this;
     }
 
-    inline counter& dec()
+    inline counter &dec()
     {
         T tmp;
-        do {
-            tmp = value_.load();
-            if (tmp - step_ > max_ || tmp - step_ < min_)
+        do
+        {
+            tmp = _value.load();
+            if(tmp - _step > _max || tmp - _step < _min)
                 return *this;
-        } while(!value_.compare_exchange_weak(tmp, tmp - step_));
+        } while(!_value.compare_exchange_weak(tmp, tmp - _step));
 
         return *this;
     }
 
-    inline const T& step()
-    {
-        return step_;
-    }
+    inline const T &step() { return _step; }
 
-    inline const T value()
-    {
-        return value_.load();
-    }
+    inline const T value() { return _value.load(); }
 
-    inline const T& max()
-    {
-        return max_;
-    }
+    inline const T &max() { return _max; }
 
-    inline const T& min()
-    {
-        return min_;
-    }
+    inline const T &min() { return _min; }
 
-    inline counter& reset(const T& value = 0)
+    inline counter &reset(const T &value = 0)
     {
-        if (value > max_ || value < min_)
+        if(value > _max || value < _min)
             return *this;
 
         T tmp;
-        do {
-            tmp = value_.load();
-        } while(!value_.compare_exchange_weak(tmp, value));
+        do
+        {
+            tmp = _value.load();
+        } while(!_value.compare_exchange_weak(tmp, value));
         return *this;
     }
 
-private:
-    std::atomic<T> value_;
-    T max_;
-    T min_;
-    T step_;
+  private:
+    std::atomic<T> _value;
+    T              _max;
+    T              _min;
+    T              _step;
 };
 
 }

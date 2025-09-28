@@ -10,34 +10,34 @@
 
 class CpuTest : public ::testing::Test
 {
-protected:
+  protected:
     void SetUp() override
     {
-//         std::cout << "\n=== CPU Hardware Tests Setup ===" << std::endl;
-//         std::cout << "Platform: ";
-// #if defined(_WIN32) || defined(_WIN64)
-//         std::cout << "Windows" << std::endl;
-// #elif defined(__linux__)
-//         std::cout << "Linux" << std::endl;
-// #elif defined(__APPLE__)
-//         std::cout << "macOS" << std::endl;
-// #else
-//         std::cout << "Unknown" << std::endl;
-// #endif
+        //         std::cout << "\n=== CPU Hardware Tests Setup ===" << std::endl;
+        //         std::cout << "Platform: ";
+        // #if defined(_WIN32) || defined(_WIN64)
+        //         std::cout << "Windows" << std::endl;
+        // #elif defined(__linux__)
+        //         std::cout << "Linux" << std::endl;
+        // #elif defined(__APPLE__)
+        //         std::cout << "macOS" << std::endl;
+        // #else
+        //         std::cout << "Unknown" << std::endl;
+        // #endif
 
-//         std::cout << "Compiler: ";
-// #if defined(_MSC_VER)
-//         std::cout << "MSVC " << _MSC_VER << std::endl;
-// #elif defined(__GNUC__)
-//         std::cout << "GCC " << __GNUC__ << "." << __GNUC_MINOR__ << std::endl;
-// #elif defined(__clang__)
-//         std::cout << "Clang " << __clang_major__ << "." << __clang_minor__
-//                   << std::endl;
-// #else
-//         std::cout << "Unknown" << std::endl;
-// #endif
+        //         std::cout << "Compiler: ";
+        // #if defined(_MSC_VER)
+        //         std::cout << "MSVC " << _MSC_VER << std::endl;
+        // #elif defined(__GNUC__)
+        //         std::cout << "GCC " << __GNUC__ << "." << __GNUC_MINOR__ << std::endl;
+        // #elif defined(__clang__)
+        //         std::cout << "Clang " << __clang_major__ << "." << __clang_minor__
+        //                   << std::endl;
+        // #else
+        //         std::cout << "Unknown" << std::endl;
+        // #endif
 
-//         std::cout << "=================================" << std::endl;
+        //         std::cout << "=================================" << std::endl;
     }
 
     void TearDown() override
@@ -51,11 +51,14 @@ TEST_F(CpuTest, cpu_brand_functionality)
     SCOPED_TRACE("Testing cpu_brand functionality");
     unsigned char brand[128] = {0};
     cpu_brand(brand, sizeof(brand));
-    std::string brand_str(reinterpret_cast<char*>(brand));
+    std::string brand_str(reinterpret_cast<char *>(brand));
     EXPECT_FALSE(brand_str.empty()) << "CPU brand string should not be empty";
-    EXPECT_GT(brand_str.length(), 2u) << "CPU brand string should be reasonable length";
-    for (char c : brand_str) {
-        EXPECT_TRUE(c == 0 || (c >= 32 && c <= 126)) << "Brand string should be printable";
+    EXPECT_GT(brand_str.length(), 2u)
+        << "CPU brand string should be reasonable length";
+    for(char c : brand_str)
+    {
+        EXPECT_TRUE(c == 0 || (c >= 32 && c <= 126))
+            << "Brand string should be printable";
     }
 }
 
@@ -64,11 +67,14 @@ TEST_F(CpuTest, cpu_vendor_functionality)
     SCOPED_TRACE("Testing cpu_vendor functionality");
     unsigned char vendor[64] = {0};
     cpu_vendor(vendor, sizeof(vendor));
-    std::string vendor_str(reinterpret_cast<char*>(vendor));
+    std::string vendor_str(reinterpret_cast<char *>(vendor));
     EXPECT_FALSE(vendor_str.empty()) << "CPU vendor string should not be empty";
-    EXPECT_GT(vendor_str.length(), 2u) << "CPU vendor string should be reasonable length";
-    for (char c : vendor_str) {
-        EXPECT_TRUE(c == 0 || (c >= 32 && c <= 126)) << "Vendor string should be printable";
+    EXPECT_GT(vendor_str.length(), 2u)
+        << "CPU vendor string should be reasonable length";
+    for(char c : vendor_str)
+    {
+        EXPECT_TRUE(c == 0 || (c >= 32 && c <= 126))
+            << "Vendor string should be printable";
     }
 }
 
@@ -83,7 +89,7 @@ TEST_F(CpuTest, cpu_core_num_basic)
     EXPECT_LE(core_count, 1024)
         << "CPU core count should be reasonable (≤ 1024)";
 
-    for (int i = 0; i < 5; ++i)
+    for(int i = 0; i < 5; ++i)
     {
         EXPECT_EQ(cpu_core_num(), core_count)
             << "cpu_core_num should return consistent results";
@@ -94,7 +100,7 @@ TEST_F(CpuTest, cpu_core_list_functionality)
 {
     SCOPED_TRACE("Testing cpu_core_list functionality");
 
-    unsigned int expected_count = cpu_core_num();
+    unsigned int              expected_count = cpu_core_num();
     std::vector<unsigned int> core_list(expected_count + 10);
     unsigned int list_len = static_cast<unsigned int>(core_list.size());
 
@@ -113,7 +119,7 @@ TEST_F(CpuTest, cpu_core_list_functionality)
     //     std::cout << "...";
     // std::cout << std::endl;
 
-    for (unsigned int i = 0; i < list_len; ++i)
+    for(unsigned int i = 0; i < list_len; ++i)
     {
         EXPECT_LT(core_list[i], 1024) << "Core ID should be reasonable";
     }
@@ -137,11 +143,10 @@ TEST_F(CpuTest, cpu_core_list_boundary_conditions)
     unsigned int small_len = 2;
     cpu_core_list(small_buf, &small_len);
 
-    if (cpu_core_num() > 2)
+    if(cpu_core_num() > 2)
     {
         EXPECT_EQ(small_len, 2) << "Should limit to buffer size";
-    }
-    else
+    } else
     {
         EXPECT_LE(small_len, 2) << "Should not exceed buffer size";
     }
@@ -153,33 +158,33 @@ TEST_F(CpuTest, cpu_core_bind_functionality)
 
     unsigned int core_count = cpu_core_num();
 
-    if (core_count <= 1)
+    if(core_count <= 1)
     {
         GTEST_SKIP() << "Single core system, skipping bind test";
         return;
     }
 
     std::vector<unsigned int> core_list(core_count);
-    unsigned int list_len = core_count;
+    unsigned int              list_len = core_count;
     cpu_core_list(core_list.data(), &list_len);
 
 #if defined(_WIN32) || defined(__linux__)
     // std::cout << "Testing CPU binding on supported platform..." << std::endl;
 
-    bool any_bind_success = false;
-    unsigned int min = (list_len < 4u) ? list_len : 4u;
-    for (unsigned int i = 0; i < min; ++i)
+    bool         any_bind_success = false;
+    unsigned int min              = (list_len < 4u) ? list_len : 4u;
+    for(unsigned int i = 0; i < min; ++i)
     {
         bool bind_result = cpu_core_bind(core_list[i]);
         // std::cout << "Bind to core " << core_list[i] << ": "
         //           << (bind_result ? "Success" : "Failed") << std::endl;
 
-        if (bind_result)
+        if(bind_result)
         {
             any_bind_success = true;
 
             std::set<uint32_t> observed_cpus;
-            for (int j = 0; j < 20; ++j)
+            for(int j = 0; j < 20; ++j)
             {
                 observed_cpus.insert(cpu_id());
                 std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -194,7 +199,7 @@ TEST_F(CpuTest, cpu_core_bind_functionality)
         }
     }
 
-    if (!any_bind_success)
+    if(!any_bind_success)
     {
         std::cout << "Warning: CPU binding failed (may require administrator "
                      "privileges)"
@@ -205,7 +210,7 @@ TEST_F(CpuTest, cpu_core_bind_functionality)
     // std::cout << "Testing CPU binding on macOS (should return false)..."
     //           << std::endl;
 
-    for (unsigned int i = 0; i < std::min(2u, list_len); ++i)
+    for(unsigned int i = 0; i < std::min(2u, list_len); ++i)
     {
         bool bind_result = cpu_core_bind(core_list[i]);
         EXPECT_FALSE(bind_result) << "macOS should not support CPU binding";
@@ -232,10 +237,10 @@ TEST_F(CpuTest, cpu_id_functionality)
     EXPECT_LT(cpu_id_3, 1024) << "CPU ID should be reasonable";
 
     std::vector<uint32_t> cpu_ids;
-    for (int i = 0; i < 100; ++i)
+    for(int i = 0; i < 100; ++i)
     {
         cpu_ids.push_back(cpu_id());
-        if (i % 10 == 0)
+        if(i % 10 == 0)
         {
             std::this_thread::yield();
         }
@@ -255,38 +260,36 @@ TEST_F(CpuTest, cpu_id_multithreaded)
     SCOPED_TRACE("Testing cpu_id in multithreaded environment");
 
     unsigned int core_count = cpu_core_num();
-    if (core_count <= 1)
+    if(core_count <= 1)
     {
         GTEST_SKIP() << "Single core system, skipping multithread test";
         return;
     }
 
-    unsigned int min = (core_count < 4u) ? core_count : 4u;
-    std::vector<std::thread> threads;
-    std::vector<std::set<uint32_t>> thread_cpu_ids(min);
+    unsigned int                     min = (core_count < 4u) ? core_count : 4u;
+    std::vector<std::thread>         threads;
+    std::vector<std::set<uint32_t> > thread_cpu_ids(min);
     // std::cout << "Starting " << min << " threads to test CPU ID..."
     //           << std::endl;
 
-    for (int t = 0; t < min; ++t)
+    for(int t = 0; t < min; ++t)
     {
-        threads.emplace_back(
-            [&, t]()
+        threads.emplace_back([&, t]() {
+            for(int i = 0; i < 50; ++i)
             {
-                for (int i = 0; i < 50; ++i)
+                thread_cpu_ids[t].insert(cpu_id());
+
+                for(int j = 0; j < 1000; ++j)
                 {
-                    thread_cpu_ids[t].insert(cpu_id());
-
-                    for (int j = 0; j < 1000; ++j)
-                    {
-                        cpu_nop();
-                    }
-
-                    std::this_thread::sleep_for(std::chrono::microseconds(10));
+                    cpu_nop();
                 }
-            });
+
+                std::this_thread::sleep_for(std::chrono::microseconds(10));
+            }
+        });
     }
 
-    for (auto& thread : threads)
+    for(auto &thread : threads)
     {
         thread.join();
     }
@@ -319,7 +322,7 @@ TEST_F(CpuTest, cpu_pause_functionality)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    for (int i = 0; i < 1000; ++i)
+    for(int i = 0; i < 1000; ++i)
     {
         cpu_pause();
     }
@@ -343,7 +346,7 @@ TEST_F(CpuTest, cpu_nop_functionality)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    for (int i = 0; i < 10000; ++i)
+    for(int i = 0; i < 10000; ++i)
     {
         cpu_nop();
     }
@@ -368,7 +371,7 @@ TEST_F(CpuTest, cpu_delay_functionality)
 
     std::vector<uint64_t> test_cycles = {1000, 10000, 100000, 1000000};
 
-    for (uint64_t cycles : test_cycles)
+    for(uint64_t cycles : test_cycles)
     {
         auto start = std::chrono::high_resolution_clock::now();
 
@@ -392,11 +395,11 @@ TEST_F(CpuTest, cpu_delay_precision)
 
     // std::cout << "Testing cpu_delay precision..." << std::endl;
 
-    const uint64_t test_cycles = 50000;
-    const int num_tests = 5;
+    const uint64_t         test_cycles = 50000;
+    const int              num_tests   = 5;
     std::vector<long long> durations;
 
-    for (int i = 0; i < num_tests; ++i)
+    for(int i = 0; i < num_tests; ++i)
     {
         auto start = std::chrono::high_resolution_clock::now();
         cpu_delay(test_cycles);
@@ -411,14 +414,14 @@ TEST_F(CpuTest, cpu_delay_precision)
     }
 
     long long sum = 0;
-    for (long long d : durations)
+    for(long long d : durations)
     {
         sum += d;
     }
     long long avg = sum / num_tests;
 
     long long variance_sum = 0;
-    for (long long d : durations)
+    for(long long d : durations)
     {
         long long diff = d - avg;
         variance_sum += diff * diff;
@@ -473,7 +476,7 @@ TEST_F(CpuTest, cpu_boundary_conditions)
 
 TEST(cpu, cpu_core_num)
 {
-    ASSERT_EQ(cpu_core_num() > 0, true);
+    ASSERT_TRUE(cpu_core_num() > 0);
 }
 
 TEST(cpu, cpu_core_bind)
@@ -482,15 +485,15 @@ TEST(cpu, cpu_core_bind)
     unsigned int buf[1024];
     unsigned int sz = 1024;
     cpu_core_list(buf, &sz);
-    ASSERT_EQ(sz != 0, true);
+    ASSERT_TRUE(sz != 0);
 
-    unsigned int test_count = (sz < 4u) ? sz : 4u;
-    bool any_success = false;
+    unsigned int test_count  = (sz < 4u) ? sz : 4u;
+    bool         any_success = false;
 
-    for (unsigned int i = 0; i < test_count; ++i)
+    for(unsigned int i = 0; i < test_count; ++i)
     {
         bool result = cpu_core_bind(buf[i]);
-        if (result)
+        if(result)
         {
             any_success = true;
         }
@@ -498,7 +501,7 @@ TEST(cpu, cpu_core_bind)
         //           << (result ? "Success" : "Failed") << std::endl;
     }
 
-    if (!any_success)
+    if(!any_success)
     {
         std::cout << "Warning: All CPU bindings failed (may require "
                      "administrator privileges)"
@@ -512,7 +515,7 @@ TEST(cpu, cpu_core_list)
     unsigned int buf[1024];
     unsigned int sz = 1024;
     cpu_core_list(buf, &sz);
-    ASSERT_EQ(sz != 0, true);
+    ASSERT_TRUE(sz != 0);
 
     // std::cout << "CPU cores (" << sz << " total): ";
     // for (unsigned int i = 0; i < sz; ++i)
@@ -530,11 +533,11 @@ TEST_F(CpuTest, cpu_cache_flush_functionality)
 
     // std::cout << "Testing cpu_cache_flush()..." << std::endl;
 
-    const size_t test_size = 4096;
+    const size_t      test_size = 4096;
     std::vector<char> test_data(test_size, 0x55);
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < test_data.size(); i += 64)
+    for(size_t i = 0; i < test_data.size(); i += 64)
     {
         cpu_cache_flush(&test_data[i]);
     }
@@ -562,10 +565,10 @@ TEST_F(CpuTest, cpu_prefetch_functionality)
     // std::cout << "Testing cpu_prefetch_read() and cpu_prefetch_write()..."
     //           << std::endl;
 
-    const size_t array_size = 1024 * 1024; // 1MB
+    const size_t     array_size = 1024 * 1024; // 1MB
     std::vector<int> test_array(array_size);
 
-    for (size_t i = 0; i < array_size; ++i)
+    for(size_t i = 0; i < array_size; ++i)
     {
         test_array[i] = static_cast<int>(i);
     }
@@ -573,9 +576,9 @@ TEST_F(CpuTest, cpu_prefetch_functionality)
     auto start = std::chrono::high_resolution_clock::now();
 
     int sum = 0;
-    for (size_t i = 0; i < array_size; i += 16)
+    for(size_t i = 0; i < array_size; i += 16)
     {
-        if (i + 64 < array_size)
+        if(i + 64 < array_size)
         {
             cpu_prefetch_read(&test_array[i + 64]);
         }
@@ -589,7 +592,7 @@ TEST_F(CpuTest, cpu_prefetch_functionality)
     start = std::chrono::high_resolution_clock::now();
 
     int sum2 = 0;
-    for (size_t i = 0; i < array_size; i += 16)
+    for(size_t i = 0; i < array_size; i += 16)
     {
         sum2 += test_array[i];
     }
@@ -607,9 +610,9 @@ TEST_F(CpuTest, cpu_prefetch_functionality)
 
     start = std::chrono::high_resolution_clock::now();
 
-    for (size_t i = 0; i < array_size; i += 16)
+    for(size_t i = 0; i < array_size; i += 16)
     {
-        if (i + 64 < array_size)
+        if(i + 64 < array_size)
         {
             cpu_prefetch_write(&test_array[i + 64]);
         }
@@ -648,35 +651,34 @@ TEST_F(CpuTest, cpu_tsc_functionality)
     EXPECT_GT(tsc3, tsc2) << "TSC should be increasing";
 
     std::vector<uint64_t> tsc_values;
-    for (int i = 0; i < 10; ++i)
+    for(int i = 0; i < 10; ++i)
     {
         tsc_values.push_back(cpu_tsc_read());
         cpu_nop();
     }
 
     bool all_different = true;
-    for (size_t i = 1; i < tsc_values.size(); ++i)
+    for(size_t i = 1; i < tsc_values.size(); ++i)
     {
-        if (tsc_values[i] <= tsc_values[i - 1])
+        if(tsc_values[i] <= tsc_values[i - 1])
         {
             all_different = false;
             break;
         }
     }
 
-    if (all_different)
+    if(all_different)
     {
         std::cout << "TSC shows high precision (all values increasing)"
                   << std::endl;
-    }
-    else
+    } else
     {
         std::cout << "TSC shows limited precision (some values equal)"
                   << std::endl;
     }
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 10000; ++i)
+    for(int i = 0; i < 10000; ++i)
     {
         volatile uint64_t tsc = cpu_tsc_read();
         (void) tsc;
@@ -719,17 +721,17 @@ TEST_F(CpuTest, cpu_tscp_functionality)
 
     // std::cout << "TSCP without aux: " << tscp_no_aux << std::endl;
 
-    uint64_t tsc = cpu_tsc_read();
+    uint64_t tsc  = cpu_tsc_read();
     uint64_t tscp = cpu_tscp_read(nullptr);
 
     // std::cout << "TSC vs TSCP comparison: TSC=" << tsc << ", TSCP=" << tscp
     //           << std::endl;
 
-    if (tsc > 0 && tscp > 0)
+    if(tsc > 0 && tscp > 0)
     {
-        uint64_t diff = (tsc > tscp) ? (tsc - tscp) : (tscp - tsc);
-        double max = (tsc > tscp) ? tsc : tscp;
-        double relative_diff = (double) diff / max;
+        uint64_t diff          = (tsc > tscp) ? (tsc - tscp) : (tscp - tsc);
+        double   max           = (tsc > tscp) ? tsc : tscp;
+        double   relative_diff = (double) diff / max;
         // std::cout << "Relative difference between TSC and TSCP: "
         //           << (relative_diff * 100) << "%" << std::endl;
     }
@@ -753,51 +755,51 @@ TEST_F(CpuTest, cpu_pmu_cycle_counter_functionality)
     EXPECT_GT(pmu2, pmu1) << "PMU cycle counter should be increasing";
     EXPECT_GT(pmu3, pmu2) << "PMU cycle counter should be increasing";
 
-    bool is_true_cycle_counter = false;
-    std::string counter_type = "Unknown";
+    bool        is_true_cycle_counter = false;
+    std::string counter_type          = "Unknown";
 
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
     is_true_cycle_counter = true;
-    counter_type = "Windows x86/x64 RDTSC";
+    counter_type          = "Windows x86/x64 RDTSC";
 #else
     is_true_cycle_counter = false;
-    counter_type = "Windows QueryPerformanceCounter";
+    counter_type          = "Windows QueryPerformanceCounter";
 #endif
 #elif defined(__linux__)
 #if defined(__i386__) || defined(__x86_64__)
     is_true_cycle_counter = true;
-    counter_type = "Linux x86/x64 RDTSC";
+    counter_type          = "Linux x86/x64 RDTSC";
 #elif defined(__arm__) || defined(__aarch64__)
     is_true_cycle_counter = true;
-    counter_type = "Linux ARM cycle counter";
+    counter_type          = "Linux ARM cycle counter";
 #else
     is_true_cycle_counter = false;
-    counter_type = "Linux clock_gettime";
+    counter_type          = "Linux clock_gettime";
 #endif
 #elif defined(__APPLE__)
     is_true_cycle_counter = true;
-    counter_type = "macOS mach_absolute_time";
+    counter_type          = "macOS mach_absolute_time";
 #else
     is_true_cycle_counter = false;
-    counter_type = "Generic fallback";
+    counter_type          = "Generic fallback";
 #endif
 
     // std::cout << "Detected counter type: " << counter_type << std::endl;
     // std::cout << "Is true cycle counter: "
     //           << (is_true_cycle_counter ? "Yes" : "No") << std::endl;
 
-    auto start = std::chrono::high_resolution_clock::now();
+    auto     start     = std::chrono::high_resolution_clock::now();
     uint64_t pmu_start = cpu_pmu_cycle_counter_read();
 
     volatile long long sum = 0;
-    for (int i = 0; i < 100000; ++i)
+    for(int i = 0; i < 100000; ++i)
     {
         sum += i * i;
     }
 
     uint64_t pmu_end = cpu_pmu_cycle_counter_read();
-    auto end = std::chrono::high_resolution_clock::now();
+    auto     end     = std::chrono::high_resolution_clock::now();
 
     auto wall_time =
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -811,20 +813,19 @@ TEST_F(CpuTest, cpu_pmu_cycle_counter_functionality)
 
     EXPECT_GT(pmu_cycles, 0) << "PMU should count some cycles during work";
 
-    if (wall_time.count() > 0)
+    if(wall_time.count() > 0)
     {
         double cycles_per_microsecond = (double) pmu_cycles / wall_time.count();
         // std::cout << "  Estimated cycles per microsecond: "
         //           << cycles_per_microsecond << std::endl;
 
-        if (is_true_cycle_counter)
+        if(is_true_cycle_counter)
         {
             EXPECT_GT(cycles_per_microsecond, 100)
                 << "CPU cycle rate seems too low for " << counter_type;
             EXPECT_LT(cycles_per_microsecond, 10000)
                 << "CPU cycle rate seems too high for " << counter_type;
-        }
-        else
+        } else
         {
             // std::cout << "  Note: This is not a true CPU cycle counter, so "
             //              "frequency checks are relaxed"
@@ -834,8 +835,8 @@ TEST_F(CpuTest, cpu_pmu_cycle_counter_functionality)
             EXPECT_LT(cycles_per_microsecond, 100000)
                 << "Counter rate seems unreasonably high for " << counter_type;
 
-            if (counter_type.find("QueryPerformanceCounter") !=
-                std::string::npos)
+            if(counter_type.find("QueryPerformanceCounter")
+               != std::string::npos)
             {
                 std::cout
                     << "  QueryPerformanceCounter frequency appears to be: "
@@ -855,15 +856,15 @@ TEST_F(CpuTest, cpu_counter_frequency_detection)
 
     // std::cout << "Detecting counter frequencies..." << std::endl;
 
-    auto wall_start = std::chrono::high_resolution_clock::now();
-    uint64_t tsc_start = cpu_tsc_read();
-    uint64_t pmu_start = cpu_pmu_cycle_counter_read();
+    auto     wall_start = std::chrono::high_resolution_clock::now();
+    uint64_t tsc_start  = cpu_tsc_read();
+    uint64_t pmu_start  = cpu_pmu_cycle_counter_read();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    auto wall_end = std::chrono::high_resolution_clock::now();
-    uint64_t tsc_end = cpu_tsc_read();
-    uint64_t pmu_end = cpu_pmu_cycle_counter_read();
+    auto     wall_end = std::chrono::high_resolution_clock::now();
+    uint64_t tsc_end  = cpu_tsc_read();
+    uint64_t pmu_end  = cpu_pmu_cycle_counter_read();
 
     auto wall_duration = std::chrono::duration_cast<std::chrono::microseconds>(
         wall_end - wall_start);
@@ -873,7 +874,7 @@ TEST_F(CpuTest, cpu_counter_frequency_detection)
     // std::cout << "Frequency detection results (over " << wall_duration.count()
     //           << " μs):" << std::endl;
 
-    if (wall_duration.count() > 0)
+    if(wall_duration.count() > 0)
     {
         double tsc_freq_mhz = (double) tsc_diff / wall_duration.count();
         double pmu_freq_mhz = (double) pmu_diff / wall_duration.count();
@@ -896,9 +897,9 @@ TEST_F(CpuTest, cpu_counter_frequency_detection)
         //     }
         // }
 
-#if defined(_WIN32) ||                                                         \
-    defined(_WIN64) && (!defined(_M_IX86) && !defined(_M_X64))
-        if (pmu_freq_mhz < 100)
+#if defined(_WIN32)                                                            \
+    || defined(_WIN64) && (!defined(_M_IX86) && !defined(_M_X64))
+        if(pmu_freq_mhz < 100)
         {
             std::cout
                 << "  PMU appears to be QueryPerformanceCounter (low frequency)"
@@ -910,33 +911,33 @@ TEST_F(CpuTest, cpu_counter_frequency_detection)
     std::vector<double> tsc_frequencies;
     std::vector<double> pmu_frequencies;
 
-    for (int i = 0; i < 5; ++i)
+    for(int i = 0; i < 5; ++i)
     {
-        auto start = std::chrono::high_resolution_clock::now();
+        auto     start = std::chrono::high_resolution_clock::now();
         uint64_t tsc_s = cpu_tsc_read();
         uint64_t pmu_s = cpu_pmu_cycle_counter_read();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-        auto end = std::chrono::high_resolution_clock::now();
+        auto     end   = std::chrono::high_resolution_clock::now();
         uint64_t tsc_e = cpu_tsc_read();
         uint64_t pmu_e = cpu_pmu_cycle_counter_read();
 
         auto duration =
             std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        if (duration.count() > 0)
+        if(duration.count() > 0)
         {
-            tsc_frequencies.push_back((double) (tsc_e - tsc_s) /
-                                      duration.count());
-            pmu_frequencies.push_back((double) (pmu_e - pmu_s) /
-                                      duration.count());
+            tsc_frequencies.push_back((double) (tsc_e - tsc_s)
+                                      / duration.count());
+            pmu_frequencies.push_back((double) (pmu_e - pmu_s)
+                                      / duration.count());
         }
     }
 
-    if (!tsc_frequencies.empty())
+    if(!tsc_frequencies.empty())
     {
         double tsc_avg = 0, pmu_avg = 0;
-        for (size_t i = 0; i < tsc_frequencies.size(); ++i)
+        for(size_t i = 0; i < tsc_frequencies.size(); ++i)
         {
             tsc_avg += tsc_frequencies[i];
             pmu_avg += pmu_frequencies[i];
@@ -951,7 +952,7 @@ TEST_F(CpuTest, cpu_counter_frequency_detection)
         //           << std::endl;
 
         double tsc_var = 0, pmu_var = 0;
-        for (size_t i = 0; i < tsc_frequencies.size(); ++i)
+        for(size_t i = 0; i < tsc_frequencies.size(); ++i)
         {
             tsc_var +=
                 (tsc_frequencies[i] - tsc_avg) * (tsc_frequencies[i] - tsc_avg);

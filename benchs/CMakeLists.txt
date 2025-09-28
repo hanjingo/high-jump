@@ -72,11 +72,12 @@ add_test(
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/results)
 
 # Custom target to run benchmark with JSON output
+string(TIMESTAMP BENCHMARK_TIMESTAMP "%Y%m%d_%H%M%S")
 add_custom_target(benchmark_run
     COMMAND ${CMAKE_COMMAND} -E env 
         $<TARGET_FILE:${PROJECT_NAME}> 
         --benchmark_format=json 
-        --benchmark_out=${CMAKE_CURRENT_SOURCE_DIR}/results/benchmark_$<SHELL_PATH:$ENV{TIMESTAMP}>.json
+        --benchmark_out=${CMAKE_CURRENT_SOURCE_DIR}/results/benchmark_${BENCHMARK_TIMESTAMP}.json
         --benchmark_min_time=0.1
     DEPENDS ${PROJECT_NAME}
     COMMENT "Running benchmarks with JSON output"

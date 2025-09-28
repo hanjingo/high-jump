@@ -9,25 +9,26 @@ namespace hj
 
 class init final
 {
-public:
-    explicit init(std::function<void()>&& cb)
+  public:
+    explicit init(std::function<void()> &&cb)
     {
-        cb_ = std::move(cb);
+        _cb = std::move(cb);
 
-        if (cb_) {
-            cb_();
+        if(_cb)
+        {
+            _cb();
         }
     }
     ~init() {}
 
-    init(const init& other) = delete;
-    init& operator=(const init&) = delete;
+    init(const init &other)       = delete;
+    init &operator=(const init &) = delete;
 
-    init(init&& other) = delete;
-    init& operator=(init&& other) = delete;
+    init(init &&other)            = delete;
+    init &operator=(init &&other) = delete;
 
-private:
-    std::function<void()> cb_;
+  private:
+    std::function<void()> _cb;
 };
 
 }
@@ -35,6 +36,10 @@ private:
 #define __init_cat(a, b) a##b
 #define _init_cat(a, b) __init_cat(a, b)
 
-#define INIT(cmd) namespace { ::hj::init _init_cat(__simulate_go_init__, __COUNTER__)([](){ cmd; }); }
+#define INIT(cmd)                                                              \
+    namespace                                                                  \
+    {                                                                          \
+    ::hj::init _init_cat(__simulate_go_init__, __COUNTER__)([]() { cmd; });    \
+    }
 
 #endif

@@ -6,7 +6,7 @@
 namespace hj
 {
 
-template<typename T>
+template <typename T>
 using ring_buffer = boost::circular_buffer<T>;
 
 }

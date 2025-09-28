@@ -4,7 +4,7 @@
 bool is_big_endian()
 {
     int n = 1;
-    return *(char*)(&n) == 1;
+    return *(char *) (&n) == 1;
 }
 
 TEST(endian, is_big_endian)

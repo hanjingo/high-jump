@@ -48,12 +48,12 @@ TEST(clickhouse_client, insert)
     )");
 
     hj::ck::block b;
-    auto id = std::make_shared<hj::ck::column_uint64>();
-    auto age = std::make_shared<hj::ck::column_int8>();
-    auto salary = std::make_shared<hj::ck::column_decimal>(6, 2);
-    auto name = std::make_shared<hj::ck::column_string>();
-    auto create_time = std::make_shared<hj::ck::column_date_time>();
-    for (uint32_t i = 1; i <= 5; ++i)
+    auto          id          = std::make_shared<hj::ck::column_uint64>();
+    auto          age         = std::make_shared<hj::ck::column_int8>();
+    auto          salary      = std::make_shared<hj::ck::column_decimal>(6, 2);
+    auto          name        = std::make_shared<hj::ck::column_string>();
+    auto          create_time = std::make_shared<hj::ck::column_date_time>();
+    for(uint32_t i = 1; i <= 5; ++i)
     {
         id->Append(i);
         age->Append(30);
@@ -85,11 +85,11 @@ TEST(clickhouse_client, select)
     )");
 
     hj::ck::block b;
-    auto id = std::make_shared<hj::ck::column_uint32>();
-    auto name = std::make_shared<hj::ck::column_string>();
-    auto score = std::make_shared<hj::ck::column_float64>();
-    auto dt = std::make_shared<hj::ck::column_date_time>();
-    for (uint32_t i = 1; i <= 5; ++i)
+    auto          id    = std::make_shared<hj::ck::column_uint32>();
+    auto          name  = std::make_shared<hj::ck::column_string>();
+    auto          score = std::make_shared<hj::ck::column_float64>();
+    auto          dt    = std::make_shared<hj::ck::column_date_time>();
+    for(uint32_t i = 1; i <= 5; ++i)
     {
         id->Append(i);
         name->Append("User-" + std::to_string(i));
@@ -104,9 +104,11 @@ TEST(clickhouse_client, select)
 
     cli.insert("select_test", b);
 
-    auto result = cli.select("SELECT id, name, score, dt FROM select_test WHERE id = 1");
+    auto result =
+        cli.select("SELECT id, name, score, dt FROM select_test WHERE id = 1");
     ASSERT_EQ(result.GetRowCount(), 1);
-    if (result.GetRowCount() > 0) {
+    if(result.GetRowCount() > 0)
+    {
         auto id    = result[0]->As<hj::ck::column_uint32>()->At(0);
         auto name  = result[1]->As<hj::ck::column_string>()->At(0);
         auto score = result[2]->As<hj::ck::column_float64>()->At(0);

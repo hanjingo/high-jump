@@ -50,8 +50,10 @@ TEST(process, daemon)
     hj::process::daemon(exe);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::ifstream fin("daemon_test.txt");
-    if (!fin.is_open()) {
-        GTEST_SKIP() << "daemon_test.txt not generated, skipping test (likely due to CI environment restrictions).";
+    if(!fin.is_open())
+    {
+        GTEST_SKIP() << "daemon_test.txt not generated, skipping test (likely "
+                        "due to CI environment restrictions).";
     }
     std::string line;
     std::getline(fin, line);
@@ -60,14 +62,15 @@ TEST(process, daemon)
     std::remove("daemon_test.txt");
 
     std::vector<hj::process::pid_t> vec;
-    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
-        if (arg.size() < 2)
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool {
+        if(arg.size() < 2)
             return false;
-        if (arg[0].find("daemon") == std::string::npos)
+        if(arg[0].find("daemon") == std::string::npos)
             return false;
         return true;
     });
-    for (auto pid : vec) {
+    for(auto pid : vec)
+    {
         hj::process::kill(pid);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -99,14 +102,15 @@ TEST(process, list)
 
     // clear env
     std::vector<hj::process::pid_t> vec;
-    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
-        if (arg.size() < 2)
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool {
+        if(arg.size() < 2)
             return false;
-        if (arg[0].find("child") == std::string::npos)
+        if(arg[0].find("child") == std::string::npos)
             return false;
         return true;
     });
-    for (auto var : vec) {
+    for(auto var : vec)
+    {
         hj::process::kill(var);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -115,29 +119,33 @@ TEST(process, list)
     vec.clear();
     hj::process::spawn(exe);
     bool found = false;
-    for (int i = 0; i < 5; ++i) 
+    for(int i = 0; i < 5; ++i)
     {
         vec.clear();
-        hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
-            if (arg.size() < 2)
+        hj::process::list(vec, [](std::vector<std::string> arg) -> bool {
+            if(arg.size() < 2)
                 return false;
-            if (arg[0].find("child") == std::string::npos)
+            if(arg[0].find("child") == std::string::npos)
                 return false;
             return true;
         });
         std::cout << "Process list: ";
-        for (auto pid : vec) {
+        for(auto pid : vec)
+        {
             std::cout << pid << " ";
         }
         std::cout << std::endl;
-        if (vec.size() == 1) {
+        if(vec.size() == 1)
+        {
             found = true;
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
-    if (!found) {
-        GTEST_SKIP() << "Process not found after retries, skipping test (likely due to CI environment restrictions).";
+    if(!found)
+    {
+        GTEST_SKIP() << "Process not found after retries, skipping test "
+                        "(likely due to CI environment restrictions).";
     }
     ASSERT_EQ(vec.size(), 1);
 }
@@ -154,35 +162,41 @@ TEST(process, kill)
 #endif
     hj::process::spawn(exe);
     std::vector<hj::process::pid_t> vec;
-    hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
-        if (arg.size() < 2)
+    hj::process::list(vec, [](std::vector<std::string> arg) -> bool {
+        if(arg.size() < 2)
             return false;
-        if (arg[0].find("child") == std::string::npos)
+        if(arg[0].find("child") == std::string::npos)
             return false;
         return true;
     });
-    for (auto var : vec) {
+    for(auto var : vec)
+    {
         hj::process::kill(var);
     }
     vec.clear();
     bool killed = false;
-    for (int i = 0; i < 5; ++i) {
+    for(int i = 0; i < 5; ++i)
+    {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        hj::process::list(vec, [](std::vector<std::string> arg) -> bool{
-            if (arg.size() < 2)
+        hj::process::list(vec, [](std::vector<std::string> arg) -> bool {
+            if(arg.size() < 2)
                 return false;
-            if (arg[0].find("child") == std::string::npos)
+            if(arg[0].find("child") == std::string::npos)
                 return false;
             return true;
         });
-        if (vec.empty()) {
+        if(vec.empty())
+        {
             killed = true;
             break;
         }
         vec.clear();
     }
-    if (!killed) {
-        GTEST_SKIP() << "Child process not fully killed after retries, skipping test (likely due to CI environment restrictions).";
+    if(!killed)
+    {
+        GTEST_SKIP()
+            << "Child process not fully killed after retries, skipping test "
+               "(likely due to CI environment restrictions).";
     }
     ASSERT_TRUE(killed);
 }

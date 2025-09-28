@@ -4,13 +4,13 @@
 TEST(bytes, bytes_to_bool)
 {
     unsigned char buf[1] = {0x01};
-    ASSERT_EQ(hj::bytes_to_bool(buf), true);
+    ASSERT_TRUE(hj::bytes_to_bool(buf));
 
     buf[0] = 0x0;
-    ASSERT_EQ(hj::bytes_to_bool(buf), false);
+    ASSERT_FALSE(hj::bytes_to_bool(buf));
 
     buf[0] = 0xFF;
-    ASSERT_EQ(hj::bytes_to_bool(buf), true);
+    ASSERT_TRUE(hj::bytes_to_bool(buf));
 
     buf[0] = 0x2;
     ASSERT_EQ(hj::bytes_to_bool(buf), false);
@@ -80,30 +80,24 @@ TEST(bytes, short_to_bytes)
 
 TEST(bytes, bytes_to_double)
 {
-
 }
 
 TEST(bytes, double_to_bytes)
 {
-
 }
 
 TEST(bytes, bytes_to_float)
 {
-
 }
 
 TEST(bytes, float_to_bytes)
 {
-
 }
 
 TEST(bytes, bytes_to_string)
 {
-
 }
 
 TEST(bytes, string_to_bytes)
 {
-
 }

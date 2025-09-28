@@ -5,36 +5,24 @@ static int singleton_num = 0;
 
 class A
 {
-public:
-    void static static_inc()
-    {
-        singleton_num += 1;
-    }
-    void inc()
-    {
-        _tmp += 2;
-    }
-    int value() { return _tmp; }
+  public:
+    void static static_inc() { singleton_num += 1; }
+    void inc() { _tmp += 2; }
+    int  value() { return _tmp; }
 
-private:
+  private:
     int _tmp = 0;
 };
 
 
 class B : public hj::singleton<B>
 {
-public:
-    void static static_inc()
-    {
-        singleton_num += 10;
-    }
-    void inc()
-    {
-        _tmp += 100;
-    }
-    int value() { return _tmp; }
+  public:
+    void static static_inc() { singleton_num += 10; }
+    void inc() { _tmp += 100; }
+    int  value() { return _tmp; }
 
-private:
+  private:
     int _tmp = 0;
 };
 

@@ -11,30 +11,24 @@ namespace hj
 template <typename T>
 class object_pool
 {
-public:
-    object_pool()
-    {
-    }
-    ~object_pool() 
-    {
-    }
+  public:
+    object_pool() {}
+    ~object_pool() {}
 
-    template<typename ... Args>
-    void construct(Args&& ... args)
+    template <typename... Args>
+    void construct(Args &&...args)
     {
         auto ptr = _pool.malloc();
-        new(ptr) typename boost::object_pool<T>::element_type(std::forward<Args>(args)...);
+        new(ptr) typename boost::object_pool<T>::element_type(
+            std::forward<Args>(args)...);
         push(ptr);
     }
 
-    T* allocate()
-    {
-        return _pool.malloc();
-    }
+    T *allocate() { return _pool.malloc(); }
 
-    typename boost::object_pool<T>::element_type* pop()
+    typename boost::object_pool<T>::element_type *pop()
     {
-        if (_container.empty())
+        if(_container.empty())
             return nullptr;
 
         auto ret = _container.front();
@@ -42,25 +36,22 @@ public:
         return ret;
     }
 
-    inline void push(typename boost::object_pool<T>::element_type* obj)
+    inline void push(typename boost::object_pool<T>::element_type *obj)
     {
         _container.push(obj);
     }
 
-    inline std::size_t size()
-    {
-        return _container.size();
-    }
+    inline std::size_t size() { return _container.size(); }
 
-private:
-    object_pool(const object_pool&) = delete;
-    object_pool& operator=(const object_pool&) = delete;
-    object_pool(const object_pool&&) = delete;
-    object_pool& operator=(const object_pool&&) = delete;
+  private:
+    object_pool(const object_pool &)             = delete;
+    object_pool &operator=(const object_pool &)  = delete;
+    object_pool(const object_pool &&)            = delete;
+    object_pool &operator=(const object_pool &&) = delete;
 
-private:
-    boost::object_pool<T>                                     _pool;
-    std::queue<typename boost::object_pool<T>::element_type*> _container;
+  private:
+    boost::object_pool<T>                                      _pool;
+    std::queue<typename boost::object_pool<T>::element_type *> _container;
 };
 
 }

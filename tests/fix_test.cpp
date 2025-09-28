@@ -1,14 +1,15 @@
 #include <gtest/gtest.h>
 #include <hj/misc/fix.hpp>
 
-TEST(FixTest, BuildAndParse) {
+TEST(FixTest, BuildAndParse)
+{
     hj::fix_builder builder;
     builder.begin();
-    builder.add_string(35, "D"); // MsgType
+    builder.add_string(35, "D");      // MsgType
     builder.add_string(49, "SENDER"); // SenderCompID
     builder.add_string(56, "TARGET"); // TargetCompID
-    builder.add_int(34, 123); // MsgSeqNum
-    builder.add_char(54, '1'); // Side
+    builder.add_int(34, 123);         // MsgSeqNum
+    builder.add_char(54, '1');        // Side
     builder.end();
 
     std::string fixmsg = builder.str();
@@ -22,4 +23,3 @@ TEST(FixTest, BuildAndParse) {
     EXPECT_EQ(parser.get_int<int>(34), 123);
     EXPECT_EQ(parser.get_char(54), '1');
 }
-

@@ -7,30 +7,30 @@ namespace hj
 {
 
 template <typename Container, typename Fn>
-void fill(Container& ct, const Fn&& fn)
+void fill(Container &ct, const Fn &&fn)
 {
     unsigned long idx = 0;
-    for (auto& v : ct)
+    for(auto &v : ct)
         v = fn(idx++);
 }
 
 template <typename Container, typename Fn>
-void fill(Container& ct, const Fn&& fn, const unsigned long n)
+void fill(Container &ct, const Fn &&fn, const unsigned long n)
 {
     unsigned long idx = 0;
-    for (auto& v : ct)
+    for(auto &v : ct)
     {
         v = fn(idx++);
-        if (idx >= n)
+        if(idx >= n)
             return;
     }
 }
 
 template <typename Iterator, typename Fn>
-void fill(Iterator begin, Iterator end, const Fn&& fn)
+void fill(Iterator begin, Iterator end, const Fn &&fn)
 {
     unsigned long idx = 0;
-    for (auto itr = begin; itr != end; ++itr)
+    for(auto itr = begin; itr != end; ++itr)
         *itr = fn(idx++);
 }
 

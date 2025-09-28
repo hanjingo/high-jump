@@ -1,35 +1,34 @@
 #include "comm.h"
 
-std::string fmt_strs(const std::vector<std::string>& vec)
+std::string fmt_strs(const std::vector<std::string> &vec)
 {
     std::string s;
-    for (const auto& e : vec)
+    for(const auto &e : vec)
         s += e + ", ";
 
-    s = s.substr(0, s.size() - 2);  // remove trailing comma and space
+    s = s.substr(0, s.size() - 2); // remove trailing comma and space
     return s;
 }
 
-output_type select_output_type(const std::string& out)
+output_type select_output_type(const std::string &out)
 {
-    if (out.empty()) 
+    if(out.empty())
         return output_type::console;
-    else 
+    else
         return output_type::file;
 }
 
-std::string select_encrypt_output_fmt(
-    std::string& fmt,
-    const std::string& out,
-    const std::string& algo)
+std::string select_encrypt_output_fmt(std::string       &fmt,
+                                      const std::string &out,
+                                      const std::string &algo)
 {
-    if (algo == "base64" || algo == "md5")
+    if(algo == "base64" || algo == "md5")
         fmt = "";
 
-    if (algo == "aes" || algo == "des" || algo == "sha256" || algo == "rsa")
+    if(algo == "aes" || algo == "des" || algo == "sha256" || algo == "rsa")
     {
         // to console
-        if (out.empty())
+        if(out.empty())
             fmt = (fmt == "") ? "base64" : fmt;
         else // to file
             fmt = "";
@@ -38,9 +37,9 @@ std::string select_encrypt_output_fmt(
     return fmt;
 }
 
-void print(const std::string& msg, const output_type& otype)
+void print(const std::string &msg, const output_type &otype)
 {
-    switch (otype)
+    switch(otype)
     {
         case output_type::console:
             std::cout << msg << std::endl;
@@ -50,15 +49,16 @@ void print(const std::string& msg, const output_type& otype)
     }
 }
 
-void print(const std::vector<std::string>& msgs, const output_type& otype)
+void print(const std::vector<std::string> &msgs, const output_type &otype)
 {
-    for (const auto& msg : msgs)
+    for(const auto &msg : msgs)
         print(msg, otype);
 }
 
-void print(const std::vector<std::vector<std::string>>& msgs, const output_type& otype)
+void print(const std::vector<std::vector<std::string> > &msgs,
+           const output_type                            &otype)
 {
-    for (const auto& row : msgs)
-        for (const auto& msg : row)
+    for(const auto &row : msgs)
+        for(const auto &msg : row)
             print(msg, otype);
 }

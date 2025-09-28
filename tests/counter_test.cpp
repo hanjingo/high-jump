@@ -3,7 +3,6 @@
 
 TEST(counter, operator)
 {
-
 }
 
 TEST(counter, inc)
@@ -20,25 +19,20 @@ TEST(counter, dec)
 
 TEST(counter, step)
 {
-
 }
 
 TEST(counter, value)
 {
-
 }
 
 TEST(counter, max)
 {
-
 }
 
 TEST(counter, min)
 {
-
 }
 
 TEST(counter, reset)
 {
-
 }

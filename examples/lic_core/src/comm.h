@@ -7,6 +7,6 @@
 
 int hj_err_to_int(hj::license::err_t e);
 
-hj::license::sign_algo str_to_sign_algo(const std::string& algo);
+hj::license::sign_algo str_to_sign_algo(const std::string &algo);
 
 #endif

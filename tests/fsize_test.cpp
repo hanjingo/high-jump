@@ -23,5 +23,6 @@ TEST(file, GB)
 
 TEST(file, TB)
 {
-    ASSERT_EQ(TB(1) == (unsigned long long)(1) * 1024 * 1024 * 1024 * 1024, true);
+    ASSERT_EQ(TB(1) == (unsigned long long) (1) * 1024 * 1024 * 1024 * 1024,
+              true);
 }

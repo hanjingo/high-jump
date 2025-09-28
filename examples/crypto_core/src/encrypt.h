@@ -18,261 +18,257 @@
 
 class encryptor
 {
-public:
-    virtual const std::string type() = 0;
-    virtual const std::vector<std::string>& supported_paddings() = 0;
-    virtual const std::vector<std::string>& supported_modes() = 0;
-    virtual int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt) = 0;
+  public:
+    virtual const std::string               type()                          = 0;
+    virtual const std::vector<std::string> &supported_paddings()            = 0;
+    virtual const std::vector<std::string> &supported_modes()               = 0;
+    virtual int                             encrypt(std::string       &out,
+                                                    const std::string &in,
+                                                    const std::string &content,
+                                                    const std::string &mode,
+                                                    const std::string &key,
+                                                    const std::string &padding,
+                                                    const std::string &iv,
+                                                    const std::string &fmt) = 0;
 };
 
 class encryptor_mgr
 {
-public:
+  public:
     encryptor_mgr()
-        :_encryptors{}
+        : _encryptors{}
     {
     }
-    ~encryptor_mgr()
-    {
-        _encryptors.clear();
-    }
+    ~encryptor_mgr() { _encryptors.clear(); }
 
-    static encryptor_mgr& instance()
+    static encryptor_mgr &instance()
     {
         static encryptor_mgr inst;
         return inst;
     }
 
     std::vector<std::string> supported_algos();
-    int add(std::unique_ptr<encryptor>&& enc);
-    int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& algo,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt);
+    int                      add(std::unique_ptr<encryptor> &&enc);
+    int                      encrypt(std::string       &out,
+                                     const std::string &in,
+                                     const std::string &content,
+                                     const std::string &algo,
+                                     const std::string &mode,
+                                     const std::string &key,
+                                     const std::string &padding,
+                                     const std::string &iv,
+                                     const std::string &fmt);
 
-private:
-    std::vector<std::unique_ptr<encryptor>> _encryptors;
+  private:
+    std::vector<std::unique_ptr<encryptor> > _encryptors;
 };
 
 class aes_encryptor : public encryptor
 {
-public:
+  public:
     inline const std::string type() override { return std::string("aes"); }
-    inline const std::vector<std::string>& supported_modes() override 
-    { 
-        static std::vector<std::string> modes{
-            "ecb", "cbc", "cfb1", "cfb8", "cfb128", "cfb", "ofb", "ctr", "gcm", "ccm", "xts", 
-            "wrap", "wrap_pad", "cbc_hmac_sha1", "cbc_hmac_sha256", "ocb"}; 
+    inline const std::vector<std::string> &supported_modes() override
+    {
+        static std::vector<std::string> modes{"ecb",
+                                              "cbc",
+                                              "cfb1",
+                                              "cfb8",
+                                              "cfb128",
+                                              "cfb",
+                                              "ofb",
+                                              "ctr",
+                                              "gcm",
+                                              "ccm",
+                                              "xts",
+                                              "wrap",
+                                              "wrap_pad",
+                                              "cbc_hmac_sha1",
+                                              "cbc_hmac_sha256",
+                                              "ocb"};
         return modes;
     }
-    inline const std::vector<std::string>& supported_paddings() override 
+    inline const std::vector<std::string> &supported_paddings() override
     {
-        static std::vector<std::string> paddings{
-            "pkcs5", "pkcs7", "zero", "iso10126", "ansix923", "iso_iec_7816_4", "none"};
+        static std::vector<std::string> paddings{"pkcs5",
+                                                 "pkcs7",
+                                                 "zero",
+                                                 "iso10126",
+                                                 "ansix923",
+                                                 "iso_iec_7816_4",
+                                                 "none"};
         return paddings;
     }
-    int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt) override;
+    int encrypt(std::string       &out,
+                const std::string &in,
+                const std::string &content,
+                const std::string &mode,
+                const std::string &key,
+                const std::string &padding,
+                const std::string &iv,
+                const std::string &fmt) override;
 
-private:
-    bool _is_fmt_valid(const std::string& fmt);
-    bool _is_mode_valid(const std::string& mode);
-    bool _is_key_valid(
-        const std::string& key,
-        const std::string& mode);
-    bool _is_padding_valid(const std::string& padding);
-    bool _is_iv_valid(
-        const std::string& iv, 
-        const std::string& mode);
-    bool _is_input_valid(
-        const std::string& out,
-        const std::string& in, 
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding);
+  private:
+    bool _is_fmt_valid(const std::string &fmt);
+    bool _is_mode_valid(const std::string &mode);
+    bool _is_key_valid(const std::string &key, const std::string &mode);
+    bool _is_padding_valid(const std::string &padding);
+    bool _is_iv_valid(const std::string &iv, const std::string &mode);
+    bool _is_input_valid(const std::string &out,
+                         const std::string &in,
+                         const std::string &content,
+                         const std::string &mode,
+                         const std::string &key,
+                         const std::string &padding);
 };
 
 class base64_encryptor : public encryptor
 {
-public:
+  public:
     inline const std::string type() override { return std::string("base64"); }
-    inline const std::vector<std::string>& supported_modes() override 
-    { 
+    inline const std::vector<std::string> &supported_modes() override
+    {
         static std::vector<std::string> modes{};
-        return modes; 
+        return modes;
     }
-    inline const std::vector<std::string>& supported_paddings() override 
-    { 
+    inline const std::vector<std::string> &supported_paddings() override
+    {
         static std::vector<std::string> paddings{};
-        return paddings; 
+        return paddings;
     }
-    int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt) override;
+    int encrypt(std::string       &out,
+                const std::string &in,
+                const std::string &content,
+                const std::string &mode,
+                const std::string &key,
+                const std::string &padding,
+                const std::string &iv,
+                const std::string &fmt) override;
 
-private:
-    bool _is_fmt_valid(const std::string& fmt);
+  private:
+    bool _is_fmt_valid(const std::string &fmt);
 };
 
 class des_encryptor : public encryptor
 {
-public:
+  public:
     inline const std::string type() override { return std::string("des"); }
-    inline const std::vector<std::string>& supported_modes() override 
-    { 
+    inline const std::vector<std::string> &supported_modes() override
+    {
         static std::vector<std::string> modes{};
-        return modes; 
+        return modes;
     }
-    inline const std::vector<std::string>& supported_paddings() override 
-    { 
+    inline const std::vector<std::string> &supported_paddings() override
+    {
         static std::vector<std::string> paddings{};
-        return paddings; 
+        return paddings;
     }
-    int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt) override;
+    int encrypt(std::string       &out,
+                const std::string &in,
+                const std::string &content,
+                const std::string &mode,
+                const std::string &key,
+                const std::string &padding,
+                const std::string &iv,
+                const std::string &fmt) override;
 
-private:
-    bool _is_fmt_valid(const std::string& fmt);
-    bool _is_mode_valid(const std::string& mode);
-    bool _is_key_valid(
-        const std::string& key,
-        const std::string& mode);
-    bool _is_padding_valid(const std::string& padding);
-    bool _is_iv_valid(
-        const std::string& iv, 
-        const std::string& mode);
-    bool _is_input_valid(
-        const std::string& out,
-        const std::string& in, 
-        const std::string& content,
-        const std::string& padding);
+  private:
+    bool _is_fmt_valid(const std::string &fmt);
+    bool _is_mode_valid(const std::string &mode);
+    bool _is_key_valid(const std::string &key, const std::string &mode);
+    bool _is_padding_valid(const std::string &padding);
+    bool _is_iv_valid(const std::string &iv, const std::string &mode);
+    bool _is_input_valid(const std::string &out,
+                         const std::string &in,
+                         const std::string &content,
+                         const std::string &padding);
 };
 
 class md5_encryptor : public encryptor
 {
-public:
+  public:
     inline const std::string type() override { return std::string("md5"); }
-    inline const std::vector<std::string>& supported_modes() override 
-    { 
+    inline const std::vector<std::string> &supported_modes() override
+    {
         static std::vector<std::string> modes{};
-        return modes; 
+        return modes;
     }
-    inline const std::vector<std::string>& supported_paddings() override 
-    { 
+    inline const std::vector<std::string> &supported_paddings() override
+    {
         static std::vector<std::string> paddings{};
-        return paddings; 
+        return paddings;
     }
-    int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt) override;
+    int encrypt(std::string       &out,
+                const std::string &in,
+                const std::string &content,
+                const std::string &mode,
+                const std::string &key,
+                const std::string &padding,
+                const std::string &iv,
+                const std::string &fmt) override;
 
-private:
-    bool _is_fmt_valid(const std::string& fmt);
+  private:
+    bool _is_fmt_valid(const std::string &fmt);
 };
 
 class sha256_encryptor : public encryptor
 {
-public:
+  public:
     inline const std::string type() override { return std::string("sha256"); }
-    inline const std::vector<std::string>& supported_modes() override 
-    { 
+    inline const std::vector<std::string> &supported_modes() override
+    {
         static std::vector<std::string> modes{};
-        return modes; 
+        return modes;
     }
-    inline const std::vector<std::string>& supported_paddings() override 
-    { 
+    inline const std::vector<std::string> &supported_paddings() override
+    {
         static std::vector<std::string> paddings{};
-        return paddings; 
+        return paddings;
     }
-    int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt) override;
+    int encrypt(std::string       &out,
+                const std::string &in,
+                const std::string &content,
+                const std::string &mode,
+                const std::string &key,
+                const std::string &padding,
+                const std::string &iv,
+                const std::string &fmt) override;
 
-private:
-    bool _is_fmt_valid(const std::string& fmt);
+  private:
+    bool _is_fmt_valid(const std::string &fmt);
 };
 
 class rsa_encryptor : public encryptor
 {
-public:
+  public:
     inline const std::string type() override { return std::string("rsa"); }
-    inline const std::vector<std::string>& supported_modes() override 
-    { 
+    inline const std::vector<std::string> &supported_modes() override
+    {
         static std::vector<std::string> modes{};
-        return modes; 
+        return modes;
     }
-    inline const std::vector<std::string>& supported_paddings() override 
-    { 
+    inline const std::vector<std::string> &supported_paddings() override
+    {
         static std::vector<std::string> paddings{};
-        return paddings; 
+        return paddings;
     }
-    int encrypt(
-        std::string& out,
-        const std::string& in,
-        const std::string& content,
-        const std::string& mode,
-        const std::string& key,
-        const std::string& padding,
-        const std::string& iv,
-        const std::string& fmt) override;
+    int encrypt(std::string       &out,
+                const std::string &in,
+                const std::string &content,
+                const std::string &mode,
+                const std::string &key,
+                const std::string &padding,
+                const std::string &iv,
+                const std::string &fmt) override;
 
-private:
-    bool _is_fmt_valid(const std::string& fmt);
-    bool _is_key_valid(const std::string& key);
-    bool _is_padding_valid(const std::string& padding);
-    bool _is_input_valid(
-        const std::string& out,
-        const std::string& in, 
-        const std::string& content,
-        const std::string& key,
-        const std::string& padding);
+  private:
+    bool _is_fmt_valid(const std::string &fmt);
+    bool _is_key_valid(const std::string &key);
+    bool _is_padding_valid(const std::string &padding);
+    bool _is_input_valid(const std::string &out,
+                         const std::string &in,
+                         const std::string &content,
+                         const std::string &key,
+                         const std::string &padding);
 };
 
 #endif

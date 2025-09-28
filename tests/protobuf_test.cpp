@@ -4,7 +4,8 @@
 #include <cstdio>
 #include <string>
 
-TEST(ProtobufTest, SerializeParseString) {
+TEST(ProtobufTest, SerializeParseString)
+{
     test::Person p;
     p.set_name("test");
     p.set_id(100);
@@ -18,7 +19,8 @@ TEST(ProtobufTest, SerializeParseString) {
     EXPECT_EQ(p1.id(), 100);
 }
 
-TEST(ProtobufTest, SerializeParseFile) {
+TEST(ProtobufTest, SerializeParseFile)
+{
     test::Person p;
     p.set_name("file");
     p.set_id(42);
@@ -27,7 +29,7 @@ TEST(ProtobufTest, SerializeParseFile) {
     ASSERT_TRUE(hj::pb::serialize(fout, p));
     fout.close();
 
-    test::Person p2;
+    test::Person  p2;
     std::ifstream fin("person_test.pb", std::ios::binary);
     ASSERT_TRUE(hj::pb::deserialize(p2, fin));
     EXPECT_EQ(p2.name(), "file");

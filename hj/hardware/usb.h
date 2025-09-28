@@ -28,59 +28,60 @@ extern "C" {
 #endif
 
 typedef hid_device_info usb_info_t;
-typedef bool(*usb_device_range_fn)(usb_info_t* device);
-typedef bool(*usb_device_filter_fn)(const usb_info_t* device);
+typedef bool (*usb_device_range_fn)(usb_info_t *device);
+typedef bool (*usb_device_filter_fn)(const usb_info_t *device);
 
-static bool default_usb_device_filter(const usb_info_t* device)
+inline bool default_usb_device_filter(const usb_info_t *device)
 {
-    if (!device)
+    if(!device)
         return false;
 
-    if (device->bus_type == HID_API_BUS_USB) 
+    if(device->bus_type == HID_API_BUS_USB)
         return true;
 
     return false;
 }
 
 // ----------------------------- USB API ------------------------------------
-static void usb_device_range(usb_device_range_fn fn, usb_device_filter_fn filter)
+inline void usb_device_range(usb_device_range_fn  fn,
+                             usb_device_filter_fn filter)
 {
-    if (!fn)
+    if(!fn)
         return;
 
-    usb_info_t* head = hid_enumerate(0x00, 0x00);
-    if (!head)
+    usb_info_t *head = hid_enumerate(0x00, 0x00);
+    if(!head)
         return;
 
-    usb_info_t* info;
-    for (info = head; info; info = info->next) 
+    usb_info_t *info;
+    for(info = head; info; info = info->next)
     {
-        if (filter && !filter(info))
+        if(filter && !filter(info))
             continue;
 
-        if (!fn(info))
+        if(!fn(info))
             break;
     }
-    
+
     hid_free_enumeration(head);
 }
 
-static int usb_device_count(usb_device_filter_fn filter)
+inline int usb_device_count(usb_device_filter_fn filter)
 {
-    usb_info_t* head = hid_enumerate(0x00, 0x00);
-    if (!head)
+    usb_info_t *head = hid_enumerate(0x00, 0x00);
+    if(!head)
         return 0;
 
-    int count = 0;
-    usb_info_t* info;
-    for (info = head; info; info = info->next) 
+    int         count = 0;
+    usb_info_t *info;
+    for(info = head; info; info = info->next)
     {
-        if (filter && !filter(info)) 
+        if(filter && !filter(info))
             continue;
 
         count++;
     }
-    
+
     hid_free_enumeration(head);
     return count;
 }

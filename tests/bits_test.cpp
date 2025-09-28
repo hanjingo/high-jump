@@ -6,7 +6,7 @@ using hj::bits;
 
 TEST(bits, get)
 {
-    ASSERT_EQ(hj::bits::get(int(0xFFFFFFFF), 1), true);
+    ASSERT_TRUE(hj::bits::get(int(0xFFFFFFFF), 1));
 }
 
 TEST(bits, put)
@@ -25,7 +25,7 @@ TEST(bits, reset)
 TEST(bits, flip)
 {
     unsigned int n = 0xFFFFFFFF;
-    ASSERT_EQ(hj::bits::flip(n) == 0x0, true);
+    ASSERT_TRUE(hj::bits::flip(n) == 0x0);
 
     long long n1 = -1;
     ASSERT_EQ(hj::bits::flip(n1), 0LL);
@@ -33,8 +33,8 @@ TEST(bits, flip)
 
 TEST(bits, to_string)
 {
-    std::string result = "1111111111111111";
-    unsigned short n = 0xFFFF;
+    std::string    result = "1111111111111111";
+    unsigned short n      = 0xFFFF;
     ASSERT_STREQ(hj::bits::to_string(n).c_str(), result.c_str());
 
     char buf[sizeof(unsigned short) * 8 + 1];
@@ -42,7 +42,8 @@ TEST(bits, to_string)
     ASSERT_STREQ(buf, result.c_str());
 }
 
-TEST(BitsTest, CountLeadingZeros32) {
+TEST(BitsTest, CountLeadingZeros32)
+{
     EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0), 32);
     EXPECT_EQ(bits::count_leading_zeros<uint32_t>(1), 31);
     EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0x80000000), 0);
@@ -52,7 +53,8 @@ TEST(BitsTest, CountLeadingZeros32) {
     EXPECT_EQ(bits::count_leading_zeros<uint32_t>(0x00000010), 27);
 }
 
-TEST(BitsTest, CountLeadingZeros64) {
+TEST(BitsTest, CountLeadingZeros64)
+{
     EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0), 64);
     EXPECT_EQ(bits::count_leading_zeros<uint64_t>(1), 63);
     EXPECT_EQ(bits::count_leading_zeros<uint64_t>(0x8000000000000000ULL), 0);

@@ -47,22 +47,22 @@ namespace hj
 
 class base64
 {
-public:
+  public:
     // bytes -> base64 bytes
-    static bool encode(unsigned char* dst, 
-                       std::size_t& dst_len,
-                       const unsigned char* src, 
-                       const std::size_t src_len)
+    static bool encode(unsigned char       *dst,
+                       std::size_t         &dst_len,
+                       const unsigned char *src,
+                       const std::size_t    src_len)
     {
-        if (src_len == 0 || dst_len == 0)
+        if(src_len == 0 || dst_len == 0)
             return false; // Invalid input or output length
 
-        BUF_MEM* buffer_ptr;
-        BIO* bio = BIO_new(BIO_s_mem());
-        if (!bio)
+        BUF_MEM *buffer_ptr;
+        BIO     *bio = BIO_new(BIO_s_mem());
+        if(!bio)
             return false; // Failed to create BIO from memory buffer
-        BIO* b64 = BIO_new(BIO_f_base64());
-        if (!b64)
+        BIO *b64 = BIO_new(BIO_f_base64());
+        if(!b64)
         {
             BIO_free(bio);
             return false; // Failed to create base64 BIO
@@ -73,7 +73,7 @@ public:
         BIO_write(b64, src, static_cast<int>(src_len));
         BIO_flush(b64);
         BIO_get_mem_ptr(b64, &buffer_ptr);
-        if (buffer_ptr->length > dst_len)
+        if(buffer_ptr->length > dst_len)
         {
             BIO_free_all(b64);
             return false; // Not enough space in destination buffer
@@ -86,38 +86,37 @@ public:
     }
 
     // string -> base64 string
-    static bool encode(std::string& dst,
-                       const std::string& src)
+    static bool encode(std::string &dst, const std::string &src)
     {
         std::size_t dst_len = encode_len_reserve(src.size());
         dst.resize(dst_len); // Base64 encoding increases size by ~33%
-        if (!encode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())), 
-                    dst_len,
-                    reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size()))
+        if(!encode(reinterpret_cast<unsigned char *>(
+                       const_cast<char *>(dst.data())),
+                   dst_len,
+                   reinterpret_cast<const unsigned char *>(src.c_str()),
+                   src.size()))
         {
             dst.clear();
             return false;
         }
-        
+
         dst.resize(dst_len); // Resize to actual length
         return true;
     }
 
     // base64 stream -> stream
-    static bool encode(std::ostream& out,
-                       std::istream& in)
+    static bool encode(std::ostream &out, std::istream &in)
     {
-        if (!in || !out)
+        if(!in || !out)
             return false;
 
-        BIO* b64 = BIO_new(BIO_f_base64());
-        if (!b64)
+        BIO *b64 = BIO_new(BIO_f_base64());
+        if(!b64)
             return false;
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        BIO* bio_out = BIO_new(BIO_s_mem());
-        if (!bio_out) 
+        BIO *bio_out = BIO_new(BIO_s_mem());
+        if(!bio_out)
         {
             BIO_free(b64);
             return false;
@@ -125,10 +124,10 @@ public:
         BIO_push(b64, bio_out);
 
         char buffer[BASE64_BUF_SIZE];
-        while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0) 
+        while(in.read(buffer, sizeof(buffer)) || in.gcount() > 0)
         {
             std::streamsize n = in.gcount();
-            if (BIO_write(b64, buffer, static_cast<int>(n)) != n) 
+            if(BIO_write(b64, buffer, static_cast<int>(n)) != n)
             {
                 BIO_free_all(b64);
                 return false;
@@ -136,9 +135,9 @@ public:
         }
 
         BIO_flush(b64);
-        BUF_MEM* mem_ptr = nullptr;
+        BUF_MEM *mem_ptr = nullptr;
         BIO_get_mem_ptr(b64, &mem_ptr);
-        if (mem_ptr && mem_ptr->length > 0)
+        if(mem_ptr && mem_ptr->length > 0)
             out.write(mem_ptr->data, mem_ptr->length);
 
         BIO_free_all(b64);
@@ -146,43 +145,43 @@ public:
     }
 
     // file -> base64 file
-    static bool encode_file(const char* dst_file_path,
-                            const char* src_file_path)
+    static bool encode_file(const char *dst_file_path,
+                            const char *src_file_path)
     {
-        FILE* in = fopen(src_file_path, "rb");
-        if (!in) 
+        FILE *in = fopen(src_file_path, "rb");
+        if(!in)
             return false;
 
-        FILE* out = fopen(dst_file_path, "wb");
-        if (!out) 
-        { 
+        FILE *out = fopen(dst_file_path, "wb");
+        if(!out)
+        {
             fclose(in);
-            return false; 
+            return false;
         }
 
-        BIO* bio_out = BIO_new_fp(out, BIO_NOCLOSE);
-        BIO* b64 = BIO_new(BIO_f_base64());
-        if (!b64) 
-        { 
-            BIO_free(bio_out); 
-            fclose(in); 
-            fclose(out); 
-            return false; 
+        BIO *bio_out = BIO_new_fp(out, BIO_NOCLOSE);
+        BIO *b64     = BIO_new(BIO_f_base64());
+        if(!b64)
+        {
+            BIO_free(bio_out);
+            fclose(in);
+            fclose(out);
+            return false;
         }
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
         BIO_push(b64, bio_out);
 
-        char buffer[BASE64_BUF_SIZE];
+        char        buffer[BASE64_BUF_SIZE];
         std::size_t n;
-        while ((n = fread(buffer, 1, sizeof(buffer), in)) > 0) 
+        while((n = fread(buffer, 1, sizeof(buffer), in)) > 0)
         {
-            if (BIO_write(b64, buffer, static_cast<int>(n)) == (int)n)
+            if(BIO_write(b64, buffer, static_cast<int>(n)) == (int) n)
                 continue;
 
-            BIO_free_all(b64); 
-            fclose(in); 
-            fclose(out); 
+            BIO_free_all(b64);
+            fclose(in);
+            fclose(out);
             return false;
         }
 
@@ -194,28 +193,27 @@ public:
     }
 
     // file -> base64 file
-    static bool encode_file(const std::string& dst_file_path,
-                            const std::string& src_file_path)
+    static bool encode_file(const std::string &dst_file_path,
+                            const std::string &src_file_path)
     {
-        return encode_file(dst_file_path.c_str(),
-                            src_file_path.c_str());
+        return encode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
 
     // base64 bytes -> bytes
-    static bool decode(unsigned char* dst, 
-                       std::size_t& dst_len,
-                       const unsigned char* src, 
-                       const std::size_t src_len)
+    static bool decode(unsigned char       *dst,
+                       std::size_t         &dst_len,
+                       const unsigned char *src,
+                       const std::size_t    src_len)
     {
-        if (src_len % 4 != 0)
+        if(src_len % 4 != 0)
             return false; // Invalid base64 input length
 
-        BIO* bio = BIO_new_mem_buf(src, static_cast<int>(src_len));
-        if (!bio)
+        BIO *bio = BIO_new_mem_buf(src, static_cast<int>(src_len));
+        if(!bio)
             return false; // Failed to create BIO from memory buffer
 
-        BIO* b64 = BIO_new(BIO_f_base64());
-        if (!b64)
+        BIO *b64 = BIO_new(BIO_f_base64());
+        if(!b64)
         {
             BIO_free(bio);
             return false; // Failed to create base64 BIO
@@ -224,7 +222,7 @@ public:
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
         BIO_push(b64, bio);
         int decoded_length = BIO_read(b64, dst, static_cast<int>(dst_len));
-        if (decoded_length < 0)
+        if(decoded_length < 0)
         {
             BIO_free_all(b64);
             return false;
@@ -236,43 +234,43 @@ public:
     }
 
     // base64 string -> string
-    static bool decode(std::string& dst,
-                       const std::string& src)
+    static bool decode(std::string &dst, const std::string &src)
     {
         dst.resize(decode_len_reserve(src.size()));
         std::size_t dst_len = dst.size();
-        if (!decode(reinterpret_cast<unsigned char*>(const_cast<char*>(dst.data())),
-                    dst_len,
-                    reinterpret_cast<const unsigned char*>(src.c_str()), 
-                    src.size()))
+        if(!decode(reinterpret_cast<unsigned char *>(
+                       const_cast<char *>(dst.data())),
+                   dst_len,
+                   reinterpret_cast<const unsigned char *>(src.c_str()),
+                   src.size()))
         {
             dst.clear(); // Clear the string if decoding fails
             return false;
         }
-        
+
         dst.resize(dst_len);
         return true;
     }
 
     // base64 stream -> stream
-    static bool decode(std::ostream& out,
-                       std::istream& in)
+    static bool decode(std::ostream &out, std::istream &in)
     {
-        BIO* b64 = BIO_new(BIO_f_base64());
-        if (!b64)
+        BIO *b64 = BIO_new(BIO_f_base64());
+        if(!b64)
             return false;
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
 
         std::string input_buf;
-        char buffer[BASE64_BUF_SIZE];
-        while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0) 
+        char        buffer[BASE64_BUF_SIZE];
+        while(in.read(buffer, sizeof(buffer)) || in.gcount() > 0)
         {
             input_buf.append(buffer, static_cast<size_t>(in.gcount()));
         }
 
-        BIO* bio_in = BIO_new_mem_buf(input_buf.data(), static_cast<int>(input_buf.size()));
-        if (!bio_in) 
+        BIO *bio_in = BIO_new_mem_buf(input_buf.data(),
+                                      static_cast<int>(input_buf.size()));
+        if(!bio_in)
         {
             BIO_free(b64);
             return false;
@@ -280,8 +278,8 @@ public:
         BIO_push(b64, bio_in);
 
         char outbuf[BASE64_BUF_SIZE];
-        int n;
-        while ((n = BIO_read(b64, outbuf, sizeof(outbuf))) > 0) 
+        int  n;
+        while((n = BIO_read(b64, outbuf, sizeof(outbuf))) > 0)
         {
             out.write(outbuf, n);
         }
@@ -291,43 +289,43 @@ public:
     }
 
     // base64 file -> file
-    static bool decode_file(const char* dst_file_path,
-                            const char* src_file_path)
+    static bool decode_file(const char *dst_file_path,
+                            const char *src_file_path)
     {
-        FILE* in = fopen(src_file_path, "rb");
-        if (!in) 
+        FILE *in = fopen(src_file_path, "rb");
+        if(!in)
             return false;
 
-        FILE* out = fopen(dst_file_path, "wb");
-        if (!out) 
-        { 
-            fclose(in); 
-            return false; 
+        FILE *out = fopen(dst_file_path, "wb");
+        if(!out)
+        {
+            fclose(in);
+            return false;
         }
 
-        BIO* bio_in = BIO_new_fp(in, BIO_NOCLOSE);
-        BIO* b64 = BIO_new(BIO_f_base64());
-        if (!b64) 
+        BIO *bio_in = BIO_new_fp(in, BIO_NOCLOSE);
+        BIO *b64    = BIO_new(BIO_f_base64());
+        if(!b64)
         {
-            BIO_free(bio_in); 
-            fclose(in); 
-            fclose(out); 
-            return false; 
+            BIO_free(bio_in);
+            fclose(in);
+            fclose(out);
+            return false;
         }
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
         BIO_push(b64, bio_in);
 
         char buffer[4096];
-        int n;
-        while ((n = BIO_read(b64, buffer, sizeof(buffer))) > 0) 
+        int  n;
+        while((n = BIO_read(b64, buffer, sizeof(buffer))) > 0)
         {
-            if (fwrite(buffer, 1, n, out) == (size_t)n) 
+            if(fwrite(buffer, 1, n, out) == (size_t) n)
                 continue;
 
-            BIO_free_all(b64); 
-            fclose(in); 
-            fclose(out); 
+            BIO_free_all(b64);
+            fclose(in);
+            fclose(out);
             return false;
         }
 
@@ -338,57 +336,53 @@ public:
     }
 
     // base64 file -> file
-    static bool decode_file(const std::string& dst_file_path,
-                            const std::string& src_file_path)
+    static bool decode_file(const std::string &dst_file_path,
+                            const std::string &src_file_path)
     {
-        return decode_file(dst_file_path.c_str(),
-                            src_file_path.c_str());
+        return decode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
 
-	// reserve encode dst buf size
-	static std::size_t encode_len_reserve(const std::size_t src_len)
-	{
-		return (src_len + 2) / 3 * 4;
-	}
-
-	// reserve decode dst buf size
-	static std::size_t decode_len_reserve(const std::size_t src_len)
-	{
-		return (src_len / 4) * 3;
-	}
-
-    static bool is_valid(const unsigned char* buf, const std::size_t len)
+    // reserve encode dst buf size
+    static std::size_t encode_len_reserve(const std::size_t src_len)
     {
-        if (len == 0 || buf == nullptr)
+        return (src_len + 2) / 3 * 4;
+    }
+
+    // reserve decode dst buf size
+    static std::size_t decode_len_reserve(const std::size_t src_len)
+    {
+        return (src_len / 4) * 3;
+    }
+
+    static bool is_valid(const unsigned char *buf, const std::size_t len)
+    {
+        if(len == 0 || buf == nullptr)
             return false;
 
-        if (len % 4 != 0)
+        if(len % 4 != 0)
             return false;
 
         std::size_t pad = 0;
-        for (std::size_t i = 0; i < len; ++i)
+        for(std::size_t i = 0; i < len; ++i)
         {
             char c = buf[i];
-            if ((c >= 'A' && c <= 'Z') ||
-                (c >= 'a' && c <= 'z') ||
-                (c >= '0' && c <= '9') ||
-                c == '+' || c == '/')
+            if((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+               || (c >= '0' && c <= '9') || c == '+' || c == '/')
             {
-                if (pad > 0)
+                if(pad > 0)
                     return false;
 
                 continue;
             }
-            if (c == '=')
+            if(c == '=')
             {
                 ++pad;
-                if (pad > 2)
+                if(pad > 2)
                     return false;
 
-                if (i < len - 2)
+                if(i < len - 2)
                     return false;
-            }
-            else
+            } else
             {
                 return false;
             }
@@ -396,55 +390,56 @@ public:
         return true;
     }
 
-    static bool is_valid(const std::string& str)
+    static bool is_valid(const std::string &str)
     {
-        return is_valid(reinterpret_cast<const unsigned char*>(str.c_str()), str.length());
+        return is_valid(reinterpret_cast<const unsigned char *>(str.c_str()),
+                        str.length());
     }
 
-    static bool is_valid(std::ifstream& in)
+    static bool is_valid(std::ifstream &in)
     {
-        if (!in.is_open())
+        if(!in.is_open())
             return false;
 
-        unsigned char buf[BASE64_BUF_SIZE];
-        std::size_t total_len = 0;
+        unsigned char           buf[BASE64_BUF_SIZE];
+        std::size_t             total_len = 0;
         std::ifstream::pos_type start_pos = in.tellg();
-        while (in)
+        while(in)
         {
-            in.read(reinterpret_cast<char*>(buf), BASE64_BUF_SIZE);
+            in.read(reinterpret_cast<char *>(buf), BASE64_BUF_SIZE);
             std::streamsize n = in.gcount();
-            if (n == 0)
+            if(n == 0)
                 break;
 
             total_len += n;
-            if (!is_valid(buf, n))
+            if(!is_valid(buf, n))
                 return false;
         }
 
         in.clear();
         in.seekg(start_pos);
-        if (total_len == 0 || total_len % 4 != 0)
+        if(total_len == 0 || total_len % 4 != 0)
             return false;
 
         return true;
     }
 
-    static bool is_valid_file(const std::string& file_path)
+    static bool is_valid_file(const std::string &file_path)
     {
         std::ifstream file(file_path, std::ios::binary);
-        if (!file.is_open())
+        if(!file.is_open())
             return false;
-            
+
         return is_valid(file);
     }
 
-private:
-    base64() = default;
-    ~base64() = default;
-    base64(const base64&) = delete;
-    base64& operator=(const base64&) = delete;
-    base64(base64&&) = delete;
-    base64& operator=(base64&&) = delete;
+  private:
+    base64()                          = default;
+    ~base64()                         = default;
+    base64(const base64 &)            = delete;
+    base64 &operator=(const base64 &) = delete;
+    base64(base64 &&)                 = delete;
+    base64 &operator=(base64 &&)      = delete;
 };
 
 }

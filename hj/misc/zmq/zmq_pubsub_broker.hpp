@@ -14,34 +14,35 @@ namespace hj
 
 class zmq_pubsub_broker
 {
-public:
-    zmq_pubsub_broker(void* ctx)
-        : ctx_{ctx}
-        , back_{zmq_socket(ctx, ZMQ_XPUB)}
-        , front_{zmq_socket(ctx, ZMQ_XSUB)}
-    {}
+  public:
+    zmq_pubsub_broker(void *ctx)
+        : _ctx{ctx}
+        , _back{zmq_socket(ctx, ZMQ_XPUB)}
+        , _front{zmq_socket(ctx, ZMQ_XSUB)}
+    {
+    }
     virtual ~zmq_pubsub_broker()
     {
-        if (back_ != nullptr)
+        if(_back != nullptr)
         {
-            zmq_close(back_);
-            back_ = nullptr;
+            zmq_close(_back);
+            _back = nullptr;
         }
-        if (back_ != nullptr)
+        if(_back != nullptr)
         {
-            zmq_close(front_);
-            front_ = nullptr;
+            zmq_close(_front);
+            _front = nullptr;
         }
     }
 
-    inline int bind(const std::string& xpub_addr, const std::string& xsub_addr)
+    inline int bind(const std::string &xpub_addr, const std::string &xsub_addr)
     {
-        int ret = zmq_bind(back_, xpub_addr.c_str());
-        if (ret != 0)
+        int ret = zmq_bind(_back, xpub_addr.c_str());
+        if(ret != 0)
             return ret;
 
-        ret = zmq_bind(front_, xsub_addr.c_str());
-        if (ret != 0)
+        ret = zmq_bind(_front, xsub_addr.c_str());
+        if(ret != 0)
             return ret;
 
         return 0;
@@ -49,13 +50,13 @@ public:
 
     inline int proxy(void *capture = nullptr)
     {
-        return zmq_proxy(front_, back_, capture);
+        return zmq_proxy(_front, _back, capture);
     }
 
-private:
-    void*     ctx_;
-    void*     back_;
-    void*     front_;
+  private:
+    void *_ctx;
+    void *_back;
+    void *_front;
 };
 
 }

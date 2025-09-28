@@ -28,10 +28,10 @@ extern "C" {
 #endif
 
 typedef hid_device_info bluetooth_info_t;
-typedef bool(*bluetooth_device_range_fn)(bluetooth_info_t* device);
-typedef bool(*bluetooth_device_filter_fn)(const bluetooth_info_t* device);
+typedef bool (*bluetooth_device_range_fn)(bluetooth_info_t *device);
+typedef bool (*bluetooth_device_filter_fn)(const bluetooth_info_t *device);
 
-static bool default_bluetooth_device_filter(const bluetooth_info_t* device)
+inline bool default_bluetooth_device_filter(const bluetooth_info_t *device)
 {
     static unsigned short vendor_id_list[] = {
         0x0A5C, // Broadcom
@@ -50,58 +50,59 @@ static bool default_bluetooth_device_filter(const bluetooth_info_t* device)
 
         // for more vendor IDs, you can add them here
     };
-    if (!device) 
+    if(!device)
         return false;
 
-    for (int i = 0; i < sizeof(vendor_id_list) / sizeof(vendor_id_list[0]); ++i) 
+    for(int i = 0; i < sizeof(vendor_id_list) / sizeof(vendor_id_list[0]); ++i)
     {
-        if (device->vendor_id == vendor_id_list[i])
+        if(device->vendor_id == vendor_id_list[i])
             return true;
     }
 
-    if (device->bus_type == HID_API_BUS_BLUETOOTH) 
+    if(device->bus_type == HID_API_BUS_BLUETOOTH)
         return true;
 
     return false;
 }
 
 // --------------------------------- Bluetooth API ----------------------------------------
-static void bluetooth_device_range(bluetooth_device_range_fn fn, bluetooth_device_filter_fn filter)
+inline void bluetooth_device_range(bluetooth_device_range_fn  fn,
+                                   bluetooth_device_filter_fn filter)
 {
-    if (!fn)
+    if(!fn)
         return;
 
-    bluetooth_info_t* head = hid_enumerate(0x00, 0x00);
-    if (!head)
+    bluetooth_info_t *head = hid_enumerate(0x00, 0x00);
+    if(!head)
         return;
-    
-    for (bluetooth_info_t* info = head; info; info = info->next)
+
+    for(bluetooth_info_t *info = head; info; info = info->next)
     {
-        if (!filter || !filter(info))
+        if(!filter || !filter(info))
             continue;
 
-        if (!fn(info))
+        if(!fn(info))
             break;
     }
-    
+
     hid_free_enumeration(head);
 }
 
-static int bluetooth_device_count(bluetooth_device_filter_fn filter)
+inline int bluetooth_device_count(bluetooth_device_filter_fn filter)
 {
-    bluetooth_info_t* head = hid_enumerate(0x00, 0x00);
-    if (!head)
+    bluetooth_info_t *head = hid_enumerate(0x00, 0x00);
+    if(!head)
         return 0;
-    
+
     int count = 0;
-    for (bluetooth_info_t* info = head; info; info = info->next)
+    for(bluetooth_info_t *info = head; info; info = info->next)
     {
-        if (filter && !filter(info))
+        if(filter && !filter(info))
             continue;
 
         count++;
     }
-    
+
     hid_free_enumeration(head);
     return count;
 }

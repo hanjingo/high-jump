@@ -6,7 +6,7 @@
 namespace hj
 {
 
-template<typename T>
+template <typename T>
 using result = boost::leaf::result<T>;
 
 }

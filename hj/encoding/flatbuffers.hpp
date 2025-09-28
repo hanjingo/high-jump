@@ -6,7 +6,7 @@
 namespace hj
 {
 
-using flatbuffer_builder = flatbuffers::FlatBufferBuilder;
+using flatbuffer_builder   = flatbuffers::FlatBufferBuilder;
 using flatbuffer_builder64 = flatbuffers::FlatBufferBuilder64;
 
 }

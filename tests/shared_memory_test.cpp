@@ -58,7 +58,7 @@ TEST(shared_memory, map)
 //     ASSERT_EQ(result2.map() != nullptr, true);
 //     hj::shared_memory result3{"result3", 256};
 //     ASSERT_EQ(result3.map() != nullptr, true);
-    
+
 //     // start producer
 //     hj::process::spawn("./shm_producer --key=prod");
 

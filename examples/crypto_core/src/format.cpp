@@ -7,13 +7,12 @@
 
 #include "crypto_core.h"
 
-int formator::format(
-    std::string& out,
-    const std::string& in,
-    const std::string& fmt,
-    const fmt_target tgt)
+int formator::format(std::string       &out,
+                     const std::string &in,
+                     const std::string &fmt,
+                     const fmt_target   tgt)
 {
-    switch (tgt)
+    switch(tgt)
     {
         case fmt_target::memory:
             return _format_memory(out, in, fmt);
@@ -24,13 +23,12 @@ int formator::format(
     }
 }
 
-int formator::unformat(
-    std::string& out,
-    const std::string& in,
-    const std::string& fmt,
-    const fmt_target tgt)
+int formator::unformat(std::string       &out,
+                       const std::string &in,
+                       const std::string &fmt,
+                       const fmt_target   tgt)
 {
-    switch (tgt)
+    switch(tgt)
     {
         case fmt_target::memory:
             return _unformat_memory(out, in, fmt);
@@ -41,125 +39,116 @@ int formator::unformat(
     }
 }
 
-int formator::_format_memory(
-    std::string& out,
-    const std::string& in,
-    const std::string& fmt)
+int formator::_format_memory(std::string       &out,
+                             const std::string &in,
+                             const std::string &fmt)
 {
-    int err = CRYPTO_ERR_FAIL;
+    int         err = CRYPTO_ERR_FAIL;
     std::string tmp = in;
-    if (fmt == "hex")
+    if(fmt == "hex")
     {
         tmp = hj::hex::encode(in, true); // upper case
         err = (!tmp.empty()) ? OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
-    }
-    else if (fmt == "base64")
+    } else if(fmt == "base64")
     {
-        err = hj::base64::encode(tmp, in) ? OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
-    }
-    else if (fmt == "none" || fmt == "")
+        err =
+            hj::base64::encode(tmp, in) ? OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+    } else if(fmt == "none" || fmt == "")
     {
         err = OK;
-    }
-    else
+    } else
     {
         err = CRYPTO_ERR_FORMAT_STYLE_NOT_FOUND;
     }
 
-    if (err == OK)
+    if(err == OK)
         out = tmp;
 
     return err;
 }
 
-int formator::_unformat_memory(
-    std::string& out,
-    const std::string& in,
-    const std::string& fmt)
+int formator::_unformat_memory(std::string       &out,
+                               const std::string &in,
+                               const std::string &fmt)
 {
-    int err = CRYPTO_ERR_FAIL;
+    int         err = CRYPTO_ERR_FAIL;
     std::string tmp = in;
-    if (fmt == "hex")
+    if(fmt == "hex")
     {
         tmp = hj::hex::decode(in); // upper case
         err = (!tmp.empty()) ? OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
-    }
-    else if (fmt == "base64")
+    } else if(fmt == "base64")
     {
-        err = hj::base64::decode(out, in) ? 
-            OK : CRYPTO_ERR_UNFORMAT_BASE64_FAILED;
-    }
-    else if (fmt == "none" || fmt == "")
+        err = hj::base64::decode(out, in) ? OK
+                                          : CRYPTO_ERR_UNFORMAT_BASE64_FAILED;
+    } else if(fmt == "none" || fmt == "")
     {
         err = OK;
-    }
-    else
+    } else
     {
         err = CRYPTO_ERR_UNFORMAT_STYLE_NOT_FOUND;
     }
 
-    if (err == OK)
+    if(err == OK)
         out = tmp;
 
     return OK;
 }
 
-int formator::_format_file(
-    const std::string& out,
-    const std::string& in,
-    const std::string& fmt)
+int formator::_format_file(const std::string &out,
+                           const std::string &in,
+                           const std::string &fmt)
 {
-    int err = CRYPTO_ERR_FAIL;
+    int         err = CRYPTO_ERR_FAIL;
     std::string tmp = "";
-    if (out == in)
+    if(out == in)
     {
         // the same file
         auto name = hj::filepath::file_name(out, false);
-        auto ext = hj::filepath::extension(out);
+        auto ext  = hj::filepath::extension(out);
         auto path = hj::filepath::path_name(out);
-        tmp = hj::filepath::join(path, name + std::to_string(hj::random::range<0, 999>()) + ext);
+        tmp       = hj::filepath::join(
+            path,
+            name + std::to_string(hj::random::range<0, 999>()) + ext);
     }
 
     // do format
-    if (fmt == "hex")
+    if(fmt == "hex")
     {
         // not same file
-        if (tmp == "")
+        if(tmp == "")
         {
-            err = hj::hex::encode_file(out, in) ? 
-                OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
-        }
-        else
+            err = hj::hex::encode_file(out, in) ? OK
+                                                : CRYPTO_ERR_FORMAT_HEX_FAILED;
+        } else
         {
             // same file
             hj::filepath::copy_file(in, tmp);
-            err = hj::hex::encode_file(out, tmp) ? 
-                OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
+            err = hj::hex::encode_file(out, tmp) ? OK
+                                                 : CRYPTO_ERR_FORMAT_HEX_FAILED;
             hj::filepath::remove(tmp);
         }
-    }
-    else if (fmt == "base64")
+    } else if(fmt == "base64")
     {
-        if (tmp == "")
+        if(tmp == "")
         {
             // not same file
-            err = hj::base64::encode_file(out, in) ? 
-                OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
-        }
-        else
+            err = hj::base64::encode_file(out, in)
+                      ? OK
+                      : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+        } else
         {
             // same file
             hj::filepath::copy_file(in, tmp);
-            err = hj::base64::encode_file(out, tmp) ? 
-                OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+            err = hj::base64::encode_file(out, tmp)
+                      ? OK
+                      : CRYPTO_ERR_FORMAT_BASE64_FAILED;
             hj::filepath::remove(tmp);
         }
-    }
-    else if (fmt == "none" || fmt == "")
+    } else if(fmt == "none" || fmt == "")
     {
         err = OK;
-    }
-    else
+    } else
     {
         err = CRYPTO_ERR_FORMAT_STYLE_NOT_FOUND;
     }
@@ -167,62 +156,62 @@ int formator::_format_file(
     return err;
 }
 
-int formator::_unformat_file(
-    const std::string& out,
-    const std::string& in,
-    const std::string& fmt)
+int formator::_unformat_file(const std::string &out,
+                             const std::string &in,
+                             const std::string &fmt)
 {
-    int err = CRYPTO_ERR_FAIL;
+    int         err = CRYPTO_ERR_FAIL;
     std::string tmp = "";
-    if (out == in)
+    if(out == in)
     {
         // the same file
         auto name = hj::filepath::file_name(out, false);
-        auto ext = hj::filepath::extension(out);
+        auto ext  = hj::filepath::extension(out);
         auto path = hj::filepath::path_name(out);
-        tmp = hj::filepath::join(path, name + std::to_string(hj::random::range<0, 999>()) + ext);
+        tmp       = hj::filepath::join(
+            path,
+            name + std::to_string(hj::random::range<0, 999>()) + ext);
     }
 
     // do unformat
-    if (fmt == "hex")
+    if(fmt == "hex")
     {
-        if (tmp == "")
+        if(tmp == "")
         {
             // not same file
-            err = hj::hex::decode_file(out, in) ? 
-                OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
-        }
-        else
+            err = hj::hex::decode_file(out, in)
+                      ? OK
+                      : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
+        } else
         {
             // same file
             hj::filepath::copy_file(in, tmp);
-            err = hj::hex::decode_file(out, tmp) ? 
-                OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
+            err = hj::hex::decode_file(out, tmp)
+                      ? OK
+                      : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
             hj::filepath::remove(tmp);
         }
-    }
-    else if (fmt == "base64")
+    } else if(fmt == "base64")
     {
-        if (tmp == "")
+        if(tmp == "")
         {
             // not same file
-            err = hj::base64::decode_file(out, in) ? 
-                OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
-        }
-        else
+            err = hj::base64::decode_file(out, in)
+                      ? OK
+                      : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+        } else
         {
             // same file
             hj::filepath::copy_file(in, tmp);
-            err = hj::base64::decode_file(out, tmp) ? 
-                OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+            err = hj::base64::decode_file(out, tmp)
+                      ? OK
+                      : CRYPTO_ERR_FORMAT_BASE64_FAILED;
             hj::filepath::remove(tmp);
         }
-    }
-    else if (fmt == "none" || fmt == "")
+    } else if(fmt == "none" || fmt == "")
     {
         err = OK;
-    }
-    else
+    } else
     {
         err = CRYPTO_ERR_FORMAT_STYLE_NOT_FOUND;
     }

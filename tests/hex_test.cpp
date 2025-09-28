@@ -31,8 +31,8 @@ TEST(hex, decode)
     hj::hex::decode(out3, in3);
     auto str3 = out3.str();
     ASSERT_EQ(str3.size(), 2);
-    ASSERT_EQ(static_cast<unsigned char>(str3[0]), 0x0F);  // "0F"
-    ASSERT_EQ(static_cast<unsigned char>(str3[1]), 0xFF);  // "FF"
+    ASSERT_EQ(static_cast<unsigned char>(str3[0]), 0x0F); // "0F"
+    ASSERT_EQ(static_cast<unsigned char>(str3[1]), 0xFF); // "FF"
 }
 
 TEST(hex, encode)
@@ -72,10 +72,10 @@ TEST(hex, is_valid)
     EXPECT_FALSE(hj::hex::is_valid(""));
 
     {
-        std::string valid_hex = "AABBCCDDEEFF";
+        std::string valid_hex   = "AABBCCDDEEFF";
         std::string invalid_hex = "AABBCCGG";
-        std::string odd_hex = "AABBCCD";
-        std::string empty_hex = "";
+        std::string odd_hex     = "AABBCCD";
+        std::string empty_hex   = "";
 
         {
             std::ofstream ofs("tmp_valid_hex.txt", std::ios::binary);

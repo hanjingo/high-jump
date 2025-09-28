@@ -76,6 +76,18 @@ log_verbose() {
     fi
 }
 
+# Function to detect auto-generated files
+is_autogen_file() {
+    case "$1" in
+        *.pb.h|*.pb.cc|*.pb.c|*.grpc.pb.h|*.grpc.pb.cc|*.grpc.pb.c|*generated.h)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # Ensure we're in the project root
 cd "$PROJECT_ROOT"
 
@@ -110,13 +122,10 @@ log_verbose "Using: $CLANG_FORMAT_VERSION"
 
 # Determine which files to process
 if [[ ${#SPECIFIED_FILES[@]} -gt 0 ]]; then
-    # Use specified files
     log_verbose "Processing specified files..."
     files=()
     for file in "${SPECIFIED_FILES[@]}"; do
-        # Check if file exists and is a regular file
         if [[ -f "$file" ]]; then
-            # Check if it's a C++ file
             case "$file" in
                 *.cpp|*.hpp|*.h|*.cc|*.cxx)
                     files+=("$file")
@@ -131,10 +140,7 @@ if [[ ${#SPECIFIED_FILES[@]} -gt 0 ]]; then
         fi
     done
 else
-    # Find all C++ files in default directories
     log_verbose "Searching for C++ files in hj/ and tests/ directories..."
-    
-    # Use find to locate C++ files - compatible with all shell environments
     files=()
     while IFS= read -r -d '' file; do
         files+=("$file")
@@ -159,34 +165,21 @@ if [[ "$CHECK_ONLY" == "true" ]]; then
     error_files=()
     
     for file in "${files[@]}"; do
-        log_verbose "Checking: $file"
-        
-        # Use a temporary file to capture clang-format output
-        temp_file=$(mktemp)
-        
-        # For .h files, force C++ language to avoid Objective-C issues
-        temp_cpp_file=""
-        if [[ "$file" == *.h ]]; then
-            # Create temporary .cpp file to avoid Objective-C detection
-            temp_cpp_file=$(mktemp)
-            mv "$temp_cpp_file" "${temp_cpp_file}.cpp"
-            temp_cpp_file="${temp_cpp_file}.cpp"
-            cp "$file" "$temp_cpp_file"
-            check_file="$temp_cpp_file"
-        else
-            check_file="$file"
+        if is_autogen_file "$file"; then
+            log_verbose "Skipping auto-generated file: $file"
+            continue
         fi
-        
-        # Run clang-format and capture both stdout and stderr
-        if ! clang-format --style=file --dry-run --Werror "$check_file" 2>"$temp_file"; then
+
+        log_verbose "Checking: $file"
+        temp_file=$(mktemp)
+        if ! clang-format --style=file --dry-run --Werror "$file" 2>"$temp_file"; then
             has_errors=true
             error_files+=("$file")
-            
+
             red "Format issues in $(basename "$file"):"
             if [[ -s "$temp_file" ]]; then
-                # Show warnings from clang-format, clean up paths
                 echo "  Specific format issues:"
-                cat "$temp_file" | head -10 | sed "s|${temp_cpp_file:-$file}:|Line |g" | while read -r line; do
+                cat "$temp_file" | head -10 | sed "s|$file:|Line |g" | while read -r line; do
                     case "$line" in
                         *"error: code should be clang-formatted"*) 
                             echo "    $(echo "$line" | sed 's/error: code should be clang-formatted.*/does not conform to formatting standards/')"
@@ -203,22 +196,16 @@ if [[ "$CHECK_ONLY" == "true" ]]; then
                 yellow "  File needs formatting (unable to show details)"
             fi
         fi
-        
-        # Cleanup temporary file
-        [[ -n "$temp_cpp_file" ]] && rm -f "$temp_cpp_file"
-        
         rm -f "$temp_file"
     done
     
     if [[ "$has_errors" == "true" ]]; then
         echo
         red "Code formatting issues found in ${#error_files[@]} files!"
-        
         if [[ "$VERBOSE" == "true" ]]; then
             echo "Files with issues:"
             printf '  %s\n' "${error_files[@]}"
         fi
-        
         echo
         echo "To fix these issues, run:"
         echo "  $0"
@@ -229,65 +216,35 @@ if [[ "$CHECK_ONLY" == "true" ]]; then
     fi
 else
     blue "Applying code formatting..."
-    
-    formatted_count=0
-    
+    modified_files=()
     for file in "${files[@]}"; do
+        if is_autogen_file "$file"; then
+            log_verbose "Skipping auto-generated file: $file"
+            continue
+        fi
+
         log_verbose "Formatting: $file"
-        
-        # Create a backup of the original file to check if it changed
         temp_backup=$(mktemp)
         cp "$file" "$temp_backup"
-        
-        # Apply formatting
-        if [[ "$file" == *.h ]]; then
-            # For .h files, create temporary .cpp file to ensure consistent processing
-            temp_cpp=$(mktemp)
-            mv "$temp_cpp" "${temp_cpp}.cpp"
-            temp_cpp="${temp_cpp}.cpp"
-            cp "$file" "$temp_cpp"
-            
-            # Apply formatting to temporary file then copy back
-            if clang-format --style=file -i "$temp_cpp" 2>/dev/null; then
-                # Check if formatting changed anything
-                if ! cmp -s "$file" "$temp_cpp"; then
-                    cp "$temp_cpp" "$file"
-                    format_success=true
-                    echo "Formatted: $(basename "$file")"
-                    ((formatted_count++))
-                else
-                    format_success=true
-                    log_verbose "No changes: $(basename "$file")"
-                fi
+
+        clang-format --style=file -i "$file"
+        if [[ $? -eq 0 ]]; then
+            if ! cmp -s "$file" "$temp_backup"; then
+                echo "Formatted: $file"
+                modified_files+=("$file")
             else
-                format_success=false
+                log_verbose "No changes: $file"
             fi
-            rm -f "$temp_cpp"
         else
-            format_success=true
-            clang-format --style=file -i "$file" || format_success=false
-            
-            # Check if the file actually changed
-            if [[ "$format_success" == "true" ]]; then
-                if ! cmp -s "$file" "$temp_backup"; then
-                    echo "Formatted: $(basename "$file")"
-                    ((formatted_count++))
-                else
-                    log_verbose "No changes: $(basename "$file")"
-                fi
-            fi
-        fi
-        
-        if [[ "$format_success" == "false" ]]; then
             red "Error formatting: $file"
         fi
-        
+
         rm -f "$temp_backup"
     done
-    
+
     echo
-    if [[ $formatted_count -gt 0 ]]; then
-        green "Code formatting complete! $formatted_count files were modified."
+    if [[ ${#modified_files[@]} -gt 0 ]]; then
+        green "Code formatting complete! ${#modified_files[@]} files were modified."
     else
         green "Code formatting complete! All files were already properly formatted."
     fi

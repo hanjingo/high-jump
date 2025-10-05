@@ -10,7 +10,7 @@ class DiskTest : public ::testing::Test
     void SetUp() override
     {
         disk_err_t result = disk_init();
-        ASSERT_EQ(result, DISK_SUCCESS);
+        ASSERT_EQ(result, DISK_OK);
     }
 
     void TearDown() override {}
@@ -21,14 +21,11 @@ TEST_F(DiskTest, initialization_and_cleanup)
 {
     SCOPED_TRACE("Testing disk subsystem initialization and cleanup");
 
-    // std::cout << "Testing disk subsystem management..." << std::endl;
-
     // Test multiple initializations (should be safe)
-    EXPECT_EQ(disk_init(), DISK_SUCCESS)
-        << "Multiple initialization should be safe";
+    EXPECT_EQ(disk_init(), DISK_OK) << "Multiple initialization should be safe";
 
     // Re-initialize for other tests
-    EXPECT_EQ(disk_init(), DISK_SUCCESS) << "Re-initialization should work";
+    EXPECT_EQ(disk_init(), DISK_OK) << "Re-initialization should work";
 
     // std::cout << "Disk subsystem management test completed" << std::endl;
 }
@@ -37,9 +34,6 @@ TEST_F(DiskTest, initialization_and_cleanup)
 TEST_F(DiskTest, size_formatting)
 {
     SCOPED_TRACE("Testing size formatting");
-
-    // std::cout << "Testing size formatting..." << std::endl;
-
     char buffer[256];
 
     // Test various sizes
@@ -55,12 +49,9 @@ TEST_F(DiskTest, size_formatting)
     {
         disk_err_t result =
             disk_format_size(test_sizes[i], buffer, sizeof(buffer));
-        EXPECT_EQ(result, DISK_SUCCESS)
+        EXPECT_EQ(result, DISK_OK)
             << "Size formatting should succeed for " << test_sizes[i];
         EXPECT_GT(strlen(buffer), 0) << "Formatted size should not be empty";
-
-        // std::cout << "Size " << test_sizes[i] << " bytes: " << buffer
-        //           << std::endl;
     }
 
     // Test error conditions
@@ -71,7 +62,7 @@ TEST_F(DiskTest, size_formatting)
     disk_err_t result = disk_format_size(1024ULL * 1024 * 1024,
                                          small_buffer,
                                          sizeof(small_buffer));
-    EXPECT_EQ(result, DISK_ERROR_INSUFFICIENT_BUFFER)
+    EXPECT_EQ(result, DISK_ERROR_BUFFER_TOO_SMALL)
         << "Should detect insufficient buffer";
 
     // std::cout << "Size formatting test completed" << std::endl;
@@ -81,8 +72,6 @@ TEST_F(DiskTest, size_formatting)
 TEST_F(DiskTest, disk_count_retrieval)
 {
     SCOPED_TRACE("Testing disk count retrieval");
-
-    // std::cout << "Testing disk count retrieval..." << std::endl;
 
     uint32_t count = disk_count();
 
@@ -96,13 +85,10 @@ TEST_F(DiskTest, disk_enumeration)
 {
     SCOPED_TRACE("Testing disk enumeration");
 
-    // std::cout << "Testing disk enumeration..." << std::endl;
-
     uint32_t count = disk_count();
     ASSERT_GT(count, 0) << "Should get disk count successfully";
     if(count == 0)
     {
-        // std::cout << "No disks found, skipping enumeration test" << std::endl;
         return;
     }
 
@@ -111,12 +97,9 @@ TEST_F(DiskTest, disk_enumeration)
     uint32_t                 actual_count = 0;
 
     auto result = disk_enumerate(disks.data(), count, &actual_count);
-    EXPECT_EQ(result, DISK_SUCCESS) << "Disk enumeration should succeed";
+    EXPECT_EQ(result, DISK_OK) << "Disk enumeration should succeed";
     EXPECT_LE(actual_count, count)
         << "Actual count should not exceed requested count";
-
-    // std::cout << "Successfully enumerated " << actual_count
-    //           << " disks:" << std::endl;
 
     for(uint32_t i = 0; i < actual_count; i++)
     {
@@ -129,37 +112,6 @@ TEST_F(DiskTest, disk_enumeration)
             << "Disk type should be valid for disk " << i;
         EXPECT_LE(disk.type, DISK_TYPE_RAM)
             << "Disk type should be valid for disk " << i;
-
-        // std::cout << "  Disk " << i << ":" << std::endl;
-        // std::cout << "    Device: " << disk.device_name << std::endl;
-        // std::cout << "    Model: " << disk.model << std::endl;
-
-        // if (disk.total_size > 0)
-        // {
-        //     char size_str[64];
-        //     if (disk_format_size(disk.total_size, size_str, sizeof(size_str)) == DISK_SUCCESS)
-        //     {
-        //         std::cout << "    Size: " << size_str << std::endl;
-        //     }
-        // }
-
-        // std::cout << "    Sector size: " << disk.sector_size << " bytes"
-        //           << std::endl;
-        // std::cout << "    Removable: " << (disk.removable ? "Yes" : "No")
-        //           << std::endl;
-        // std::cout << "    Read-only: " << (disk.read_only ? "Yes" : "No")
-        //           << std::endl;
-
-        // if (disk.rpm > 0)
-        // {
-        //     std::cout << "    RPM: " << disk.rpm << std::endl;
-        // }
-
-        // if (disk.temperature >= 0)
-        // {
-        //     std::cout << "    Temperature: " << disk.temperature << "°C"
-        //               << std::endl;
-        // }
     }
 
     // Test invalid parameters
@@ -169,8 +121,6 @@ TEST_F(DiskTest, disk_enumeration)
               DISK_ERROR_INVALID_PARAMETER);
     EXPECT_EQ(disk_enumerate(disks.data(), 0, &actual_count),
               DISK_ERROR_INVALID_PARAMETER);
-
-    // std::cout << "Disk enumeration test completed" << std::endl;
 }
 
 // Test disk information retrieval
@@ -178,21 +128,18 @@ TEST_F(DiskTest, disk_info_retrieval)
 {
     SCOPED_TRACE("Testing disk information retrieval");
 
-    // std::cout << "Testing disk information retrieval..." << std::endl;
-
     // First get a list of available disks
     uint32_t count = disk_count();
 
     if(count == 0)
     {
-        // std::cout << "No disks available for testing" << std::endl;
         GTEST_SKIP() << "No disks available";
     }
 
     std::vector<disk_info_t> disks(count);
     uint32_t                 actual_count = 0;
     auto result = disk_enumerate(disks.data(), count, &actual_count);
-    ASSERT_EQ(result, DISK_SUCCESS) << "Should enumerate disks successfully";
+    ASSERT_EQ(result, DISK_OK) << "Should enumerate disks successfully";
 
     if(actual_count > 0)
     {
@@ -200,11 +147,8 @@ TEST_F(DiskTest, disk_info_retrieval)
         disk_info_t info;
         result = disk_info(disks[0].device_name, &info);
 
-        if(result == DISK_SUCCESS)
+        if(result == DISK_OK)
         {
-            // std::cout << "Successfully retrieved info for disk: "
-            //           << disks[0].device_name << std::endl;
-
             // Validate the information
             EXPECT_STREQ(info.device_name, disks[0].device_name)
                 << "Device name should match";
@@ -234,17 +178,12 @@ TEST_F(DiskTest, disk_info_retrieval)
 
     // Test non-existent device
     result = disk_info("non_existent_device", &dummy_info);
-    // EXPECT_NE(result, DISK_SUCCESS) << "Should fail for non-existent device";
-
-    // std::cout << "Disk information retrieval test completed" << std::endl;
 }
 
 // Test disk readiness check
 TEST_F(DiskTest, disk_readiness_check)
 {
     SCOPED_TRACE("Testing disk readiness check");
-
-    // std::cout << "Testing disk readiness check..." << std::endl;
 
     // Get available disks
     uint32_t count = disk_count();
@@ -256,14 +195,11 @@ TEST_F(DiskTest, disk_readiness_check)
     std::vector<disk_info_t> disks(count);
     uint32_t                 actual_count = 0;
     auto result = disk_enumerate(disks.data(), count, &actual_count);
-    ASSERT_EQ(result, DISK_SUCCESS) << "Should enumerate disks successfully";
+    ASSERT_EQ(result, DISK_OK) << "Should enumerate disks successfully";
 
     if(actual_count > 0)
     {
         bool ready = disk_is_ready(disks[0].device_name);
-        // std::cout << "Disk " << disks[0].device_name
-        //               << " ready status: " << (ready ? "Ready" : "Not ready")
-        //               << std::endl;
 
         // Most system disks should be ready
         if(!disks[0].removable)
@@ -279,8 +215,6 @@ TEST_F(DiskTest, partition_info_retrieval)
 {
     SCOPED_TRACE("Testing partition information retrieval");
 
-    // std::cout << "Testing partition information retrieval..." << std::endl;
-
     partition_info_t info;
     disk_err_t       result;
 
@@ -293,31 +227,21 @@ TEST_F(DiskTest, partition_info_retrieval)
     result = DISK_ERROR_NOT_SUPPORTED;
 #endif
 
-    if(result == DISK_SUCCESS)
+    if(result == DISK_OK)
     {
-        // std::cout << "Successfully retrieved partition information:"
-        //           << std::endl;
-        // std::cout << "  Mount point: " << info.mount_point << std::endl;
-        // std::cout << "  Device: " << info.device_name << std::endl;
-        // std::cout << "  Volume label: " << info.volume_label << std::endl;
-
         if(info.total_size > 0)
         {
             char total_str[64], used_str[64], avail_str[64];
 
             if(disk_format_size(info.total_size, total_str, sizeof(total_str))
-                   == DISK_SUCCESS
+                   == DISK_OK
                && disk_format_size(info.used_size, used_str, sizeof(used_str))
-                      == DISK_SUCCESS
+                      == DISK_OK
                && disk_format_size(info.available_size,
                                    avail_str,
                                    sizeof(avail_str))
-                      == DISK_SUCCESS)
+                      == DISK_OK)
             {
-                // std::cout << "  Total size: " << total_str << std::endl;
-                // std::cout << "  Used size: " << used_str << std::endl;
-                // std::cout << "  Available size: " << avail_str << std::endl;
-
                 // Basic sanity checks
                 EXPECT_GT(info.total_size, 0)
                     << "Total size should be positive";
@@ -328,14 +252,8 @@ TEST_F(DiskTest, partition_info_retrieval)
             }
         }
 
-        // std::cout << "  Read-only: " << (info.read_only ? "Yes" : "No")
-        //           << std::endl;
-        // std::cout << "  Bootable: " << (info.bootable ? "Yes" : "No")
-        //           << std::endl;
     } else if(result == DISK_ERROR_NOT_SUPPORTED)
     {
-        // std::cout << "Partition information not supported on this platform"
-        //           << std::endl;
         GTEST_SKIP() << "Platform does not support partition information";
     } else
     {
@@ -348,16 +266,12 @@ TEST_F(DiskTest, partition_info_retrieval)
               DISK_ERROR_INVALID_PARAMETER);
     EXPECT_EQ(disk_get_partition_by_mount("/", nullptr),
               DISK_ERROR_INVALID_PARAMETER);
-
-    // std::cout << "Partition information retrieval test completed" << std::endl;
 }
 
 // Test disk performance testing
 TEST_F(DiskTest, disk_performance_testing)
 {
     SCOPED_TRACE("Testing disk performance testing");
-
-    // std::cout << "Testing disk performance testing..." << std::endl;
 
     // Get available disks
     uint32_t count = disk_count();
@@ -369,7 +283,7 @@ TEST_F(DiskTest, disk_performance_testing)
     std::vector<disk_info_t> disks(count);
     uint32_t                 actual_count = 0;
     auto result = disk_enumerate(disks.data(), count, &actual_count);
-    ASSERT_EQ(result, DISK_SUCCESS) << "Should enumerate disks successfully";
+    ASSERT_EQ(result, DISK_OK) << "Should enumerate disks successfully";
     if(actual_count > 0)
     {
         double read_speed = 0.0;
@@ -377,11 +291,8 @@ TEST_F(DiskTest, disk_performance_testing)
                                       1,
                                       &read_speed); // 1 MB test
 
-        if(result == DISK_SUCCESS)
+        if(result == DISK_OK)
         {
-            // std::cout << "Read speed test for " << disks[0].device_name
-            //           << ": " << read_speed << " MB/s" << std::endl;
-
             EXPECT_GT(read_speed, 0.0) << "Read speed should be positive";
             EXPECT_LT(read_speed, 10000.0) << "Read speed should be reasonable";
         } else
@@ -408,8 +319,6 @@ TEST_F(DiskTest, disk_performance_testing)
               DISK_ERROR_INVALID_PARAMETER);
     EXPECT_EQ(disk_read_speed_test("valid_name", 1, nullptr),
               DISK_ERROR_INVALID_PARAMETER);
-
-    // std::cout << "Disk performance testing test completed" << std::endl;
 }
 
 // Test parameter validation across all functions
@@ -447,16 +356,12 @@ TEST_F(DiskTest, parameter_validation)
               DISK_ERROR_INVALID_PARAMETER);
     EXPECT_EQ(disk_format_size(1024, dummy_buffer, 0),
               DISK_ERROR_INVALID_PARAMETER);
-
-    // std::cout << "Parameter validation test completed" << std::endl;
 }
 
 // Integration test - comprehensive disk system test
 TEST_F(DiskTest, comprehensive_disk_system_test)
 {
     SCOPED_TRACE("Comprehensive disk system test");
-
-    // std::cout << "Running comprehensive disk system test..." << std::endl;
 
     // Step 1: Get disk count
     uint32_t count = disk_count();
@@ -476,31 +381,24 @@ TEST_F(DiskTest, comprehensive_disk_system_test)
     std::vector<disk_info_t> disks(count);
     uint32_t                 actual_count = 0;
     auto result = disk_enumerate(disks.data(), count, &actual_count);
-    ASSERT_EQ(result, DISK_SUCCESS) << "Should enumerate disks";
-    // std::cout << "Successfully enumerated " << actual_count << " disks"
-    //           << std::endl;
+    ASSERT_EQ(result, DISK_OK) << "Should enumerate disks";
 
     // Step 3: Test each disk
     for(uint32_t i = 0; i < actual_count; i++)
     {
         const disk_info_t &disk = disks[i];
-        // std::cout << "\nTesting disk " << i << ": " << disk.device_name
-        //           << std::endl;
 
         // Test readiness
         bool ready = disk_is_ready(disk.device_name);
-        if(result == DISK_SUCCESS)
+        if(result == DISK_OK)
         {
-            // std::cout << "  Readiness: " << (ready ? "Ready" : "Not ready")
-            //           << std::endl;
         }
 
         // Test getting detailed info
         disk_info_t detailed_info;
         result = disk_info(disk.device_name, &detailed_info);
-        if(result == DISK_SUCCESS)
+        if(result == DISK_OK)
         {
-            // std::cout << "  Detailed info retrieved successfully" << std::endl;
             EXPECT_STREQ(detailed_info.device_name, disk.device_name);
         }
 
@@ -509,15 +407,10 @@ TEST_F(DiskTest, comprehensive_disk_system_test)
         {
             double read_speed = 0.0;
             result = disk_read_speed_test(disk.device_name, 1, &read_speed);
-            if(result == DISK_SUCCESS)
+            if(result == DISK_OK)
             {
-                // std::cout << "  Read speed: " << read_speed << " MB/s"
-                //           << std::endl;
                 EXPECT_GT(read_speed, 0.0);
             }
         }
     }
-
-    // std::cout << "\nComprehensive disk system test completed successfully"
-    //           << std::endl;
 }

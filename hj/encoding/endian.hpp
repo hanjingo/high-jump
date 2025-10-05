@@ -1,6 +1,8 @@
 #ifndef ENDIAN_HPP
 #define ENDIAN_HPP
 
+#include <cstdint>
+
 #if defined(_WIN32)
 #include <WinSock2.h>
 #else
@@ -14,72 +16,79 @@ static const int endian_tag = 1;
 
 inline bool is_big_endian()
 {
-    return *(char *) (&endian_tag) == 1;
+    return *(char *) (&endian_tag) == 0;
 }
 
 class big_endian
 {
   public:
-    big_endian() {}
-    ~big_endian() {}
+    big_endian()                              = default;
+    ~big_endian()                             = default;
+    big_endian(const big_endian &)            = delete;
+    big_endian(big_endian &&)                 = delete;
+    big_endian &operator=(const big_endian &) = delete;
 
     template <typename T>
     T operator<<(const T n)
     {
-        return hj::big_endian::covert(n);
+        return hj::big_endian::convert(n);
     }
 
-    static uint16_t covert(const uint16_t n) { return htons(n); }
+    static uint16_t convert(const uint16_t n) { return htons(n); }
 
-    static int16_t covert(const int16_t n) { return (int16_t) (htons(n)); }
+    static int16_t convert(const int16_t n) { return (int16_t) (htons(n)); }
 
-    static uint32_t covert(const uint32_t n) { return htonl(n); }
+    static uint32_t convert(const uint32_t n) { return htonl(n); }
 
-    static int32_t covert(const int32_t n) { return (int32_t) (htonl(n)); }
+    static int32_t convert(const int32_t n) { return (int32_t) (htonl(n)); }
 
-    static uint64_t covert(const uint64_t n)
+    static uint64_t convert(const uint64_t n)
     {
         return (((uint64_t) htonl(n)) << 32) + htonl(n >> 32);
     }
 
-    static int64_t covert(const int64_t n)
+    static int64_t convert(const int64_t n)
     {
         return (((int64_t) htonl(n)) << 32) + (htonl(n >> 32));
     }
 };
-static hj::big_endian BE;
 
 class little_endian
 {
   public:
-    little_endian() {}
-    ~little_endian() {}
+    little_endian()                                 = default;
+    ~little_endian()                                = default;
+    little_endian(const little_endian &)            = delete;
+    little_endian(little_endian &&)                 = delete;
+    little_endian &operator=(const little_endian &) = delete;
 
     template <typename T>
     T operator<<(const T n)
     {
-        return hj::little_endian::covert(n);
+        return hj::little_endian::convert(n);
     }
 
-    static uint16_t covert(const uint16_t n) { return ntohs(n); }
+    static uint16_t convert(const uint16_t n) { return ntohs(n); }
 
-    static int16_t covert(const int16_t n) { return (int16_t) (ntohs(n)); }
+    static int16_t convert(const int16_t n) { return (int16_t) (ntohs(n)); }
 
-    static uint32_t covert(const uint32_t n) { return ntohl(n); }
+    static uint32_t convert(const uint32_t n) { return ntohl(n); }
 
-    static int32_t covert(const int32_t n) { return (int32_t) (ntohl(n)); }
+    static int32_t convert(const int32_t n) { return (int32_t) (ntohl(n)); }
 
-    static uint64_t covert(const uint64_t n)
+    static uint64_t convert(const uint64_t n)
     {
         return (((uint64_t) ntohl(n)) << 32) + htonl(n >> 32);
     }
 
-    static int64_t covert(const int64_t n)
+    static int64_t convert(const int64_t n)
     {
         return (((int64_t) ntohl(n)) << 32) + (htonl(n >> 32));
     }
 };
-static hj::little_endian LE;
+
+static const hj::big_endian    BE;
+static const hj::little_endian LE;
 
 }
 

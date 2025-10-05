@@ -6,7 +6,7 @@ BIN_DIR="../bin"
 
 # Build with coverage flags
 echo "Building with coverage..."
-cmake -S .. -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="--coverage"
+cmake -S .. -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TEST=ON -DCMAKE_CXX_FLAGS="--coverage"
 CORES=$(nproc)
 if [ "$CORES" -gt 1 ]; then
 	THREADS=$((CORES-1))

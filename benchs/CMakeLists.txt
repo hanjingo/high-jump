@@ -37,15 +37,25 @@ if(COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 find_package(benchmark REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(jwt-cpp CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 
 include_directories(${CMAKE_SOURCE_DIR})
+
 aux_source_directory(. SRC)
 add_executable(${PROJECT_NAME} ${SRC})
 
 target_link_libraries(${PROJECT_NAME}
 	benchmark::benchmark
+    nlohmann_json::nlohmann_json
+    jwt-cpp::jwt-cpp
+    OpenSSL::SSL 
+    OpenSSL::Crypto
+    spdlog::spdlog
 )
 
 if (WIN32)

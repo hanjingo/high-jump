@@ -8,12 +8,14 @@
 
 TEST(sha256, encode)
 {
+    auto        ok        = hj::sha::error_code::ok;
+    auto        ok_base64 = hj::base64::error_code::ok;
     std::string data;
     ASSERT_EQ(hj::sha::encode(data,
                               std::string("123456"),
                               hj::sha::algorithm::sha256),
-              true);
-    ASSERT_EQ(data.empty(), false);
+              ok);
+    ASSERT_FALSE(data.empty());
     ASSERT_STREQ(data.c_str(),
                  "\x8D\x96\x9E\xEFn\xCA\xD3\xC2\x9A:b\x92\x80\xE6\
 \x86\xCF\f?]Z\x86\xAF\xF3\xCA\x12\x2\f\x92:\xDCl\x92");
@@ -22,11 +24,11 @@ TEST(sha256, encode)
     unsigned char dst[1024];
     std::size_t   dst_len = 1024;
     ASSERT_EQ(hj::sha::encode(dst, dst_len, src, 3, hj::sha::algorithm::sha256),
-              true);
+              ok);
     std::string sha256_encoded;
     sha256_encoded.assign((char *) dst, dst_len);
     std::string b64_encoded;
-    ASSERT_EQ(hj::base64::encode(b64_encoded, sha256_encoded), true);
+    ASSERT_EQ(hj::base64::encode(b64_encoded, sha256_encoded), ok_base64);
     ASSERT_STREQ(b64_encoded.c_str(),
                  "ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=");
 
@@ -47,19 +49,22 @@ aff3ca12020c923adc6c92");
 
 TEST(sha256, encode_file)
 {
+    auto        ok          = hj::sha::error_code::ok;
     const char *input_file  = "sha_test_input.txt";
     const char *output_file = "sha_test_output.bin";
     {
         std::ofstream ofs(input_file, std::ios::binary);
         if(!ofs.is_open())
             GTEST_SKIP() << "Failed to create test input file.";
+
         ofs << "123456";
     }
 
     std::remove(output_file);
-    ASSERT_TRUE(hj::sha::encode_file(output_file,
-                                     input_file,
-                                     hj::sha::algorithm::sha256));
+    ASSERT_EQ(hj::sha::encode_file(output_file,
+                                   input_file,
+                                   hj::sha::algorithm::sha256),
+              ok);
 
     std::ifstream ifs(output_file, std::ios::binary);
     std::string   sha_bin((std::istreambuf_iterator<char>(ifs)),

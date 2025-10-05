@@ -19,9 +19,9 @@ bool create_md5_test_file(const char *filename, const std::string &content)
 
 TEST(md5, encode)
 {
+    auto        ok = hj::md5::error_code::ok;
     std::string dst;
-    ASSERT_EQ(hj::md5::encode(dst, std::string("hehehunanchina@live.com")),
-              true);
+    ASSERT_EQ(hj::md5::encode(dst, std::string("hehehunanchina@live.com")), ok);
     ASSERT_STREQ(hj::md5::to_hex(dst).c_str(),
                  "2da6acfccab34c8ac05295d0f4262b84");
     ASSERT_STREQ(hj::md5::to_hex(dst, true).c_str(),
@@ -37,13 +37,14 @@ TEST(md5, encode)
 
 TEST(md5, encode_file)
 {
+    auto        ok          = hj::md5::error_code::ok;
     const char *input_file  = "md5_test_input.txt";
     const char *output_file = "md5_test_output.bin";
     if(!create_md5_test_file(input_file, "hehehunanchina@live.com"))
         GTEST_SKIP() << "Failed to create test input file.";
 
     std::remove(output_file);
-    ASSERT_TRUE(hj::md5::encode_file(output_file, input_file));
+    ASSERT_EQ(hj::md5::encode_file(output_file, input_file), ok);
 
     std::ifstream ifs(output_file, std::ios::binary);
     std::string   md5_bin((std::istreambuf_iterator<char>(ifs)),

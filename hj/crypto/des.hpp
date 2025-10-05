@@ -16,8 +16,13 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #ifndef DES_HPP
 #define DES_HPP
+
+#include <array>
+#include <cassert>
+#include <random>
 
 // disable msvc safe check warning
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -33,6 +38,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <cstring>
 
 #include <openssl/des.h>
 
@@ -42,6 +48,23 @@ namespace hj
 class des
 {
   public:
+    enum class error_code
+    {
+        ok = 0,
+        invalid_key,
+        invalid_iv,
+        invalid_plain,
+        invalid_padding,
+        invalid_input,
+        invalid_output,
+        buffer_too_small,
+        encrypt_failed,
+        decrypt_failed,
+        file_io_failed,
+        unsupported_algorithm,
+        unknown
+    };
+
     enum class mode
     {
         ecb,
@@ -66,22 +89,25 @@ class des
 
   public:
     // bytes -> encrypt bytes
-    static bool encrypt(unsigned char       *dst,
-                        std::size_t         &dst_len,
-                        const unsigned char *src,
-                        const std::size_t    src_len,
-                        const unsigned char *key,
-                        const std::size_t    key_len,
-                        const mode           mod       = mode::ecb,
-                        const padding        pad_style = padding::zero,
-                        const unsigned char *iv        = nullptr,
-                        const std::size_t    iv_len    = 0)
+    static error_code encrypt(unsigned char       *dst,
+                              std::size_t         &dst_len,
+                              const unsigned char *src,
+                              const std::size_t    src_len,
+                              const unsigned char *key,
+                              const std::size_t    key_len,
+                              const mode           mod       = mode::ecb,
+                              const padding        pad_style = padding::zero,
+                              const unsigned char *iv        = nullptr,
+                              const std::size_t    iv_len    = 0)
     {
-        if(!is_key_valid(key, key_len) || !is_iv_valid(mod, iv, iv_len))
-            return false;
-
+        if(!is_key_valid(key, key_len))
+            return error_code::invalid_key;
+        if(!is_iv_valid(mod, iv, iv_len))
+            return error_code::invalid_iv;
         if(!is_plain_valid(src, src_len, pad_style))
-            return false;
+            return error_code::invalid_plain;
+        if(!dst)
+            return error_code::buffer_too_small;
 
         std::vector<DES_key_schedule> key_schedules;
         std::size_t n   = _multiple_key(key_schedules, key, key_len);
@@ -99,8 +125,14 @@ class des
                 }
                 std::size_t remain = src_len - idx;
                 if(pad_style == padding::no_padding && remain > 0)
-                    return false;
+                {
+                    if(dst && dst_len > 0)
+                        memset(dst, 0, dst_len);
 
+                    dst_len = 0;
+                    key_schedules.clear();
+                    return error_code::invalid_padding;
+                }
                 if(remain > 0 || _is_need_padding(pad_style))
                 {
                     unsigned char last_block[8];
@@ -116,7 +148,8 @@ class des
             }
             case mode::cbc: {
                 if(!iv)
-                    return false;
+                    return error_code::invalid_iv;
+
                 DES_cblock iv_block;
                 memcpy(iv_block, iv, 8);
                 for(; idx + 8 <= src_len; idx += 8)
@@ -132,7 +165,14 @@ class des
                 }
                 std::size_t remain = src_len - idx;
                 if(pad_style == padding::no_padding && remain > 0)
-                    return false;
+                {
+                    if(dst && dst_len > 0)
+                        memset(dst, 0, dst_len);
+
+                    dst_len = 0;
+                    key_schedules.clear();
+                    return error_code::invalid_padding;
+                }
 
                 if(remain > 0 || _is_need_padding(pad_style))
                 {
@@ -152,7 +192,8 @@ class des
             }
             case mode::cfb: {
                 if(!iv)
-                    return false;
+                    return error_code::invalid_iv;
+
                 DES_cblock iv_block;
                 memcpy(iv_block, iv, 8);
                 std::size_t full_blocks = src_len / 8;
@@ -190,8 +231,14 @@ class des
                 } else if(remain > 0)
                 {
                     if(pad_style == padding::no_padding)
-                        return false;
+                    {
+                        if(dst && dst_len > 0)
+                            memset(dst, 0, dst_len);
 
+                        dst_len = 0;
+                        key_schedules.clear();
+                        return error_code::invalid_padding;
+                    }
                     DES_cblock block;
                     memcpy(block, iv_block, 8);
                     _ede_encrypt(key_schedules, block);
@@ -205,13 +252,21 @@ class des
             }
             case mode::ofb: {
                 if(!iv)
-                    return false;
+                    return error_code::invalid_iv;
+
                 DES_cblock iv_block;
                 memcpy(iv_block, iv, 8);
                 std::size_t full_blocks = src_len / 8;
                 long        remain      = static_cast<long>(src_len % 8);
                 if(pad_style == padding::no_padding && remain > 0)
-                    return false;
+                {
+                    if(dst && dst_len > 0)
+                        memset(dst, 0, dst_len);
+
+                    dst_len = 0;
+                    key_schedules.clear();
+                    return error_code::invalid_padding;
+                }
 
                 for(std::size_t i = 0; i < full_blocks; ++i)
                 {
@@ -258,7 +313,8 @@ class des
             }
             case mode::ctr: {
                 if(!iv)
-                    return false;
+                    return error_code::invalid_iv;
+
                 DES_cblock ctr_block;
                 memcpy(ctr_block, iv, 8);
                 idx                    = 0;
@@ -293,27 +349,28 @@ class des
                     _ede_encrypt(key_schedules, keystream);
                     for(std::size_t i = 0; i < 8; ++i)
                         dst[idx + i] = block[i] ^ keystream[i];
+
                     for(int i = 7; i >= 0; --i)
                         if(++ctr_block[i] != 0)
-                        {
                             break;
-                        }
                     idx += 8;
                 }
                 dst_len = padded_len;
                 break;
             }
         }
-        return dst_len > 0;
+
+        key_schedules.clear();
+        return error_code::ok;
     }
 
     // string -> encrypt string
-    static bool encrypt(std::string       &dst,
-                        const std::string &src,
-                        const std::string &key,
-                        const mode         mod       = mode::ecb,
-                        const padding      pad_style = padding::zero,
-                        const std::string &iv        = std::string())
+    static error_code encrypt(std::string       &dst,
+                              const std::string &src,
+                              const std::string &key,
+                              const mode         mod       = mode::ecb,
+                              const padding      pad_style = padding::zero,
+                              const std::string &iv        = std::string())
     {
         std::size_t dst_len = encrypt_len_reserve(src.size());
         dst.resize(dst_len);
@@ -321,41 +378,43 @@ class des
             (mod == mode::ecb)
                 ? nullptr
                 : reinterpret_cast<const unsigned char *>(iv.c_str());
-        if(!encrypt(reinterpret_cast<unsigned char *>(
-                        const_cast<char *>(dst.data())),
-                    dst_len,
-                    reinterpret_cast<const unsigned char *>(src.c_str()),
-                    src.size(),
-                    reinterpret_cast<const unsigned char *>(key.c_str()),
-                    key.size(),
-                    mod,
-                    pad_style,
-                    iv_ptr,
-                    iv.size()))
+        auto ec = encrypt(
+            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
+            dst_len,
+            reinterpret_cast<const unsigned char *>(src.c_str()),
+            src.size(),
+            reinterpret_cast<const unsigned char *>(key.c_str()),
+            key.size(),
+            mod,
+            pad_style,
+            iv_ptr,
+            iv.size());
+        if(ec != error_code::ok)
         {
             dst.clear();
-            return false;
+            return ec;
         }
 
         dst.resize(dst_len);
-        return !dst.empty();
+        return ec;
     }
 
     // stream -> encrypt stream
-    static bool encrypt(std::ostream        &out,
-                        std::istream        &in,
-                        const unsigned char *key,
-                        const std::size_t    key_len,
-                        const mode           mod       = mode::ecb,
-                        const padding        pad_style = padding::zero,
-                        const unsigned char *iv        = nullptr,
-                        const std::size_t    iv_len    = 0)
+    static error_code encrypt(std::ostream        &out,
+                              std::istream        &in,
+                              const unsigned char *key,
+                              const std::size_t    key_len,
+                              const mode           mod       = mode::ecb,
+                              const padding        pad_style = padding::zero,
+                              const unsigned char *iv        = nullptr,
+                              const std::size_t    iv_len    = 0)
     {
         if(!in || !out)
-            return false;
-
-        if(!is_key_valid(key, key_len) || !is_iv_valid(mod, iv, iv_len))
-            return false;
+            return error_code::file_io_failed;
+        if(!is_key_valid(key, key_len))
+            return error_code::invalid_key;
+        if(!is_iv_valid(mod, iv, iv_len))
+            return error_code::invalid_iv;
 
         std::vector<DES_key_schedule> key_schedules;
         std::size_t n = _multiple_key(key_schedules, key, key_len);
@@ -374,10 +433,8 @@ class des
         {
             in.read(reinterpret_cast<char *>(inbuf), block_size);
             std::streamsize read_len = in.gcount();
-
             if(read_len == 0)
                 break;
-
             // check if this is the last block
             bool is_last_block = false;
             if(read_len < block_size)
@@ -385,14 +442,12 @@ class des
                 is_last_block = true;
             } else
             {
-                // peek one byte to check if there's more data
                 char peek_byte;
                 if(!in.read(&peek_byte, 1))
                     is_last_block = true;
                 else
-                    in.seekg(-1, std::ios::cur); // rewind
+                    in.seekg(-1, std::ios::cur);
             }
-
             if(!is_last_block)
             {
                 _stream_block_encrypt(key_schedules,
@@ -404,12 +459,11 @@ class des
                                       outbuf);
                 continue;
             }
-
             // handle the last block
             if(pad_style == padding::no_padding)
             {
                 if(read_len != block_size)
-                    return false;
+                    return error_code::invalid_padding;
 
                 _stream_block_encrypt(key_schedules,
                                       mod,
@@ -418,13 +472,11 @@ class des
                                       ctr_block,
                                       inbuf,
                                       outbuf);
-                return true;
+                return error_code::ok;
             }
-
             // padding for the last block
             if(read_len == block_size)
             {
-                // handler current block
                 _stream_block_encrypt(key_schedules,
                                       mod,
                                       out,
@@ -432,8 +484,6 @@ class des
                                       ctr_block,
                                       inbuf,
                                       outbuf);
-
-                // padding block
                 unsigned char padding_block[block_size];
                 _padding_block(padding_block,
                                block_size,
@@ -449,7 +499,6 @@ class des
                                       outbuf);
             } else
             {
-                // padding for the last block
                 unsigned char padded_block[block_size];
                 _padding_block(padded_block,
                                block_size,
@@ -464,30 +513,29 @@ class des
                                       padded_block,
                                       outbuf);
             }
-
             break;
         }
-
-        return true;
+        key_schedules.clear();
+        return error_code::ok;
     }
 
     // file -> encrypt file
-    static bool encrypt_file(const char          *dst_file_path,
-                             const char          *src_file_path,
-                             const unsigned char *key,
-                             const std::size_t    key_len,
-                             const mode           mod       = mode::ecb,
-                             const padding        pad_style = padding::zero,
-                             const unsigned char *iv        = nullptr,
-                             const std::size_t    iv_len    = 0)
+    static error_code encrypt_file(const char          *dst_file_path,
+                                   const char          *src_file_path,
+                                   const unsigned char *key,
+                                   const std::size_t    key_len,
+                                   const mode           mod    = mode::ecb,
+                                   const padding pad_style     = padding::zero,
+                                   const unsigned char *iv     = nullptr,
+                                   const std::size_t    iv_len = 0)
     {
         std::ifstream src_file(src_file_path, std::ios::binary);
         if(!src_file.is_open())
-            return false;
+            return error_code::file_io_failed;
 
         std::ofstream dst_file(dst_file_path, std::ios::binary);
         if(!dst_file.is_open())
-            return false;
+            return error_code::file_io_failed;
 
         return encrypt(dst_file,
                        src_file,
@@ -500,12 +548,12 @@ class des
     }
 
     // file -> encrypt file
-    static bool encrypt_file(const std::string &dst_file_path,
-                             const std::string &src_file_path,
-                             const std::string &key,
-                             const mode         mod       = mode::ecb,
-                             const padding      pad_style = padding::zero,
-                             const std::string &iv        = std::string())
+    static error_code encrypt_file(const std::string &dst_file_path,
+                                   const std::string &src_file_path,
+                                   const std::string &key,
+                                   const mode         mod       = mode::ecb,
+                                   const padding      pad_style = padding::zero,
+                                   const std::string &iv        = std::string())
     {
         const unsigned char *iv_ptr =
             (mod == mode::ecb)
@@ -523,19 +571,23 @@ class des
     }
 
     // decrypt bytes -> bytes
-    static bool decrypt(unsigned char       *dst,
-                        std::size_t         &dst_len,
-                        const unsigned char *src,
-                        const std::size_t    src_len,
-                        const unsigned char *key,
-                        const std::size_t    key_len,
-                        const mode           mod       = mode::ecb,
-                        const padding        pad_style = padding::zero,
-                        const unsigned char *iv        = nullptr,
-                        const std::size_t    iv_len    = 0)
+    static error_code decrypt(unsigned char       *dst,
+                              std::size_t         &dst_len,
+                              const unsigned char *src,
+                              const std::size_t    src_len,
+                              const unsigned char *key,
+                              const std::size_t    key_len,
+                              const mode           mod       = mode::ecb,
+                              const padding        pad_style = padding::zero,
+                              const unsigned char *iv        = nullptr,
+                              const std::size_t    iv_len    = 0)
     {
-        if(!is_key_valid(key, key_len) || !is_iv_valid(mod, iv, iv_len))
-            return false;
+        if(!is_key_valid(key, key_len))
+            return error_code::invalid_key;
+        if(!is_iv_valid(mod, iv, iv_len))
+            return error_code::invalid_iv;
+        if(!dst)
+            return error_code::buffer_too_small;
 
         std::vector<DES_key_schedule> key_schedules;
         std::size_t n   = _multiple_key(key_schedules, key, key_len);
@@ -656,16 +708,17 @@ class des
         }
 
         _unpadding_block(dst, dst_len, pad_style);
-        return dst_len > 0;
+        key_schedules.clear();
+        return error_code::ok;
     }
 
     // decrypt string -> string
-    static bool decrypt(std::string       &dst,
-                        const std::string &src,
-                        const std::string &key,
-                        const mode         mod       = mode::ecb,
-                        const padding      pad_style = padding::zero,
-                        const std::string &iv        = std::string())
+    static error_code decrypt(std::string       &dst,
+                              const std::string &src,
+                              const std::string &key,
+                              const mode         mod       = mode::ecb,
+                              const padding      pad_style = padding::zero,
+                              const std::string &iv        = std::string())
     {
         dst.resize(decrypt_len_reserve(src.size()));
         std::size_t          dst_len = dst.size();
@@ -673,50 +726,52 @@ class des
             (mod == mode::ecb)
                 ? nullptr
                 : reinterpret_cast<const unsigned char *>(iv.c_str());
-        if(!decrypt(reinterpret_cast<unsigned char *>(
-                        const_cast<char *>(dst.data())),
-                    dst_len,
-                    reinterpret_cast<const unsigned char *>(src.c_str()),
-                    src.size(),
-                    reinterpret_cast<const unsigned char *>(key.c_str()),
-                    key.size(),
-                    mod,
-                    pad_style,
-                    iv_ptr,
-                    iv.size()))
+        auto ec = decrypt(
+            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
+            dst_len,
+            reinterpret_cast<const unsigned char *>(src.c_str()),
+            src.size(),
+            reinterpret_cast<const unsigned char *>(key.c_str()),
+            key.size(),
+            mod,
+            pad_style,
+            iv_ptr,
+            iv.size());
+        if(ec != error_code::ok)
         {
             dst.clear();
-            return false;
+            return ec;
         }
 
         dst.resize(dst_len);
-        return !dst.empty();
+        return ec;
     }
 
     // decrypt stream -> stream
-    static bool decrypt(std::ostream        &out,
-                        std::istream        &in,
-                        const unsigned char *key,
-                        const std::size_t    key_len,
-                        const mode           mod       = mode::ecb,
-                        const padding        pad_style = padding::zero,
-                        const unsigned char *iv        = nullptr,
-                        const std::size_t    iv_len    = 0)
+    static error_code decrypt(std::ostream        &out,
+                              std::istream        &in,
+                              const unsigned char *key,
+                              const std::size_t    key_len,
+                              const mode           mod       = mode::ecb,
+                              const padding        pad_style = padding::zero,
+                              const unsigned char *iv        = nullptr,
+                              const std::size_t    iv_len    = 0)
     {
-        if(!in || !out)
-            return false;
-
-        if(!is_key_valid(key, key_len) || !is_iv_valid(mod, iv, iv_len))
-            return false;
+        if(!in)
+            return error_code::invalid_input;
+        if(!out)
+            return error_code::invalid_output;
+        if(!is_key_valid(key, key_len))
+            return error_code::invalid_key;
+        if(!is_iv_valid(mod, iv, iv_len))
+            return error_code::invalid_iv;
 
         std::vector<DES_key_schedule> key_schedules;
-        std::size_t n = _multiple_key(key_schedules, key, key_len);
-
+        std::size_t   n = _multiple_key(key_schedules, key, key_len);
         unsigned char inbuf[block_size]       = {0};
         unsigned char outbuf[block_size]      = {0};
         unsigned char prev_outbuf[block_size] = {0};
-
-        DES_cblock iv_block;
+        DES_cblock    iv_block;
         if(mod != mode::ecb && iv && iv_len >= 8)
             memcpy(iv_block, iv, 8);
 
@@ -726,17 +781,14 @@ class des
 
         bool has_previous_block = false;
         bool is_first_block     = true;
-
         while(in)
         {
             in.read(reinterpret_cast<char *>(inbuf), block_size);
             std::streamsize read_len = in.gcount();
-
             if(read_len == 0)
                 break;
-
             if(read_len != block_size)
-                return false;
+                return error_code::invalid_padding;
 
             // decrypt the current block
             switch(mod)
@@ -792,7 +844,7 @@ class des
                     break;
                 }
                 default:
-                    return false; // unsupported algorithm
+                    return error_code::unsupported_algorithm;
             }
 
             // check if this is the last block
@@ -814,7 +866,6 @@ class des
                 std::size_t final_len = block_size;
                 if(pad_style != padding::no_padding)
                     _unpadding_block(outbuf, final_len, pad_style);
-
                 out.write(reinterpret_cast<char *>(outbuf), final_len);
                 break;
             }
@@ -825,26 +876,27 @@ class des
             is_first_block     = false;
         }
 
-        return true;
+        key_schedules.clear();
+        return error_code::ok;
     }
 
     // decrypt file -> file
-    static bool decrypt_file(const char          *dst_file_path,
-                             const char          *src_file_path,
-                             const unsigned char *key,
-                             const std::size_t    key_len,
-                             const mode           mod       = mode::ecb,
-                             const padding        pad_style = padding::zero,
-                             const unsigned char *iv        = nullptr,
-                             const std::size_t    iv_len    = 0)
+    static error_code decrypt_file(const char          *dst_file_path,
+                                   const char          *src_file_path,
+                                   const unsigned char *key,
+                                   const std::size_t    key_len,
+                                   const mode           mod    = mode::ecb,
+                                   const padding pad_style     = padding::zero,
+                                   const unsigned char *iv     = nullptr,
+                                   const std::size_t    iv_len = 0)
     {
         std::ifstream src_file(src_file_path, std::ios::binary);
         if(!src_file.is_open())
-            return false;
+            return error_code::file_io_failed;
 
         std::ofstream dst_file(dst_file_path, std::ios::binary);
         if(!dst_file.is_open())
-            return false;
+            return error_code::file_io_failed;
 
         return decrypt(dst_file,
                        src_file,
@@ -857,12 +909,12 @@ class des
     }
 
     // decrypt file -> file
-    static bool decrypt_file(const std::string &dst_file_path,
-                             const std::string &src_file_path,
-                             const std::string &key,
-                             const mode         mod       = mode::ecb,
-                             const padding      pad_style = padding::zero,
-                             const std::string &iv        = std::string())
+    static error_code decrypt_file(const std::string &dst_file_path,
+                                   const std::string &src_file_path,
+                                   const std::string &key,
+                                   const mode         mod       = mode::ecb,
+                                   const padding      pad_style = padding::zero,
+                                   const std::string &iv        = std::string())
     {
         const unsigned char *iv_ptr =
             (mod == mode::ecb)
@@ -963,9 +1015,9 @@ class des
                 break;
             }
             case padding::iso10126: {
+                std::random_device rd;
                 for(std::size_t i = src_len; i < dst_len - 1; ++i)
-                    dst[i] = static_cast<unsigned char>(rand() % 256);
-
+                    dst[i] = static_cast<unsigned char>(rd());
                 dst[dst_len - 1] = pad_val;
                 break;
             }
@@ -1009,12 +1061,15 @@ class des
                     }
 
                 len = len - pad;
+                memset(buf + len, 0, pad);
                 return;
             }
             case padding::zero: {
                 while(len > 0 && buf[len - 1] == 0)
                     --len;
 
+                if(len < block_size)
+                    memset(buf + len, 0, block_size - len);
                 return;
             }
             case padding::iso10126: {
@@ -1026,6 +1081,7 @@ class des
                     return;
 
                 len = len - pad;
+                memset(buf + len, 0, pad);
                 return;
             }
             case padding::ansix923: {
@@ -1038,9 +1094,7 @@ class des
 
                 for(std::size_t i = len - pad; i < len - 1; ++i)
                     if(buf[i] != 0)
-                    {
                         return;
-                    }
 
                 len = len - pad;
                 return;
@@ -1052,6 +1106,9 @@ class des
 
                 if(i >= 0 && buf[i] == 0x80)
                     len = static_cast<std::size_t>(i);
+
+                if(len < block_size)
+                    memset(buf + len, 0, block_size - len);
 
                 return;
             }

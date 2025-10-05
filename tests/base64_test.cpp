@@ -11,11 +11,14 @@ extern "C" {
 
 TEST(base64, encode)
 {
+    auto ok = hj::base64::error_code::ok;
+
     // string -> base64 string
     std::string str_dst;
     ASSERT_TRUE(
         hj::base64::encode(str_dst,
-                           std::string("https://github.com/hanjingo/libcpp")));
+                           std::string("https://github.com/hanjingo/libcpp"))
+        == ok);
     ASSERT_STREQ(str_dst.c_str(),
                  "aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
 
@@ -23,24 +26,28 @@ TEST(base64, encode)
     unsigned char buf_dst[1024];
     std::size_t   buf_dst_len = 1024;
     unsigned char buf[]       = {'a', 'b', 'c', 'd', '1', '2', '3'};
-    ASSERT_TRUE(hj::base64::encode(buf_dst, buf_dst_len, buf, 7));
+    ASSERT_TRUE(hj::base64::encode(buf_dst, buf_dst_len, buf, 7) == ok);
     ASSERT_STREQ(std::string((char *) buf_dst, buf_dst_len).c_str(),
                  "YWJjZDEyMw==");
 
     // stream -> stream
     std::istringstream iss("https://github.com/hanjingo/libcpp");
     std::ostringstream oss;
-    ASSERT_TRUE(hj::base64::encode(oss, iss));
+    ASSERT_TRUE(hj::base64::encode(oss, iss) == ok);
     ASSERT_EQ(oss.str(), "aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
 }
 
 TEST(base64, decode)
 {
+    auto ok = hj::base64::error_code::ok;
+
     // base64 string -> string
     std::string str_dst;
-    ASSERT_TRUE(hj::base64::decode(
-        str_dst,
-        std::string("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==")));
+    ASSERT_TRUE(
+        hj::base64::decode(
+            str_dst,
+            std::string("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA=="))
+        == ok);
     ASSERT_STREQ(str_dst.c_str(), "https://github.com/hanjingo/libcpp");
 
     // base64 byte -> string
@@ -62,7 +69,7 @@ TEST(base64, decode)
                                  'H',
                                  'A',
                                  '='};
-    ASSERT_TRUE(hj::base64::decode(buf_dst, buf_dst_len, buf, 16));
+    ASSERT_TRUE(hj::base64::decode(buf_dst, buf_dst_len, buf, 16) == ok);
     ASSERT_STREQ(
         std::string(reinterpret_cast<char *>(buf_dst), buf_dst_len).c_str(),
         "hello licpp");
@@ -70,12 +77,14 @@ TEST(base64, decode)
     // stream -> stream
     std::istringstream iss("aHR0cHM6Ly9naXRodWIuY29tL2hhbmppbmdvL2xpYmNwcA==");
     std::ostringstream oss;
-    ASSERT_TRUE(hj::base64::decode(oss, iss));
+    ASSERT_TRUE(hj::base64::decode(oss, iss) == ok);
     ASSERT_EQ(oss.str(), "https://github.com/hanjingo/libcpp");
 }
 
 TEST(base64, encode_file)
 {
+    auto ok = hj::base64::error_code::ok;
+
     // base64 file -> file
     std::string str_src = "./crypto.log";
     std::string str_dst = "./base64_file_test_encode.log";
@@ -83,18 +92,20 @@ TEST(base64, encode_file)
     {
         GTEST_SKIP() << "skip test base64 encrypt_file not exist: " << str_src;
     }
-    ASSERT_TRUE(hj::base64::encode_file(str_dst, str_src));
+    ASSERT_TRUE(hj::base64::encode_file(str_dst, str_src) == ok);
 }
 
 TEST(base64, decode_file)
 {
+    auto ok = hj::base64::error_code::ok;
+
     std::string str_src = "./crypto.log";
     std::string str_dst = "./base64_file_test_encode1.log";
     if(!std::filesystem::exists(str_src))
     {
         GTEST_SKIP() << "skip test base64 decode_file not exist: " << str_src;
     }
-    ASSERT_TRUE(hj::base64::encode_file(str_dst, str_src));
+    ASSERT_TRUE(hj::base64::encode_file(str_dst, str_src) == ok);
 
     str_src = "./base64_file_test_encode1.log";
     str_dst = "./base64_file_test_decode.log";
@@ -102,7 +113,7 @@ TEST(base64, decode_file)
     {
         GTEST_SKIP() << "skip test base64 decode_file not exist: " << str_src;
     }
-    ASSERT_TRUE(hj::base64::decode_file(str_dst, str_src));
+    ASSERT_TRUE(hj::base64::decode_file(str_dst, str_src) == ok);
 }
 
 TEST(base64, is_valid)

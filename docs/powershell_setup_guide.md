@@ -4,7 +4,6 @@ This directory contains generic PowerShell execution policy setup tools that can
 
 ## Files
 
-- `setup_powershell_policy.bat` - Windows batch script for PowerShell policy setup
 - `setup_powershell_policy.ps1` - Native PowerShell script with advanced features
 
 ## PowerShell Execution Policy Overview
@@ -18,26 +17,6 @@ Windows PowerShell has execution policies that control script execution:
 - **Bypass** - All scripts allowed without restrictions
 
 ## Usage Examples
-
-### Batch Script (`setup_powershell_policy.bat`)
-
-#### Basic usage (sets RemoteSigned for CurrentUser):
-```cmd
-setup_powershell_policy.bat
-```
-
-#### Custom policy and scope:
-```cmd
-setup_powershell_policy.bat RemoteSigned CurrentUser
-setup_powershell_policy.bat Unrestricted Process
-setup_powershell_policy.bat AllSigned LocalMachine
-```
-
-#### Show help:
-```cmd
-setup_powershell_policy.bat help
-setup_powershell_policy.bat InvalidPolicy
-```
 
 ### PowerShell Script (`setup_powershell_policy.ps1`)
 
@@ -82,22 +61,10 @@ setup_powershell_policy.bat InvalidPolicy
 
 ## Common Use Cases
 
-### Development Environment Setup
-```cmd
-REM Allow local scripts for development
-setup_powershell_policy.bat RemoteSigned CurrentUser
-```
-
 ### Temporary Script Testing
 ```powershell
 # Allow all scripts for current session only
 .\setup_powershell_policy.ps1 -PolicyLevel Bypass -Scope Process -Force
-```
-
-### Corporate Environment
-```cmd
-REM Require all scripts to be signed (needs admin privileges)
-setup_powershell_policy.bat AllSigned LocalMachine
 ```
 
 ### CI/CD Pipeline
@@ -107,14 +74,6 @@ setup_powershell_policy.bat AllSigned LocalMachine
 ```
 
 ## Project Integration
-
-### In your project's setup script:
-```cmd
-@echo off
-echo Setting up PowerShell for this project...
-call path\to\scripts\setup_powershell_policy.bat RemoteSigned CurrentUser
-echo You can now run PowerShell scripts in this project.
-```
 
 ### In PowerShell project setup:
 ```powershell

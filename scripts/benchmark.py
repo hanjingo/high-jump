@@ -34,8 +34,8 @@ class ComparisonConfig:
         self.timestamp_format = '%Y%m%d_%H%M%S'
         
         # Benchmark name formatting
-        self.name_prefix_to_remove = "BM_"  # Remove "BM_" prefix from benchmark names
-        self.name_separator_replacement = " "  # Replace "_" with " " in names
+        self.name_prefix_to_remove = "bm_"  # Remove "bm_" prefix from benchmark names
+        self.name_separator_replacement = "_"  # Replace "_" with " " in names
         
         # Performance analysis settings
         self.significant_change_threshold = 1.0  # Minimum % change to be considered significant

@@ -1,3 +1,20 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef NIC_H
 #define NIC_H
 
@@ -10,7 +27,7 @@
 extern "C" {
 #endif
 
-/* ----------------------------- Platform Detection ------------------------------------ */
+/* ----------------------------- Platform Detection ------------------------- */
 #if defined(_WIN32) || defined(_WIN64)
 #define NIC_PLATFORM_WINDOWS 1
 #include <winsock2.h>
@@ -42,7 +59,7 @@ extern "C" {
 #define NIC_PLATFORM_UNKNOWN 1
 #endif
 
-/* ----------------------------- Constants and Limits ------------------------------------ */
+/* ----------------------------- Constants and Limits ------------------------------- */
 #define NIC_MAX_INTERFACES 32
 #define NIC_MAX_NAME_LENGTH 256
 #define NIC_MAX_DESCRIPTION_LENGTH 512
@@ -65,7 +82,7 @@ typedef enum
     NIC_ERROR_INSUFFICIENT_MEMORY = -9
 } nic_error_t;
 
-/* ----------------------------- Interface Types ------------------------------------ */
+/* ------------------------ Interface Types -------------- */
 typedef enum
 {
     NIC_TYPE_UNKNOWN  = 0,

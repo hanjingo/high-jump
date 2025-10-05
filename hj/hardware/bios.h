@@ -1,3 +1,20 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef BIOS_H
 #define BIOS_H
 
@@ -6,10 +23,47 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+#define SMBIOS_TYPE_BIOS 0
+#define SMBIOS_TYPE_SYSTEM 1
+#define SMBIOS_SIGNATURE 'RSMB'
+#define BIOS_ROM_SIZE_UNIT (64 * 1024) // 64KB units
+
+#define MAX_VENDOR_LENGTH 127
+#define MAX_VERSION_LENGTH 63
+#define MAX_DATE_LENGTH 31
+#define MAX_SERIAL_LENGTH 127
+
+typedef enum
+{
+    BIOS_OK                       = 0,
+    BIOS_FAILED                   = -1,
+    BIOS_ERROR_NULL_POINTER       = -2,
+    BIOS_ERROR_BUFFER_TOO_SMALL   = -3,
+    BIOS_ERROR_NOT_FOUND          = -4,
+    BIOS_ERROR_SYSTEM_CALL_FAILED = -5,
+    BIOS_ERROR_PARSE_FAILED       = -6,
+    BIOS_ERROR_NOT_SUPPORTED      = -7,
+    BIOS_ERROR_MEMORY_ALLOCATION  = -8
+} bios_error_t;
+
+typedef struct
+{
+    char     vendor[128];
+    char     version[64];
+    char     release_date[32];
+    char     serial_number[128];
+    uint16_t starting_segment;
+    size_t   rom_size;
+} bios_info_t;
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #pragma pack(push, 1)
 typedef struct
@@ -17,193 +71,109 @@ typedef struct
     uint8_t  type;
     uint8_t  length;
     uint16_t handle;
-} SMBIOSHeader;
+} smbios_header_t;
 #pragma pack(pop)
 
-inline int bios_vendor(unsigned char *vendor, size_t *length)
+inline bios_error_t smbios_get_data(uint8_t **data, size_t *size)
 {
-    UINT size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
-    if(size == 0)
-        return -1;
+    if(!data || !size)
+        return BIOS_ERROR_NULL_POINTER;
 
-    uint8_t *buffer = (uint8_t *) malloc(size);
+    UINT required_size = GetSystemFirmwareTable(SMBIOS_SIGNATURE, 0, NULL, 0);
+    if(required_size == 0)
+        return BIOS_ERROR_SYSTEM_CALL_FAILED;
+
+    uint8_t *buffer = (uint8_t *) malloc(required_size);
     if(!buffer)
-        return -1;
+        return BIOS_ERROR_MEMORY_ALLOCATION;
 
-    if(GetSystemFirmwareTable('RSMB', 0, buffer, size) != size)
+    if(GetSystemFirmwareTable(SMBIOS_SIGNATURE, 0, buffer, required_size)
+       != required_size)
     {
         free(buffer);
-        return -1;
+        buffer = NULL;
+        return BIOS_ERROR_SYSTEM_CALL_FAILED;
     }
-    uint8_t *p   = buffer + 8;
-    uint8_t *end = buffer + size;
-    while(p + sizeof(SMBIOSHeader) <= end)
+
+    *data = buffer;
+    *size = required_size;
+    return BIOS_OK;
+}
+
+inline const char *smbios_find_string(const uint8_t *entry_data,
+                                      size_t         entry_length,
+                                      const uint8_t *buffer_end,
+                                      uint8_t        string_index)
+{
+    if(!entry_data || !buffer_end || string_index == 0)
+        return NULL;
+
+    const uint8_t *str_ptr = entry_data + entry_length;
+    if(str_ptr >= buffer_end)
+        return NULL;
+
+    for(uint8_t i = 1; i < string_index && str_ptr < buffer_end - 1; i++)
     {
-        SMBIOSHeader *h = (SMBIOSHeader *) p;
-        if(h->length < 4)
+        while(str_ptr < buffer_end && *str_ptr != 0)
+            str_ptr++;
+
+        if(str_ptr < buffer_end)
+            str_ptr++;
+    }
+
+    if(str_ptr >= buffer_end || *str_ptr == 0)
+        return NULL;
+
+    return (const char *) str_ptr;
+}
+
+inline bios_error_t smbios_parse_entry(uint8_t type,
+                                       uint8_t field_offset,
+                                       uint8_t string_index_offset,
+                                       char   *output,
+                                       size_t  output_size)
+{
+    if(!output || output_size == 0)
+        return BIOS_ERROR_NULL_POINTER;
+
+    uint8_t     *buffer;
+    size_t       buffer_size;
+    bios_error_t result = smbios_get_data(&buffer, &buffer_size);
+    if(result != BIOS_OK)
+        return result;
+
+    const uint8_t *p   = buffer + 8;
+    const uint8_t *end = buffer + buffer_size;
+    while(p + sizeof(smbios_header_t) <= end)
+    {
+        const smbios_header_t *header = (const smbios_header_t *) p;
+        if(header->length < sizeof(smbios_header_t))
             break;
 
-        if(h->type == 0)
+        if(header->type == type)
         {
-            uint8_t vendorIndex = *(p + 4);
-            char   *str         = (char *) (p + h->length);
-            for(uint8_t i = 1; i < vendorIndex && *str; i++)
-                str += strlen(str) + 1;
-            if(!(*str))
-                break;
+            if(p + string_index_offset >= p + header->length)
+                return BIOS_ERROR_PARSE_FAILED;
 
-            size_t len = strlen(str);
-            if(len < *length)
+            uint8_t     string_index = *(p + string_index_offset);
+            const char *str =
+                smbios_find_string(p, header->length, end, string_index);
+            if(str)
             {
-                memcpy(vendor, str, len + 1);
-                *length = len;
-            } else
-            {
-                *length = 0;
+                if(!output || !str || output_size == 0)
+                    return BIOS_ERROR_NULL_POINTER;
+
+                size_t src_len = strlen(str);
+                if(src_len >= output_size)
+                    return BIOS_ERROR_BUFFER_TOO_SMALL;
+
+                memcpy(output, str, src_len + 1);
+                return BIOS_OK;
             }
             break;
         }
 
-        uint8_t *next = p + h->length;
-        while(next < end - 1 && (next[0] != 0 || next[1] != 0))
-            next++;
-
-        next += 2;
-        p = next;
-    }
-    free(buffer);
-    return 0;
-}
-
-inline uint16_t bios_starting_segment()
-{
-    UINT size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
-    if(size == 0)
-        return 0;
-
-    uint8_t *buffer = (uint8_t *) malloc(size);
-    if(!buffer)
-        return 0;
-
-    if(GetSystemFirmwareTable('RSMB', 0, buffer, size) != size)
-    {
-        free(buffer);
-        return 0;
-    }
-
-    uint8_t *p       = buffer + 8;
-    uint8_t *end     = buffer + size;
-    uint16_t segment = 0;
-    while(p + sizeof(SMBIOSHeader) <= end)
-    {
-        SMBIOSHeader *h = (SMBIOSHeader *) p;
-        if(h->length < 4)
-            break;
-
-        if(h->type == 0)
-        {
-            segment = *(uint16_t *) (p + 6);
-            break;
-        }
-
-        uint8_t *next = p + h->length;
-        while(next < end - 1 && (next[0] != 0 || next[1] != 0))
-            next++;
-
-        next += 2;
-        p = next;
-    }
-    free(buffer);
-    return segment;
-}
-
-inline int bios_release_date(uint8_t *year, uint8_t *month, uint8_t *day)
-{
-    UINT size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
-    if(size == 0)
-        return -1;
-
-    uint8_t *buffer = (uint8_t *) malloc(size);
-    if(!buffer)
-        return -1;
-
-    if(GetSystemFirmwareTable('RSMB', 0, buffer, size) != size)
-    {
-        free(buffer);
-        return -1;
-    }
-
-    uint8_t *p   = buffer + 8;
-    uint8_t *end = buffer + size;
-    while(p + sizeof(SMBIOSHeader) <= end)
-    {
-        SMBIOSHeader *h = (SMBIOSHeader *) p;
-        if(h->length < 4)
-            break;
-
-        if(h->type == 0)
-        {
-            uint8_t dateIndex = *(p + 8);
-            char   *str       = (char *) (p + h->length);
-            for(uint8_t i = 1; i < dateIndex && *str; i++)
-                str += strlen(str) + 1;
-            if(!(*str))
-                break;
-
-            int y, m, d;
-            if(sscanf(str, "%d/%d/%d", &m, &d, &y) == 3)
-            {
-                *year  = (uint8_t) (y % 100);
-                *month = (uint8_t) m;
-                *day   = (uint8_t) d;
-            }
-            break;
-        }
-        uint8_t *next = p + h->length;
-        while(next < end - 1 && (next[0] != 0 || next[1] != 0))
-            next++;
-
-        next += 2;
-        p = next;
-    }
-    free(buffer);
-    return 0;
-}
-
-inline size_t bios_rom_size()
-{
-    UINT size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
-    if(size == 0)
-        return 0;
-
-    uint8_t *buffer = (uint8_t *) malloc(size);
-    if(!buffer)
-        return 0;
-
-    if(GetSystemFirmwareTable('RSMB', 0, buffer, size) != size)
-    {
-        free(buffer);
-        return 0;
-    }
-
-    uint8_t *p        = buffer + 8;
-    uint8_t *end      = buffer + size;
-    size_t   rom_size = 0;
-    while(p + sizeof(SMBIOSHeader) <= end)
-    {
-        SMBIOSHeader *h = (SMBIOSHeader *) p;
-        if(h->length < 4)
-            break;
-
-        if(h->type == 0)
-        {
-            uint8_t size_kb = *(p + 9);
-            rom_size =
-                (size_t) size_kb * 64 * 1024; // SMBIOS: size in 64KB units
-            break;
-        }
-
-        uint8_t *next = p + h->length;
+        const uint8_t *next = p + header->length;
         while(next < end - 1 && (next[0] != 0 || next[1] != 0))
             next++;
 
@@ -211,225 +181,34 @@ inline size_t bios_rom_size()
         p = next;
     }
 
-    free(buffer);
-    return rom_size;
-}
-
-inline int bios_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
-{
-    UINT size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
-    if(size == 0)
-        return -1;
-
-    uint8_t *buffer = (uint8_t *) malloc(size);
-    if(!buffer)
-        return -1;
-
-    if(GetSystemFirmwareTable('RSMB', 0, buffer, size) != size)
-    {
-        free(buffer);
-        return -1;
-    }
-
-    uint8_t *p   = buffer + 8;
-    uint8_t *end = buffer + size;
-    while(p + sizeof(SMBIOSHeader) <= end)
-    {
-        SMBIOSHeader *h = (SMBIOSHeader *) p;
-        if(h->length < 4)
-            break;
-
-        if(h->type == 0)
-        {
-            uint8_t versionIndex = *(p + 5);
-            char   *str          = (char *) (p + h->length);
-            for(uint8_t i = 1; i < versionIndex && *str; i++)
-                str += strlen(str) + 1;
-
-            if(*str)
-                sscanf(str, "%hhu.%hhu.%hhu", major, minor, patch);
-
-            break;
-        }
-
-        uint8_t *next = p + h->length;
-        while(next < end - 1 && (next[0] != 0 || next[1] != 0))
-            next++;
-
-        next += 2;
-        p = next;
-    }
-
-    free(buffer);
-    return 0;
-}
-
-inline int bios_serial_num(uint8_t *serial_num, size_t *length)
-{
-    UINT size = GetSystemFirmwareTable('RSMB', 0, NULL, 0);
-    if(size == 0)
-        return -1;
-
-    uint8_t *buffer = (uint8_t *) malloc(size);
-    if(!buffer)
-        return -1;
-
-    if(GetSystemFirmwareTable('RSMB', 0, buffer, size) != size)
-    {
-        free(buffer);
-        return -1;
-    }
-
-    uint8_t *p   = buffer + 8;
-    uint8_t *end = buffer + size;
-    while(p + sizeof(SMBIOSHeader) <= end)
-    {
-        SMBIOSHeader *h = (SMBIOSHeader *) p;
-        if(h->length < 4)
-            break;
-
-        if(h->type == 1)
-        {
-            uint8_t serialIndex = *(p + 7);
-            char   *str         = (char *) (p + h->length);
-            for(uint8_t i = 1; i < serialIndex && *str; i++)
-                str += strlen(str) + 1;
-
-            if(*str)
-            {
-                size_t len = strlen(str);
-                if(len < *length)
-                {
-                    memcpy(serial_num, str, len + 1);
-                    *length = len;
-                } else
-                {
-                    *length = 0;
-                }
-            }
-            break;
-        }
-
-        uint8_t *next = p + h->length;
-        while(next < end - 1 && (next[0] != 0 || next[1] != 0))
-            next++;
-
-        next += 2;
-        p = next;
-    }
-
-    free(buffer);
-    return 0;
+    return BIOS_ERROR_NOT_FOUND;
 }
 
 #elif defined(__linux__)
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-inline int bios_vendor(unsigned char *vendor, size_t *length)
+inline bios_error_t
+bios_sys_file_read(const char *path, char *buffer, size_t buffer_size)
 {
-    FILE *fp = fopen("/sys/class/dmi/id/bios_vendor", "r");
-    if(!fp)
-        return -1;
+    if(!path || !buffer || buffer_size == 0)
+        return BIOS_ERROR_NULL_POINTER;
 
-    char buf[64] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
-    {
+    FILE *fp = fopen(path, "r");
+    if(!fp)
+        return BIOS_ERROR_NOT_FOUND;
+
+    if(!fgets(buffer, buffer_size, fp))
         fclose(fp);
-        return -1;
-    }
+    return BIOS_ERROR_SYSTEM_CALL_FAILED;
 
     fclose(fp);
-    size_t len = strlen(buf);
-    if(len > 0 && buf[len - 1] == '\n')
-        buf[--len] = 0;
+    size_t len = strlen(buffer);
+    if(len > 0 && buffer[len - 1] == '\n')
+        buffer[len - 1] = '\0';
 
-    if(*length < len)
-        return -1;
-
-    memcpy(vendor, buf, len);
-    *length = len;
-    return 0;
-}
-
-inline uint16_t bios_starting_segment()
-{
-    // TODO
-    return 0;
-}
-
-inline int bios_release_date(uint8_t *year, uint8_t *month, uint8_t *day)
-{
-    FILE *fp = fopen("/sys/class/dmi/id/bios_date", "r");
-    if(!fp)
-        return -1;
-
-    char buf[32] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
-    {
-        fclose(fp);
-        return -1;
-    }
-
-    fclose(fp);
-    int y, m, d;
-    if(sscanf(buf, "%d/%d/%d", &m, &d, &y) == 3)
-    {
-        *year  = (uint8_t) (y % 100);
-        *month = (uint8_t) m;
-        *day   = (uint8_t) d;
-        return 0;
-    }
-
-    return -1;
-}
-
-inline size_t bios_rom_size()
-{
-    // TODO
-    return 0;
-}
-
-inline int bios_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
-{
-    FILE *fp = fopen("/sys/class/dmi/id/bios_version", "r");
-    if(!fp)
-        return -1;
-
-    char buf[32] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
-    {
-        fclose(fp);
-        return -1;
-    }
-
-    fclose(fp);
-    sscanf(buf, "%hhu.%hhu.%hhu", major, minor, patch);
-    return 0;
-}
-
-inline int bios_serial_num(uint8_t *serial_num, size_t *length)
-{
-    FILE *fp = fopen("/sys/class/dmi/id/product_serial", "r");
-    if(!fp)
-        return -1;
-
-    char buf[64] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
-    {
-        fclose(fp);
-        return -1;
-    }
-    fclose(fp);
-    size_t len = strlen(buf);
-    if(len > 0 && buf[len - 1] == '\n')
-        buf[--len] = 0;
-
-    if(*length < len)
-        return -1;
-
-    memcpy(serial_num, buf, len);
-    *length = len;
-    return 0;
+    return BIOS_OK;
 }
 
 #elif defined(__APPLE__)
@@ -437,158 +216,320 @@ inline int bios_serial_num(uint8_t *serial_num, size_t *length)
 #include <stdlib.h>
 #include <string.h>
 
-inline int bios_vendor(unsigned char *vendor, size_t *length)
+inline bios_error_t bios_execute_command_and_parse(const char *command,
+                                                   const char *search_pattern,
+                                                   char       *output,
+                                                   size_t      output_size)
 {
-    FILE *fp =
-        popen("system_profiler SPHardwareDataType | grep 'Manufacturer'", "r");
-    if(!fp)
-        return -1;
+    if(!command || !search_pattern || !output || output_size == 0)
+        return BIOS_ERROR_NULL_POINTER;
 
-    char buf[128] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
+    FILE *fp = popen(command, "r");
+    if(!fp)
+        return BIOS_ERROR_SYSTEM_CALL_FAILED;
+
+    char        *found = NULL;
+    char        *value = NULL;
+    char         buffer[256];
+    bios_error_t result = BIOS_ERROR_NOT_FOUND;
+    while(fgets(buffer, sizeof(buffer), fp))
     {
-        pclose(fp);
-        return -1;
+        found = strstr(buffer, search_pattern);
+        if(!found)
+            continue;
+
+        value = strchr(found, ':');
+        if(!value)
+            continue;
+
+        value++;
+        while(*value == ' ' || *value == '\t')
+            value++;
+
+        size_t len = strlen(value);
+        if(len > 0 && value[len - 1] == '\n')
+            value[len - 1] = '\0';
+
+        result = safe_string_copy(output, output_size, value);
+        break;
     }
 
     pclose(fp);
-    char *mfg = strchr(buf, ':');
-    if(!mfg)
-        return -1;
-
-    mfg++;
-    while(*mfg == ' ')
-        ++mfg;
-
-    size_t len = strlen(mfg);
-    if(len > 0 && mfg[len - 1] == '\n')
-        mfg[--len] = 0;
-
-    if(*length < len)
-        return -1;
-
-    memcpy(vendor, mfg, len);
-    *length = len;
-    return 0;
+    return result;
 }
 
-inline uint16_t bios_starting_segment()
-{
-    // TODO
-    return 0;
-}
-
-inline int bios_release_date(uint8_t *year, uint8_t *month, uint8_t *day)
-{
-    FILE *fp =
-        popen("system_profiler SPHardwareDataType | grep 'Boot ROM Version'",
-              "r");
-    if(!fp)
-        return -1;
-
-    char buf[128] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
-    {
-        pclose(fp);
-        return -1;
-    }
-
-    pclose(fp);
-    *year = *month = *day = 0;
-    return 0;
-}
-
-inline size_t bios_rom_size()
-{
-    // TODO
-    return 0;
-}
-
-inline int bios_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
-{
-    if(!major || !minor || !patch)
-        return -1;
-
-    FILE *fp =
-        popen("system_profiler SPHardwareDataType | grep 'Boot ROM Version'",
-              "r");
-    if(!fp)
-        return -1;
-
-    char buf[128] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
-    {
-        pclose(fp);
-        return -1;
-    }
-
-    pclose(fp);
-    // "Boot ROM Version: 123.0.0.0.0"
-    char *ver = strchr(buf, ':');
-    if(!ver)
-        return -1;
-
-    ver++;
-    while(*ver == ' ')
-        ++ver;
-
-    int m = 0, n = 0, p = 0;
-    sscanf(ver, "%hhu.%hhu.%hhu", major, minor, patch);
-    return 0;
-}
-
-inline int bios_serial_num(uint8_t *serial_num, size_t *length)
-{
-    if(!serial_num || !length || *length < 32)
-        return -1;
-
-    FILE *fp =
-        popen("system_profiler SPHardwareDataType | grep 'Serial Number'", "r");
-    if(!fp)
-        return -1;
-
-    char buf[128] = {0};
-    if(!fgets(buf, sizeof(buf), fp))
-    {
-        pclose(fp);
-        return -1;
-    }
-
-    pclose(fp);
-    char *sn = strchr(buf, ':');
-    if(!sn)
-        return -1;
-
-    sn++;
-    while(*sn == ' ')
-        ++sn;
-
-    size_t len = strlen(sn);
-    if(len > 0 && sn[len - 1] == '\n')
-        sn[--len] = 0;
-
-    if(*length < len)
-        return -1;
-
-    memcpy(serial_num, sn, len);
-    *length = len;
-    return 0;
-}
-
-#else
-inline int bios_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
-{
-    // TODO
-    return -1;
-}
-
-inline int bios_serial_num(uint8_t *serial_num, size_t *length)
-{
-    // TODO
-    return -1;
-}
 #endif
 
+// --------------------- API -------------------------
+inline bios_error_t bios_vendor(char *vendor, size_t *length)
+{
+    if(!vendor || !length || *length == 0)
+        return BIOS_ERROR_NULL_POINTER;
+
+#if defined(_WIN32) || defined(_WIN64)
+    return smbios_parse_entry(SMBIOS_TYPE_BIOS, 4, 4, vendor, *length);
+
+#elif defined(__linux__)
+    bios_error_t result =
+        bios_sys_file_read("/sys/class/dmi/id/bios_vendor", vendor, *length);
+    if(result == BIOS_OK)
+        *length = strlen(vendor);
+
+    return result;
+
+#elif defined(__APPLE__)
+    bios_error_t result = bios_execute_command_and_parse(
+        "system_profiler SPHardwareDataType | grep 'Manufacturer'",
+        "Manufacturer",
+        vendor,
+        *length);
+    if(result == BIOS_OK)
+        *length = strlen(vendor);
+
+    return result;
+
+#else
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#endif
+}
+
+inline bios_error_t bios_version(char *version, size_t *length)
+{
+    if(!version || !length || *length == 0)
+        return BIOS_ERROR_NULL_POINTER;
+
+#if defined(_WIN32) || defined(_WIN64)
+    return smbios_parse_entry(SMBIOS_TYPE_BIOS, 5, 5, version, *length);
+
+#elif defined(__linux__)
+    bios_error_t result =
+        bios_sys_file_read("/sys/class/dmi/id/bios_version", version, *length);
+    if(result == BIOS_OK)
+        *length = strlen(version);
+
+    return result;
+
+#elif defined(__APPLE__)
+    bios_error_t result = bios_execute_command_and_parse(
+        "system_profiler SPHardwareDataType | grep 'Boot ROM Version'",
+        "Boot ROM Version",
+        version,
+        *length);
+    if(result == BIOS_OK)
+        *length = strlen(version);
+
+    return result;
+
+#else
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#endif
+}
+
+inline bios_error_t bios_release_date(char *date_str, size_t *length)
+{
+    if(!date_str || !length || *length == 0)
+        return BIOS_ERROR_NULL_POINTER;
+
+#if defined(_WIN32) || defined(_WIN64)
+    return smbios_parse_entry(SMBIOS_TYPE_BIOS, 8, 8, date_str, *length);
+
+#elif defined(__linux__)
+    bios_error_t result =
+        bios_sys_file_read("/sys/class/dmi/id/bios_date", date_str, *length);
+    if(result == BIOS_OK)
+        *length = strlen(date_str);
+
+    return result;
+
+#elif defined(__APPLE__)
+    if(*length > 0)
+    {
+        date_str[0] = '\0';
+        *length     = 0;
+        return BIOS_OK;
+    }
+
+    return BIOS_ERROR_BUFFER_TOO_SMALL;
+
+#else
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#endif
+}
+
+inline bios_error_t bios_starting_segment(uint16_t *segment)
+{
+    if(!segment)
+        return BIOS_ERROR_NULL_POINTER;
+
+#if defined(_WIN32) || defined(_WIN64)
+    uint8_t     *buffer      = NULL;
+    size_t       buffer_size = 0;
+    bios_error_t ec          = smbios_get_data(&buffer, &buffer_size);
+    if(ec != BIOS_OK || !buffer || buffer_size <= 8)
+        return BIOS_ERROR_SYSTEM_CALL_FAILED;
+
+    const uint8_t *p   = buffer + 8;
+    const uint8_t *end = buffer + buffer_size;
+    while(p + sizeof(smbios_header_t) <= end)
+    {
+        const smbios_header_t *header = (const smbios_header_t *) p;
+        if(header->length < sizeof(smbios_header_t))
+            break;
+
+        if(header->type == SMBIOS_TYPE_BIOS)
+        {
+            if(header->length >= 8)
+            {
+                *segment = (uint16_t) (p[6] | (p[7] << 8));
+                free(buffer);
+                return BIOS_OK;
+            }
+            break;
+        }
+
+        const uint8_t *next = p + header->length;
+        while(next < end - 1 && (next[0] != 0 || next[1] != 0))
+            next++;
+
+        next += 2;
+        p = next;
+    }
+    free(buffer);
+    return BIOS_ERROR_NOT_FOUND;
+
+#elif defined(__linux__)
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#elif defined(__APPLE__)
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#else
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#endif
+}
+
+inline bios_error_t bios_serial_num(char *serial_num, size_t *length)
+{
+    if(!serial_num || !length || *length == 0)
+        return BIOS_ERROR_NULL_POINTER;
+
+#if defined(_WIN32) || defined(_WIN64)
+    return smbios_parse_entry(SMBIOS_TYPE_BIOS, 1, 1, serial_num, *length);
+
+#elif defined(__linux__)
+    bios_error_t result = bios_sys_file_read("/sys/class/dmi/id/bios_serial",
+                                             serial_num,
+                                             *length);
+    if(result == BIOS_OK)
+        *length = strlen(serial_num);
+
+    return result;
+
+#elif defined(__APPLE__)
+    bios_error_t result = bios_execute_command_and_parse(
+        "system_profiler SPHardwareDataType | grep 'Serial Number'",
+        "Serial Number",
+        serial_num,
+        *length);
+    if(result == BIOS_OK)
+        *length = strlen(serial_num);
+
+    return result;
+
+#else
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#endif
+}
+
+inline bios_error_t bios_rom_size(size_t *rom_size)
+{
+#if defined(_WIN32) || defined(_WIN64)
+    uint8_t     *buffer      = NULL;
+    size_t       buffer_size = 0;
+    bios_error_t ec          = smbios_get_data(&buffer, &buffer_size);
+    if(ec != BIOS_OK || !buffer || buffer_size <= 8)
+        return BIOS_ERROR_SYSTEM_CALL_FAILED;
+
+    const uint8_t *p   = buffer + 8;
+    const uint8_t *end = buffer + buffer_size;
+    while(p + sizeof(smbios_header_t) <= end)
+    {
+        const smbios_header_t *header = (const smbios_header_t *) p;
+        if(header->length < sizeof(smbios_header_t))
+            break;
+
+        if(header->type == SMBIOS_TYPE_BIOS)
+        {
+            if(header->length >= 9)
+            {
+                *rom_size = (size_t) (p[8] * BIOS_ROM_SIZE_UNIT);
+                free(buffer);
+                return BIOS_OK;
+            }
+            break;
+        }
+
+        const uint8_t *next = p + header->length;
+        while(next < end - 1 && (next[0] != 0 || next[1] != 0))
+            next++;
+
+        next += 2;
+        p = next;
+    }
+
+    free(buffer);
+    return BIOS_ERROR_NOT_FOUND;
+
+#elif defined(__linux__)
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#elif defined(__APPLE__)
+    return BIOS_ERROR_NOT_SUPPORTED;
+
+#endif
+    return BIOS_ERROR_NOT_SUPPORTED;
+}
+
+inline bios_error_t bios_info(bios_info_t *info)
+{
+    if(!info)
+        return BIOS_ERROR_NULL_POINTER;
+
+    bios_error_t ec = BIOS_OK;
+    memset(info, 0, sizeof(bios_info_t));
+    size_t vendor_len = sizeof(info->vendor);
+    ec                = bios_vendor(info->vendor, &vendor_len);
+    if(ec != BIOS_OK)
+        return ec;
+
+    size_t version_len = sizeof(info->version);
+    ec                 = bios_version(info->version, &version_len);
+    if(ec != BIOS_OK)
+        return ec;
+
+    size_t date_len = sizeof(info->release_date);
+    ec              = bios_release_date(info->release_date, &date_len);
+    if(ec != BIOS_OK)
+        return ec;
+
+    size_t sn_len = sizeof(info->serial_number);
+    ec            = bios_serial_num(info->serial_number, &sn_len);
+    if(ec != BIOS_OK)
+        return ec;
+
+    ec = bios_starting_segment(&info->starting_segment);
+    // ignore if starting segment not found
+
+    ec = bios_rom_size(&info->rom_size);
+    // ignore if rom size not found
+
+    return BIOS_OK;
+}
 
 #ifdef __cplusplus
 }

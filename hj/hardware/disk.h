@@ -1,3 +1,20 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef DISK_H
 #define DISK_H
 
@@ -55,23 +72,27 @@
 extern "C" {
 #endif
 
-// ------------------------ Error Codes -------------------------
+// ------------------------ disk defines -------------------------
 typedef enum
 {
-    DISK_SUCCESS                   = 0,
-    DISK_ERROR_INVALID_PARAMETER   = -1,
-    DISK_ERROR_ACCESS_DENIED       = -2,
-    DISK_ERROR_NOT_FOUND           = -3,
-    DISK_ERROR_INSUFFICIENT_BUFFER = -4,
-    DISK_ERROR_IO_ERROR            = -5,
-    DISK_ERROR_NOT_SUPPORTED       = -6,
-    DISK_ERROR_INSUFFICIENT_MEMORY = -7,
-    DISK_ERROR_SYSTEM_ERROR        = -8,
-    DISK_ERROR_INVALID_FILESYSTEM  = -9,
-    DISK_ERROR_DEVICE_BUSY         = -10
+    DISK_OK                       = 0,
+    DISK_ERROR_NULL_POINTER       = -1,
+    DISK_ERROR_INVALID_PARAMETER  = -2,
+    DISK_ERROR_BUFFER_TOO_SMALL   = -3,
+    DISK_ERROR_NOT_FOUND          = -4,
+    DISK_ERROR_ACCESS_DENIED      = -5,
+    DISK_ERROR_DEVICE_BUSY        = -6,
+    DISK_ERROR_IO_ERROR           = -7,
+    DISK_ERROR_NOT_SUPPORTED      = -8,
+    DISK_ERROR_MEMORY_ALLOCATION  = -9,
+    DISK_ERROR_TIMEOUT            = -10,
+    DISK_ERROR_INVALID_FILESYSTEM = -11,
+    DISK_ERROR_DEVICE_OFFLINE     = -12,
+    DISK_ERROR_QUOTA_EXCEEDED     = -13,
+    DISK_ERROR_READ_ONLY          = -14,
+    DISK_ERROR_CORRUPTED_DATA     = -15
 } disk_err_t;
 
-// ------------------ Disk Types -------------------------
 typedef enum
 {
     DISK_TYPE_UNKNOWN   = 0,
@@ -83,97 +104,91 @@ typedef enum
     DISK_TYPE_RAM       = 6
 } disk_type_t;
 
-// -------------------- Filesystem Types --------------------
 typedef enum
 {
     FILESYSTEM_UNKNOWN  = 0,
     FILESYSTEM_NTFS     = 1,
-    FILESYSTEM_FAT32    = 2,
-    FILESYSTEM_EXFAT    = 3,
-    FILESYSTEM_EXT2     = 4,
-    FILESYSTEM_EXT3     = 5,
-    FILESYSTEM_EXT4     = 6,
-    FILESYSTEM_XFS      = 7,
-    FILESYSTEM_BTRFS    = 8,
-    FILESYSTEM_ZFS      = 9,
-    FILESYSTEM_HFS_PLUS = 10,
-    FILESYSTEM_APFS     = 11,
-    FILESYSTEM_UFS      = 12,
-    FILESYSTEM_ISO9660  = 13
+    FILESYSTEM_FAT16    = 2,
+    FILESYSTEM_FAT32    = 3,
+    FILESYSTEM_EXFAT    = 4,
+    FILESYSTEM_EXT2     = 5,
+    FILESYSTEM_EXT3     = 6,
+    FILESYSTEM_EXT4     = 7,
+    FILESYSTEM_XFS      = 8,
+    FILESYSTEM_BTRFS    = 9,
+    FILESYSTEM_ZFS      = 10,
+    FILESYSTEM_F2FS     = 11,
+    FILESYSTEM_HFS_PLUS = 12,
+    FILESYSTEM_APFS     = 13,
+    FILESYSTEM_UFS      = 14,
+    FILESYSTEM_JFS      = 15,
+    FILESYSTEM_REISERFS = 16,
+    FILESYSTEM_ISO9660  = 17,
+    FILESYSTEM_UDF      = 18,
+    FILESYSTEM_SWAP     = 19,
+    FILESYSTEM_TMPFS    = 20,
+    FILESYSTEM_PROCFS   = 21,
+    FILESYSTEM_SYSFS    = 22
 } filesystem_type_t;
 
-// Disk information structure
 typedef struct
 {
-    // Device name (e.g., "/dev/sda", "C:")
-    char device_name[DISK_MAX_DEVICE_NAME];
-    // Disk model name
-    char model[DISK_MAX_DEVICE_NAME];
-    // Serial number
-    char serial[DISK_MAX_DEVICE_NAME];
-    // Disk type
+    char        device_name[DISK_MAX_DEVICE_NAME]; // (e.g., "/dev/sda", "C:")
+    char        model[DISK_MAX_DEVICE_NAME];
+    char        serial[DISK_MAX_DEVICE_NAME];
     disk_type_t type;
-    // Total size in bytes
-    uint64_t total_size;
-    // Sector size in bytes
-    uint64_t sector_size;
-    // Total number of sectors
-    uint64_t sector_count;
-    // Is removable disk
-    bool removable;
-    // Is read-only
-    bool read_only;
-    // Rotation speed (0 for SSD)
-    uint32_t rpm;
-    // Temperature in Celsius (-1 if unknown)
-    double temperature;
+    uint64_t    total_size;
+    uint64_t    sector_size;
+    uint64_t    sector_count;
+    bool        removable;
+    bool        read_only;
+    uint32_t    rpm;
+    double      temperature;
 } disk_info_t;
 
-// Partition information structure
 typedef struct
 {
-    // Partition device
-    char device_name[DISK_MAX_DEVICE_NAME];
-    // Mount point
-    char mount_point[DISK_MAX_PATH_LENGTH];
-    // Volume label
-    char volume_label[DISK_MAX_VOLUME_LABEL];
-    // Filesystem type
+    char              device_name[DISK_MAX_DEVICE_NAME];
+    char              mount_point[DISK_MAX_PATH_LENGTH];
+    char              volume_label[DISK_MAX_VOLUME_LABEL];
     filesystem_type_t filesystem;
-    // Starting sector
-    uint64_t start_sector;
-    // Number of sectors
-    uint64_t sector_count;
-    // Total size in bytes
-    uint64_t total_size;
-    // Used size in bytes
-    uint64_t used_size;
-    // Available size in bytes
-    uint64_t available_size;
-    // Is bootable partition
-    bool bootable;
-    // Is read-only
-    bool read_only;
+    uint64_t          start_sector;
+    uint64_t          sector_count;
+    uint64_t          total_size;
+    uint64_t          used_size;
+    uint64_t          available_size;
+    bool              bootable;
+    bool              read_only;
 } partition_info_t;
 
-// Disk usage statistics
 typedef struct
 {
-    // Total bytes read
     uint64_t bytes_read;
-    // Total bytes written
     uint64_t bytes_written;
-    // Number of read operations
     uint64_t read_operations;
-    // Number of write operations
     uint64_t write_operations;
-    // Total read time in ms
-    double read_time_ms;
-    // Total write time in ms
-    double write_time_ms;
-    // Current queue depth
+    double   read_time_ms;
+    double   write_time_ms;
     uint32_t queue_depth;
 } disk_stats_t;
+
+static const struct
+{
+    filesystem_type_t type;
+    const char       *name;
+} filesystem_names[] = {
+    {FILESYSTEM_NTFS, "NTFS"},       {FILESYSTEM_FAT16, "FAT16"},
+    {FILESYSTEM_FAT32, "FAT32"},     {FILESYSTEM_EXFAT, "exFAT"},
+    {FILESYSTEM_EXT2, "ext2"},       {FILESYSTEM_EXT3, "ext3"},
+    {FILESYSTEM_EXT4, "ext4"},       {FILESYSTEM_XFS, "XFS"},
+    {FILESYSTEM_BTRFS, "Btrfs"},     {FILESYSTEM_ZFS, "ZFS"},
+    {FILESYSTEM_F2FS, "F2FS"},       {FILESYSTEM_HFS_PLUS, "HFS+"},
+    {FILESYSTEM_APFS, "APFS"},       {FILESYSTEM_UFS, "UFS"},
+    {FILESYSTEM_JFS, "JFS"},         {FILESYSTEM_REISERFS, "ReiserFS"},
+    {FILESYSTEM_ISO9660, "ISO9660"}, {FILESYSTEM_UDF, "UDF"},
+    {FILESYSTEM_SWAP, "Linux swap"}, {FILESYSTEM_TMPFS, "tmpfs"},
+    {FILESYSTEM_PROCFS, "proc"},     {FILESYSTEM_SYSFS, "sysfs"},
+    {FILESYSTEM_UNKNOWN, "Unknown"}};
 
 // -------------------------- disk API -----------------------------
 inline disk_err_t
@@ -201,21 +216,21 @@ disk_format_size(uint64_t bytes, char *buffer, size_t buffer_size)
             snprintf(buffer, buffer_size, "%.2f %s", size, units[unit_index]);
 
     if(result < 0 || (size_t) result >= buffer_size)
-        return DISK_ERROR_INSUFFICIENT_BUFFER;
+        return DISK_ERROR_BUFFER_TOO_SMALL;
 
-    return DISK_SUCCESS;
+    return DISK_OK;
 }
 
 inline disk_err_t disk_init(void)
 {
 #if defined(DISK_PLATFORM_WINDOWS)
-    return DISK_SUCCESS;
+    return DISK_OK;
 
 #elif defined(DISK_PLATFORM_LINUX)
-    return DISK_SUCCESS;
+    return DISK_OK;
 
 #elif defined(DISK_PLATFORM_MACOS)
-    return DISK_SUCCESS;
+    return DISK_OK;
 
 #else
     return DISK_ERROR_NOT_SUPPORTED;
@@ -347,6 +362,8 @@ inline filesystem_type_t disk_filesystem_type_from_string(const char *fs_name)
         return FILESYSTEM_UNKNOWN;
     if(strcmp(fs_name, "ntfs") == 0 || strcmp(fs_name, "NTFS") == 0)
         return FILESYSTEM_NTFS;
+    if(strcmp(fs_name, "fat16") == 0 || strcmp(fs_name, "FAT16") == 0)
+        return FILESYSTEM_FAT16;
     if(strcmp(fs_name, "fat32") == 0 || strcmp(fs_name, "FAT32") == 0)
         return FILESYSTEM_FAT32;
     if(strcmp(fs_name, "exfat") == 0 || strcmp(fs_name, "exFAT") == 0)
@@ -363,16 +380,45 @@ inline filesystem_type_t disk_filesystem_type_from_string(const char *fs_name)
         return FILESYSTEM_BTRFS;
     if(strcmp(fs_name, "zfs") == 0 || strcmp(fs_name, "ZFS") == 0)
         return FILESYSTEM_ZFS;
+    if(strcmp(fs_name, "f2fs") == 0 || strcmp(fs_name, "F2FS") == 0)
+        return FILESYSTEM_F2FS;
     if(strcmp(fs_name, "hfs+") == 0 || strcmp(fs_name, "HFS+") == 0)
         return FILESYSTEM_HFS_PLUS;
     if(strcmp(fs_name, "apfs") == 0 || strcmp(fs_name, "APFS") == 0)
         return FILESYSTEM_APFS;
     if(strcmp(fs_name, "ufs") == 0 || strcmp(fs_name, "UFS") == 0)
         return FILESYSTEM_UFS;
+    if(strcmp(fs_name, "jfs") == 0 || strcmp(fs_name, "JFS") == 0)
+        return FILESYSTEM_JFS;
+    if(strcmp(fs_name, "reiserfs") == 0 || strcmp(fs_name, "REISERFS") == 0)
+        return FILESYSTEM_REISERFS;
     if(strcmp(fs_name, "iso9660") == 0 || strcmp(fs_name, "ISO9660") == 0)
         return FILESYSTEM_ISO9660;
+    if(strcmp(fs_name, "udf") == 0 || strcmp(fs_name, "UDF") == 0)
+        return FILESYSTEM_UDF;
+    if(strcmp(fs_name, "swap") == 0 || strcmp(fs_name, "SWAP") == 0)
+        return FILESYSTEM_SWAP;
+    if(strcmp(fs_name, "tmpfs") == 0 || strcmp(fs_name, "TMPFS") == 0)
+        return FILESYSTEM_TMPFS;
+    if(strcmp(fs_name, "procfs") == 0 || strcmp(fs_name, "PROCFS") == 0)
+        return FILESYSTEM_PROCFS;
+    if(strcmp(fs_name, "sysfs") == 0 || strcmp(fs_name, "SYSFS") == 0)
+        return FILESYSTEM_SYSFS;
 
     return FILESYSTEM_UNKNOWN;
+}
+
+inline const char *disk_filesystem_type_to_string(filesystem_type_t fs_type)
+{
+    for(size_t i = 0;
+        i < sizeof(filesystem_names) / sizeof(filesystem_names[0]);
+        i++)
+    {
+        if(filesystem_names[i].type == fs_type)
+            return filesystem_names[i].name;
+    }
+
+    return "UNKNOWN";
 }
 
 inline disk_err_t disk_info(const char *device_name, disk_info_t *info)
@@ -509,7 +555,7 @@ inline disk_err_t disk_info(const char *device_name, disk_info_t *info)
 
     strncpy(info->model, "Generic Disk", sizeof(info->model) - 1);
     strncpy(info->serial, "Unknown", sizeof(info->serial) - 1);
-    return DISK_SUCCESS;
+    return DISK_OK;
 }
 
 inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
@@ -555,7 +601,7 @@ inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
     if(QueryDosDeviceA(&mount_point[0], device_path, sizeof(device_path)))
         strncpy(info->device_name, device_path, sizeof(info->device_name) - 1);
 
-    return DISK_SUCCESS;
+    return DISK_OK;
 
 #elif defined(DISK_PLATFORM_LINUX)
     struct statvfs vfs;
@@ -609,7 +655,7 @@ inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
 
 #endif
 
-    return DISK_SUCCESS;
+    return DISK_OK;
 }
 
 inline bool disk_is_ready(const char *device_name)
@@ -781,7 +827,7 @@ disk_enumerate(disk_info_t *disks, uint32_t max_disks, uint32_t *actual_count)
             continue;
 
         disk_err_t result = disk_info(drive_letter, &disks[*actual_count]);
-        if(result == DISK_SUCCESS)
+        if(result == DISK_OK)
             (*actual_count)++;
     }
 
@@ -805,7 +851,7 @@ disk_enumerate(disk_info_t *disks, uint32_t max_disks, uint32_t *actual_count)
             continue;
 
         disk_err_t result = disk_info(disk_patterns[i], &disks[*actual_count]);
-        if(result == DISK_SUCCESS)
+        if(result == DISK_OK)
             (*actual_count)++;
     }
 
@@ -813,7 +859,7 @@ disk_enumerate(disk_info_t *disks, uint32_t max_disks, uint32_t *actual_count)
     if(max_disks > 0)
     {
         disk_err_t result = disk_info("/dev/disk0", &disks[0]);
-        if(result == DISK_SUCCESS)
+        if(result == DISK_OK)
             *actual_count = 1;
     }
 
@@ -822,7 +868,7 @@ disk_enumerate(disk_info_t *disks, uint32_t max_disks, uint32_t *actual_count)
 
 #endif
 
-    return DISK_SUCCESS;
+    return DISK_OK;
 }
 
 inline disk_err_t disk_read_speed_test(const char *device_name,
@@ -869,7 +915,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     if(!buffer)
     {
         CloseHandle(hDevice);
-        return DISK_ERROR_INSUFFICIENT_MEMORY;
+        return DISK_ERROR_BUFFER_TOO_SMALL;
     }
 
     DISK_GEOMETRY_EX geometry;
@@ -948,7 +994,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     if(posix_memalign(&buffer, 4096, buffer_size) != 0)
     {
         close(fd);
-        return DISK_ERROR_INSUFFICIENT_MEMORY;
+        return DISK_ERROR_BUFFER_TOO_SMALL;
     }
 
     uint64_t device_size = 0;
@@ -1015,7 +1061,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     if(posix_memalign(&buffer, 4096, buffer_size) != 0)
     {
         close(fd);
-        return DISK_ERROR_INSUFFICIENT_MEMORY;
+        return DISK_ERROR_BUFFER_TOO_SMALL;
     }
 
     uint64_t device_size = 0;
@@ -1070,7 +1116,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
 
 #endif
 
-    return DISK_SUCCESS;
+    return DISK_OK;
 }
 
 #ifdef __cplusplus

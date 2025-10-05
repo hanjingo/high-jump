@@ -1,3 +1,20 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef SIMD_H
 #define SIMD_H
 
@@ -18,7 +35,6 @@
 extern "C" {
 #endif
 
-// Add two float arrays using SIMD (SSE), fallback to scalar if not available
 inline void simd_add_f32(const float *a, const float *b, float *out, size_t n)
 {
 #if defined(SIMD_SSE)
@@ -32,13 +48,14 @@ inline void simd_add_f32(const float *a, const float *b, float *out, size_t n)
     }
     for(; i < n; ++i)
         out[i] = a[i] + b[i];
+
 #else
     for(size_t i = 0; i < n; ++i)
         out[i] = a[i] + b[i];
+
 #endif
 }
 
-// Multiply two float arrays using SIMD (SSE), fallback to scalar if not available
 inline void simd_mul_f32(const float *a, const float *b, float *out, size_t n)
 {
 #if defined(SIMD_SSE)
@@ -52,13 +69,14 @@ inline void simd_mul_f32(const float *a, const float *b, float *out, size_t n)
     }
     for(; i < n; ++i)
         out[i] = a[i] * b[i];
+
 #else
     for(size_t i = 0; i < n; ++i)
         out[i] = a[i] * b[i];
+
 #endif
 }
 
-// Compute dot product of two float arrays using SIMD (SSE), fallback to scalar if not available
 inline float simd_dot_f32(const float *a, const float *b, size_t n)
 {
     float result = 0.0f;
@@ -76,9 +94,11 @@ inline float simd_dot_f32(const float *a, const float *b, size_t n)
     result = tmp[0] + tmp[1] + tmp[2] + tmp[3];
     for(; i < n; ++i)
         result += a[i] * b[i];
+
 #else
     for(size_t i = 0; i < n; ++i)
         result += a[i] * b[i];
+
 #endif
     return result;
 }

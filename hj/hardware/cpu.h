@@ -1,3 +1,20 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef CPU_H
 #define CPU_H
 
@@ -35,8 +52,22 @@
 extern "C" {
 #endif
 
+typedef enum
+{
+    CPU_OK                           = 0,
+    CPU_ERR_UNKNOWN                  = -1,
+    CPU_ERR_NOT_SUPPORTED            = -2,
+    CPU_ERR_INVALID_ARG              = -3,
+    CPU_ERR_INTERNAL                 = -4,
+    CPU_ERR_ALLOCATION_MEMORY_FAILED = -5,
+    CPU_ERR_OPEN_FILE_FAILED         = -6,
+    CPU_ERR_READ_INFO_FAILED         = -7,
+    CPU_ERR_SYSCTL_FAILED            = -8,
+    CPU_ERR_SYSCONF_FAILED           = -9
+} cpu_error_t;
+
 // ------------------------ CPU API ---------------------------------
-inline void cpu_brand(unsigned char *buf, size_t size)
+inline cpu_error_t cpu_brand(unsigned char *buf, size_t size)
 {
 #if defined(_WIN32) || defined(_WIN64)
     int  cpuInfo[4] = {0};
@@ -61,7 +92,12 @@ inline void cpu_brand(unsigned char *buf, size_t size)
     {
         if(size > 0)
             buf[0] = 0;
+
+        return CPU_ERR_NOT_SUPPORTED;
     }
+
+    return CPU_OK;
+
 #elif defined(__linux__)
     FILE *fp = fopen("/proc/cpuinfo", "r");
     if(!fp)
@@ -69,54 +105,63 @@ inline void cpu_brand(unsigned char *buf, size_t size)
         if(size > 0)
             buf[0] = 0;
 
-        return;
+        return CPU_ERR_OPEN_FILE_FAILED;
     }
-    char line[256];
+
+    char *p = NULL;
+    char  line[256];
     while(fgets(line, sizeof(line), fp))
     {
-        if(strstr(line, "model name"))
-        {
-            char *p = strchr(line, ':');
-            if(p)
-            {
-                p++;
-                while(*p == ' ')
-                    ++p;
+        if(!strstr(line, "model name"))
+            continue;
 
-                size_t len = strlen(p);
-                if(len > 0 && p[len - 1] == '\n')
-                    p[--len] = 0;
+        p = strchr(line, ':');
+        if(!p)
+            continue;
 
-                if(len >= size)
-                    len = size - 1;
+        p++;
+        while(*p == ' ')
+            ++p;
 
-                memcpy(buf, p, len);
-                buf[len] = 0;
-                fclose(fp);
-                return;
-            }
-        }
+        size_t len = strlen(p);
+        if(len > 0 && p[len - 1] == '\n')
+            p[--len] = 0;
+
+        if(len >= size)
+            len = size - 1;
+
+        memcpy(buf, p, len);
+        buf[len] = 0;
+        fclose(fp);
+        return CPU_OK;
     }
+
     fclose(fp);
     if(size > 0)
         buf[0] = 0;
 
+    return CPU_ERR_READ_INFO_FAILED;
+
 #elif defined(__APPLE__)
     size_t len = size;
-    if(sysctlbyname("machdep.cpu.brand_string", buf, &len, NULL, 0) != 0)
-    {
-        if(size > 0)
-            buf[0] = 0;
-    }
+    if(sysctlbyname("machdep.cpu.brand_string", buf, &len, NULL, 0) == 0)
+        return CPU_OK;
+
+    if(size > 0)
+        buf[0] = 0;
+
+    return CPU_ERR_SYSCTL_FAILED;
 
 #else
     if(size > 0)
         buf[0] = 0;
 
+    return CPU_ERROR_NOT_SUPPORTED;
+
 #endif
 }
 
-inline void cpu_vendor(unsigned char *buf, size_t size)
+inline cpu_error_t cpu_vendor(unsigned char *buf, size_t size)
 {
 #if defined(_WIN32) || defined(_WIN64)
     int  cpuInfo[4] = {0};
@@ -132,6 +177,8 @@ inline void cpu_vendor(unsigned char *buf, size_t size)
 
     memcpy(buf, vendor, len);
     buf[len] = 0;
+    return CPU_OK;
+
 #elif defined(__linux__)
     FILE *fp = fopen("/proc/cpuinfo", "r");
     if(!fp)
@@ -139,49 +186,58 @@ inline void cpu_vendor(unsigned char *buf, size_t size)
         if(size > 0)
             buf[0] = 0;
 
-        return;
+        return CPU_ERR_OPEN_FILE_FAILED;
     }
-    char line[256];
+
+    char *p = NULL;
+    char  line[256];
     while(fgets(line, sizeof(line), fp))
     {
-        if(strstr(line, "vendor_id"))
-        {
-            char *p = strchr(line, ':');
-            if(p)
-            {
-                p++;
-                while(*p == ' ')
-                    ++p;
+        if(!strstr(line, "vendor_id"))
+            continue;
 
-                size_t len = strlen(p);
-                if(len > 0 && p[len - 1] == '\n')
-                    p[--len] = 0;
+        p = strchr(line, ':');
+        if(!p)
+            continue;
 
-                if(len >= size)
-                    len = size - 1;
+        p++;
+        while(*p == ' ')
+            ++p;
 
-                memcpy(buf, p, len);
-                buf[len] = 0;
-                fclose(fp);
-                return;
-            }
-        }
+        size_t len = strlen(p);
+        if(len > 0 && p[len - 1] == '\n')
+            p[--len] = 0;
+
+        if(len >= size)
+            len = size - 1;
+
+        memcpy(buf, p, len);
+        buf[len] = 0;
+        fclose(fp);
+        return CPU_OK;
     }
+
     fclose(fp);
     if(size > 0)
         buf[0] = 0;
 
+    return CPU_ERR_READ_INFO_FAILED;
+
 #elif defined(__APPLE__)
     size_t len = size;
-    if(sysctlbyname("machdep.cpu.vendor", buf, &len, NULL, 0) != 0)
-    {
-        if(size > 0)
-            buf[0] = 0;
-    }
+    if(sysctlbyname("machdep.cpu.vendor", buf, &len, NULL, 0) == 0)
+        return CPU_OK;
+
+    if(size > 0)
+        buf[0] = 0;
+
+    return CPU_ERR_SYSCTL_FAILED;
 
 #else
     if(size > 0)
         buf[0] = 0;
+
+    return CPU_ERROR_NOT_SUPPORTED;
 
 #endif
 }
@@ -216,42 +272,46 @@ inline unsigned int cpu_core_num(void)
     return (result > 0) ? (unsigned int) result : 1;
 
 #else
-    return 1;
+    return 0;
 
 #endif
 }
 
-inline bool cpu_core_bind(const unsigned int core)
+inline cpu_error_t cpu_core_bind(const unsigned int core)
 {
 #if defined(_WIN32) || defined(_WIN64)
     HANDLE    hThread = GetCurrentThread();
     DWORD_PTR mask = SetThreadAffinityMask(hThread, (DWORD_PTR) (1LLU << core));
-    return (mask != 0);
+    return (mask != 0) ? CPU_OK : CPU_ERR_INTERNAL;
 
 #elif defined(__linux__)
     cpu_set_t mask;
     CPU_ZERO(&mask);
     CPU_SET(core, &mask);
-    return (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == 0);
+    if(pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == 0)
+        return CPU_OK;
+    else
+        return CPU_ERR_INTERNAL;
 
 #elif defined(__APPLE__)
     (void) core;
-    return false;
+    return CPU_ERR_NOT_SUPPORTED;
 
 #else
     (void) core;
-    return false;
+    return CPU_ERROR_NOT_SUPPORTED;
 
 #endif
 }
 
-inline void cpu_core_list(unsigned int *buf, unsigned int *len)
+inline cpu_error_t cpu_core_list(unsigned int *buf, unsigned int *len)
 {
     if(!buf || !len)
     {
         if(len)
             *len = 0;
-        return;
+
+        return CPU_ERR_INVALID_ARG;
     }
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -260,7 +320,7 @@ inline void cpu_core_list(unsigned int *buf, unsigned int *len)
     if(returnLength == 0)
     {
         *len = 0;
-        return;
+        return CPU_ERR_INTERNAL;
     }
 
     PSYSTEM_LOGICAL_PROCESSOR_INFORMATION buffer =
@@ -268,14 +328,14 @@ inline void cpu_core_list(unsigned int *buf, unsigned int *len)
     if(!buffer)
     {
         *len = 0;
-        return;
+        return CPU_ERR_ALLOCATION_MEMORY_FAILED;
     }
 
     if(!GetLogicalProcessorInformation(buffer, &returnLength))
     {
         free(buffer);
         *len = 0;
-        return;
+        return CPU_ERR_INTERNAL;
     }
 
     unsigned int count = 0;
@@ -297,14 +357,14 @@ inline void cpu_core_list(unsigned int *buf, unsigned int *len)
 
     *len = count;
     free(buffer);
-    return;
+    return CPU_OK;
 
 #elif defined(__linux__)
     long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
     if(ncpu <= 0)
     {
         *len = 0;
-        return;
+        return CPU_ERR_SYSCONF_FAILED;
     }
 
     unsigned int count    = 0;
@@ -314,7 +374,7 @@ inline void cpu_core_list(unsigned int *buf, unsigned int *len)
         buf[count++] = i;
 
     *len = count;
-    return;
+    return CPU_OK;
 
 #elif defined(__APPLE__)
     int          nm[2];
@@ -325,7 +385,7 @@ inline void cpu_core_list(unsigned int *buf, unsigned int *len)
     if(sysctl(nm, 2, &ncpu, &len_cpu, NULL, 0) != 0 || ncpu == 0)
     {
         *len = 0;
-        return;
+        return CPU_ERR_SYSCTL_FAILED;
     }
 
     unsigned int count = 0;
@@ -334,11 +394,11 @@ inline void cpu_core_list(unsigned int *buf, unsigned int *len)
         buf[count++] = i;
 
     *len = count;
-    return;
+    return CPU_OK;
 
 #else
     *len = 0;
-    return;
+    return CPU_ERR_NOT_SUPPORTED;
 
 #endif
 }

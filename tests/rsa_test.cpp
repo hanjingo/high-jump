@@ -6,6 +6,7 @@
 
 TEST(rsa, encrypt)
 {
+    auto ok = hj::rsa::error_code::ok;
     // verify it by website:https://www.devglan.com/online-tools/rsa-encryption-decryption
 
     std::string prikey = R"(-----BEGIN RSA PRIVATE KEY-----
@@ -36,7 +37,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                          reinterpret_cast<unsigned char *>(pubkey.data()),
                          pubkey.size(),
                          hj::rsa::padding::pkcs1),
-        true);
+        ok);
     unsigned char decrypted1[4096];
     std::size_t   decrypted1_len = 4096;
     ASSERT_EQ(hj::rsa::decrypt(decrypted1,
@@ -46,7 +47,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                                reinterpret_cast<unsigned char *>(prikey.data()),
                                prikey.size(),
                                hj::rsa::padding::pkcs1),
-              true);
+              ok);
     std::string decrypted1_str;
     decrypted1_str.assign(reinterpret_cast<char *>(decrypted1), decrypted1_len);
     ASSERT_STREQ(decrypted1_str.c_str(), plain.c_str());
@@ -65,7 +66,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                                reinterpret_cast<unsigned char *>(pubkey.data()),
                                pubkey.size(),
                                hj::rsa::padding::no_padding),
-              true);
+              ok);
     unsigned char decrypted[4096];
     std::size_t   decrypted_len = 4096;
     ASSERT_EQ(hj::rsa::decrypt(decrypted,
@@ -75,7 +76,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                                reinterpret_cast<unsigned char *>(prikey.data()),
                                prikey.size(),
                                hj::rsa::padding::no_padding),
-              true);
+              ok);
     ASSERT_EQ(decrypted_len, key_size);
     ASSERT_EQ(memcmp(decrypted, plain_data.data(), key_size), 0);
     ASSERT_EQ(memcmp(decrypted, original_msg.data(), original_msg.size()), 0);
@@ -89,7 +90,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                          reinterpret_cast<const unsigned char *>(pubkey.data()),
                          pubkey.size(),
                          hj::rsa::padding::pkcs1),
-        true);
+        ok);
     std::string   encrypted_stream_str = out.str();
     unsigned char decrypted_stream[4096];
     std::size_t   decrypted_stream_len = 4096;
@@ -101,7 +102,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                                reinterpret_cast<unsigned char *>(prikey.data()),
                                prikey.size(),
                                hj::rsa::padding::pkcs1),
-              true);
+              ok);
     std::string decrypted_stream_str;
     decrypted_stream_str.assign(reinterpret_cast<char *>(decrypted_stream),
                                 decrypted_stream_len);
@@ -111,7 +112,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 TEST(rsa, decrypt)
 {
     // verify it by website:https://www.devglan.com/online-tools/rsa-encryption-decryption
-
+    auto        ok     = hj::rsa::error_code::ok;
     std::string prikey = R"(-----BEGIN RSA PRIVATE KEY-----
 MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9/CJtqi8S07DgthGvs+XxHeTA6R8vPKqIykZgNgp0sJsJXHOKKNtDnQIDAQABAkAGmXeWJvr3ynnQTWWRvF09hCKSeZFmOkOHz8D/JOXONAxYOPkpNVu3sShS/ccyGMQKjSHEa5Zyo0S9k/vwl+7xAiEAz6bkXHsaut7Sk2Ze4/MZZuRhR6LqE7Q9Y/ecyGyTDFECIQC2F7HqA0RB2PhuD37Gb3JkB1HNUdro9Fj6wVYATXYLjQIgSOP/k0sPRfuDlYRA2OlzyD9wunHAkywYxKednGkocRECIGsm1F31YCQzbjUtzxcsG687E2rz4RK2PuoH/PienHk9AiBIE54w2swcy1YcaL3MnZDN6eWVFYRTZXeue74hbpZ27A==
 -----END RSA PRIVATE KEY-----)";
@@ -130,7 +131,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
                          plain.size(),
                          reinterpret_cast<unsigned char *>(pubkey.data()),
                          pubkey.size()),
-        true);
+        ok);
 
     unsigned char decrypted[4096];
     std::size_t   decrypted_len = 4096;
@@ -140,7 +141,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
                                encrypted_len,
                                reinterpret_cast<unsigned char *>(prikey.data()),
                                prikey.size()),
-              true);
+              ok);
 
     std::string decrypted_str;
     decrypted_str.assign(reinterpret_cast<char *>(decrypted), decrypted_len);
@@ -156,7 +157,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
                          plain.size(),
                          reinterpret_cast<const unsigned char *>(pubkey.data()),
                          pubkey.size()),
-        true);
+        ok);
 
     std::string encrypt_stream_str;
     encrypt_stream_str.assign(reinterpret_cast<char *>(encrypted_stream),
@@ -167,12 +168,13 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
                                in,
                                reinterpret_cast<unsigned char *>(prikey.data()),
                                prikey.size()),
-              true);
+              ok);
     ASSERT_STREQ(out.str().c_str(), plain.c_str());
 }
 
 TEST(rsa, encrypt_file)
 {
+    auto        ok     = hj::rsa::error_code::ok;
     std::string pubkey = R"(-----BEGIN PUBLIC KEY-----
 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==
 -----END PUBLIC KEY-----)";
@@ -184,11 +186,12 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     {
         GTEST_SKIP() << "skip test rsa encrypt_file not exist: " << str_src;
     }
-    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, pubkey), true);
+    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, pubkey), ok);
 }
 
 TEST(rsa, decrypt_file)
 {
+    auto        ok     = hj::rsa::error_code::ok;
     std::string pubkey = R"(-----BEGIN PUBLIC KEY-----
 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==
 -----END PUBLIC KEY-----)";
@@ -200,7 +203,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     {
         GTEST_SKIP() << "skip test rsa decrypt_file not exist: " << str_src;
     }
-    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, pubkey), true);
+    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, pubkey), ok);
 
     std::string prikey = R"(-----BEGIN RSA PRIVATE KEY-----
 MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9/CJtqi8S07DgthGvs+XxHeTA6R8vPKqIykZgNgp0sJsJXHOKKNtDnQIDAQABAkAGmXeWJvr3ynnQTWWRvF09hCKSeZFmOkOHz8D/JOXONAxYOPkpNVu3sShS/ccyGMQKjSHEa5Zyo0S9k/vwl+7xAiEAz6bkXHsaut7Sk2Ze4/MZZuRhR6LqE7Q9Y/ecyGyTDFECIQC2F7HqA0RB2PhuD37Gb3JkB1HNUdro9Fj6wVYATXYLjQIgSOP/k0sPRfuDlYRA2OlzyD9wunHAkywYxKednGkocRECIGsm1F31YCQzbjUtzxcsG687E2rz4RK2PuoH/PienHk9AiBIE54w2swcy1YcaL3MnZDN6eWVFYRTZXeue74hbpZ27A==
@@ -210,22 +213,23 @@ MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9
     ASSERT_EQ(hj::rsa::decrypt_file(std::string("./rsa_file_test_decrypt.log"),
                                     std::string("./rsa_file_test_encrypt1.log"),
                                     prikey),
-              true);
+              ok);
 }
 
-TEST(rsa, make_key_pair)
+TEST(rsa, keygen)
 {
+    auto        ok = hj::rsa::error_code::ok;
     std::string prikey;
     std::string pubkey;
     std::string passwd = "test123456";
     std::string plain  = "hello world";
-    ASSERT_EQ(hj::rsa::make_key_pair(pubkey,
-                                     prikey,
-                                     2048,
-                                     hj::rsa::key_format::x509,
-                                     hj::rsa::mode::aes_256_cbc,
-                                     passwd),
-              true);
+    ASSERT_EQ(hj::rsa::keygen(pubkey,
+                              prikey,
+                              2048,
+                              hj::rsa::key_format::x509,
+                              hj::rsa::mode::aes_256_cbc,
+                              passwd),
+              ok);
 
     unsigned char encrypted[4096];
     std::size_t   encrypted_len = 4096;
@@ -237,7 +241,7 @@ TEST(rsa, make_key_pair)
                          reinterpret_cast<unsigned char *>(pubkey.data()),
                          pubkey.size(),
                          hj::rsa::padding::pkcs1),
-        true);
+        ok);
 
     unsigned char decrypted[4096];
     std::size_t   decrypted_len = 4096;
@@ -251,7 +255,7 @@ TEST(rsa, make_key_pair)
                   hj::rsa::padding::pkcs1,
                   reinterpret_cast<const unsigned char *>(passwd.c_str()),
                   passwd.size()),
-              true);
+              ok);
 
     std::string decrypted_str;
     decrypted_str.assign(reinterpret_cast<char *>(decrypted), decrypted_len);
@@ -260,24 +264,23 @@ TEST(rsa, make_key_pair)
 
 TEST(rsa, is_pubkey_valid)
 {
+    auto        ok      = hj::rsa::error_code::ok;
     std::string pubkey1 = R"(-----BEGIN PUBLIC KEY-----
 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==
 -----END PUBLIC KEY-----)";
 
-    ASSERT_EQ(hj::rsa::is_pubkey_valid(
-                  reinterpret_cast<const unsigned char *>(pubkey1.c_str()),
-                  pubkey1.size(),
-                  hj::rsa::padding::pkcs1),
-              true);
+    ASSERT_TRUE(hj::rsa::is_pubkey_valid(
+        reinterpret_cast<const unsigned char *>(pubkey1.c_str()),
+        pubkey1.size(),
+        hj::rsa::padding::pkcs1));
 
     std::string pubkey2 =
         R"(MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==)";
 
-    ASSERT_EQ(hj::rsa::is_pubkey_valid(
-                  reinterpret_cast<const unsigned char *>(pubkey2.c_str()),
-                  pubkey2.size(),
-                  hj::rsa::padding::pkcs1),
-              false);
+    ASSERT_FALSE(hj::rsa::is_pubkey_valid(
+        reinterpret_cast<const unsigned char *>(pubkey2.c_str()),
+        pubkey2.size(),
+        hj::rsa::padding::pkcs1));
 }
 
 TEST(rsa, is_prikey_valid)
@@ -286,24 +289,23 @@ TEST(rsa, is_prikey_valid)
 MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9/CJtqi8S07DgthGvs+XxHeTA6R8vPKqIykZgNgp0sJsJXHOKKNtDnQIDAQABAkAGmXeWJvr3ynnQTWWRvF09hCKSeZFmOkOHz8D/JOXONAxYOPkpNVu3sShS/ccyGMQKjSHEa5Zyo0S9k/vwl+7xAiEAz6bkXHsaut7Sk2Ze4/MZZuRhR6LqE7Q9Y/ecyGyTDFECIQC2F7HqA0RB2PhuD37Gb3JkB1HNUdro9Fj6wVYATXYLjQIgSOP/k0sPRfuDlYRA2OlzyD9wunHAkywYxKednGkocRECIGsm1F31YCQzbjUtzxcsG687E2rz4RK2PuoH/PienHk9AiBIE54w2swcy1YcaL3MnZDN6eWVFYRTZXeue74hbpZ27A==
 -----END RSA PRIVATE KEY-----)";
 
-    ASSERT_EQ(hj::rsa::is_prikey_valid(
-                  reinterpret_cast<const unsigned char *>(prikey1.c_str()),
-                  prikey1.size(),
-                  hj::rsa::padding::pkcs1),
-              true);
+    ASSERT_TRUE(hj::rsa::is_prikey_valid(
+        reinterpret_cast<const unsigned char *>(prikey1.c_str()),
+        prikey1.size(),
+        hj::rsa::padding::pkcs1));
 
     std::string prikey2 =
         R"(MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9/CJtqi8S07DgthGvs+XxHeTA6R8vPKqIykZgNgp0sJsJXHOKKNtDnQIDAQABAkAGmXeWJvr3ynnQTWWRvF09hCKSeZFmOkOHz8D/JOXONAxYOPkpNVu3sShS/ccyGMQKjSHEa5Zyo0S9k/vwl+7xAiEAz6bkXHsaut7Sk2Ze4/MZZuRhR6LqE7Q9Y/ecyGyTDFECIQC2F7HqA0RB2PhuD37Gb3JkB1HNUdro9Fj6wVYATXYLjQIgSOP/k0sPRfuDlYRA2OlzyD9wunHAkywYxKednGkocRECIGsm1F31YCQzbjUtzxcsG687E2rz4RK2PuoH/PienHk9AiBIE54w2swcy1YcaL3MnZDN6eWVFYRTZXeue74hbpZ27A==)";
 
-    ASSERT_EQ(hj::rsa::is_prikey_valid(
-                  reinterpret_cast<const unsigned char *>(prikey2.c_str()),
-                  prikey2.size(),
-                  hj::rsa::padding::pkcs1),
-              false);
+    ASSERT_FALSE(hj::rsa::is_prikey_valid(
+        reinterpret_cast<const unsigned char *>(prikey2.c_str()),
+        prikey2.size(),
+        hj::rsa::padding::pkcs1));
 }
 
 TEST(rsa, is_cipher_valid)
 {
+    auto        ok     = hj::rsa::error_code::ok;
     std::string prikey = R"(-----BEGIN RSA PRIVATE KEY-----
 MIIBOgIBAAJAevxSYQggOUn0bfka93jW0E2wkakW9gxE8h/RQTcsk06WYYQJB6CZ
 cjLeXwVsoIC5T8Ph3lvRIGmVCEQQ0peBowIDAQABAkBSGbtMt0X7uJkKCS+tYOfW
@@ -328,7 +330,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
                                plain,
                                pubkey,
                                hj::rsa::padding::no_padding),
-              true);
+              ok);
 
     ASSERT_TRUE(hj::rsa::is_cipher_valid(encrypted,
                                          hj::rsa::padding::no_padding,

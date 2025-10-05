@@ -39,7 +39,7 @@
 #include <openssl/buffer.h>
 
 #ifndef BASE64_BUF_SIZE
-#define BASE64_BUF_SIZE 4096
+#define BASE64_BUF_SIZE 16384 // 16KB
 #endif
 
 namespace hj
@@ -48,24 +48,39 @@ namespace hj
 class base64
 {
   public:
+    enum class error_code
+    {
+        ok = 0,
+        invalid_input,
+        buffer_overflow,
+        encode_failed,
+        decode_failed,
+        file_open_failed,
+        file_read_failed,
+        file_write_failed
+    };
+
+  public:
     // bytes -> base64 bytes
-    static bool encode(unsigned char       *dst,
-                       std::size_t         &dst_len,
-                       const unsigned char *src,
-                       const std::size_t    src_len)
+    static error_code encode(unsigned char       *dst,
+                             std::size_t         &dst_len,
+                             const unsigned char *src,
+                             const std::size_t    src_len)
     {
         if(src_len == 0 || dst_len == 0)
-            return false; // Invalid input or output length
+            return error_code::invalid_input; // Invalid input or output length
 
         BUF_MEM *buffer_ptr;
         BIO     *bio = BIO_new(BIO_s_mem());
         if(!bio)
-            return false; // Failed to create BIO from memory buffer
+            return error_code::
+                encode_failed; // Failed to create BIO from memory buffer
+
         BIO *b64 = BIO_new(BIO_f_base64());
         if(!b64)
         {
             BIO_free(bio);
-            return false; // Failed to create base64 BIO
+            return error_code::encode_failed; // Failed to create base64 BIO
         }
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
@@ -76,53 +91,55 @@ class base64
         if(buffer_ptr->length > dst_len)
         {
             BIO_free_all(b64);
-            return false; // Not enough space in destination buffer
+            return error_code::
+                buffer_overflow; // Not enough space in destination buffer
         }
 
         memcpy(dst, buffer_ptr->data, buffer_ptr->length);
         dst_len = buffer_ptr->length;
         BIO_free_all(b64);
-        return true;
+        return error_code::ok;
     }
 
     // string -> base64 string
-    static bool encode(std::string &dst, const std::string &src)
+    static error_code encode(std::string &dst, const std::string &src)
     {
         std::size_t dst_len = encode_len_reserve(src.size());
         dst.resize(dst_len); // Base64 encoding increases size by ~33%
-        if(!encode(reinterpret_cast<unsigned char *>(
-                       const_cast<char *>(dst.data())),
-                   dst_len,
-                   reinterpret_cast<const unsigned char *>(src.c_str()),
-                   src.size()))
+        auto ec = encode(
+            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
+            dst_len,
+            reinterpret_cast<const unsigned char *>(src.c_str()),
+            src.size());
+        if(ec != error_code::ok)
         {
             dst.clear();
-            return false;
+            return ec;
         }
 
         dst.resize(dst_len); // Resize to actual length
-        return true;
+        return error_code::ok;
     }
 
     // base64 stream -> stream
-    static bool encode(std::ostream &out, std::istream &in)
+    static error_code encode(std::ostream &out, std::istream &in)
     {
         if(!in || !out)
-            return false;
+            return error_code::invalid_input;
 
         BIO *b64 = BIO_new(BIO_f_base64());
         if(!b64)
-            return false;
+            return error_code::encode_failed;
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
         BIO *bio_out = BIO_new(BIO_s_mem());
         if(!bio_out)
         {
             BIO_free(b64);
-            return false;
+            return error_code::encode_failed;
         }
-        BIO_push(b64, bio_out);
 
+        BIO_push(b64, bio_out);
         char buffer[BASE64_BUF_SIZE];
         while(in.read(buffer, sizeof(buffer)) || in.gcount() > 0)
         {
@@ -130,7 +147,7 @@ class base64
             if(BIO_write(b64, buffer, static_cast<int>(n)) != n)
             {
                 BIO_free_all(b64);
-                return false;
+                return error_code::encode_failed;
             }
         }
 
@@ -141,22 +158,22 @@ class base64
             out.write(mem_ptr->data, mem_ptr->length);
 
         BIO_free_all(b64);
-        return true;
+        return error_code::ok;
     }
 
     // file -> base64 file
-    static bool encode_file(const char *dst_file_path,
-                            const char *src_file_path)
+    static error_code encode_file(const char *dst_file_path,
+                                  const char *src_file_path)
     {
         FILE *in = fopen(src_file_path, "rb");
         if(!in)
-            return false;
+            return error_code::file_open_failed;
 
         FILE *out = fopen(dst_file_path, "wb");
         if(!out)
         {
             fclose(in);
-            return false;
+            return error_code::file_open_failed;
         }
 
         BIO *bio_out = BIO_new_fp(out, BIO_NOCLOSE);
@@ -166,7 +183,7 @@ class base64
             BIO_free(bio_out);
             fclose(in);
             fclose(out);
-            return false;
+            return error_code::encode_failed;
         }
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
@@ -182,41 +199,42 @@ class base64
             BIO_free_all(b64);
             fclose(in);
             fclose(out);
-            return false;
+            return error_code::encode_failed;
         }
 
         BIO_flush(b64);
         BIO_free_all(b64);
         fclose(in);
         fclose(out);
-        return true;
+        return error_code::ok;
     }
 
     // file -> base64 file
-    static bool encode_file(const std::string &dst_file_path,
-                            const std::string &src_file_path)
+    static error_code encode_file(const std::string &dst_file_path,
+                                  const std::string &src_file_path)
     {
         return encode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
 
     // base64 bytes -> bytes
-    static bool decode(unsigned char       *dst,
-                       std::size_t         &dst_len,
-                       const unsigned char *src,
-                       const std::size_t    src_len)
+    static error_code decode(unsigned char       *dst,
+                             std::size_t         &dst_len,
+                             const unsigned char *src,
+                             const std::size_t    src_len)
     {
         if(src_len % 4 != 0)
-            return false; // Invalid base64 input length
+            return error_code::invalid_input; // Invalid base64 input length
 
         BIO *bio = BIO_new_mem_buf(src, static_cast<int>(src_len));
         if(!bio)
-            return false; // Failed to create BIO from memory buffer
+            return error_code::
+                decode_failed; // Failed to create BIO from memory buffer
 
         BIO *b64 = BIO_new(BIO_f_base64());
         if(!b64)
         {
             BIO_free(bio);
-            return false; // Failed to create base64 BIO
+            return error_code::decode_failed; // Failed to create base64 BIO
         }
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
@@ -225,82 +243,78 @@ class base64
         if(decoded_length < 0)
         {
             BIO_free_all(b64);
-            return false;
+            return error_code::decode_failed;
         }
 
         dst_len = static_cast<std::size_t>(decoded_length);
         BIO_free_all(b64);
-        return true;
+        return error_code::ok;
     }
 
     // base64 string -> string
-    static bool decode(std::string &dst, const std::string &src)
+    static error_code decode(std::string &dst, const std::string &src)
     {
         dst.resize(decode_len_reserve(src.size()));
         std::size_t dst_len = dst.size();
-        if(!decode(reinterpret_cast<unsigned char *>(
-                       const_cast<char *>(dst.data())),
-                   dst_len,
-                   reinterpret_cast<const unsigned char *>(src.c_str()),
-                   src.size()))
+        auto        ec      = decode(
+            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
+            dst_len,
+            reinterpret_cast<const unsigned char *>(src.c_str()),
+            src.size());
+        if(ec != error_code::ok)
         {
             dst.clear(); // Clear the string if decoding fails
-            return false;
+            return ec;
         }
 
         dst.resize(dst_len);
-        return true;
+        return error_code::ok;
     }
 
     // base64 stream -> stream
-    static bool decode(std::ostream &out, std::istream &in)
+    static error_code decode(std::ostream &out, std::istream &in)
     {
         BIO *b64 = BIO_new(BIO_f_base64());
         if(!b64)
-            return false;
+            return error_code::decode_failed;
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-
         std::string input_buf;
         char        buffer[BASE64_BUF_SIZE];
         while(in.read(buffer, sizeof(buffer)) || in.gcount() > 0)
-        {
             input_buf.append(buffer, static_cast<size_t>(in.gcount()));
-        }
 
         BIO *bio_in = BIO_new_mem_buf(input_buf.data(),
                                       static_cast<int>(input_buf.size()));
         if(!bio_in)
         {
             BIO_free(b64);
-            return false;
+            return error_code::decode_failed;
         }
-        BIO_push(b64, bio_in);
 
+        BIO_push(b64, bio_in);
         char outbuf[BASE64_BUF_SIZE];
         int  n;
         while((n = BIO_read(b64, outbuf, sizeof(outbuf))) > 0)
-        {
             out.write(outbuf, n);
-        }
 
         BIO_free_all(b64);
-        return true;
+        return error_code::ok;
     }
 
     // base64 file -> file
-    static bool decode_file(const char *dst_file_path,
-                            const char *src_file_path)
+    static error_code decode_file(const char *dst_file_path,
+                                  const char *src_file_path)
     {
         FILE *in = fopen(src_file_path, "rb");
         if(!in)
-            return false;
+            return error_code::file_open_failed;
 
         FILE *out = fopen(dst_file_path, "wb");
         if(!out)
         {
             fclose(in);
-            return false;
+            return error_code::file_open_failed;
         }
 
         BIO *bio_in = BIO_new_fp(in, BIO_NOCLOSE);
@@ -310,12 +324,11 @@ class base64
             BIO_free(bio_in);
             fclose(in);
             fclose(out);
-            return false;
+            return error_code::decode_failed;
         }
 
         BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
         BIO_push(b64, bio_in);
-
         char buffer[4096];
         int  n;
         while((n = BIO_read(b64, buffer, sizeof(buffer))) > 0)
@@ -326,18 +339,18 @@ class base64
             BIO_free_all(b64);
             fclose(in);
             fclose(out);
-            return false;
+            return error_code::file_write_failed;
         }
 
         BIO_free_all(b64);
         fclose(in);
         fclose(out);
-        return true;
+        return error_code::ok;
     }
 
     // base64 file -> file
-    static bool decode_file(const std::string &dst_file_path,
-                            const std::string &src_file_path)
+    static error_code decode_file(const std::string &dst_file_path,
+                                  const std::string &src_file_path)
     {
         return decode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
@@ -374,6 +387,7 @@ class base64
 
                 continue;
             }
+
             if(c == '=')
             {
                 ++pad;
@@ -404,10 +418,11 @@ class base64
         unsigned char           buf[BASE64_BUF_SIZE];
         std::size_t             total_len = 0;
         std::ifstream::pos_type start_pos = in.tellg();
+        std::streamsize         n;
         while(in)
         {
             in.read(reinterpret_cast<char *>(buf), BASE64_BUF_SIZE);
-            std::streamsize n = in.gcount();
+            n = in.gcount();
             if(n == 0)
                 break;
 

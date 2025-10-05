@@ -33,6 +33,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <cstring>
 
 #include <openssl/opensslconf.h>
 #include <openssl/evp.h>
@@ -51,6 +52,29 @@ namespace hj
 class rsa
 {
   public:
+    enum class error_code
+    {
+        ok = 0,
+        invalid_input,
+        invalid_output,
+        invalid_pubkey_pem,
+        invalid_prikey_pem,
+        invalid_key_bits,
+        buffer_too_small,
+        key_generation_failed,
+        key_loading_failed,
+        encryption_failed,
+        decryption_failed,
+        signing_failed,
+        verification_failed,
+        not_supported_padding,
+        no_padding_specified,
+        write_failed,
+        read_failed,
+        mode_and_password_mismatch,
+        unknown,
+    };
+
     enum class key_format
     {
         x509, // X.509 (-----BEGIN PUBLIC KEY-----) (-----BEGIN PRIVATE KEY-----)
@@ -131,89 +155,102 @@ class rsa
     };
 
     // use pubkey to encrypt
-    static bool encrypt(unsigned char       *dst,
-                        std::size_t         &dst_len,
-                        const unsigned char *src,
-                        const std::size_t    src_len,
-                        const unsigned char *pubkey_pem,
-                        const std::size_t    pubkey_pem_len,
-                        const padding        padding = padding::pkcs1)
+    static error_code encrypt(unsigned char       *dst,
+                              std::size_t         &dst_len,
+                              const unsigned char *src,
+                              const std::size_t    src_len,
+                              const unsigned char *pubkey_pem,
+                              const std::size_t    pubkey_pem_len,
+                              const padding        padding = padding::pkcs1)
     {
+        if(!dst)
+            return error_code::invalid_output;
+        if(!src)
+            return error_code::invalid_input;
+        if(!pubkey_pem || pubkey_pem_len == 0)
+            return error_code::invalid_pubkey_pem;
+
         RSA *rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
         if(!rsa)
-            return false;
+            return error_code::key_loading_failed;
 
-        if(!_is_plain_valid(src_len, padding, rsa))
+        int        len = 0;
+        error_code ec  = error_code::encryption_failed;
+        do
         {
-            RSA_free(rsa);
-            return false;
-        }
+            if(!_is_plain_valid(src_len, padding, rsa))
+                break;
 
-        if(dst_len < static_cast<std::size_t>(RSA_size(rsa)))
-        {
-            RSA_free(rsa);
-            return false;
-        }
+            if(dst_len < static_cast<std::size_t>(RSA_size(rsa)))
+                break;
 
-        int len = RSA_public_encrypt((int) src_len,
+            len = RSA_public_encrypt((int) src_len,
                                      src,
                                      dst,
                                      rsa,
                                      static_cast<int>(padding));
-        RSA_free(rsa);
-        if(len == -1)
-            return false;
+            if(len == -1)
+                break;
 
-        dst_len = len;
-        return true;
+            dst_len = len;
+            ec      = error_code::ok;
+        } while(false);
+        RSA_free(rsa);
+        if(ec != error_code::ok && dst)
+            memset(dst, 0, dst_len);
+
+        return ec;
     }
 
     // use pubkey(string) to encrypt
-    static bool encrypt(std::string       &dst,
-                        const std::string &src,
-                        const std::string &pubkey_pem,
-                        const padding      padding = padding::pkcs1)
+    static error_code encrypt(std::string       &dst,
+                              const std::string &src,
+                              const std::string &pubkey_pem,
+                              const padding      padding = padding::pkcs1)
     {
         dst.resize(encrypt_len_reserve(
             reinterpret_cast<const unsigned char *>(pubkey_pem.c_str()),
             pubkey_pem.size()));
         std::size_t dst_len = dst.size();
-        if(!encrypt(reinterpret_cast<unsigned char *>(
-                        const_cast<char *>(dst.data())),
-                    dst_len,
-                    reinterpret_cast<const unsigned char *>(src.c_str()),
-                    src.size(),
-                    reinterpret_cast<const unsigned char *>(pubkey_pem.c_str()),
-                    pubkey_pem.size(),
-                    padding))
+        auto        ec      = encrypt(
+            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
+            dst_len,
+            reinterpret_cast<const unsigned char *>(src.c_str()),
+            src.size(),
+            reinterpret_cast<const unsigned char *>(pubkey_pem.c_str()),
+            pubkey_pem.size(),
+            padding);
+        if(ec != error_code::ok)
         {
             dst.clear();
-            return false;
+            return ec;
         }
 
         dst.resize(dst_len);
-        return true;
+        return error_code::ok;
     }
 
-    static bool encrypt(std::ostream        &out,
-                        std::istream        &in,
-                        const unsigned char *pubkey_pem,
-                        const std::size_t    pubkey_pem_len,
-                        const padding        padding = padding::pkcs1)
+    static error_code encrypt(std::ostream        &out,
+                              std::istream        &in,
+                              const unsigned char *pubkey_pem,
+                              const std::size_t    pubkey_pem_len,
+                              const padding        padding = padding::pkcs1)
     {
-        if(!in || !out)
-            return false;
+        if(!in)
+            return error_code::invalid_input;
+        if(!out)
+            return error_code::invalid_output;
 
         RSA *rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
         if(!rsa)
-            return false;
+            return error_code::key_loading_failed;
 
         int key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
         if(pubkey_pem_len < static_cast<std::size_t>(key_size)
            || !_is_stream_valid(in, padding, key_size))
         {
             RSA_free(rsa);
-            return false;
+            return error_code::verification_failed;
         }
 
         int max_chunk = key_size;
@@ -237,7 +274,7 @@ class rsa
             }
             default: {
                 RSA_free(rsa);
-                return false;
+                return error_code::not_supported_padding;
             }
         }
 
@@ -245,7 +282,6 @@ class rsa
         unsigned char   outbuf[RSA_MAX_KEY_LENGTH];
         std::streamsize read_len;
         int             write_len = 0;
-
         while(in)
         {
             in.read(reinterpret_cast<char *>(inbuf), max_chunk);
@@ -257,7 +293,7 @@ class rsa
             if(padding == padding::no_padding && read_len != key_size)
             {
                 RSA_free(rsa);
-                return false;
+                return error_code::no_padding_specified;
             }
 
             write_len = RSA_public_encrypt(static_cast<int>(read_len),
@@ -268,22 +304,22 @@ class rsa
             if(write_len == -1)
             {
                 RSA_free(rsa);
-                return false;
+                return error_code::encryption_failed;
             }
             out.write(reinterpret_cast<char *>(outbuf), write_len);
         }
 
         RSA_free(rsa);
-        return true;
+        return error_code::ok;
     }
 
     // use pubkey to encrypt file
     // NOTE: this function not recommand for large file
-    static bool encrypt_file(const char          *dst_file_path,
-                             const char          *src_file_path,
-                             const unsigned char *pubkey_pem,
-                             const std::size_t    pubkey_pem_len,
-                             const padding        padding = padding::pkcs1)
+    static error_code encrypt_file(const char          *dst_file_path,
+                                   const char          *src_file_path,
+                                   const unsigned char *pubkey_pem,
+                                   const std::size_t    pubkey_pem_len,
+                                   const padding padding = padding::pkcs1)
     {
         std::ifstream in(reinterpret_cast<const char *>(src_file_path),
                          std::ios::binary);
@@ -294,10 +330,10 @@ class rsa
 
     // use pubkey(string) to encrypt file
     // NOTE: this function not recommand for large file
-    static bool encrypt_file(const std::string &dst_file_path,
-                             const std::string &src_file_path,
-                             const std::string &pubkey_pem,
-                             const padding      padding = padding::pkcs1)
+    static error_code encrypt_file(const std::string &dst_file_path,
+                                   const std::string &src_file_path,
+                                   const std::string &pubkey_pem,
+                                   const padding      padding = padding::pkcs1)
     {
         return encrypt_file(
             dst_file_path.c_str(),
@@ -308,103 +344,120 @@ class rsa
     }
 
     // use prikey to decrypt
-    static bool decrypt(unsigned char       *dst,
-                        std::size_t         &dst_len,
-                        const unsigned char *src,
-                        const std::size_t    src_len,
-                        const unsigned char *prikey_pem,
-                        const std::size_t    prikey_pem_len,
-                        const padding        padding      = padding::pkcs1,
-                        const unsigned char *password     = nullptr,
-                        const std::size_t    password_len = 0)
+    static error_code decrypt(unsigned char       *dst,
+                              std::size_t         &dst_len,
+                              const unsigned char *src,
+                              const std::size_t    src_len,
+                              const unsigned char *prikey_pem,
+                              const std::size_t    prikey_pem_len,
+                              const padding        padding  = padding::pkcs1,
+                              const unsigned char *password = nullptr,
+                              const std::size_t    password_len = 0)
     {
+        if(!dst || dst_len == 0)
+            return error_code::invalid_output;
+        if(!src || src_len == 0)
+            return error_code::invalid_input;
+        if(!prikey_pem || prikey_pem_len == 0)
+            return error_code::invalid_prikey_pem;
+
         RSA *rsa = _load_private_key(prikey_pem,
                                      prikey_pem_len,
                                      password,
                                      password_len);
         if(!rsa)
-            return false;
-
-        if(dst_len < static_cast<std::size_t>(RSA_size(rsa)))
         {
-            RSA_free(rsa);
-            return false;
+            memset(dst, 0, dst_len);
+            return error_code::key_loading_failed;
         }
 
-        int len = RSA_private_decrypt(src_len,
-                                      src,
-                                      dst,
-                                      rsa,
-                                      static_cast<int>(padding));
-        RSA_free(rsa);
-        if(len == -1)
-            return false;
+        error_code ec = error_code::decryption_failed;
+        do
+        {
+            if(dst_len < static_cast<std::size_t>(RSA_size(rsa)))
+                break;
 
-        dst_len = len;
-        return true;
+            int len = RSA_private_decrypt(src_len,
+                                          src,
+                                          dst,
+                                          rsa,
+                                          static_cast<int>(padding));
+            if(len == -1)
+                break;
+
+            dst_len = len;
+            ec      = error_code::ok;
+        } while(false);
+        RSA_free(rsa);
+        if(ec != error_code::ok && dst)
+            memset(dst, 0, dst_len);
+
+        return ec;
     }
 
     // use prikey to decrypt
-    static bool decrypt(std::string       &dst,
-                        const std::string &src,
-                        const std::string &prikey_pem,
-                        const padding      padding  = padding::pkcs1,
-                        const std::string &password = "")
+    static error_code decrypt(std::string       &dst,
+                              const std::string &src,
+                              const std::string &prikey_pem,
+                              const padding      padding  = padding::pkcs1,
+                              const std::string &password = "")
     {
         dst.resize(decrypt_len_reserve(
             reinterpret_cast<const unsigned char *>(prikey_pem.c_str()),
             prikey_pem.size()));
-
         unsigned char *password_ptr =
             (password.empty()) ? nullptr
                                : reinterpret_cast<unsigned char *>(
                                      const_cast<char *>(password.c_str()));
         std::size_t password_len = password.size();
         std::size_t dst_len      = dst.size();
-        if(!decrypt(reinterpret_cast<unsigned char *>(
-                        const_cast<char *>(dst.data())),
-                    dst_len,
-                    reinterpret_cast<const unsigned char *>(src.c_str()),
-                    src.size(),
-                    reinterpret_cast<const unsigned char *>(prikey_pem.c_str()),
-                    prikey_pem.size(),
-                    padding,
-                    password_ptr,
-                    password_len))
+        auto        ec           = decrypt(
+            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
+            dst_len,
+            reinterpret_cast<const unsigned char *>(src.c_str()),
+            src.size(),
+            reinterpret_cast<const unsigned char *>(prikey_pem.c_str()),
+            prikey_pem.size(),
+            padding,
+            password_ptr,
+            password_len);
+        if(ec != error_code::ok)
         {
             dst.clear();
-            return false;
+            return ec;
         }
 
         dst.resize(dst_len);
-        return true;
+        return error_code::ok;
     }
 
     // use prikey to decrypt stream
-    static bool decrypt(std::ostream        &out,
-                        std::istream        &in,
-                        const unsigned char *prikey_pem,
-                        const std::size_t    prikey_pem_len,
-                        const padding        padding      = padding::pkcs1,
-                        const unsigned char *password     = nullptr,
-                        const std::size_t    password_len = 0)
+    static error_code decrypt(std::ostream        &out,
+                              std::istream        &in,
+                              const unsigned char *prikey_pem,
+                              const std::size_t    prikey_pem_len,
+                              const padding        padding  = padding::pkcs1,
+                              const unsigned char *password = nullptr,
+                              const std::size_t    password_len = 0)
     {
-        if(!in || !out)
-            return false;
+        if(!in)
+            return error_code::invalid_input;
+        if(!out)
+            return error_code::invalid_output;
 
         RSA *rsa = _load_private_key(prikey_pem,
                                      prikey_pem_len,
                                      password,
                                      password_len);
         if(!rsa)
-            return false;
+            return error_code::key_loading_failed;
 
         std::size_t key_size = RSA_size(rsa); // [1024/8, 2048/8, 4096/8]
         if(prikey_pem_len < key_size
            || !_is_stream_valid(in, padding, key_size))
         {
             RSA_free(rsa);
-            return false;
+            return error_code::verification_failed;
         }
 
         unsigned char   inbuf[RSA_MAX_KEY_LENGTH];
@@ -425,23 +478,24 @@ class rsa
             if(write_len == -1)
             {
                 RSA_free(rsa);
-                return false;
+                return error_code::write_failed;
             }
+
             out.write(reinterpret_cast<char *>(outbuf), write_len);
         }
 
         RSA_free(rsa);
-        return true;
+        return error_code::ok;
     }
 
     // use prikey to decrypt file
-    static bool decrypt_file(const char          *dst_file_path,
-                             const char          *src_file_path,
-                             const unsigned char *prikey_pem,
-                             const std::size_t    prikey_pem_len,
-                             const padding        padding      = padding::pkcs1,
-                             const unsigned char *password     = nullptr,
-                             const std::size_t    password_len = 0)
+    static error_code decrypt_file(const char          *dst_file_path,
+                                   const char          *src_file_path,
+                                   const unsigned char *prikey_pem,
+                                   const std::size_t    prikey_pem_len,
+                                   const padding padding = padding::pkcs1,
+                                   const unsigned char *password     = nullptr,
+                                   const std::size_t    password_len = 0)
     {
         std::ifstream in(reinterpret_cast<const char *>(src_file_path),
                          std::ios::binary);
@@ -457,11 +511,11 @@ class rsa
     }
 
     // use prikey(std::string) to decrypt file
-    static bool decrypt_file(const std::string &dst_file_path,
-                             const std::string &src_file_path,
-                             const std::string &prikey_pem,
-                             const padding      padding  = padding::pkcs1,
-                             const std::string &password = "")
+    static error_code decrypt_file(const std::string &dst_file_path,
+                                   const std::string &src_file_path,
+                                   const std::string &prikey_pem,
+                                   const padding      padding  = padding::pkcs1,
+                                   const std::string &password = "")
     {
         unsigned char *password_ptr =
             (password.empty()) ? nullptr
@@ -479,25 +533,24 @@ class rsa
     }
 
     // use prikey to signature
-    static bool signature(unsigned char       *dst,
-                          std::size_t         &dst_len,
-                          const unsigned char *src,
-                          const std::size_t    src_len,
-                          const unsigned char *prikey_pem,
-                          const std::size_t    prikey_pem_len,
-                          const padding        padding      = padding::pkcs1,
-                          const unsigned char *password     = nullptr,
-                          const std::size_t    password_len = 0)
+    static error_code signature(unsigned char       *dst,
+                                std::size_t         &dst_len,
+                                const unsigned char *src,
+                                const std::size_t    src_len,
+                                const unsigned char *prikey_pem,
+                                const std::size_t    prikey_pem_len,
+                                const padding        padding  = padding::pkcs1,
+                                const unsigned char *password = nullptr,
+                                const std::size_t    password_len = 0)
     {
         RSA *rsa = _load_private_key(prikey_pem,
                                      prikey_pem_len,
                                      password,
                                      password_len);
         if(!rsa)
-            return false;
-
+            return error_code::key_loading_failed;
         if(dst_len < static_cast<std::size_t>(RSA_size(rsa)))
-            return false;
+            return error_code::buffer_too_small;
 
         int len = RSA_private_encrypt(src_len,
                                       src,
@@ -506,27 +559,26 @@ class rsa
                                       static_cast<int>(padding));
         RSA_free(rsa);
         if(len == -1)
-            return false;
+            return error_code::encryption_failed;
 
         dst_len = len;
-        return true;
+        return error_code::ok;
     }
 
     // use pubkey to verify signature
-    static bool verify_signature(unsigned char       *dst,
-                                 std::size_t         &dst_len,
-                                 const unsigned char *src,
-                                 const std::size_t    src_len,
-                                 const unsigned char *pubkey_pem,
-                                 const std::size_t    pubkey_pem_len,
-                                 const padding        padding = padding::pkcs1)
+    static error_code verify_signature(unsigned char       *dst,
+                                       std::size_t         &dst_len,
+                                       const unsigned char *src,
+                                       const std::size_t    src_len,
+                                       const unsigned char *pubkey_pem,
+                                       const std::size_t    pubkey_pem_len,
+                                       const padding padding = padding::pkcs1)
     {
         RSA *rsa = _load_public_key(pubkey_pem, pubkey_pem_len);
         if(!rsa)
-            return false;
-
+            return error_code::key_loading_failed;
         if(dst_len < static_cast<std::size_t>(RSA_size(rsa)))
-            return false;
+            return error_code::buffer_too_small;
 
         int len = RSA_public_decrypt(src_len,
                                      src,
@@ -535,44 +587,44 @@ class rsa
                                      static_cast<int>(padding));
         RSA_free(rsa);
         if(len == -1)
-            return false;
+            return error_code::verification_failed;
 
         dst_len = len;
-        return true;
+        return error_code::ok;
     }
 
     // generate rsa key pair
-    static bool make_key_pair(unsigned char       *pubkey_pem,
-                              std::size_t         &pubkey_pem_len,
-                              unsigned char       *prikey_pem,
-                              std::size_t         &prikey_pem_len,
-                              const std::size_t    bits     = 2048,
-                              const key_format     format   = key_format::x509,
-                              const mode           mod      = mode::none,
-                              const unsigned char *password = nullptr,
-                              const std::size_t    password_len = 0)
+    static error_code keygen(unsigned char       *pubkey_pem,
+                             std::size_t         &pubkey_pem_len,
+                             unsigned char       *prikey_pem,
+                             std::size_t         &prikey_pem_len,
+                             const std::size_t    bits     = 2048,
+                             const key_format     format   = key_format::x509,
+                             const mode           mod      = mode::none,
+                             const unsigned char *password = nullptr,
+                             const std::size_t    password_len = 0)
     {
         if(!pubkey_pem || pubkey_pem_len < 256)
-            return false;
+            return error_code::invalid_pubkey_pem;
         if(!prikey_pem || prikey_pem_len < 512)
-            return false;
+            return error_code::invalid_prikey_pem;
         // bits: 512, 1024, 2048, 3072, 4096
         if(!is_key_pair_bits_valid(bits))
-            return false;
+            return error_code::invalid_key_bits;
         if(mod != mode::none
            && (!password || !_validate_password_for_cipher(mod, password_len)))
-            return false;
+            return error_code::mode_and_password_mismatch;
 
-        RSA      *rsa     = nullptr;
-        BIGNUM   *bn      = nullptr;
-        BIO      *pub_bio = nullptr;
-        BIO      *pri_bio = nullptr;
-        EVP_PKEY *pkey    = nullptr;
-        bool      ret     = false;
-        char     *pub_buf = nullptr;
-        char     *pri_buf = nullptr;
-        long      pub_len = 0;
-        long      pri_len = 0;
+        RSA       *rsa     = nullptr;
+        BIGNUM    *bn      = nullptr;
+        BIO       *pub_bio = nullptr;
+        BIO       *pri_bio = nullptr;
+        EVP_PKEY  *pkey    = nullptr;
+        error_code ret     = error_code::key_generation_failed;
+        char      *pub_buf = nullptr;
+        char      *pri_buf = nullptr;
+        long       pub_len = 0;
+        long       pri_len = 0;
         do
         {
             bn = BN_new();
@@ -694,7 +746,7 @@ class rsa
             prikey_pem[pri_len] = '\0';
             prikey_pem_len      = static_cast<std::size_t>(pri_len);
 
-            ret = true;
+            ret = error_code::ok;
         } while(false);
 
         if(pkey)
@@ -711,38 +763,40 @@ class rsa
         return ret;
     }
 
-    static bool make_key_pair(std::string       &pubkey_pem,
-                              std::string       &prikey_pem,
-                              const std::size_t  bits     = 2048,
-                              const key_format   format   = key_format::x509,
-                              const mode         mod      = mode::none,
-                              const std::string &password = "")
+    static error_code keygen(std::string       &pubkey_pem,
+                             std::string       &prikey_pem,
+                             const std::size_t  bits     = 2048,
+                             const key_format   format   = key_format::x509,
+                             const mode         mod      = mode::none,
+                             const std::string &password = "")
     {
         pubkey_pem.resize(RSA_MAX_KEY_LENGTH);
         std::size_t pubkey_pem_len = pubkey_pem.size();
         prikey_pem.resize(RSA_MAX_KEY_LENGTH);
         std::size_t prikey_pem_len = prikey_pem.size();
-        if(!make_key_pair(
-               reinterpret_cast<unsigned char *>(
-                   const_cast<char *>(pubkey_pem.data())),
-               pubkey_pem_len,
-               reinterpret_cast<unsigned char *>(
-                   const_cast<char *>(prikey_pem.data())),
-               prikey_pem_len,
-               bits,
-               format,
-               mod,
-               reinterpret_cast<const unsigned char *>(password.c_str()),
-               password.size()))
+
+        auto ec =
+            keygen(reinterpret_cast<unsigned char *>(
+                       const_cast<char *>(pubkey_pem.data())),
+                   pubkey_pem_len,
+                   reinterpret_cast<unsigned char *>(
+                       const_cast<char *>(prikey_pem.data())),
+                   prikey_pem_len,
+                   bits,
+                   format,
+                   mod,
+                   reinterpret_cast<const unsigned char *>(password.c_str()),
+                   password.size());
+        if(ec != error_code::ok)
         {
             pubkey_pem.clear();
             prikey_pem.clear();
-            return false;
+            return ec;
         }
 
         pubkey_pem.resize(pubkey_pem_len);
         prikey_pem.resize(prikey_pem_len);
-        return true;
+        return ec;
     }
 
     // reserve encrypt dst buf size
@@ -1034,135 +1088,93 @@ class rsa
     {
         switch(mod)
         {
-            case mode::none: {
+            case mode::none:
                 return nullptr;
-            }
-
-            // AES
-            case mode::aes_128_ecb: {
+            case mode::aes_128_ecb: // AES-128-CBC is the default for AES ECB
                 return EVP_aes_128_cbc();
-            } // AES-128-CBC is the default for AES ECB
-            case mode::aes_192_ecb: {
+            case mode::aes_192_ecb: // AES-192-CBC is the default for AES ECB
                 return EVP_aes_192_cbc();
-            } // AES-192-CBC is the default for AES ECB
-            case mode::aes_256_ecb: {
+            case mode::aes_256_ecb: // AES-256-CBC is the default for AES ECB
                 return EVP_aes_256_cbc();
-            } // AES-256-CBC is the default for AES ECB
-
-            case mode::aes_128_cbc: {
+            case mode::aes_128_cbc:
                 return EVP_aes_128_cbc();
-            }
-            case mode::aes_192_cbc: {
+            case mode::aes_192_cbc:
                 return EVP_aes_192_cbc();
-            }
-            case mode::aes_256_cbc: {
+            case mode::aes_256_cbc:
                 return EVP_aes_256_cbc();
-            }
-
-            case mode::aes_128_cfb: {
+            case mode::aes_128_cfb:
                 return EVP_aes_128_cfb();
-            }
-            case mode::aes_192_cfb: {
+            case mode::aes_192_cfb:
                 return EVP_aes_192_cfb();
-            }
-            case mode::aes_256_cfb: {
+            case mode::aes_256_cfb:
                 return EVP_aes_256_cfb();
-            }
-
-            case mode::aes_128_ofb: {
+            case mode::aes_128_ofb:
                 return EVP_aes_128_ofb();
-            }
-            case mode::aes_192_ofb: {
+            case mode::aes_192_ofb:
                 return EVP_aes_192_ofb();
-            }
-            case mode::aes_256_ofb: {
+            case mode::aes_256_ofb:
                 return EVP_aes_256_ofb();
-            }
-
 #ifndef OPENSSL_NO_DES
             // 3DES
-            case mode::des_ede3_ecb: {
+            case mode::des_ede3_ecb: // 3DES-CBC is the default for 3DES ECB
                 return EVP_des_ede3_cbc();
-            } // 3DES-CBC is the default for 3DES ECB
-            case mode::des_ede3_cbc: {
+            case mode::des_ede3_cbc:
                 return EVP_des_ede3_cbc();
-            }
-            case mode::des_ede3_cfb: {
+            case mode::des_ede3_cfb:
                 return EVP_des_ede3_cfb();
-            }
-            case mode::des_ede3_ofb: {
+            case mode::des_ede3_ofb:
                 return EVP_des_ede3_ofb();
-            }
-            case mode::des_ede_cbc: {
+            case mode::des_ede_cbc:
                 return EVP_des_ede_cbc();
-            }
-
             // DES (not recommended)
-            case mode::des_ecb: {
+            case mode::des_ecb: // DES-CBC is the default for DES ECB
                 return EVP_des_cbc();
-            } // DES-CBC is the default for DES ECB
-            case mode::des_cbc: {
+            case mode::des_cbc:
                 return EVP_des_cbc();
-            }
-            case mode::des_cfb: {
+            case mode::des_cfb:
                 return EVP_des_cfb();
-            }
-            case mode::des_ofb: {
+            case mode::des_ofb:
                 return EVP_des_ofb();
-            }
 #endif
 
 #ifndef OPENSSL_NO_BF
             // Blowfish
-            case mode::bf_ecb: {
+            case mode::bf_ecb: // Blowfish-CBC is the default for Blowfish ECB
                 return EVP_bf_cbc();
-            } // Blowfish-CBC is the default for Blowfish ECB
-            case mode::bf_cbc: {
+            case mode::bf_cbc:
                 return EVP_bf_cbc();
-            }
-            case mode::bf_cfb: {
+            case mode::bf_cfb:
                 return EVP_bf_cfb();
-            }
-            case mode::bf_ofb: {
+            case mode::bf_ofb:
                 return EVP_bf_ofb();
-            }
 #endif
 
 #ifndef OPENSSL_NO_CAST
             // CAST5
-            case mode::cast5_ecb: {
+            case mode::cast5_ecb: // CAST5-CBC is the default for CAST5 ECB
                 return EVP_cast5_cbc();
-            } // CAST5-CBC is the default for CAST5 ECB
-            case mode::cast5_cbc: {
+            case mode::cast5_cbc:
                 return EVP_cast5_cbc();
-            }
-            case mode::cast5_cfb: {
+            case mode::cast5_cfb:
                 return EVP_cast5_cfb();
-            }
-            case mode::cast5_ofb: {
+            case mode::cast5_ofb:
                 return EVP_cast5_ofb();
-            }
 #endif
 
 #ifndef OPENSSL_NO_RC2
             // RC2
-            case mode::rc2_ecb: {
+            case mode::rc2_ecb: // RC2-CBC is the default for RC2 ECB
                 return EVP_rc2_cbc();
-            } // RC2-CBC is the default for RC2 ECB
-            case mode::rc2_cbc: {
+            case mode::rc2_cbc:
                 return EVP_rc2_cbc();
-            }
-            case mode::rc2_cfb: {
+            case mode::rc2_cfb:
                 return EVP_rc2_cfb();
-            }
-            case mode::rc2_ofb: {
+            case mode::rc2_ofb:
                 return EVP_rc2_ofb();
-            }
 #endif
 
-            default: {
+            default:
                 return EVP_aes_256_cbc();
-            }
         }
     }
 

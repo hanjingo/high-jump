@@ -9,7 +9,7 @@
 
 using namespace hj::log;
 
-class BenchmarkDataGenerator
+class benchmark_data_generator
 {
   public:
     static std::string random_string(size_t length = 50)
@@ -57,7 +57,6 @@ class logger_benchmark : public benchmark::Fixture
     {
         if(state.thread_index() == 0)
         {
-            // 清理资源 - 清空所有 sinks
             log_inst->clear_sink();
         }
     }
@@ -70,7 +69,7 @@ BENCHMARK_F(logger_benchmark, info_logging)(benchmark::State &state)
     for(auto _ : state)
     {
         log_inst->info("This is an info message with number: {}",
-                       BenchmarkDataGenerator::random_int());
+                       benchmark_data_generator::random_int());
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -80,7 +79,7 @@ BENCHMARK_F(logger_benchmark, warn_logging)(benchmark::State &state)
     for(auto _ : state)
     {
         log_inst->warn("This is a warning with data: {}",
-                       BenchmarkDataGenerator::random_string());
+                       benchmark_data_generator::random_string());
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -90,7 +89,7 @@ BENCHMARK_F(logger_benchmark, error_logging)(benchmark::State &state)
     for(auto _ : state)
     {
         log_inst->error("This is an error with code: {}",
-                        BenchmarkDataGenerator::random_int());
+                        benchmark_data_generator::random_int());
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -99,12 +98,12 @@ BENCHMARK_F(logger_benchmark, formatted_logging)(benchmark::State &state)
 {
     for(auto _ : state)
     {
-        log_inst->info("User: {}, ID: {}, Score: {:.2f}, Active: {}",
-                       BenchmarkDataGenerator::random_string(20),
-                       BenchmarkDataGenerator::random_int(),
-                       static_cast<double>(BenchmarkDataGenerator::random_int())
-                           / 100.0,
-                       BenchmarkDataGenerator::random_int() % 2 == 0);
+        log_inst->info(
+            "User: {}, ID: {}, Score: {:.2f}, Active: {}",
+            benchmark_data_generator::random_string(20),
+            benchmark_data_generator::random_int(),
+            static_cast<double>(benchmark_data_generator::random_int()) / 100.0,
+            benchmark_data_generator::random_int() % 2 == 0);
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -114,7 +113,7 @@ BENCHMARK_F(logger_benchmark, large_message_logging)(benchmark::State &state)
     for(auto _ : state)
     {
         log_inst->info("Large message: {}",
-                       BenchmarkDataGenerator::large_string());
+                       benchmark_data_generator::large_string());
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -128,7 +127,7 @@ BENCHMARK_F(logger_benchmark, conditional_logging)(benchmark::State &state)
         {
             log_inst->info("Conditional log #{}: {}",
                            counter,
-                           BenchmarkDataGenerator::random_string());
+                           benchmark_data_generator::random_string());
         }
         ++counter;
     }
@@ -144,19 +143,19 @@ BENCHMARK_F(logger_benchmark, different_levels)(benchmark::State &state)
         {
             case 0:
                 log_inst->debug("Debug message: {}",
-                                BenchmarkDataGenerator::random_int());
+                                benchmark_data_generator::random_int());
                 break;
             case 1:
                 log_inst->info("Info message: {}",
-                               BenchmarkDataGenerator::random_int());
+                               benchmark_data_generator::random_int());
                 break;
             case 2:
                 log_inst->warn("Warning message: {}",
-                               BenchmarkDataGenerator::random_int());
+                               benchmark_data_generator::random_int());
                 break;
             case 3:
                 log_inst->error("Error message: {}",
-                                BenchmarkDataGenerator::random_int());
+                                benchmark_data_generator::random_int());
                 break;
         }
         ++counter;
@@ -223,7 +222,7 @@ BENCHMARK_F(logger_benchmark, multi_thread_logging)(benchmark::State &state)
     {
         log_inst->info("Thread {} message: {}",
                        static_cast<int>(state.thread_index()),
-                       BenchmarkDataGenerator::random_int());
+                       benchmark_data_generator::random_int());
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -234,7 +233,8 @@ BENCHMARK_F(logger_benchmark, small_messages)(benchmark::State &state)
 
     for(auto _ : state)
     {
-        log_inst->info("Small: {}", BenchmarkDataGenerator::random_string(50));
+        log_inst->info("Small: {}",
+                       benchmark_data_generator::random_string(50));
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -245,7 +245,7 @@ BENCHMARK_F(logger_benchmark, medium_messages)(benchmark::State &state)
 
     for(auto _ : state)
     {
-        log_inst->info("Medium: {}", BenchmarkDataGenerator::medium_string());
+        log_inst->info("Medium: {}", benchmark_data_generator::medium_string());
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -261,16 +261,14 @@ BENCHMARK_F(logger_benchmark, no_format_logging)(benchmark::State &state)
 
 BENCHMARK_F(logger_benchmark, disabled_level_logging)(benchmark::State &state)
 {
-    log_inst->set_level(level::warning); // 设置为只记录警告及以上级别
+    log_inst->set_level(level::warning);
 
     for(auto _ : state)
     {
-        // 这些 debug 和 info 消息应该被过滤掉
         log_inst->debug("This debug message should be filtered");
         log_inst->info("This info message should be filtered");
     }
     state.SetItemsProcessed(state.iterations());
 }
 
-// 注册多线程基准测试
 BENCHMARK_REGISTER_F(logger_benchmark, multi_thread_logging)->Threads(4);

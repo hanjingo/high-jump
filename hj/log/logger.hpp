@@ -1,10 +1,13 @@
 #ifndef LOGGER_HPP
 #define LOGGER_HPP
 
+#ifndef SPDLOG_ACTIVE_LEVEL
 #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+#endif
 
 #include <atomic>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 
 #include <spdlog/spdlog.h>
@@ -14,21 +17,20 @@
 #include <spdlog/sinks/daily_file_sink.h>
 
 #if defined(QT_VERSION) && defined(QT_CORE_LIB)
-#ifndef HJ_QT_ENVIRONMENT
-#define HJ_QT_ENVIRONMENT 1
+#ifndef HJ_QT_SUPPORT
+#define HJ_QT_SUPPORT 1
 #endif
-
 #include <QString>
 #include <QDebug>
 #include <QLoggingCategory>
 #else
-#ifndef HJ_QT_ENVIRONMENT
-#define HJ_QT_ENVIRONMENT 0
+#ifndef HJ_QT_SUPPORT
+#define HJ_QT_SUPPORT 0
 #endif
 #endif
 
 #ifndef LOG_QUEUE_SIZE
-#define LOG_QUEUE_SIZE 102400
+#define LOG_QUEUE_SIZE 1024
 #endif
 
 #ifndef LOG_THREAD_NUM
@@ -37,62 +39,101 @@
 
 namespace hj
 {
+namespace log
+{
 
 class logger;
 
-enum class log_lvl : int
+enum class level : int
 {
     trace = 0,
     debug,
     info,
-    warn,
-    err,
+    warning,
+    error,
     critical,
+    off
 };
 
-static std::mutex log_mu;
-
-// for qt environment
-#if HJ_QT_ENVIRONMENT
-static void default_qt_msg_handler(QtMsgType                 typ,
-                                   const QMessageLogContext &context,
-                                   const QString            &str)
+#if HJ_QT_SUPPORT
+class QtMessageHandler
 {
-    switch(typ)
+  public:
+    using Handler = std::function<void(
+        QtMsgType, const QMessageLogContext &, const QString &)>;
+
+    static void install(const Handler &handler = {},
+                        const char    *name    = "default")
     {
-        case QtDebugMsg: {
-            hj::logger::instance()->debug(str.toUtf8().constData());
-            break;
+        if(_is_installed.load())
+            return;
+
+        std::lock_guard lock(_mu);
+        _name = name;
+        if(handler)
+            qInstallMessageHandler(handler);
+        else
+            qInstallMessageHandler(default_handler);
+
+        _is_installed.store(true);
+    }
+
+    static void uninstall() noexcept
+    {
+        try
+        {
+            std::lock_guard lock(_mu);
+            qInstallMessageHandler(nullptr);
+            _is_installed.store(false);
         }
-        case QtWarningMsg: {
-            hj::logger::instance()->warn(str.toUtf8().constData());
-            break;
+        catch(...)
+        {
         }
-        case QtCriticalMsg: {
-            hj::logger::instance()->critical(str.toUtf8().constData());
-            break;
+    }
+
+    static bool isInstalled() noexcept { return _is_installed.load(); }
+
+  private:
+    static void defaultHandler(QtMsgType                 type,
+                               const QMessageLogContext &context,
+                               const QString            &message)
+    {
+        try
+        {
+            switch(type)
+            {
+                case QtDebugMsg: {
+                    hj::logger::instance()->debug(message.toUtf8().constData());
+                    break;
+                }
+                case QtWarningMsg: {
+                    hj::logger::instance()->warn(message.toUtf8().constData());
+                    break;
+                }
+                case QtCriticalMsg: {
+                    hj::logger::instance()->critical(
+                        message.toUtf8().constData());
+                    break;
+                }
+                case QtInfoMsg: {
+                    hj::logger::instance()->info(message.toUtf8().constData());
+                    break;
+                }
+                default:
+                    break;
+            };
         }
-        case QtInfoMsg: {
-            hj::logger::instance()->info(str.toUtf8().constData());
-            break;
+        catch(...)
+        {
         }
-        default:
-            break;
-    };
+    }
+
+    static std::atomic<bool> _is_installed;
+    static std::string       _name;
+    static std::mutex        _mu;
 };
 
-static void install_qt_msg_handler(void (*fn)(QtMsgType,
-                                              const QMessageLogContext &,
-                                              const QString &))
-{
-    qInstallMessageHandler(fn);
-}
-
-static void uninstall_qt_msg_handler()
-{
-    qInstallMessageHandler(nullptr);
-}
-#endif
+#endif // HJ_QT_SUPPORT
 
 class logger
 {
@@ -101,11 +142,13 @@ class logger
     using base_logger_ptr_t = std::shared_ptr<spdlog::logger>;
 
   public:
-    logger()                          = delete;
-    logger(const logger &)            = delete;
-    logger &operator=(const logger &) = delete;
+    logger()                              = delete;
+    logger(const logger &)                = delete;
+    logger &operator=(const logger &)     = delete;
+    logger(logger &&) noexcept            = default;
+    logger &operator=(logger &&) noexcept = default;
 
-    logger(base_logger_ptr_t base)
+    explicit logger(base_logger_ptr_t base)
         : _base{base}
     {
     }
@@ -119,7 +162,10 @@ class logger
 
         if(async)
         {
-            spdlog::init_thread_pool(queue_size, thread_num);
+            static std::once_flag init_flag;
+            std::call_once(init_flag, [&queue_size, &thread_num]() {
+                spdlog::init_thread_pool(queue_size, thread_num);
+            });
 
             _base = std::make_shared<spdlog::async_logger>(
                 name,
@@ -134,18 +180,14 @@ class logger
                                                      sinks.end());
         }
 
-        _base->set_level(spdlog::level::level_enum(log_lvl::trace));
+        _base->set_level(spdlog::level::level_enum(level::trace));
     }
 
-    ~logger()
-    {
-        flush();
-        spdlog::drop_all();
-    }
+    ~logger() noexcept { flush(); }
 
-    static hj::logger *instance()
+    static hj::log::logger *instance()
     {
-        static hj::logger inst{spdlog::default_logger()};
+        static hj::log::logger inst{spdlog::default_logger()};
         return &inst;
     }
 
@@ -182,15 +224,22 @@ class logger
 
     inline const std::string &name() { return _base->name(); }
 
+    inline const bool should_log(const level lvl)
+    {
+        return _base
+               && _base->should_log(static_cast<spdlog::level::level_enum>(
+                   static_cast<int>(lvl)));
+    }
+
     inline void add_sink(sink_ptr_t &&sink)
     {
-        std::lock_guard<std::mutex> lock(log_mu);
+        std::unique_lock lock(_mu);
         _base->sinks().push_back(std::move(sink));
     }
 
     inline void remove_sink(const sink_ptr_t sink)
     {
-        std::lock_guard<std::mutex> lock(log_mu);
+        std::unique_lock lock(_mu);
         _base->sinks().erase(
             std::remove(_base->sinks().begin(), _base->sinks().end(), sink),
             _base->sinks().end());
@@ -198,17 +247,23 @@ class logger
 
     inline void clear_sink()
     {
-        std::lock_guard<std::mutex> lock(log_mu);
+        std::unique_lock lock(_mu);
         _base->sinks().clear();
     }
 
-    inline void set_level(const hj::log_lvl lvl)
+    inline std::size_t sink_count()
+    {
+        std::unique_lock lock(_mu);
+        return _base->sinks().size();
+    }
+
+    inline void set_level(const hj::log::level lvl)
     {
         _base->set_level(
             static_cast<spdlog::level::level_enum>(static_cast<int>(lvl)));
     }
 
-    inline log_lvl get_level() { return static_cast<log_lvl>(_base->level()); }
+    inline level get_level() { return static_cast<level>(_base->level()); }
 
     // see also: https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
     inline void set_pattern(const char *patterm)
@@ -218,7 +273,7 @@ class logger
 
     inline void flush() { _base->flush(); }
 
-    inline void flush_on(const log_lvl lvl)
+    inline void flush_on(const level lvl)
     {
         _base->flush_on(
             static_cast<spdlog::level::level_enum>(static_cast<int>(lvl)));
@@ -262,23 +317,25 @@ class logger
     }
 
   private:
-    base_logger_ptr_t _base;
+    mutable std::shared_mutex _mu;
+    base_logger_ptr_t         _base;
 };
 
-}
+} // namespace log
+} // namespace hj
 
-#define LOG_TRACE(...) hj::logger::instance()->trace(__VA_ARGS__)
+#define LOG_TRACE(...) hj::log::logger::instance()->trace(__VA_ARGS__)
 
-#define LOG_DEBUG(...) hj::logger::instance()->debug(__VA_ARGS__)
+#define LOG_DEBUG(...) hj::log::logger::instance()->debug(__VA_ARGS__)
 
-#define LOG_INFO(...) hj::logger::instance()->info(__VA_ARGS__)
+#define LOG_INFO(...) hj::log::logger::instance()->info(__VA_ARGS__)
 
-#define LOG_WARN(...) hj::logger::instance()->warn(__VA_ARGS__)
+#define LOG_WARN(...) hj::log::logger::instance()->warn(__VA_ARGS__)
 
-#define LOG_ERROR(...) hj::logger::instance()->error(__VA_ARGS__)
+#define LOG_ERROR(...) hj::log::logger::instance()->error(__VA_ARGS__)
 
-#define LOG_CRITICAL(...) hj::logger::instance()->critical(__VA_ARGS__)
+#define LOG_CRITICAL(...) hj::log::logger::instance()->critical(__VA_ARGS__)
 
-#define LOG_FLUSH() hj::logger::instance()->flush();
+#define LOG_FLUSH() hj::log::logger::instance()->flush();
 
 #endif

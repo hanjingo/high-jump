@@ -157,7 +157,9 @@ jobs:
         df -h
         echo "============================="
         
-        cmake --build build --config ${{ matrix.build_type }} --parallel $(nproc)
+        JOBS=$(($(nproc)-1))
+        if [ "$JOBS" -lt 1 ]; then JOBS=1; fi
+        cmake --build build --config ${{ matrix.build_type }} --parallel $JOBS
         
         echo "=== Post-build disk usage ==="
         df -h
@@ -452,9 +454,10 @@ jobs:
         
         # Set number of parallel jobs (use fewer cores on macOS to avoid memory issues)
         NPROC=$(sysctl -n hw.ncpu)
-        PARALLEL_JOBS=$((NPROC > 4 ? 4 : NPROC))
+        PARALLEL_JOBS=$((NPROC-1))
+        if [ "$PARALLEL_JOBS" -lt 1 ]; then PARALLEL_JOBS=1; fi
         echo "Using $PARALLEL_JOBS parallel jobs (total cores: $NPROC)"
-        
+              
         cmake --build build --config ${{ matrix.build_type }} --parallel $PARALLEL_JOBS
         
         echo "=== Post-build disk usage ==="
@@ -532,12 +535,14 @@ jobs:
     - name: Build
       run: |
         echo "=== Building project ==="
-        cmake --build build --config ${{ matrix.build_type }} --parallel
+        $env:JOBS = [System.Environment]::ProcessorCount - 1
+        if ($env:JOBS -lt 1) { $env:JOBS = 1 }
+        cmake --build build --config ${{ matrix.build_type }} --parallel $env:JOBS
 
     - name: Run tests
       working-directory: build
       run: |
-        ctest --output-on-failure --parallel 2 -C ${{ matrix.build_type }}
+        ctest --output-on-failure --parallel $env:JOBS -C ${{ matrix.build_type }}
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4

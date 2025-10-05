@@ -1,8 +1,10 @@
 #ifndef BYTES_HPP
 #define BYTES_HPP
 
-#include <string.h>
+#include <cstring>
 #include <string>
+#include <type_traits>
+#include <array>
 
 namespace hj
 {
@@ -10,247 +12,149 @@ namespace hj
 template <typename T>
 inline bool bytes_to_bool(const T &bytes)
 {
-    return (bytes[0] & 0x01) == 1 ? true : false;
+    static_assert(std::is_trivially_copyable<T>::value,
+                  "T must be trivially copyable");
+    return (bytes[0] & 0x01) == 1;
 }
 
 template <typename T>
-inline T &bool_to_bytes(const bool b, T &bytes)
+inline T &bool_to_bytes(bool b, T &bytes)
 {
-    if(b)
+    static_assert(std::is_trivially_copyable<T>::value,
+                  "T must be trivially copyable");
+    bytes[0] = b ? 0x01 : 0x00;
+    return bytes;
+}
+
+template <typename T>
+inline int32_t bytes_to_int32(const T &bytes, bool big_endian = true)
+{
+    static_assert(sizeof(T) >= 4, "T must have at least 4 bytes");
+    uint32_t n = 0;
+    if(big_endian)
     {
-        bytes[0] = (unsigned char) (0x01 & 1);
+        n |= (uint32_t(bytes[0]) << 24);
+        n |= (uint32_t(bytes[1]) << 16);
+        n |= (uint32_t(bytes[2]) << 8);
+        n |= (uint32_t(bytes[3]));
     } else
     {
-        bytes[0] = (unsigned char) (0x01 & 0);
+        n |= (uint32_t(bytes[3]) << 24);
+        n |= (uint32_t(bytes[2]) << 16);
+        n |= (uint32_t(bytes[1]) << 8);
+        n |= (uint32_t(bytes[0]));
+    }
+    return static_cast<int32_t>(n);
+}
+
+template <typename T>
+inline T &int32_to_bytes(int32_t n, T &bytes, bool big_endian = true)
+{
+    static_assert(sizeof(T) >= 4, "T must have at least 4 bytes");
+    if(big_endian)
+    {
+        bytes[0] = (n >> 24) & 0xFF;
+        bytes[1] = (n >> 16) & 0xFF;
+        bytes[2] = (n >> 8) & 0xFF;
+        bytes[3] = n & 0xFF;
+    } else
+    {
+        bytes[3] = (n >> 24) & 0xFF;
+        bytes[2] = (n >> 16) & 0xFF;
+        bytes[1] = (n >> 8) & 0xFF;
+        bytes[0] = n & 0xFF;
     }
     return bytes;
 }
 
 template <typename T>
-inline int bytes_to_int(const T &bytes, bool big_endian = true)
+inline int64_t bytes_to_int64(const T &bytes, bool big_endian = true)
 {
-    int n = 0;
+    static_assert(sizeof(T) >= 8, "T must have at least 8 bytes");
+    uint64_t n = 0;
     if(big_endian)
     {
-        n = bytes[3] & 0x000000FF;
-        n |= ((bytes[2] << 8) & 0x0000FF00);
-        n |= ((bytes[1] << 16) & 0x00FF0000);
-        n |= ((bytes[0] << 24) & 0xFF000000);
+        for(int i = 0; i < 8; ++i)
+            n |= (uint64_t(bytes[i]) << (56 - 8 * i));
     } else
     {
-        n = bytes[0] & 0x000000FF;
-        n |= ((bytes[1] << 8) & 0x0000FF00);
-        n |= ((bytes[2] << 16) & 0x00FF0000);
-        n |= ((bytes[3] << 24) & 0xFF000000);
+        for(int i = 0; i < 8; ++i)
+            n |= (uint64_t(bytes[i]) << (8 * i));
     }
-    return n;
+    return static_cast<int64_t>(n);
 }
 
 template <typename T>
-inline T &int_to_bytes(const int n, T &bytes, bool big_endian = true)
+inline T &int64_to_bytes(int64_t n, T &bytes, bool big_endian = true)
 {
+    static_assert(sizeof(T) >= 8, "T must have at least 8 bytes");
     if(big_endian)
     {
-        bytes[3] = (unsigned char) (0xFF & n);
-        bytes[2] = (unsigned char) ((0xFF00 & n) >> 8);
-        bytes[1] = (unsigned char) ((0xFF0000 & n) >> 16);
-        bytes[0] = (unsigned char) ((0xFF000000 & n) >> 24);
+        for(int i = 0; i < 8; ++i)
+            bytes[i] = (n >> (56 - 8 * i)) & 0xFF;
     } else
     {
-        bytes[0] = (unsigned char) (0xFF & n);
-        bytes[1] = (unsigned char) ((0xFF00 & n) >> 8);
-        bytes[2] = (unsigned char) ((0xFF0000 & n) >> 16);
-        bytes[3] = (unsigned char) ((0xFF000000 & n) >> 24);
+        for(int i = 0; i < 8; ++i)
+            bytes[i] = (n >> (8 * i)) & 0xFF;
     }
     return bytes;
 }
 
-template <typename T>
-inline long bytes_to_long(const T &bytes, bool big_endian = true)
-{
-    long n = 0;
-    if(big_endian)
-    {
-        n = bytes[3] & 0x000000FF;
-        n |= ((bytes[2] << 8) & 0x0000FF00);
-        n |= ((bytes[1] << 16) & 0x00FF0000);
-        n |= ((bytes[0] << 24) & 0xFF000000);
-    } else
-    {
-        n = bytes[0] & 0xFF;
-        n |= ((bytes[1] << 8) & 0xFF00);
-        n |= ((bytes[2] << 16) & 0xFF0000);
-        n |= ((bytes[3] << 24) & 0xFF000000);
-    }
-    return n;
-}
-
-template <typename T>
-inline T &long_to_bytes(const long n, T &bytes, bool big_endian = true)
-{
-    if(big_endian)
-    {
-        bytes[3] = (unsigned char) (0xFF & n);
-        bytes[2] = (unsigned char) ((0xFF00 & n) >> 8);
-        bytes[1] = (unsigned char) ((0xFF0000 & n) >> 16);
-        bytes[0] = (unsigned char) ((0xFF000000 & n) >> 24);
-    } else
-    {
-        bytes[0] = (unsigned char) (0xFF & n);
-        bytes[1] = (unsigned char) ((0xFF00 & n) >> 8);
-        bytes[2] = (unsigned char) ((0xFF0000 & n) >> 16);
-        bytes[3] = (unsigned char) ((0xFF000000 & n) >> 24);
-    }
-
-    return bytes;
-}
-
-template <typename T>
-inline long long bytes_to_long_long(const T &bytes, bool big_endian = true)
-{
-    long long n = 0;
-    if(big_endian)
-    {
-        n = bytes[7] & 0xFF;
-        n |= ((bytes[6] << 8) & 0xFF00);
-        n |= ((bytes[5] << 16) & 0xFF0000);
-        n |= ((bytes[4] << 24) & 0xFF000000);
-        n |= ((((long long) bytes[3]) << 32) & 0xFF00000000);
-        n |= ((((long long) bytes[2]) << 40) & 0xFF0000000000);
-        n |= ((((long long) bytes[1]) << 48) & 0xFF000000000000);
-        n |= ((((long long) bytes[0]) << 56) & 0xFF00000000000000);
-    } else
-    {
-        n = bytes[0] & 0xFF;
-        n |= ((bytes[1] << 8) & 0xFF00);
-        n |= ((bytes[2] << 16) & 0xFF0000);
-        n |= ((bytes[3] << 24) & 0xFF000000);
-        n |= ((((long long) bytes[4]) << 32) & 0xFF00000000);
-        n |= ((((long long) bytes[5]) << 40) & 0xFF0000000000);
-        n |= ((((long long) bytes[6]) << 48) & 0xFF000000000000);
-        n |= ((((long long) bytes[7]) << 56) & 0xFF00000000000000);
-    }
-    return n;
-}
-
-template <typename T>
-inline T &
-long_long_to_bytes(const long long n, T &bytes, bool big_endian = true)
-{
-    if(big_endian)
-    {
-        bytes[7] = (unsigned char) (0xFF & n);
-        bytes[6] = (unsigned char) ((0xFF00 & n) >> 8);
-        bytes[5] = (unsigned char) ((0xFF0000 & n) >> 16);
-        bytes[4] = (unsigned char) ((0xFF000000 & n) >> 24);
-        bytes[3] = (unsigned char) ((0xFF00000000 & n) >> 32);
-        bytes[2] = (unsigned char) ((0xFF0000000000 & n) >> 40);
-        bytes[1] = (unsigned char) ((0xFF000000000000 & n) >> 48);
-        bytes[0] = (unsigned char) ((0xFF00000000000000 & n) >> 56);
-    } else
-    {
-        bytes[0] = (unsigned char) (0xFF & n);
-        bytes[1] = (unsigned char) ((0xFF00 & n) >> 8);
-        bytes[2] = (unsigned char) ((0xFF0000 & n) >> 16);
-        bytes[3] = (unsigned char) ((0xFF000000 & n) >> 24);
-        bytes[4] = (unsigned char) ((0xFF00000000 & n) >> 32);
-        bytes[5] = (unsigned char) ((0xFF0000000000 & n) >> 40);
-        bytes[6] = (unsigned char) ((0xFF000000000000 & n) >> 48);
-        bytes[7] = (unsigned char) ((0xFF00000000000000 & n) >> 56);
-    }
-    return bytes;
-}
-
-template <typename T>
-inline short bytes_to_short(const T &bytes, bool big_endian = true)
-{
-    short n = 0;
-    if(big_endian)
-    {
-        n = bytes[1] & 0xFF;
-        n |= ((bytes[0] << 8) & 0xFF00);
-    } else
-    {
-        n = bytes[0] & 0xFF;
-        n |= ((bytes[1] << 8) & 0xFF00);
-    }
-    return n;
-}
-
-template <typename T>
-inline T &short_to_bytes(const short n, T &bytes, bool big_endian = true)
-{
-    if(big_endian)
-    {
-        bytes[1] = (unsigned char) (0xFF & n);
-        bytes[0] = (unsigned char) ((0xFF00 & n) >> 8);
-    } else
-    {
-        bytes[0] = (unsigned char) (0xFF & n);
-        bytes[1] = (unsigned char) ((0xFF00 & n) >> 8);
-    }
-    return bytes;
-}
-
-template <typename T>
-inline double bytes_to_double(const T &bytes)
-{
-    return *((double *) bytes);
-}
-
-template <typename T>
-inline T &double_to_bytes(const double num, T &bytes)
-{
-    int         i;
-    std::size_t sz = sizeof(double);
-    char       *p  = (char *) &num;
-    for(i = 0; i < sz; i++)
-    {
-        bytes[i] = *p++;
-    }
-
-    return bytes;
-}
 
 template <typename T>
 inline float bytes_to_float(const T &bytes)
 {
-    return *((float *) bytes);
+    static_assert(sizeof(T) >= sizeof(float), "T must have at least 4 bytes");
+    float f;
+    std::memcpy(&f, bytes.data(), sizeof(float));
+    return f;
 }
 
+
 template <typename T>
-inline T &float_to_bytes(const float f, T &bytes)
+inline T &float_to_bytes(float f, T &bytes)
 {
-    int            i;
-    size_t         sz  = sizeof(float);
-    unsigned char *buf = (unsigned char *) &f;
-    memcpy(bytes, buf, sz);
+    static_assert(sizeof(T) >= sizeof(float), "T must have at least 4 bytes");
+    std::memcpy(bytes.data(), &f, sizeof(float));
     return bytes;
 }
 
-template <typename T>
-inline std::string &
-bytes_to_string(const T &bytes, const std::size_t sz, std::string &str)
-{
-    str.assign(reinterpret_cast<const char *>(bytes), sz);
-    return str;
-}
 
 template <typename T>
-inline std::string bytes_to_string(const T &bytes, const std::size_t sz)
+inline double bytes_to_double(const T &bytes)
 {
-    std::string str;
-    str.assign(reinterpret_cast<const char *>(bytes), sz);
-    return str;
+    static_assert(sizeof(T) >= sizeof(double), "T must have at least 8 bytes");
+    double d;
+    std::memcpy(&d, bytes.data(), sizeof(double));
+    return d;
 }
+
+
+template <typename T>
+inline T &double_to_bytes(double d, T &bytes)
+{
+    static_assert(sizeof(T) >= sizeof(double), "T must have at least 8 bytes");
+    std::memcpy(bytes.data(), &d, sizeof(double));
+    return bytes;
+}
+
+
+template <typename T>
+inline std::string bytes_to_string(const T &bytes, size_t sz)
+{
+    return std::string(reinterpret_cast<const char *>(bytes.data()), sz);
+}
+
 
 template <typename T>
 inline T &string_to_bytes(const std::string &str, T &bytes)
 {
-    memcpy(bytes, str.c_str(), str.size());
+    static_assert(std::is_trivially_copyable<T>::value,
+                  "T must be trivially copyable");
+    std::memcpy(bytes.data(), str.data(), std::min(str.size(), bytes.size()));
     return bytes;
 }
 
-}
+} // namespace hj
 
 #endif

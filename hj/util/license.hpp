@@ -140,6 +140,39 @@ static inline std::error_code make_err(error_code e)
     return std::error_code(static_cast<int>(e), cat);
 }
 
+#if defined(__linux__) || defined(__APPLE__)
+static std::optional<std::string>
+execute_command_safe(const std::string &command) noexcept
+{
+    try
+    {
+        std::unique_ptr<FILE, decltype(&pclose)> pipe(
+            popen(command.c_str(), "r"),
+            pclose);
+        if(!pipe)
+            return std::string();
+
+        char        buffer[256];
+        std::string result;
+        while(fgets(buffer, sizeof(buffer), pipe.get()) != nullptr)
+            result += buffer;
+
+        auto first = result.find_first_not_of(" \t\n\r\f\v");
+        auto last  = result.find_last_not_of(" \t\n\r\f\v");
+        if(first == std::string::npos || last == std::string::npos)
+            return std::string();
+
+        result = result.substr(first, last - first + 1);
+        return result.empty() ? std::string()
+                              : std::optional<std::string>{result};
+    }
+    catch(...)
+    {
+        return std::string();
+    }
+}
+#endif
+
 static err_t issue(token_t                        &token,
                    const std::string              &issuer,
                    const std::string              &licensee,
@@ -264,7 +297,7 @@ static std::string get_disk_sn() noexcept
             "cat /sys/block/sda/device/serial 2>/dev/null"};
         for(const auto &cmd : commands)
         {
-            if(auto result = _execute_command_safe(cmd))
+            if(auto result = execute_command_safe(cmd))
             {
                 if(!result->empty())
                     return *result;
@@ -280,7 +313,7 @@ static std::string get_disk_sn() noexcept
 #elif defined(__APPLE__)
     try
     {
-        auto result = _execute_command_safe(
+        auto result = execute_command_safe(
             "ioreg -l | grep \"Serial Number\" | grep IOPlatformSerialNumber | "
             "awk -F'\"' '{print $4}' 2>/dev/null");
         return result && !result->empty() ? result : std::string();
@@ -329,7 +362,7 @@ class issuer
         , _valid_times{other._valid_times}
     {
     }
-    issuer(issuer &&) = default;
+    issuer(issuer &&) = delete;
 
     virtual ~issuer() = default;
 
@@ -341,7 +374,7 @@ class issuer
         _valid_times = other._valid_times;
         return *this;
     }
-    issuer &operator=(issuer &&) = default;
+    issuer &operator=(issuer &&) = delete;
 
     inline const std::string &id() const { return _id; }
     inline sign_algo          algo() const { return _algo; }

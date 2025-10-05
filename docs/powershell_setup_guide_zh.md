@@ -4,7 +4,6 @@
 
 ## 文件
 
-- `setup_powershell_policy.bat` - PowerShell策略设置的Windows批处理脚本
 - `setup_powershell_policy.ps1` - 具有高级功能的原生PowerShell脚本
 
 ## PowerShell 执行策略概述
@@ -19,24 +18,6 @@ Windows PowerShell有控制脚本执行的执行策略：
 
 ## 使用示例
 
-### 批处理脚本 (`setup_powershell_policy.bat`)
-
-#### 基本用法（为CurrentUser设置RemoteSigned）：
-```cmd
-setup_powershell_policy.bat
-```
-
-#### 自定义策略和范围：
-```cmd
-setup_powershell_policy.bat RemoteSigned CurrentUser
-setup_powershell_policy.bat Unrestricted Process
-setup_powershell_policy.bat AllSigned LocalMachine
-```
-
-#### 显示帮助：
-```cmd
-setup_powershell_policy.bat help
-setup_powershell_policy.bat InvalidPolicy
 ```
 
 ### PowerShell 脚本 (`setup_powershell_policy.ps1`)
@@ -82,22 +63,10 @@ setup_powershell_policy.bat InvalidPolicy
 
 ## 常见用例
 
-### 开发环境设置
-```cmd
-REM 允许本地脚本用于开发
-setup_powershell_policy.bat RemoteSigned CurrentUser
-```
-
 ### 临时脚本测试
 ```powershell
 # 仅在当前会话中允许所有脚本
 .\setup_powershell_policy.ps1 -PolicyLevel Bypass -Scope Process -Force
-```
-
-### 企业环境
-```cmd
-REM 要求所有脚本必须签名（需要管理员权限）
-setup_powershell_policy.bat AllSigned LocalMachine
 ```
 
 ### CI/CD 管道
@@ -107,14 +76,6 @@ setup_powershell_policy.bat AllSigned LocalMachine
 ```
 
 ## 项目集成
-
-### 在项目的设置脚本中：
-```cmd
-@echo off
-echo Setting up PowerShell for this project...
-call path\to\scripts\setup_powershell_policy.bat RemoteSigned CurrentUser
-echo You can now run PowerShell scripts in this project.
-```
 
 ### 在PowerShell项目设置中：
 ```powershell

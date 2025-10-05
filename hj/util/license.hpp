@@ -1,3 +1,22 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+// JWT-based license management system
 // About JWT: https://www.jwt.io/
 #ifndef LICENSE_HPP
 #define LICENSE_HPP
@@ -5,13 +24,13 @@
 #include <sys/stat.h>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 
 #include <jwt-cpp/traits/nlohmann-json/traits.h>
 #include <jwt-cpp/jwt.h>
 
 namespace hj
 {
-
 namespace license
 {
 
@@ -33,8 +52,9 @@ enum class sign_algo
     rsa256,
 };
 
-enum class err
+enum class error_code
 {
+    ok        = 0,
     err_start = 1000,
     invalid_times,
     claim_mismatch,
@@ -42,10 +62,19 @@ enum class err
     keys_not_enough,
     file_not_exist,
     input_stream_invalid,
-    output_stream_invalid
+    output_stream_invalid,
+    invalid_algorithm,
+    crypto_error,
+    system_call_failed,
+    insufficient_permissions,
+    network_error,
+    timeout_error,
+    memory_allocation_failed,
+    invalid_configuration,
+    parse_license_info_failed,
 };
 
-constexpr const char *JWT_TYPE = "JWT";
+static const char *JWT_TYPE = "JWT";
 
 namespace detail
 {
@@ -53,41 +82,62 @@ class error_category : public std::error_category
 {
   public:
     const char *name() const noexcept override { return "license"; }
+
     std::string message(int ev) const override
     {
-        switch(static_cast<err>(ev))
+        switch(static_cast<error_code>(ev))
         {
-            case err::err_start:
-                return "error start";
-            case err::invalid_times:
-                return "invalid times";
-            case err::claim_mismatch:
-                return "claim mismatch";
-            case err::keys_not_changed:
-                return "keys not changed";
-            case err::keys_not_enough:
-                return "keys not enough";
-            case err::file_not_exist:
-                return "file not exist";
-            case err::input_stream_invalid:
-                return "input stream invalid";
-            case err::output_stream_invalid:
-                return "output stream invalid";
+            case error_code::ok:
+                return "Ok";
+            case error_code::invalid_times:
+                return "Invalid time configuration";
+            case error_code::claim_mismatch:
+                return "License claim verification failed";
+            case error_code::keys_not_changed:
+                return "Cryptographic keys unchanged";
+            case error_code::keys_not_enough:
+                return "Insufficient cryptographic keys";
+            case error_code::file_not_exist:
+                return "License file not found";
+            case error_code::input_stream_invalid:
+                return "Invalid input stream";
+            case error_code::output_stream_invalid:
+                return "Invalid output stream";
+            case error_code::invalid_algorithm:
+                return "Unsupported cryptographic algorithm";
+            case error_code::crypto_error:
+                return "Cryptographic operation failed";
+            case error_code::system_call_failed:
+                return "System call failed";
+            case error_code::insufficient_permissions:
+                return "Insufficient permissions";
+            case error_code::network_error:
+                return "Network operation failed";
+            case error_code::timeout_error:
+                return "Operation timeout";
+            case error_code::memory_allocation_failed:
+                return "Memory allocation failed";
+            case error_code::invalid_configuration:
+                return "Invalid configuration";
+            case error_code::parse_license_info_failed:
+                return "Failed to parse license information";
             default:
-                return "unknown";
+                return "Unknown error";
         }
+    }
+
+    bool
+    equivalent(int                         code,
+               const std::error_condition &condition) const noexcept override
+    {
+        return std::error_category::equivalent(code, condition);
     }
 };
 
-inline const error_category &license_category()
+static inline std::error_code make_err(error_code e)
 {
     static error_category cat;
-    return cat;
-}
-
-static inline std::error_code make_err(err e)
-{
-    return std::error_code(static_cast<int>(e), license_category());
+    return std::error_code(static_cast<int>(e), cat);
 }
 
 static err_t issue(token_t                        &token,
@@ -99,7 +149,7 @@ static err_t issue(token_t                        &token,
                    const std::vector<std::string> &keys,
                    const std::vector<pair_t>      &claims)
 {
-    err_t err;
+    err_t error_code;
     auto  lic = jwt::create<json_traits>();
     lic.set_type(JWT_TYPE);
     lic.set_issuer(issuer);
@@ -113,22 +163,22 @@ static err_t issue(token_t                        &token,
     {
         case sign_algo::rsa256: {
             if(keys.size() < 4)
-                return detail::make_err(err::keys_not_enough);
+                return detail::make_err(error_code::keys_not_enough);
             // public_key, private_key, public_key_password, private_key_password
             token = lic.sign(jwt::algorithm::rs256(keys.at(0),
                                                    keys.at(1),
                                                    keys.at(2),
                                                    keys.at(3)),
-                             err);
+                             error_code);
             break;
         }
         default: {
-            token = lic.sign(jwt::algorithm::none{}, err);
+            token = lic.sign(jwt::algorithm::none{}, error_code);
             break;
         }
     }
 
-    return err;
+    return error_code;
 }
 
 static err_t verify(const token_t                  &token,
@@ -139,7 +189,7 @@ static err_t verify(const token_t                  &token,
                     const std::vector<std::string> &keys,
                     const std::vector<pair_t>      &claims)
 {
-    err_t err;
+    err_t error_code;
     auto  decoded = jwt::decode<json_traits>(token);
     auto  verifier =
         jwt::verify<json_traits>()
@@ -163,92 +213,82 @@ static err_t verify(const token_t                  &token,
         }
     }
 
-    verifier.verify(decoded, err);
-    if(err)
-        return err;
+    verifier.verify(decoded, error_code);
+    if(error_code)
+        return error_code;
 
     for(const auto &p : claims)
     {
         if(decoded.get_payload_claim(p.first).as_string() != p.second)
-            return detail::make_err(err::claim_mismatch);
+            return detail::make_err(error_code::claim_mismatch);
     }
-    return err;
+    return error_code;
 }
 
-static std::string get_disk_sn()
+static std::string get_disk_sn() noexcept
 {
 #ifdef _WIN32
-    char  volumeName[MAX_PATH + 1]     = {0};
-    char  fileSystemName[MAX_PATH + 1] = {0};
-    DWORD serialNumber = 0, maxComponentLen = 0, fileSystemFlags = 0;
-    if(GetVolumeInformationA("C:\\",
-                             volumeName,
-                             sizeof(volumeName),
-                             &serialNumber,
-                             &maxComponentLen,
-                             &fileSystemFlags,
-                             fileSystemName,
-                             sizeof(fileSystemName)))
+    try
     {
-        char sn[32] = {0};
-        sprintf_s(sn, "%08X", serialNumber);
-        return std::string(sn);
+        char  volume_name[MAX_PATH + 1]      = {0};
+        char  file_system_name[MAX_PATH + 1] = {0};
+        DWORD serial_number = 0, max_component_len = 0, file_system_flags = 0;
+        if(GetVolumeInformationA("C:\\",
+                                 volume_name,
+                                 sizeof(volume_name),
+                                 &serial_number,
+                                 &max_component_len,
+                                 &file_system_flags,
+                                 file_system_name,
+                                 sizeof(file_system_name)))
+        {
+            char buffer[32] = {0};
+            if(sprintf_s(buffer, sizeof(buffer), "%08X", serial_number) > 0)
+                return std::string(buffer);
+        }
+        return std::string();
     }
-    return std::string();
+    catch(...)
+    {
+        return std::string();
+    }
 
 #elif defined(__linux__)
-    FILE *fp = fopen("/sys/block/sda/device/serial", "r");
-    if(fp)
+    try
     {
-        char buf[128] = {0};
-        if(fgets(buf, sizeof(buf), fp))
+        // Try multiple methods for better reliability
+        std::vector<std::string> commands = {
+            "lsblk -ndo SERIAL /dev/sda 2>/dev/null",
+            "hdparm -I /dev/sda 2>/dev/null | grep 'Serial Number' | awk "
+            "'{print $3}'",
+            "cat /sys/block/sda/device/serial 2>/dev/null"};
+        for(const auto &cmd : commands)
         {
-            fclose(fp);
-            size_t len = strlen(buf);
-            if(len > 0 && buf[len - 1] == '\n')
-                buf[len - 1] = '\0';
-
-            return std::string(buf);
+            if(auto result = _execute_command_safe(cmd))
+            {
+                if(!result->empty())
+                    return *result;
+            }
         }
-        fclose(fp);
+        return std::string();
     }
-
-    FILE *cmd = popen("lsblk -ndo SERIAL /dev/sda", "r");
-    if(cmd)
+    catch(...)
     {
-        char buf[128] = {0};
-        if(fgets(buf, sizeof(buf), cmd))
-        {
-            pclose(cmd);
-            size_t len = strlen(buf);
-            if(len > 0 && buf[len - 1] == '\n')
-                buf[len - 1] = '\0';
-
-            return std::string(buf);
-        }
-        pclose(cmd);
+        return std::string();
     }
-    return std::string();
 
 #elif defined(__APPLE__)
-    FILE *cmd = popen("ioreg -l | grep \"Serial Number\" | grep "
-                      "IOPlatformSerialNumber | awk -F\"\" '{print $4}'",
-                      "r");
-    if(cmd)
+    try
     {
-        char buf[128] = {0};
-        if(fgets(buf, sizeof(buf), cmd))
-        {
-            pclose(cmd);
-            size_t len = strlen(buf);
-            if(len > 0 && buf[len - 1] == '\n')
-                buf[len - 1] = '\0';
-
-            return std::string(buf);
-        }
-        pclose(cmd);
+        auto result = _execute_command_safe(
+            "ioreg -l | grep \"Serial Number\" | grep IOPlatformSerialNumber | "
+            "awk -F'\"' '{print $4}' 2>/dev/null");
+        return result && !result->empty() ? result : std::string();
     }
-    return std::string();
+    catch(...)
+    {
+        return std::string();
+    }
 
 #else
     return std::string();
@@ -289,7 +329,10 @@ class issuer
         , _valid_times{other._valid_times}
     {
     }
+    issuer(issuer &&) = default;
+
     virtual ~issuer() = default;
+
     issuer &operator=(const issuer &other)
     {
         _id          = other._id;
@@ -298,19 +341,25 @@ class issuer
         _valid_times = other._valid_times;
         return *this;
     }
+    issuer &operator=(issuer &&) = default;
 
     inline const std::string &id() const { return _id; }
     inline sign_algo          algo() const { return _algo; }
     inline std::size_t        valid_times() const { return _valid_times; }
+    inline void               set_keys(std::vector<std::string> &&keys) noexcept
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _keys = std::move(keys);
+    }
 
     err_t issue(token_t                   &token,
                 const std::string         &licensee,
                 const std::size_t          leeway_days,
                 const std::vector<pair_t> &claims = {})
     {
-        err_t err;
+        err_t error_code;
         if(_valid_times < 1)
-            return detail::make_err(err::invalid_times);
+            return detail::make_err(error_code::invalid_times);
 
         _valid_times--;
         return detail::issue(token,
@@ -329,16 +378,16 @@ class issuer
                 const std::vector<pair_t> &claims = {})
     {
         if(!out || !out.good())
-            return detail::make_err(err::output_stream_invalid);
+            return detail::make_err(error_code::output_stream_invalid);
 
         token_t token;
-        auto    err = issue(token, licensee, leeway_days, claims);
-        if(err)
-            return err;
+        auto    error_code = issue(token, licensee, leeway_days, claims);
+        if(error_code)
+            return error_code;
 
         out << token;
         if(!out.good())
-            return detail::make_err(err::output_stream_invalid);
+            return detail::make_err(error_code::output_stream_invalid);
         return err_t{};
     }
 
@@ -349,7 +398,7 @@ class issuer
     {
         std::ofstream out(filepath, std::ios::binary);
         if(!out || !out.is_open())
-            return detail::make_err(err::file_not_exist);
+            return detail::make_err(error_code::file_not_exist);
 
         return issue(out, licensee, leeway_days, claims);
     }
@@ -358,19 +407,29 @@ class issuer
     err_t release(const sign_algo algo, const std::vector<std::string> &keys)
     {
         if(algo == _algo && keys == _keys)
-            return detail::make_err(err::keys_not_changed);
+            return detail::make_err(error_code::keys_not_changed);
 
-        err_t err;
+        err_t error_code;
         _algo = algo;
         _keys = keys;
-        return err;
+        return error_code;
     }
 
   private:
+    mutable std::mutex       _mu;
     std::string              _id;
     sign_algo                _algo;
     std::vector<std::string> _keys;
     std::size_t              _valid_times;
+};
+
+struct license_info
+{
+    std::string                           issuer;
+    std::string                           audience;
+    std::chrono::system_clock::time_point issued_at;
+    std::chrono::system_clock::time_point expires_at;
+    std::vector<pair_t>                   claims;
 };
 
 class verifier
@@ -391,6 +450,8 @@ class verifier
         , _keys{other._keys}
     {
     }
+    verifier(verifier &&) = default;
+
     virtual ~verifier() = default;
 
     err_t verify(const token_t             &token,
@@ -413,14 +474,14 @@ class verifier
                  const std::vector<pair_t> &claims = {})
     {
         if(!in)
-            return detail::make_err(err::input_stream_invalid);
+            return detail::make_err(error_code::input_stream_invalid);
 
         std::string line, buf;
         while(std::getline(in, line))
             buf += line;
 
         if(buf.empty())
-            return detail::make_err(err::input_stream_invalid);
+            return detail::make_err(error_code::input_stream_invalid);
 
         token_t token = buf;
         return detail::verify(token,
@@ -439,9 +500,39 @@ class verifier
     {
         std::ifstream in(filepath, std::ios::binary);
         if(!in || !in.is_open())
-            return detail::make_err(err::file_not_exist);
+            return detail::make_err(error_code::file_not_exist);
 
         return verify(in, licensee, leeway_days, claims);
+    }
+
+    static err_t parse(license_info &info, const token_t &token) noexcept
+    {
+        try
+        {
+            auto decoded    = jwt::decode<json_traits>(token);
+            info.issuer     = decoded.get_issuer();
+            info.issued_at  = decoded.get_issued_at();
+            info.expires_at = decoded.get_expires_at();
+            auto audience   = decoded.get_audience();
+            if(!audience.empty())
+                info.audience = *audience.begin();
+
+            std::string key;
+            auto        claims = decoded.get_payload_json();
+            for(const auto &pair : claims)
+            {
+                key = pair.first;
+                if(key == "iss" || key == "aud" || key == "iat" || key == "exp")
+                    continue;
+
+                info.claims.emplace_back(key, pair.second.dump());
+            }
+            return detail::make_err(error_code::ok);
+        }
+        catch(...)
+        {
+            return detail::make_err(error_code::parse_license_info_failed);
+        }
     }
 
   private:

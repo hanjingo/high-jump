@@ -59,6 +59,20 @@ typedef struct
     size_t   rom_size;
 } bios_info_t;
 
+inline bios_error_t
+bios_safe_string_copy(char *dst, size_t dst_size, const char *src)
+{
+    if(!dst || !src || dst_size == 0)
+        return BIOS_ERROR_NULL_POINTER;
+
+    size_t src_len = strlen(src);
+    if(src_len >= dst_size)
+        return BIOS_ERROR_BUFFER_TOO_SMALL;
+
+    memcpy(dst, src, src_len + 1);
+    return BIOS_OK;
+}
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #include <stdio.h>
@@ -250,7 +264,7 @@ inline bios_error_t bios_execute_command_and_parse(const char *command,
         if(len > 0 && value[len - 1] == '\n')
             value[len - 1] = '\0';
 
-        result = safe_string_copy(output, output_size, value);
+        result = bios_safe_string_copy(output, output_size, value);
         break;
     }
 

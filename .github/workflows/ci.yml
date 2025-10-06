@@ -159,7 +159,7 @@ jobs:
         
         JOBS=$(($(nproc)-1))
         if [ "$JOBS" -lt 1 ]; then JOBS=1; fi
-        cmake --build build --config ${{ matrix.build_type }} --parallel $JOBS
+        cmake --build build --config ${{ matrix.build_type }} --parallel 2 --verbose
         
         echo "=== Post-build disk usage ==="
         df -h

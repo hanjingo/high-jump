@@ -1,3 +1,21 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef XML_HPP
 #define XML_HPP
 
@@ -69,6 +87,7 @@ class xml
         , _node(*_doc)
     {
     }
+
     xml(const xml &rhs)
         : _doc(rhs._doc)
         , _node(rhs._node)
@@ -80,27 +99,37 @@ class xml
     {
         return xml(_doc, _node.child(name));
     }
+
     inline xml append_child(const char *name)
     {
         return xml(_doc, _node.append_child(name));
     }
+
     inline bool remove_child(const char *name)
     {
         return _node.remove_child(name);
     }
+
     inline std::string child_value(const char *name) const
     {
         return _node.child_value(name);
     }
-    inline void        set_value(const char *value) { _node.text().set(value); }
+
+    inline void set_value(const char *value) { _node.text().set(value); }
+
     inline std::string name() const { return _node.name(); }
-    inline void        set_name(const char *name) { _node.set_name(name); }
+
+    inline void set_name(const char *name) { _node.set_name(name); }
+
     inline std::string value() const { return _node.text().get(); }
-    inline bool        empty() const { return _node.empty(); }
+
+    inline bool empty() const { return _node.empty(); }
+
     inline std::string attr(const char *name) const
     {
         return _node.attribute(name).value();
     }
+
     inline void set_attr(const char *name, const char *value)
     {
         _node.append_attribute(name).set_value(value);

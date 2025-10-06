@@ -11,9 +11,11 @@ TEST(ProtobufTest, SerializeParseString)
     p.set_id(100);
     p.set_email("hehehunanchina@live.com");
     std::string buf;
-    ASSERT_TRUE(hj::pb::serialize(buf, p));
+    auto        serr = hj::pb::serialize(buf, p);
+    ASSERT_EQ(serr, hj::pb::error_code::ok);
     test::Person p1;
-    ASSERT_TRUE(hj::pb::deserialize(p1, buf));
+    auto         derr = hj::pb::deserialize(p1, buf);
+    ASSERT_EQ(derr, hj::pb::error_code::ok);
     EXPECT_EQ(p1.name(), "test");
     EXPECT_EQ(p1.email(), "hehehunanchina@live.com");
     EXPECT_EQ(p1.id(), 100);
@@ -26,12 +28,14 @@ TEST(ProtobufTest, SerializeParseFile)
     p.set_id(42);
     p.set_email("file@example.com");
     std::ofstream fout("person_test.pb", std::ios::binary);
-    ASSERT_TRUE(hj::pb::serialize(fout, p));
+    auto          serr = hj::pb::serialize(fout, p);
+    ASSERT_EQ(serr, hj::pb::error_code::ok);
     fout.close();
 
     test::Person  p2;
     std::ifstream fin("person_test.pb", std::ios::binary);
-    ASSERT_TRUE(hj::pb::deserialize(p2, fin));
+    auto          derr = hj::pb::deserialize(p2, fin);
+    ASSERT_EQ(derr, hj::pb::error_code::ok);
     EXPECT_EQ(p2.name(), "file");
     EXPECT_EQ(p2.id(), 42);
     EXPECT_EQ(p2.email(), "file@example.com");

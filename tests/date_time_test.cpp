@@ -1,3 +1,4 @@
+
 #include <gtest/gtest.h>
 #include <hj/time/date_time.hpp>
 
@@ -49,6 +50,80 @@ TEST(date_time, today)
     ASSERT_EQ(today.hour(), 0);
     ASSERT_EQ(today.minute(), 0);
     ASSERT_EQ(today.seconds(), 0);
+}
+
+TEST(date_time, is_bigger_smaller_equal)
+{
+    hj::date_time d1(2023, 1, 1, 0, 0, 0);
+    hj::date_time d2(2023, 1, 2, 0, 0, 0);
+    ASSERT_TRUE(d2.is_bigger(d1));
+    ASSERT_TRUE(d1.is_smaller(d2));
+    ASSERT_TRUE(d1.is_equal(hj::date_time(2023, 1, 1, 0, 0, 0)));
+}
+
+TEST(date_time, day_of_week_and_str)
+{
+    hj::date_time d(2023, 1, 31, 0, 0, 0);
+    ASSERT_EQ(d.day_of_week(), hj::weekday::tuesday);
+    ASSERT_EQ(d.day_of_week_str(), "Tue");
+}
+
+TEST(date_time, month_and_str)
+{
+    hj::date_time d(2023, 2, 1, 0, 0, 0);
+    ASSERT_EQ(d.month(), hj::moon::february);
+    ASSERT_EQ(d.month_str(), "February");
+}
+
+TEST(date_time, day_of_month_and_year)
+{
+    hj::date_time d(2023, 2, 1, 0, 0, 0);
+    ASSERT_EQ(d.day_of_month(), 1);
+    ASSERT_EQ(d.day_of_year(), 32);
+    ASSERT_EQ(d.year(), 2023);
+}
+
+TEST(date_time, start_end_of_half_year)
+{
+    hj::date_time d1(2023, 3, 15);
+    hj::date_time d2(2023, 9, 15);
+    ASSERT_EQ(d1.start_of_half_year().time(),
+              hj::date_time(2023, 1, 1, 0, 0, 0).time());
+    ASSERT_EQ(d2.start_of_half_year().time(),
+              hj::date_time(2023, 7, 1, 0, 0, 0).time());
+    ASSERT_EQ(d1.end_of_half_year().time(),
+              hj::date_time(2023, 6, 30, 23, 59, 59).time());
+    ASSERT_EQ(d2.end_of_half_year().time(),
+              hj::date_time(2023, 12, 31, 23, 59, 59).time());
+}
+
+TEST(date_time, next_pre_month_quarter_half_year_year)
+{
+    hj::date_time d(2023, 2, 1);
+    ASSERT_EQ(d.next_month().time(), hj::date_time(2023, 3, 1, 0, 0, 0).time());
+    ASSERT_EQ(d.pre_month().time(), hj::date_time(2023, 1, 1, 0, 0, 0).time());
+    ASSERT_EQ(d.next_quarter().time(),
+              hj::date_time(2023, 4, 1, 0, 0, 0).time());
+    ASSERT_EQ(d.pre_quarter().time(),
+              hj::date_time(2022, 10, 1, 0, 0, 0).time());
+    ASSERT_EQ(d.next_half_year().time(),
+              hj::date_time(2023, 7, 1, 0, 0, 0).time());
+    ASSERT_EQ(d.pre_half_year().time(),
+              hj::date_time(2022, 7, 1, 0, 0, 0).time());
+    ASSERT_EQ(d.next_year().time(), hj::date_time(2024, 1, 1, 0, 0, 0).time());
+    ASSERT_EQ(d.pre_year().time(), hj::date_time(2022, 1, 1, 0, 0, 0).time());
+}
+
+TEST(date_time, timezone_now_today)
+{
+    auto utc_now   = hj::date_time::now(hj::timezone::UTC);
+    auto local_now = hj::date_time::now(hj::timezone::LOCAL);
+    auto bj_now    = hj::date_time::now(hj::timezone::BEIJING);
+    ASSERT_TRUE(bj_now.time() > utc_now.time());
+    auto utc_today   = hj::date_time::today(hj::timezone::UTC);
+    auto local_today = hj::date_time::today(hj::timezone::LOCAL);
+    auto bj_today    = hj::date_time::today(hj::timezone::BEIJING);
+    ASSERT_TRUE(bj_today.time() > utc_today.time());
 }
 
 TEST(date_time, format)
@@ -176,7 +251,7 @@ TEST(date_time, days_to)
 TEST(date_time, day_of_week)
 {
     ASSERT_TRUE(hj::date_time(2023, 1, 31, 0, 0, 0).day_of_week()
-                == hj::week_day::tuesday);
+                == hj::weekday::tuesday);
 }
 
 TEST(date_time, day_of_week_str)
@@ -303,12 +378,12 @@ TEST(date_time, pre_day)
 TEST(date_time, next_weekday)
 {
     ASSERT_EQ(hj::date_time(2025, 7, 12, 0, 0, 0)
-                  .next_weekday(hj::week_day::monday)
+                  .next_weekday(hj::weekday::monday)
                   .time(),
               hj::date_time(2025, 7, 14, 0, 0, 0).time());
 
     ASSERT_EQ(hj::date_time(2025, 7, 12, 0, 0, 0)
-                  .next_weekday(hj::week_day::friday)
+                  .next_weekday(hj::weekday::friday)
                   .time(),
               hj::date_time(2025, 7, 18, 0, 0, 0).time());
 }
@@ -316,12 +391,12 @@ TEST(date_time, next_weekday)
 TEST(date_time, pre_weekday)
 {
     ASSERT_EQ(hj::date_time(2025, 7, 12, 0, 0, 0)
-                  .pre_weekday(hj::week_day::monday)
+                  .pre_weekday(hj::weekday::monday)
                   .time(),
               hj::date_time(2025, 7, 7, 0, 0, 0).time());
 
     ASSERT_EQ(hj::date_time(2025, 7, 12, 0, 0, 0)
-                  .pre_weekday(hj::week_day::friday)
+                  .pre_weekday(hj::weekday::friday)
                   .time(),
               hj::date_time(2025, 7, 11, 0, 0, 0).time());
 }

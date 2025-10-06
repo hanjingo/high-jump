@@ -504,10 +504,13 @@ class LinuxDependencyInstaller:
             
             # Essential development libraries
             essential_dev_libraries = [
-                'libudev-dev', 'libusb-1.0-0-dev', 'libssl-dev', 'zlib1g-dev',
-                'libx11-dev', 'libxext-dev', 'libxfixes-dev', 'libxi-dev', 
-                'libxrandr-dev', 'libxss-dev', 'libdbus-1-dev', 'libgcrypt20-dev',
+                'libudev-dev',
+                'libusb-1.0-0-dev',
+                'libssl-dev', 'zlib1g-dev',
+                'libdbus-1-dev', 'libgcrypt20-dev',
                 'libsystemd-dev', 'libcap-dev', 'libmount-dev'
+                # 'libx11-dev', 'libxext-dev', 'libxfixes-dev', 'libxi-dev',
+                # 'libxrandr-dev', 'libxss-dev',
             ]
             
             # Python development tools and modules
@@ -560,20 +563,18 @@ class LinuxDependencyInstaller:
                     if version_float >= 24.04:
                         # Ubuntu 24.04+ packages
                         version_specific_packages.extend([
-                            'libasound2t64',  # Instead of libasound2
-                            'libglib2.0-dev', 'libgtk-3-dev',
-                            'libxtst6', 'libatspi2.0-0', 'libdrm2',
-                            'libxcomposite1', 'libxdamage1', 'libgbm1',
-                            'libnss3'
+                            # 'libglib2.0-dev', 'libgtk-3-dev',
+                            # 'libxtst6', 'libatspi2.0-0', 'libdrm2',
+                            # 'libxcomposite1', 'libxdamage1', 'libgbm1',
+                            # 'libnss3',
                         ])
                     else:
                         # Older Ubuntu versions
                         version_specific_packages.extend([
-                            'libasound2-dev',  # Try the dev package instead
-                            'libglib2.0-dev', 'libgtk-3-dev',
-                            'libxtst6', 'libatspi2.0-0', 'libdrm2',
-                            'libxcomposite1', 'libxdamage1', 'libgbm1',
-                            'libnss3'
+                            # 'libglib2.0-dev', 'libgtk-3-dev',
+                            # 'libxtst6', 'libatspi2.0-0', 'libdrm2',
+                            # 'libxcomposite1', 'libxdamage1', 'libgbm1',
+                            # 'libnss3',
                         ])
                         
                         # These packages might not exist in newer versions
@@ -937,24 +938,20 @@ class LinuxDependencyInstaller:
         if self.package_manager == 'apt':
             # Code quality tools
             code_quality_packages = [
-                'clang-format',      # Code formatter
-                'cppcheck',          # Static analysis tool
-                'clang-tidy',        # Static analysis and linting
-                'iwyu',              # Include what you use (if available)
-                'flawfinder',        # Security-focused static analysis
-                'vera++',            # Style checker (if available)
+                # 'clang-format',      # Code formatter
+                # 'cppcheck',          # Static analysis tool
+                # 'clang-tidy',        # Static analysis and linting
+                # 'iwyu',              # Include what you use (if available)
+                # 'flawfinder',        # Security-focused static analysis
+                # 'vera++',            # Style checker (if available)
             ]
-            
-            logger.info("Installing code quality packages...")
-            failed_packages = CommandRunner.safe_install_packages(code_quality_packages)
-            
-            if failed_packages:
-                logger.warning(f"Failed to install code quality tools: {', '.join(failed_packages)}")
-            else:
-                logger.info("✓ Code quality tools installed successfully")
-            
-            # Install cpplint via pip since it's not always available as apt package
-            self._install_cpplint()
+            # logger.info("Installing code quality packages...")
+            # failed_packages = CommandRunner.safe_install_packages(code_quality_packages)
+            # if failed_packages:
+            #     logger.warning(f"Failed to install code quality tools: {', '.join(failed_packages)}")
+            # else:
+            #     logger.info("✓ Code quality tools installed successfully")
+            # self._install_cpplint()
             
         elif self.package_manager in ['yum', 'dnf']:
             packages = [

@@ -1,151 +1,147 @@
-// for more information, please see:
-// https://blog.51cto.com/u_15346415/5109520
-// https://blog.51cto.com/u_15346415/5109505
-// https://blog.51cto.com/u_15346415/5109502
-// https://blog.51cto.com/u_15346415/5109245
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef TIMER_HPP
 #define TIMER_HPP
 
+#include <cstdlib>
 #include <future>
 #include <chrono>
 #include <memory>
 #include <atomic>
 #include <mutex>
 #include <unordered_map>
-
+#include <thread>
 #include <boost/version.hpp>
 #include <boost/asio.hpp>
 
 namespace hj
 {
 
-class timer;
-
-#if BOOST_VERSION < 108700
-static boost::asio::io_service       io_global;
-static boost::asio::io_service::work worker_global{io_global};
-#else
-static boost::asio::io_context io_global;
-static boost::asio::executor_work_guard<boost::asio::io_context::executor_type>
-    worker_global{io_global.get_executor()};
-#endif
-
-static std::once_flag                                           io_run_once;
-static std::unordered_map<int64_t, std::shared_ptr<hj::timer> > tm_map_global{};
-static std::mutex                                               tm_map_mu;
-static std::atomic<int64_t>                                     tm_id_tag;
-
-class timer
+class timer : public std::enable_shared_from_this<timer>
 {
   public:
-    template <typename F>
-    timer(unsigned long long us, F &&f, int64_t id = -1)
-        : _id{id}
-        , _tm{io_global, boost::posix_time::microseconds(us)}
-        , _fn{}
+    using callback_t = std::function<void()>;
+    using err_t      = boost::system::error_code;
+
+    timer(const timer &)            = delete;
+    timer &operator=(const timer &) = delete;
+
+    explicit timer(unsigned long long us)
+        : _tm{io_global(), std::chrono::microseconds(us)}
     {
-        auto fn = std::move(f);
-        _fn     = std::bind(
-            [=](const boost::system::error_code &err) {
-                if(id != -1)
-                {
-                    tm_map_mu.lock();
-                    tm_map_global.erase(id);
-                    tm_map_mu.unlock();
-                }
-
-                if(err.failed())
-                {
-                    return;
-                }
-                fn();
-            },
-            std::placeholders::_1);
-
-        hj::timer::run();
-
-        _tm.async_wait(_fn);
     }
 
-    timer(timer &&rhs)
-        : _id{std::move(rhs._id)}
-        , _tm{std::move(rhs._tm)}
+    timer(timer &&rhs) noexcept
+        : _tm{std::move(rhs._tm)}
         , _fn{std::move(rhs._fn)}
     {
     }
 
-    ~timer() {}
+    ~timer() { cancel(); }
+    inline void cancel() { _tm.cancel(); }
 
-    inline int64_t id() { return _id; }
-
-    inline void cancel()
+    template <typename F>
+    void start(F &&f)
     {
-        _tm.cancel();
+        static std::once_flag io_run_once;
 
-        if(_id != -1)
-        {
-            tm_map_mu.lock();
-            tm_map_global.erase(_id);
-            tm_map_mu.unlock();
-        }
+        auto self = this->shared_from_this();
+        _fn       = [wself = std::weak_ptr<timer>(self),
+               fn    = std::move(f)](const timer::err_t &err) {
+            if(err.failed())
+                return;
+
+            if(auto spt = wself.lock())
+                fn();
+        };
+
+        std::call_once(io_run_once, [=]() {
+            (void) worker_global();
+            std::thread([]() { io_global().run(); }).detach();
+        });
+
+        _tm.async_wait(_fn);
     }
 
-    inline void reset(unsigned long long us)
+    void reset(unsigned long long us)
     {
-        _tm.expires_at(boost::posix_time::microsec_clock::universal_time()
-                       + boost::posix_time::microseconds(us));
+        _tm.expires_after(std::chrono::microseconds(us));
         _tm.async_wait(_fn);
     }
 
     template <typename F>
-    inline void reset(unsigned long long us, F &&f)
+    void reset(unsigned long long us, F &&f)
     {
-        auto fn = std::move(f);
-        _fn     = std::bind(
-            [=](const boost::system::error_code &err) {
-                if(err.failed())
-                {
-                    return;
-                }
-                fn();
-            },
-            std::placeholders::_1);
+        auto self = this->shared_from_this();
+        _fn       = [wself = std::weak_ptr<timer>(self),
+               fn    = std::move(f)](const boost::system::error_code &err) {
+            if(err.failed())
+                return;
 
+            if(auto spt = wself.lock())
+                fn();
+        };
         reset(us);
     }
 
-    inline void wait() { _tm.wait(); }
-
     template <typename F>
-    static std::shared_ptr<timer> create_global(unsigned long long us, F &&f)
+    static std::shared_ptr<timer> make(unsigned long long us, F &&f)
     {
-        auto tm = std::make_shared<hj::timer>(us, std::move(f), tm_id_tag++);
-
-        tm_map_mu.lock();
-        tm_map_global.insert(std::make_pair(tm->id(), tm));
-        tm_map_mu.unlock();
-
+        auto tm = std::make_shared<timer>(us);
+        tm->start(std::move(f));
         return tm;
     }
 
-    static void run(bool async = true)
-    {
-        std::call_once(io_run_once, [=]() {
-            if(async)
-            {
-                std::thread([]() { io_global.run(); }).detach();
-                return;
-            }
-
-            io_global.run();
-        });
-    }
-
   private:
-    int64_t                                                   _id{-1};
-    boost::asio::deadline_timer                               _tm;
-    std::function<void(const boost::system::error_code &err)> _fn;
+#if BOOST_VERSION < 108700
+    static boost::asio::io_context &io_global()
+    {
+        static boost::asio::io_service io_global_inst;
+        return io_global_inst;
+    }
+    static boost::asio::io_service::work &worker_global()
+    {
+        static boost::asio::io_service::work worker_global_inst{io_global()};
+        return worker_global_inst;
+    }
+#else
+    static boost::asio::io_context &io_global()
+    {
+        static boost::asio::io_context io_global;
+        return io_global;
+    }
+    static boost::asio::executor_work_guard<
+        boost::asio::io_context::executor_type> &
+    worker_global()
+    {
+        static boost::asio::executor_work_guard<
+            boost::asio::io_context::executor_type>
+            worker_global_inst{io_global().get_executor()};
+        return worker_global_inst;
+    }
+#endif
+
+    boost::asio::steady_timer                              _tm;
+    std::function<void(const boost::system::error_code &)> _fn;
 };
-}
+
+
+} // namespace hj
 
 #endif

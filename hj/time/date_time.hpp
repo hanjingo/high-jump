@@ -1,3 +1,21 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef DATE_TIME_HPP
 #define DATE_TIME_HPP
 
@@ -23,7 +41,7 @@ static constexpr std::time_t hour   = std::time_t(60) * minute;
 static constexpr std::time_t day    = std::time_t(24) * hour;
 static constexpr std::time_t week   = std::time_t(7) * day;
 
-enum class week_day
+enum class weekday
 {
     sunday = 0,
     monday,
@@ -215,32 +233,32 @@ class date_time
         return *this;
     }
 
-    inline bool operator==(const date_time &other) const
+    inline bool operator==(const date_time &other) const noexcept
     {
         return _tm == other._tm;
     }
 
-    inline bool operator!=(const date_time &other) const
+    inline bool operator!=(const date_time &other) const noexcept
     {
         return _tm != other._tm;
     }
 
-    inline bool operator<(const date_time &other) const
+    inline bool operator<(const date_time &other) const noexcept
     {
         return _tm < other._tm;
     }
 
-    inline bool operator<=(const date_time &other) const
+    inline bool operator<=(const date_time &other) const noexcept
     {
         return _tm <= other._tm;
     }
 
-    inline bool operator>(const date_time &other) const
+    inline bool operator>(const date_time &other) const noexcept
     {
         return _tm > other._tm;
     }
 
-    inline bool operator>=(const date_time &other) const
+    inline bool operator>=(const date_time &other) const noexcept
     {
         return _tm >= other._tm;
     }
@@ -250,8 +268,8 @@ class date_time
         static hj::date_time::is_working_day_fn inst =
             [](const hj::date_time &dt) -> bool {
             auto day =
-                static_cast<week_day>(int64_t(dt._tm.date().day_of_week()));
-            return day != week_day::saturday && day != week_day::sunday;
+                static_cast<weekday>(int64_t(dt._tm.date().day_of_week()));
+            return day != weekday::saturday && day != weekday::sunday;
         };
 
         return inst;
@@ -315,24 +333,22 @@ class date_time
     static date_time parse(const std::string &str,
                            const std::string &fmt = TIME_FMT)
     {
-        std::tm tm;
-        //strptime(str.c_str(), fmt.c_str(), &tm);
+        std::tm            tm;
         std::istringstream ss(str);
         ss >> std::get_time(&tm, fmt.c_str());
         if(ss.fail())
-            throw std::runtime_error("Failed to parse date/time string");
+            return date_time(NullTime);
 
         return date_time(tm);
     }
 
     static void parse(date_time &dt, const char *str, const char *fmt)
     {
-        std::tm tm;
-        //strptime(str, fmt, &tm);
+        std::tm            tm;
         std::istringstream ss(str);
         ss >> std::get_time(&tm, fmt);
         if(ss.fail())
-            throw std::runtime_error("Failed to parse date/time string");
+            return;
 
         dt._tm = boost::posix_time::ptime_from_tm(tm);
     }
@@ -341,24 +357,32 @@ class date_time
                       const std::string &str,
                       const std::string &fmt = TIME_FMT)
     {
-        std::tm tm;
-        //strptime(str.c_str(), fmt.c_str(), &tm);
+        std::tm            tm;
         std::istringstream ss(str);
         ss >> std::get_time(&tm, fmt.c_str());
         if(ss.fail())
-            throw std::runtime_error("Failed to parse date/time string");
+            return;
 
         dt._tm = boost::posix_time::ptime_from_tm(tm);
     }
 
   public:
-    inline bool is_null() { return NullTime == _tm; }
+    inline bool is_null() const noexcept { return NullTime == _tm; }
 
-    inline bool is_bigger(const date_time &dt) { return _tm > dt._tm; }
+    inline bool is_bigger(const date_time &dt) const noexcept
+    {
+        return _tm > dt._tm;
+    }
 
-    inline bool is_smaller(const date_time &dt) { return _tm < dt._tm; }
+    inline bool is_smaller(const date_time &dt) const noexcept
+    {
+        return _tm < dt._tm;
+    }
 
-    inline bool is_equal(const date_time &dt) { return _tm == dt._tm; }
+    inline bool is_equal(const date_time &dt) const noexcept
+    {
+        return _tm == dt._tm;
+    }
 
     virtual inline bool is_working_day()
     {
@@ -367,8 +391,8 @@ class date_time
 
     inline bool is_weekend()
     {
-        auto day = static_cast<week_day>(int64_t(_tm.date().day_of_week()));
-        return day == week_day::saturday || day == week_day::sunday;
+        auto day = static_cast<weekday>(int64_t(_tm.date().day_of_week()));
+        return day == weekday::saturday || day == weekday::sunday;
     }
 
     inline std::string string(const std::string &fmt = TIME_FMT)
@@ -411,12 +435,12 @@ class date_time
         return (dt._tm - _tm).total_seconds() / 86400;
     }
 
-    inline week_day day_of_week()
+    inline weekday day_of_week()
     {
         if(is_null())
-            return week_day::sunday; // Default to Sunday if null
+            return weekday::sunday; // Default to Sunday if null
 
-        return static_cast<week_day>(int64_t(_tm.date().day_of_week()));
+        return static_cast<weekday>(int64_t(_tm.date().day_of_week()));
     }
 
     inline std::string day_of_week_str()
@@ -426,19 +450,19 @@ class date_time
 
         switch(day_of_week())
         {
-            case week_day::monday:
+            case weekday::monday:
                 return "Mon";
-            case week_day::tuesday:
+            case weekday::tuesday:
                 return "Tue";
-            case week_day::wednesday:
+            case weekday::wednesday:
                 return "Wed";
-            case week_day::thursday:
+            case weekday::thursday:
                 return "Thu";
-            case week_day::friday:
+            case weekday::friday:
                 return "Fri";
-            case week_day::saturday:
+            case weekday::saturday:
                 return "Sat";
-            case week_day::sunday:
+            case weekday::sunday:
                 return "Sun";
             default:
                 return "???";
@@ -509,7 +533,7 @@ class date_time
 
     inline date_time start_of_week()
     {
-        return day_of_week() == week_day::sunday
+        return day_of_week() == weekday::sunday
                    ? date_time(_tm.date() + boost::gregorian::date_duration(-6))
                          .start_of_day()
                    : date_time(_tm.date()
@@ -520,7 +544,7 @@ class date_time
 
     inline date_time end_of_week()
     {
-        return day_of_week() == week_day::sunday
+        return day_of_week() == weekday::sunday
                    ? date_time(_tm.date(), 23, 59, 59)
                    : date_time(_tm.date()
                                    + boost::gregorian::date_duration(
@@ -602,7 +626,7 @@ class date_time
         return date_time(_tm.date() - boost::gregorian::date_duration(n));
     }
 
-    inline date_time next_weekday(const week_day      target_day,
+    inline date_time next_weekday(const weekday       target_day,
                                   const unsigned long n_week = 0)
     {
         unsigned long current_day = static_cast<unsigned long>(day_of_week());
@@ -613,7 +637,7 @@ class date_time
             return next_day(7 - (current_day - target) + n_week * 7);
     }
 
-    inline date_time pre_weekday(const week_day      target_day,
+    inline date_time pre_weekday(const weekday       target_day,
                                  const unsigned long n_week = 0)
     {
         unsigned long current_day = static_cast<unsigned long>(day_of_week());

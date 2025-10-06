@@ -4,8 +4,8 @@
 TEST(utf8, is_valid)
 {
     ASSERT_TRUE(hj::utf8::is_valid("hello"));
-    // ASSERT_TRUE(hj::utf8::is_valid(
-    //     std::string(reinterpret_cast<const char *>(u8 "你好，世界"))));
+    ASSERT_TRUE(hj::utf8::is_valid(
+        std::string(reinterpret_cast<const char *>(u8"你好，世界"))));
     ASSERT_TRUE(hj::utf8::is_valid("abc\xE4\xB8\xAD\xE6\x96\x87"));
 
     ASSERT_FALSE(hj::utf8::is_valid("\xC3\x28"));
@@ -34,10 +34,12 @@ TEST(utf8, decode)
 
     std::wstring   wstr = L"test";
     unsigned char  buf[256];
-    unsigned char *result = hj::utf8::decode(buf, wstr.c_str());
+    size_t         buf_len = 256;
+    unsigned char *result  = hj::utf8::decode(buf, buf_len, wstr.c_str());
     ASSERT_TRUE(result != nullptr);
     std::string str(reinterpret_cast<char *>(buf));
     ASSERT_EQ(str, "test");
+    ASSERT_GT(buf_len, 0);
 }
 
 TEST(utf8, encode)
@@ -54,10 +56,13 @@ TEST(utf8, encode)
 
     std::string str = "test";
     wchar_t     buf[256];
+    size_t      buf_len = 256;
     wchar_t    *result =
         hj::utf8::encode(buf,
+                         buf_len,
                          reinterpret_cast<const unsigned char *>(str.c_str()));
     ASSERT_TRUE(result != nullptr);
     std::wstring wstr(reinterpret_cast<wchar_t *>(buf));
     ASSERT_EQ(wstr, L"test");
+    ASSERT_GT(buf_len, 0);
 }

@@ -1,3 +1,4 @@
+#include <sstream>
 #include <gtest/gtest.h>
 #include <hj/encoding/xml.hpp>
 #include <string>
@@ -39,4 +40,44 @@ TEST(XmlTest, NodeAndAttr)
     EXPECT_EQ(child.name(), "item");
     child.set_name("item2");
     EXPECT_EQ(child.name(), "item2");
+}
+
+TEST(XmlTest, AttrSetGet)
+{
+    xml x;
+    x.load("<root></root>");
+    auto child = x.append_child("item");
+    child.set_attr("id", "abc");
+    child.set_attr("type", "test");
+    EXPECT_EQ(child.attr("id"), "abc");
+    EXPECT_EQ(child.attr("type"), "test");
+}
+
+TEST(XmlTest, RemoveChild)
+{
+    xml x;
+    x.load("<root><a/><b/><c/></root>");
+    EXPECT_TRUE(x.remove_child("b"));
+    EXPECT_TRUE(x.child("b").empty());
+    EXPECT_FALSE(x.remove_child("not_exist"));
+}
+
+TEST(XmlTest, EmptyNode)
+{
+    xml x;
+    EXPECT_FALSE(x.empty());
+    x.load("<root></root>");
+    EXPECT_FALSE(x.empty());
+}
+
+TEST(XmlTest, StrSerialize)
+{
+    xml x;
+    x.load("<root><foo>bar</foo></root>");
+    std::string xmlstr = x.str();
+    EXPECT_NE(xmlstr.find("<foo>bar</foo>"), std::string::npos);
+
+    xml y;
+    y.load(xmlstr.c_str());
+    EXPECT_EQ(y.child("foo").value(), "bar");
 }

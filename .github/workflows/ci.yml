@@ -155,14 +155,18 @@ jobs:
       run: |
         echo "=== Pre-build disk usage ==="
         df -h
+        echo "=== Pre-build memory usage ==="
+        free -h
         echo "============================="
         
         JOBS=$(($(nproc)-1))
         if [ "$JOBS" -lt 1 ]; then JOBS=1; fi
-        cmake --build build --config ${{ matrix.build_type }} --parallel 2 --verbose
+        cmake --build build --config ${{ matrix.build_type }} --parallel 1
         
         echo "=== Post-build disk usage ==="
         df -h
+        echo "=== Post-build memory usage ==="
+        free -h
         echo "=============================="
 
     - name: Run tests

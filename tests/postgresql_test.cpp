@@ -29,6 +29,7 @@ static bool _is_pg_server_running()
     return false;
 }
 
+
 TEST(PostgreSQLTest, ConnectAndDisconnect)
 {
     if(!_is_pg_server_running())
@@ -39,6 +40,19 @@ TEST(PostgreSQLTest, ConnectAndDisconnect)
     ASSERT_TRUE(db.is_open());
     db.disconnect();
     ASSERT_FALSE(db.is_open());
+    // reconnect
+    ASSERT_TRUE(db.connect(conninfo));
+    ASSERT_TRUE(db.is_open());
+}
+
+TEST(PostgreSQLTest, SetEncoding)
+{
+    if(!_is_pg_server_running())
+        GTEST_SKIP()
+            << "PostgreSQL server is not running or connection failed.";
+    hj::pg_connection db(conninfo);
+    ASSERT_TRUE(db.is_open());
+    db.set_encoding("UTF8");
 }
 
 TEST(PostgreSQLTest, ExecAndQuery)
@@ -60,4 +74,48 @@ TEST(PostgreSQLTest, ExecAndQuery)
     EXPECT_EQ(rows[1][0], "Bob");
 
     db.exec("DROP TABLE test_table");
+}
+
+TEST(PostgreSQLTest, BatchInsertAndEmptyQuery)
+{
+    if(!_is_pg_server_running())
+        GTEST_SKIP()
+            << "PostgreSQL server is not running or connection failed.";
+    hj::pg_connection db(conninfo);
+    ASSERT_TRUE(db.is_open());
+    db.exec("DROP TABLE IF EXISTS batch_table");
+    db.exec("CREATE TABLE batch_table(id INT, val TEXT)");
+    for(int i = 0; i < 10; ++i)
+        ASSERT_TRUE(db.exec("INSERT INTO batch_table(id, val) VALUES("
+                            + std::to_string(i) + ", 'v" + std::to_string(i)
+                            + "')"));
+    auto rows = db.query("SELECT val FROM batch_table ORDER BY id");
+    ASSERT_EQ(rows.size(), 10u);
+    for(int i = 0; i < 10; ++i)
+        EXPECT_EQ(rows[i][0], "v" + std::to_string(i));
+    db.exec("DROP TABLE batch_table");
+
+    db.exec("CREATE TABLE batch_table(id INT, val TEXT)");
+    auto empty = db.query("SELECT * FROM batch_table");
+    ASSERT_EQ(empty.size(), 0u);
+    db.exec("DROP TABLE batch_table");
+}
+
+TEST(PostgreSQLTest, InvalidSQLAndReconnect)
+{
+    if(!_is_pg_server_running())
+        GTEST_SKIP()
+            << "PostgreSQL server is not running or connection failed.";
+    hj::pg_connection db(conninfo);
+    ASSERT_TRUE(db.is_open());
+
+    ASSERT_FALSE(db.exec("SELECT * FROM not_exist_table"));
+
+    db.disconnect();
+    ASSERT_FALSE(db.is_open());
+    ASSERT_FALSE(db.exec("SELECT 1"));
+
+    ASSERT_TRUE(db.connect(conninfo));
+    ASSERT_TRUE(db.is_open());
+    ASSERT_TRUE(db.exec("SELECT 1"));
 }

@@ -21,13 +21,16 @@ class sqlite
     }
     ~sqlite() { close(); }
 
-    inline bool        is_open() const { return _db != nullptr; }
-    inline std::string get_last_error() { return _last_err; }
-
     bool open(const std::string &filename)
     {
         close();
-        return sqlite3_open(filename.c_str(), &_db) == SQLITE_OK;
+        _last_err.clear();
+        if(sqlite3_open(filename.c_str(), &_db) == SQLITE_OK)
+            return true;
+
+        _last_err = sqlite3_errmsg(_db ? _db : nullptr);
+        close();
+        return false;
     }
 
     void close()
@@ -39,39 +42,62 @@ class sqlite
         _db = nullptr;
     }
 
+    inline bool        is_open() const { return _db != nullptr; }
+    inline std::string get_last_error() { return _last_err; }
+    inline bool        begin() { return exec("BEGIN TRANSACTION;"); }
+    inline bool        commit() { return exec("COMMIT;"); }
+    inline bool        rollback() { return exec("ROLLBACK;"); }
+
     bool exec(const std::string &sql)
     {
         if(!_db)
             return false;
 
         char *errmsg = nullptr;
-        int   rc = sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errmsg);
-        if(rc != SQLITE_OK)
-        {
-            if(errmsg)
-            {
-                _last_err.assign(errmsg, strlen(errmsg));
-                sqlite3_free(errmsg);
-            }
-            return false;
-        }
+        if(sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errmsg)
+           == SQLITE_OK)
+            return true;
 
         if(errmsg)
+        {
+            _last_err.assign(errmsg, strlen(errmsg));
             sqlite3_free(errmsg);
-
-        return true;
+        } else
+        {
+            _last_err = sqlite3_errmsg(_db);
+        }
+        return false;
     }
 
     // Query: returns vector of rows, each row is vector<string>
-    std::vector<std::vector<std::string> > query(const std::string &sql,
-                                                 exec_cb            callback)
+    std::vector<std::vector<std::string>> query(const std::string &sql,
+                                                exec_cb            callback)
     {
-        std::vector<std::vector<std::string> > rows;
-        char                                  *errmsg = nullptr;
-        int rc = sqlite3_exec(_db, sql.c_str(), callback, &rows, &errmsg);
-        if(rc != SQLITE_OK || errmsg)
-            sqlite3_free(errmsg);
+        std::vector<std::vector<std::string>> rows;
+        if(!_db)
+            return rows;
 
+        sqlite3_stmt *stmt = nullptr;
+        if(sqlite3_prepare_v2(_db, sql.c_str(), -1, &stmt, nullptr)
+           != SQLITE_OK)
+        {
+            _last_err = sqlite3_errmsg(_db);
+            return rows;
+        }
+
+        int cols = sqlite3_column_count(stmt);
+        while(sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            std::vector<std::string> row;
+            for(int i = 0; i < cols; ++i)
+            {
+                const char *val = reinterpret_cast<const char *>(
+                    sqlite3_column_text(stmt, i));
+                row.push_back(val ? val : "");
+            }
+            rows.push_back(std::move(row));
+        }
+        sqlite3_finalize(stmt);
         return rows;
     }
 

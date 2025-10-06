@@ -163,8 +163,8 @@ class logger
     logger()                              = delete;
     logger(const logger &)                = delete;
     logger &operator=(const logger &)     = delete;
-    logger(logger &&) noexcept            = default;
-    logger &operator=(logger &&) noexcept = default;
+    logger(logger &&) noexcept            = delete;
+    logger &operator=(logger &&) noexcept = delete;
 
     explicit logger(base_logger_ptr_t base)
         : _base{base}

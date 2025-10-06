@@ -186,9 +186,6 @@ TEST_F(GzipTest, LargeDataCompression)
     double ratio =
         gzip::compression_ratio(large_data.size(), compressed.size());
     EXPECT_GT(ratio, 0.8);
-
-    // std::cout << "Large data compression ratio: " << ratio * 100 << "%" << std::endl;
-    // std::cout << "Processing time: " << duration.count() << " ms" << std::endl;
 }
 
 TEST_F(GzipTest, RandomDataCompression)
@@ -208,7 +205,6 @@ TEST_F(GzipTest, RandomDataCompression)
 
     double ratio =
         gzip::compression_ratio(random_data.size(), compressed.size());
-    // std::cout << "Random data compression ratio: " << ratio * 100 << "%" << std::endl;
 }
 
 TEST_F(GzipTest, MaxOutputSizeLimit)
@@ -219,11 +215,6 @@ TEST_F(GzipTest, MaxOutputSizeLimit)
     auto compress_result =
         gzip::compress(compressed, test_data.data(), test_data.size());
     EXPECT_EQ(compress_result, gzip::err::ok);
-
-    // size_t max_output_size = test_data.size() / 2;
-    // auto decompress_result = gzip::decompress(decompressed, compressed.data(),
-    //                                          compressed.size(), max_output_size);
-    // EXPECT_EQ(decompress_result, gzip::err::buffer_too_small);
 
     size_t max_output_size   = test_data.size() * 2;
     auto   decompress_result = gzip::decompress(decompressed,
@@ -342,25 +333,6 @@ TEST_F(GzipTest, CompressionRatio)
     EXPECT_DOUBLE_EQ(ratio_negative, -0.5);
 }
 
-// TEST_F(GzipTest, ReserveSizeCalculation) {
-//     size_t compress_reserve = gzip::compress_reserve_sz(1000);
-//     EXPECT_GT(compress_reserve, 1000);
-//     EXPECT_LT(compress_reserve, 1020);
-
-//     size_t decompress_reserve1 = gzip::decompress_reserve_sz(1000, 0);
-//     EXPECT_EQ(decompress_reserve1, 4000);
-
-//     size_t decompress_reserve2 = gzip::decompress_reserve_sz(1000, 2000);
-//     EXPECT_EQ(decompress_reserve2, 2000);
-
-//     size_t decompress_reserve_zero = gzip::decompress_reserve_sz(0, 0);
-//     EXPECT_EQ(decompress_reserve_zero, 4096);
-
-//     constexpr size_t huge_size = std::numeric_limits<size_t>::max() / 2;
-//     size_t decompress_reserve_huge = gzip::decompress_reserve_sz(huge_size, 0);
-//     EXPECT_EQ(decompress_reserve_huge, hj::GZIP_MAX_SAFE_SZ);
-// }
-
 TEST_F(GzipTest, ErrorHandling)
 {
     std::vector<unsigned char> result;
@@ -405,21 +377,4 @@ TEST_F(GzipTest, BoundaryConditions)
         gzip::decompress(decompressed, compressed.data(), compressed.size());
     EXPECT_EQ(decompress_result, gzip::err::ok);
     EXPECT_EQ(decompressed.size(), 1);
-    // EXPECT_EQ(decompressed[0], single_byte);
-
-    // std::vector<unsigned char> repeated_data(10000, 0x55);
-    // compressed.clear();
-    // decompressed.clear();
-
-    // compress_result = gzip::compress(compressed, repeated_data.data(), repeated_data.size());
-    // EXPECT_EQ(compress_result, gzip::err::ok);
-
-    // decompress_result = gzip::decompress(decompressed, compressed.data(), compressed.size());
-    // EXPECT_EQ(decompress_result, gzip::err::ok);
-    // EXPECT_EQ(decompressed, repeated_data);
-
-    // double ratio = gzip::compression_ratio(repeated_data.size(), compressed.size());
-    // EXPECT_GT(ratio, 0.95);
-
-    // std::cout << "Repeated data compression ratio: " << ratio * 100 << "%" << std::endl;
 }

@@ -104,18 +104,23 @@ TEST(clickhouse_client, select)
 
     cli.insert("select_test", b);
 
-    auto result =
+    auto results =
         cli.select("SELECT id, name, score, dt FROM select_test WHERE id = 1");
-    ASSERT_EQ(result.GetRowCount(), 1);
-    if(result.GetRowCount() > 0)
+    size_t total_rows = 0;
+    for(const auto &block : results)
     {
-        auto id    = result[0]->As<hj::ck::column_uint32>()->At(0);
-        auto name  = result[1]->As<hj::ck::column_string>()->At(0);
-        auto score = result[2]->As<hj::ck::column_float64>()->At(0);
-        auto dt    = result[3]->As<hj::ck::column_date_time>()->At(0);
-        ASSERT_EQ(id, 1);
-        ASSERT_EQ(score, 81.0);
+        total_rows += block.GetRowCount();
+        if(block.GetRowCount() > 0)
+        {
+            auto id    = block[0]->As<hj::ck::column_uint32>()->At(0);
+            auto name  = block[1]->As<hj::ck::column_string>()->At(0);
+            auto score = block[2]->As<hj::ck::column_float64>()->At(0);
+            auto dt    = block[3]->As<hj::ck::column_date_time>()->At(0);
+            ASSERT_EQ(id, 1);
+            ASSERT_EQ(score, 81.0);
+        }
     }
+    ASSERT_EQ(total_rows, 1);
 }
 
 TEST(clickhouse_client, drop_table)

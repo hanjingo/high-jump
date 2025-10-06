@@ -1,7 +1,9 @@
+
 #include <gtest/gtest.h>
 #include <hj/db/db_conn_pool.hpp>
-
 #include <hj/db/sqlite.hpp>
+#include <thread>
+#include <vector>
 
 TEST(db_conn_pool, capa)
 {
@@ -137,4 +139,94 @@ TEST(db_conn_pool, check_conn)
     conn1.reset();
     conn2.reset();
     ASSERT_EQ(fail_count, 0);
+}
+
+TEST(db_conn_pool, concurrent_acquire_release)
+{
+    hj::db_conn_pool<sqlite3> pool{
+        3,
+        []() -> hj::db_conn_pool<sqlite3>::conn_ptr_t {
+            sqlite3 *db;
+            int      ret = sqlite3_open("011.db", &db);
+            if(ret != SQLITE_OK)
+                return nullptr;
+            return std::shared_ptr<sqlite3>(db, [](sqlite3 *db) {
+                sqlite3_close(db);
+            });
+        }};
+    std::atomic<int>         success{0};
+    std::vector<std::thread> threads;
+    for(int i = 0; i < 10; ++i)
+    {
+        threads.emplace_back([&]() {
+            auto conn = pool.acquire(200);
+            if(conn)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                ++success;
+            }
+        });
+    }
+    for(auto &t : threads)
+        t.join();
+    ASSERT_EQ(pool.size(), 3);
+    ASSERT_GE(success, 3);
+}
+
+TEST(db_conn_pool, close_and_acquire)
+{
+    hj::db_conn_pool<sqlite3> pool{
+        2,
+        []() -> hj::db_conn_pool<sqlite3>::conn_ptr_t {
+            sqlite3 *db;
+            int      ret = sqlite3_open("012.db", &db);
+            if(ret != SQLITE_OK)
+                return nullptr;
+            return std::shared_ptr<sqlite3>(db, [](sqlite3 *db) {
+                sqlite3_close(db);
+            });
+        }};
+    auto conn1 = pool.acquire();
+    pool.close();
+    ASSERT_TRUE(pool.is_closed());
+    auto conn2 = pool.acquire();
+    ASSERT_EQ(conn2, nullptr);
+    conn1.reset();
+    ASSERT_EQ(pool.size(), 0);
+}
+
+TEST(db_conn_pool, acquire_after_close_multithread)
+{
+    hj::db_conn_pool<sqlite3> pool{
+        1,
+        []() -> hj::db_conn_pool<sqlite3>::conn_ptr_t {
+            sqlite3 *db;
+            int      ret = sqlite3_open("013.db", &db);
+            if(ret != SQLITE_OK)
+                return nullptr;
+            return std::shared_ptr<sqlite3>(db, [](sqlite3 *db) {
+                sqlite3_close(db);
+            });
+        }};
+    std::atomic<int> null_count{0};
+    std::thread      t1([&]() {
+        auto c = pool.acquire();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        c.reset();
+    });
+    std::thread      t2([&]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        pool.close();
+    });
+    std::thread      t3([&]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        auto c = pool.acquire(100);
+        if(!c)
+            ++null_count;
+    });
+    t1.join();
+    t2.join();
+    t3.join();
+    ASSERT_TRUE(pool.is_closed());
+    ASSERT_EQ(null_count, 1);
 }

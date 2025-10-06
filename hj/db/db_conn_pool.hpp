@@ -1,3 +1,21 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef DB_CONN_POOL_HPP
 #define DB_CONN_POOL_HPP
 
@@ -13,6 +31,9 @@
 #include <condition_variable>
 #include <chrono>
 #include <functional>
+#include <stdexcept>
+#include <cassert>
+#include <optional>
 
 namespace hj
 {
@@ -30,6 +51,7 @@ class db_conn_pool
         : _pool{}
         , _cond{}
         , _mu{}
+        , _closed{false}
         , _capa{capa}
         , _make{std::move(make)}
         , _check{[](conn_ptr_t) -> bool { return true; }}
@@ -37,12 +59,14 @@ class db_conn_pool
         for(std::size_t i = 0; i < capa; ++i)
             _pool.push(_make());
     }
+
     explicit db_conn_pool(const std::size_t capa,
                           make_conn_t     &&make,
                           check_conn_t    &&check)
         : _pool{}
         , _cond{}
         , _mu{}
+        , _closed{false}
         , _capa{capa}
         , _make{std::move(make)}
         , _check{std::move(check)}
@@ -50,29 +74,39 @@ class db_conn_pool
         for(std::size_t i = 0; i < capa; ++i)
             _pool.push(_make());
     }
-    ~db_conn_pool() { _cond.notify_all(); }
 
-    inline std::size_t capa() { return _capa; }
+    ~db_conn_pool() { close(); }
 
-    inline std::size_t size() { return _pool.size(); }
+    inline bool        is_closed() const { return _closed; }
+    inline std::size_t capa() const { return _capa; }
+    inline std::size_t size() const
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        return _pool.size();
+    }
 
     conn_ptr_t acquire(const int timeout_ms = 0)
     {
+        std::unique_lock<std::mutex> lock{_mu};
+        if(_closed)
+            return nullptr;
+
         if(timeout_ms > 0)
         {
-            std::unique_lock<std::mutex> lock{_mu};
-            bool                         ok = _cond.wait_for(lock,
-                                     std::chrono::milliseconds(timeout_ms),
-                                     [this] { return !this->_pool.empty(); });
-            if(!ok)
+            if(!_cond.wait_for(lock,
+                               std::chrono::milliseconds(timeout_ms),
+                               [this] { return !this->_pool.empty(); }))
+                return nullptr;
+
+            if(_closed)
+                return nullptr;
+        } else
+        {
+            if(_pool.empty())
                 return nullptr;
         }
 
-        std::unique_lock<std::mutex> lock{_mu};
-        if(_pool.empty())
-            return nullptr;
-
-        do
+        while(!_pool.empty())
         {
             conn_ptr_t conn_ptr = _pool.front();
             _pool.pop();
@@ -86,22 +120,37 @@ class db_conn_pool
             return conn_ptr_t(conn_ptr.get(), [this, conn_ptr](Conn *) {
                 this->_release(conn_ptr);
             });
-            break;
-        } while(true);
+        }
+
+        return nullptr;
+    }
+
+    void close()
+    {
+        std::lock_guard<std::mutex> lock{_mu};
+        _closed = true;
+        while(!_pool.empty())
+            _pool.pop();
+
+        _cond.notify_all();
     }
 
   private:
     void _release(conn_ptr_t conn)
     {
         std::lock_guard<std::mutex> lock{_mu};
-        _pool.push(conn);
-        _cond.notify_one();
+        if(!_closed)
+        {
+            _pool.push(conn);
+            _cond.notify_one();
+        }
     }
 
   private:
     std::queue<conn_ptr_t>  _pool;
     std::condition_variable _cond;
-    std::mutex              _mu;
+    mutable std::mutex      _mu;
+    std::atomic<bool>       _closed;
     std::size_t             _capa;
 
     make_conn_t  _make;

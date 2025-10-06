@@ -1,3 +1,21 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef GZIP_HPP
 #define GZIP_HPP
 
@@ -37,7 +55,8 @@ class gzip
         max_output_sz_exceeded,
         read_buffer_error,
         write_buffer_error,
-        overflow_error
+        overflow_error,
+        zlib_version_mismatch
     };
 
     enum class compression_lvl : int
@@ -71,6 +90,9 @@ class gzip
         lvl9          = 9
     };
 
+    static_assert(ZLIB_VERNUM >= 0x1230,
+                  "zlib version too old, require >= 1.2.3");
+
     static size_t compress_reserve_sz(const size_t src_sz)
     {
         return src_sz + (src_sz / 1000) + 12 + 18;
@@ -87,11 +109,8 @@ class gzip
         if(src_sz == 0)
             return MIN_ALLOC;
 
-        size_t estimated;
-        if(src_sz <= MAX_SAFE_ALLOC / 4)
-            estimated = src_sz * 4;
-        else
-            estimated = MAX_SAFE_ALLOC;
+        size_t estimated =
+            (src_sz <= MAX_SAFE_ALLOC / 4) ? src_sz * 4 : MAX_SAFE_ALLOC;
 
         return std::max(MIN_ALLOC, std::min(estimated, MAX_SAFE_ALLOC));
     }
@@ -157,40 +176,69 @@ class gzip
     static err compress(
         std::ostream         &out,
         std::istream         &in,
-        const compression_lvl compr_lvl = compression_lvl::default_compression,
-        const mem_lvl         mem_level = mem_lvl::default_level,
-        const size_t          max_input_sz = 0)
+        const compression_lvl compr_lvl  = compression_lvl::default_compression,
+        const mem_lvl         mem_level  = mem_lvl::default_level,
+        const size_t          chunk_size = 16384)
     {
         if(!in || !out)
             return err::input_invalid;
 
-        in.seekg(0, std::ios::end);
-        std::streampos file_size = in.tellg();
-        in.seekg(0, std::ios::beg);
+        z_stream stream;
+        std::memset(&stream, 0, sizeof(stream));
+        int ret = deflateInit2(&stream,
+                               static_cast<int>(compr_lvl),
+                               Z_DEFLATED,
+                               GZIP_WINDOW_BITS,
+                               static_cast<int>(mem_level),
+                               static_cast<int>(strategy::default_strategy));
+        if(ret != Z_OK)
+            return static_cast<err>(ret);
 
-        if(file_size < 0
-           || (max_input_sz > 0
-               && static_cast<size_t>(file_size) > max_input_sz))
-            return err::input_invalid;
+        std::vector<unsigned char> inbuf(chunk_size), outbuf(chunk_size);
+        err                        result = err::ok;
+        while(in)
+        {
+            in.read(reinterpret_cast<char *>(inbuf.data()), chunk_size);
+            std::streamsize read_sz = in.gcount();
+            if(read_sz <= 0)
+                break;
 
-        size_t            size = static_cast<size_t>(file_size);
-        std::vector<char> buffer(size);
-        in.read(buffer.data(), size);
-        if(in.gcount() != static_cast<std::streamsize>(size))
-            return err::read_buffer_error;
+            stream.avail_in = static_cast<uInt>(read_sz);
+            stream.next_in  = inbuf.data();
+            do
+            {
+                stream.avail_out = static_cast<uInt>(chunk_size);
+                stream.next_out  = outbuf.data();
+                ret = deflate(&stream, in.eof() ? Z_FINISH : Z_NO_FLUSH);
+                if(ret == Z_STREAM_ERROR)
+                {
+                    result = err::stream_error;
+                    deflateEnd(&stream);
+                    return result;
+                }
+                size_t have = chunk_size - stream.avail_out;
+                out.write(reinterpret_cast<const char *>(outbuf.data()), have);
+                if(!out)
+                {
+                    result = err::write_buffer_error;
+                    deflateEnd(&stream);
+                    return result;
+                }
+            } while(stream.avail_out == 0);
+        }
 
-        std::vector<unsigned char> compressed;
-        auto                       ret =
-            compress(compressed, buffer.data(), size, compr_lvl, mem_level);
-        if(ret != err::ok)
-            return ret;
+        // end up compression
+        do
+        {
+            stream.avail_out = static_cast<uInt>(chunk_size);
+            stream.next_out  = outbuf.data();
+            ret              = deflate(&stream, Z_FINISH);
+            size_t have      = chunk_size - stream.avail_out;
+            out.write(reinterpret_cast<const char *>(outbuf.data()), have);
+        } while(ret != Z_STREAM_END);
 
-        out.write(reinterpret_cast<const char *>(compressed.data()),
-                  compressed.size());
-        if(!out)
-            return err::write_buffer_error;
-
-        return err::ok;
+        deflateEnd(&stream);
+        return result;
     }
 
     static err decompress(std::vector<unsigned char> &dst,
@@ -252,34 +300,71 @@ class gzip
 
     static err decompress(std::ostream &out,
                           std::istream &in,
-                          const size_t  max_output_sz = 0)
+                          const size_t  max_output_sz = 0,
+                          const size_t  chunk_size    = 16384)
     {
         if(!in || !out)
             return err::input_invalid;
 
-        in.seekg(0, std::ios::end);
-        std::streampos file_size = in.tellg();
-        in.seekg(0, std::ios::beg);
-        if(file_size < 0)
-            return err::input_invalid;
+        z_stream stream;
+        std::memset(&stream, 0, sizeof(stream));
+        int ret = inflateInit2(&stream, GZIP_WINDOW_BITS);
+        if(ret != Z_OK)
+            return static_cast<err>(ret);
 
-        size_t            size = static_cast<size_t>(file_size);
-        std::vector<char> buffer(size);
-        in.read(buffer.data(), size);
-        if(in.gcount() != static_cast<std::streamsize>(size))
-            return err::read_buffer_error;
+        std::vector<unsigned char> inbuf(chunk_size), outbuf(chunk_size);
+        err                        result    = err::ok;
+        size_t                     total_out = 0;
+        while(in)
+        {
+            in.read(reinterpret_cast<char *>(inbuf.data()), chunk_size);
+            std::streamsize read_sz = in.gcount();
+            if(read_sz <= 0)
+                break;
 
-        std::vector<unsigned char> decompressed;
-        auto ret = decompress(decompressed, buffer.data(), size, max_output_sz);
-        if(ret != err::ok)
-            return ret;
+            stream.avail_in = static_cast<uInt>(read_sz);
+            stream.next_in  = inbuf.data();
+            do
+            {
+                stream.avail_out = static_cast<uInt>(chunk_size);
+                stream.next_out  = outbuf.data();
+                ret              = inflate(&stream, Z_NO_FLUSH);
+                switch(ret)
+                {
+                    case Z_NEED_DICT:
+                    case Z_DATA_ERROR:
+                    case Z_MEM_ERROR: {
+                        result = static_cast<err>(ret);
+                        inflateEnd(&stream);
+                        return result;
+                    }
+                    default:
+                        break;
+                }
+                size_t have = chunk_size - stream.avail_out;
+                total_out += have;
+                if(max_output_sz > 0 && total_out > max_output_sz)
+                {
+                    result = err::max_output_sz_exceeded;
+                    inflateEnd(&stream);
+                    return result;
+                }
 
-        out.write(reinterpret_cast<const char *>(decompressed.data()),
-                  decompressed.size());
-        if(!out)
-            return err::write_buffer_error;
+                out.write(reinterpret_cast<const char *>(outbuf.data()), have);
+                if(!out)
+                {
+                    result = err::write_buffer_error;
+                    inflateEnd(&stream);
+                    return result;
+                }
 
-        return err::ok;
+            } while(stream.avail_out == 0);
+        }
+        if(ret != Z_STREAM_END)
+            result = static_cast<err>(ret);
+
+        inflateEnd(&stream);
+        return result;
     }
 
     static unsigned long crc32_checksum(const void *data, const size_t size)

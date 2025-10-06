@@ -316,7 +316,7 @@ static std::string get_disk_sn() noexcept
         auto result = execute_command_safe(
             "ioreg -l | grep \"Serial Number\" | grep IOPlatformSerialNumber | "
             "awk -F'\"' '{print $4}' 2>/dev/null");
-        return result && !result->empty() ? result : std::string();
+        return (result && !result->empty()) ? *result : std::string();
     }
     catch(...)
     {

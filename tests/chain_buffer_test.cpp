@@ -69,3 +69,69 @@ TEST(ChainBufferTest, AppendChainBuffer)
     ASSERT_EQ(n, d1.size() + d2.size());
     ASSERT_EQ(std::string(out, n), d1 + d2);
 }
+
+TEST(ChainBufferTest, ConsumeOver)
+{
+    chain_buffer buf;
+    std::string  data = "12345";
+    buf.append(data.data(), data.size());
+
+    size_t consumed = buf.consume(100);
+    ASSERT_EQ(consumed, 5u);
+    ASSERT_EQ(buf.size(), 0u);
+    ASSERT_TRUE(buf.empty());
+}
+
+TEST(ChainBufferTest, AppendEmptyBuffer)
+{
+    chain_buffer buf1, buf2;
+    buf1.append(buf2);
+    ASSERT_TRUE(buf1.empty());
+    std::string d = "x";
+    buf2.append(d.data(), d.size());
+    buf1.append(buf2);
+    ASSERT_EQ(buf1.size(), 1u);
+}
+
+TEST(ChainBufferTest, BlockSize)
+{
+    chain_buffer buf(32);
+    ASSERT_EQ(buf.block_size(), 32u);
+    std::string data(100, 'a');
+    buf.append(data.data(), data.size());
+    ASSERT_EQ(buf.size(), 100u);
+}
+
+TEST(ChainBufferTest, ClearReuse)
+{
+    chain_buffer buf;
+    std::string  d = "abc";
+    buf.append(d.data(), d.size());
+    buf.clear();
+    ASSERT_TRUE(buf.empty());
+    buf.append(d.data(), d.size());
+    ASSERT_EQ(buf.size(), 3u);
+    char   out[8] = {0};
+    size_t n      = buf.read(out, sizeof(out));
+    ASSERT_EQ(n, 3u);
+    ASSERT_EQ(std::string(out, n), d);
+}
+
+TEST(ChainBufferTest, MultiAppendConsume)
+{
+    chain_buffer buf;
+    std::string  d1 = "abc", d2 = "defg", d3 = "hij";
+    buf.append(d1.data(), d1.size());
+    buf.append(d2.data(), d2.size());
+    buf.append(d3.data(), d3.size());
+    ASSERT_EQ(buf.size(), d1.size() + d2.size() + d3.size());
+    char   out[16] = {0};
+    size_t n       = buf.read(out, 4);
+    ASSERT_EQ(n, 4u);
+    ASSERT_EQ(std::string(out, 4), "abcd");
+    size_t consumed = buf.consume(4);
+    ASSERT_EQ(consumed, 4u);
+    n = buf.read(out, 5);
+    ASSERT_EQ(n, 5u);
+    ASSERT_EQ(std::string(out, 5), "efghi");
+}

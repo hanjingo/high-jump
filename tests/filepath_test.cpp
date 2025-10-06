@@ -206,3 +206,58 @@ TEST(file_path, rename)
                       : to.c_str()),
                  to.c_str());
 }
+
+TEST(file_path, find_by_regex)
+{
+    std::string f1 = hj::filepath::join(hj::filepath::pwd(), "regex_test1.txt");
+    std::string f2 = hj::filepath::join(hj::filepath::pwd(), "regex_test2.log");
+    std::string f3 = hj::filepath::join(hj::filepath::pwd(), "regex_test3.txt");
+    if(!hj::filepath::is_exist(f1))
+        hj::filepath::make_file(f1);
+    if(!hj::filepath::is_exist(f2))
+        hj::filepath::make_file(f2);
+    if(!hj::filepath::is_exist(f3))
+        hj::filepath::make_file(f3);
+
+    auto txts = hj::filepath::find_by_regex(hj::filepath::pwd(), R"(.*\.txt$)");
+    bool found1 = false, found3 = false;
+    for(const auto &s : txts)
+    {
+        if(s == f1)
+            found1 = true;
+        if(s == f3)
+            found3 = true;
+    }
+    ASSERT_TRUE(found1);
+    ASSERT_TRUE(found3);
+
+    auto logs = hj::filepath::find_by_regex(hj::filepath::pwd(), R"(.*\.log$)");
+    bool found2 = false;
+    for(const auto &s : logs)
+        if(s == f2)
+            found2 = true;
+    ASSERT_TRUE(found2);
+}
+
+TEST(file_path, ExceptionSafety)
+{
+    ASSERT_NO_THROW(hj::filepath::list("/not_exist_dir_1234567890"));
+    ASSERT_NO_THROW(
+        hj::filepath::find_by_regex("/not_exist_dir_1234567890", ".*"));
+    ASSERT_NO_THROW(hj::filepath::find("/not_exist_dir_1234567890", "foo"));
+    ASSERT_NO_THROW(hj::filepath::is_dir("/not_exist_dir_1234567890"));
+    ASSERT_NO_THROW(hj::filepath::is_exist("/not_exist_dir_1234567890"));
+    ASSERT_NO_THROW(hj::filepath::size("/not_exist_dir_1234567890"));
+    ASSERT_NO_THROW(hj::filepath::remove("/not_exist_dir_1234567890"));
+}
+
+TEST(file_path, EdgeCases)
+{
+    ASSERT_EQ(hj::filepath::file_name("").empty(), true);
+    ASSERT_EQ(hj::filepath::dir_name("").empty(), true);
+    ASSERT_EQ(hj::filepath::extension("").empty(), true);
+    ASSERT_EQ(hj::filepath::replace_extension("", ".log"), ".log");
+    ASSERT_EQ(hj::filepath::is_dir(""), false);
+    ASSERT_EQ(hj::filepath::is_exist(""), false);
+    ASSERT_EQ(hj::filepath::size(""), -1);
+}

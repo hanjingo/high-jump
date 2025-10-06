@@ -62,7 +62,7 @@ TEST(SqliteTest, ExecAndQuery)
     EXPECT_EQ(rows[0][1], "Alice");
     EXPECT_EQ(rows[1][1], "Bob");
 
-    EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('C\'arol');"));
+    EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('C''arol');"));
     rows = db.query("SELECT id, name FROM t WHERE name='C''arol';",
                     _sqlite_exec_cb);
     ASSERT_EQ(rows.size(), 1u);

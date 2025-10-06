@@ -8,9 +8,9 @@
 
 TEST(dbuffer, read)
 {
-    hj::dbuffer<std::vector<int> > dbuf{};
-    std::vector<int>               buf1{1, 2, 3};
-    std::vector<int>               buf2{0, 0, 0};
+    hj::dbuffer<std::vector<int>> dbuf{};
+    std::vector<int>              buf1{1, 2, 3};
+    std::vector<int>              buf2{0, 0, 0};
     ASSERT_TRUE(dbuf.write(buf1));
     ASSERT_TRUE(dbuf.read(buf2));
     for(std::size_t i = 0; i < buf1.size(); ++i)
@@ -86,6 +86,55 @@ TEST(dbuffer, read)
               << (rwlock_total_end - rwlock_total_start).count() << std::endl;
 }
 
-TEST(dbuffer, write)
+TEST(dbuffer, MoveWrite)
 {
+    hj::dbuffer<std::string> dbuf;
+    std::string              s = "hello";
+    ASSERT_TRUE(dbuf.write(std::move(s)));
+    std::string out;
+    ASSERT_TRUE(dbuf.read(out));
+    ASSERT_EQ(out, "hello");
+}
+
+TEST(dbuffer, CustomCopyFn)
+{
+    using V = std::vector<int>;
+    hj::dbuffer<V> dbuf([](V &src, V &dst) -> bool {
+        if(src.empty())
+            return false;
+        dst = src;
+        return true;
+    });
+    V              v1{1, 2, 3}, v2;
+    ASSERT_TRUE(dbuf.write(v1));
+    ASSERT_TRUE(dbuf.read(v2));
+    ASSERT_EQ(v2, v1);
+    V v3;
+    ASSERT_FALSE(dbuf.write(v3));
+}
+
+TEST(dbuffer, TypeSupport)
+{
+    hj::dbuffer<int> dbuf;
+    int              x = 42, y = 0;
+    ASSERT_TRUE(dbuf.write(x));
+    ASSERT_TRUE(dbuf.read(y));
+    ASSERT_EQ(y, 42);
+}
+
+TEST(dbuffer, ExceptionCopyFn)
+{
+    struct X
+    {
+        int v;
+    };
+    hj::dbuffer<X> dbuf([](X &src, X &dst) -> bool {
+        if(src.v == 0)
+            throw std::runtime_error("bad");
+        dst = src;
+        return true;
+    });
+    X              x{1}, y{0};
+    ASSERT_TRUE(dbuf.write(x));
+    ASSERT_THROW(dbuf.write(y), std::runtime_error);
 }

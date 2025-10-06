@@ -11,10 +11,61 @@ env:
   BUILD_TYPE: Release
 
 jobs:
+  # ================================ Code Quality Checks ================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Configure environment and install tools
+      run: |
+        echo "=== Running environment configuration script ==="
+        python3 scripts/configure.py --platform=linux --code-quality
+        
+        echo "=== Verifying code quality tools ==="
+        clang-format --version || echo "clang-format not found"
+        cppcheck --version || echo "cppcheck not found"
+        cpplint --version || echo "cpplint not found"
+
+    - name: Run code quality checks
+      working-directory: ${{ github.workspace }}
+      run: |
+        echo "=== Running cppcheck static analysis ==="
+        cppcheck --enable=all --std=c++17 --suppress=missingIncludeSystem \
+          --error-exitcode=1 --xml hj/ 2> cppcheck-result.xml || true
+        
+        echo "=== Running clang-format check ==="
+        find hj -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+        xargs -I{} sh -c 'clang-format --style=file --dry-run "$1" || echo "[WARNING] $1 not clang-formatted"' -- {}
+        
+        echo "=== Running cpplint check ==="
+        find hj -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | \
+        xargs cpplint --filter=-build/c++11,-whitespace/braces || true
+
+    - name: Upload code quality reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: code-quality-reports
+        path: |
+          cppcheck-result.xml
+        retention-days: 30
+
   # ================================ Build (Linux) ================================
   build-linux:
     name: Build and Test (Linux)
     runs-on: ubuntu-22.04
+    needs: code-quality
     strategy:
       matrix:
         build_type: [Release]
@@ -135,6 +186,7 @@ jobs:
   build-macos:
     name: Build and Test (macOS)
     runs-on: macos-13
+    needs: code-quality
     strategy:
       matrix:
         build_type: [Release]
@@ -405,7 +457,7 @@ jobs:
         PARALLEL_JOBS=$((NPROC-1))
         if [ "$PARALLEL_JOBS" -lt 1 ]; then PARALLEL_JOBS=1; fi
         echo "Using $PARALLEL_JOBS parallel jobs (total cores: $NPROC)"
-              
+        
         cmake --build build --config ${{ matrix.build_type }} --parallel $PARALLEL_JOBS
         
         echo "=== Post-build disk usage ==="
@@ -440,6 +492,7 @@ jobs:
   build-windows:
     name: Build and Test (Windows)
     runs-on: windows-2022
+    needs: code-quality
     strategy:
       matrix:
         build_type: [Release]

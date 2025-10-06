@@ -613,23 +613,50 @@ class LinuxDependencyInstaller:
                     all_failed_packages.extend(failed_packages)
                 else:
                     logger.info(f"✓ {group_name} installed successfully")
-            
-            # Report overall status
+
+            python_modules_failed = False
+            try:
+                self._install_python_modules()
+            except Exception as e:
+                logger.warning(f"Python module installation failed: {e}")
+                python_modules_failed = True
+
             if all_failed_packages:
                 logger.warning(f"Some packages failed to install: {', '.join(set(all_failed_packages))}")
                 logger.info("This is normal for newer Ubuntu versions where some packages have been renamed or removed")
+            elif python_modules_failed:
+                logger.warning("Some Python modules failed to install, skipping cache cleanup to allow for debugging.")
             else:
-                logger.info("✓ All package groups installed successfully")
-            
-            # Install Python modules that are commonly needed for building
-            self._install_python_modules()
-            
-            # Clean up package cache to save space
-            try:
-                CommandRunner.run(['sudo', 'apt-get', 'autoremove', '-y'], check=False)
-                CommandRunner.run(['sudo', 'apt-get', 'autoclean'], check=False)
-            except:
-                pass
+                logger.info("✓ All package groups and Python modules installed successfully")
+                # Clean up package cache and temp files to save space
+                try:
+                    CommandRunner.run(['sudo', 'apt-get', 'autoremove', '-y'], check=False)
+                    CommandRunner.run(['sudo', 'apt-get', 'autoclean'], check=False)
+                except Exception:
+                    pass
+
+                # Remove apt cache and common temp/download folders
+                cleanup_dirs = [
+                    '/var/cache/apt/archives',
+                    '/var/cache/apt',
+                    '/var/cache',
+                    '/tmp',
+                    str(Path.home() / 'tmp'),
+                    str(Path.home() / 'Downloads'),
+                    str(Path.home() / 'download'),
+                    str(Path.home() / 'Download'),
+                ]
+                for d in cleanup_dirs:
+                    try:
+                        if os.path.exists(d):
+                            logger.info(f"Cleaning up {d} ...")
+                            # Use sudo for system dirs
+                            if d.startswith('/var/') or d == '/tmp':
+                                CommandRunner.run(['sudo', 'rm', '-rf', d], check=False)
+                            else:
+                                CommandRunner.run(['rm', '-rf', d], check=False)
+                    except Exception as e:
+                        logger.warning(f"Failed to clean {d}: {e}")
             
         elif self.package_manager in ['yum', 'dnf']:
             packages = [

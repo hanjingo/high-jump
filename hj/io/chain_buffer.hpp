@@ -1,3 +1,20 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef CHAIN_BUFFER_HPP
 #define CHAIN_BUFFER_HPP
 
@@ -15,7 +32,6 @@ namespace hj
 class chain_buffer
 {
   public:
-    // Default block size for new blocks
     static constexpr size_t DEFAULT_BLOCK_SIZE = 4096;
 
     chain_buffer(size_t block_size = DEFAULT_BLOCK_SIZE)
@@ -28,7 +44,10 @@ class chain_buffer
         _blocks.back().reserve(_block_size);
     }
 
-    // Append data to the buffer
+    inline size_t size() const { return _total_size; }
+    inline size_t block_size() const { return _block_size; }
+    inline bool   empty() const { return _total_size == 0; }
+
     void append(const void *data, size_t len)
     {
         const uint8_t *p = static_cast<const uint8_t *>(data);
@@ -39,6 +58,7 @@ class chain_buffer
                 _blocks.emplace_back();
                 _blocks.back().reserve(_block_size);
             }
+
             size_t space   = _block_size - _blocks.back().size();
             size_t to_copy = std::min(space, len);
             _blocks.back().insert(_blocks.back().end(), p, p + to_copy);
@@ -48,19 +68,26 @@ class chain_buffer
         }
     }
 
-    // Append from another chain_buffer
-    void append(const chain_buffer &other)
+    void append(chain_buffer &other)
     {
-        for(size_t i = 0; i < other._blocks.size(); ++i)
+        if(other.empty())
+            return;
+
+        if(_read_block == 0 && _read_pos == 0 && _blocks.size() == 1
+           && _blocks[0].empty())
         {
-            const auto &blk = other._blocks[i];
-            if(!blk.empty())
-                append(blk.data(), blk.size());
+            _blocks = std::move(other._blocks);
+        } else
+        {
+            for(auto &blk : other._blocks)
+                if(!blk.empty())
+                    append(blk.data(), blk.size());
         }
+
+        _total_size += other._total_size;
+        other.clear();
     }
 
-    // Read data from the buffer without consuming
-    // Returns number of bytes actually read
     size_t read(void *out, size_t len) const
     {
         size_t   copied  = 0;
@@ -77,6 +104,7 @@ class chain_buffer
                 pos = 0;
                 continue;
             }
+
             size_t avail   = blk.size() - pos;
             size_t to_copy = std::min(avail, len);
             std::memcpy(p + copied, blk.data() + pos, to_copy);
@@ -87,39 +115,40 @@ class chain_buffer
         return copied;
     }
 
-    // Consume (remove) bytes from the buffer
-    void consume(size_t len)
+    // Consume up to len bytes from the buffer. If len > size(), only available bytes are consumed.
+    //   Returns the actual number of bytes consumed. (Compatible with boost::asio/beast semantics)
+    size_t consume(size_t len)
     {
+        size_t consumed = 0;
+        len             = (len < _total_size) ? len : _total_size;
         while(len > 0 && !_blocks.empty())
         {
             auto  &blk   = _blocks[_read_block];
             size_t avail = blk.size() - _read_pos;
             if(len < avail)
             {
+                consumed += len;
                 _read_pos += len;
                 _total_size -= len;
-                return;
+                return consumed;
             } else
             {
+                consumed += avail;
                 len -= avail;
                 _total_size -= avail;
                 ++_read_block;
                 _read_pos = 0;
             }
         }
-        // Remove fully consumed blocks
+
         if(_read_block > 0)
         {
             _blocks.erase(_blocks.begin(), _blocks.begin() + _read_block);
             _read_block = 0;
         }
+
+        return consumed;
     }
-
-    // Get total bytes available to read
-    size_t size() const { return _total_size; }
-
-    // Check if buffer is empty
-    bool empty() const { return _total_size == 0; }
 
     // Clear the buffer
     void clear()
@@ -133,9 +162,15 @@ class chain_buffer
     }
 
   private:
-    size_t                             _block_size;
-    std::vector<std::vector<uint8_t> > _blocks;
-    size_t                             _total_size;
+    chain_buffer(const chain_buffer &)            = delete;
+    chain_buffer &operator=(const chain_buffer &) = delete;
+    chain_buffer(chain_buffer &&)                 = default;
+    chain_buffer &operator=(chain_buffer &&)      = default;
+
+  private:
+    size_t                            _block_size;
+    std::vector<std::vector<uint8_t>> _blocks;
+    size_t                            _total_size;
 
     // Read cursor
     mutable size_t _read_pos;

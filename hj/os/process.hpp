@@ -175,7 +175,11 @@ inline void list(
         for(auto &v : vec)
         {
             v.erase(std::remove(v.begin(), v.end(), '\"'), v.end());
-            v.erase(std::remove_if(v.begin(), v.end(), ::isspace), v.end());
+            v.erase(
+                std::remove_if(v.begin(),
+                               v.end(),
+                               [](unsigned char c) { return std::isspace(c); }),
+                v.end());
         }
 
         if(vec.size() >= 2 && match(vec))

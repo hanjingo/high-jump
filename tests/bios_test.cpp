@@ -89,7 +89,7 @@ TEST(bios, serial_num)
         if(serial[i] < 32 || serial[i] > 126)
         {
             GTEST_SKIP() << "serial_num contains non-printable char: 0x"
-                          << std::hex << (int) serial[i];
+                         << std::hex << (int) serial[i];
             return;
         }
     }
@@ -128,6 +128,12 @@ TEST(bios, info)
 {
     bios_info_t  info;
     bios_error_t ret = bios_info(&info);
+    if(ret == BIOS_ERROR_NOT_SUPPORTED || ret == BIOS_ERROR_NOT_FOUND)
+    {
+        GTEST_SKIP()
+            << "bios_info skipped: unavailable or insufficient permissions";
+        return;
+    }
     ASSERT_EQ(ret, BIOS_OK);
     ASSERT_GT(strlen(info.vendor), 0u);
     ASSERT_GT(strlen(info.version), 0u);

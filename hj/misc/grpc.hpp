@@ -1,6 +1,7 @@
 #ifndef GRPC_HPP
 #define GRPC_HPP
 
+#ifdef GRPC_ENABLE
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/impl/service_type.h>
 #include <string>
@@ -105,5 +106,7 @@ class grpc_channel
 };
 
 } // namespace hj
+
+#endif // GRPC_ENABLE
 
 #endif // GRPC_HPP

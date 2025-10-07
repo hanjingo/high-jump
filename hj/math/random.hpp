@@ -2,36 +2,66 @@
 #define RANDOM_HPP
 
 #include <random>
+#include <mutex>
 
 namespace hj
 {
 
-static std::random_device default_seed;
-
 class random
 {
   public:
-    template <int64_t Min, int64_t Max>
-    static int64_t range(std::random_device &seed = default_seed)
+    random()
+        : _engine{std::random_device{}()}
     {
-        std::default_random_engine engine(seed());
+    }
 
-        std::uniform_int_distribution<int64_t> uniform_dist(Min, Max);
-        return uniform_dist(engine);
+    explicit random(unsigned int seed)
+        : _engine{seed}
+    {
+    }
+
+    ~random() = default;
+
+    template <typename T>
+    T range(T min, T max)
+    {
+        std::lock_guard<std::mutex>      lock(_mu);
+        std::uniform_int_distribution<T> dist(min, max);
+        return dist(_engine);
     }
 
     template <typename T>
-    static T range(T min, T max, std::random_device &seed = default_seed)
+    T range_real(T min, T max)
     {
-        std::default_random_engine engine(seed());
+        std::lock_guard<std::mutex>       lock(_mu);
+        std::uniform_real_distribution<T> dist(min, max);
+        return dist(_engine);
+    }
 
-        std::uniform_int_distribution<T> uniform_dist(min, max);
-        return uniform_dist(engine);
+    template <typename T>
+    std::vector<T> range_bulk(T min, T max, size_t n)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        std::vector<T>              out;
+        out.reserve(n);
+        std::uniform_int_distribution<T> dist(min, max);
+        for(size_t i = 0; i < n; ++i)
+            out.push_back(dist(_engine));
+
+        return out;
+    }
+
+    template <typename T>
+    T normal(T mean, T stddev)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        std::normal_distribution<T> dist(mean, stddev);
+        return dist(_engine);
     }
 
   private:
-    random()  = default;
-    ~random() = default;
+    std::default_random_engine _engine;
+    std::mutex                 _mu;
 };
 
 }

@@ -1,5 +1,5 @@
 /*
- *  This file is part of hj.
+ *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -85,7 +85,7 @@ get_type_tag()
 }
 
 template <typename T>
-typename enable_if<is_same<T, std::vector<unsigned char> >::value,
+typename enable_if<is_same<T, std::vector<unsigned char>>::value,
                    vector_tag>::type
 get_type_tag()
 {
@@ -94,7 +94,7 @@ get_type_tag()
 
 template <typename T>
 typename enable_if<std::is_integral<T>::value && !is_same<T, std::string>::value
-                       && !is_same<T, std::vector<unsigned char> >::value,
+                       && !is_same<T, std::vector<unsigned char>>::value,
                    integral_tag>::type
 get_type_tag()
 {
@@ -104,7 +104,7 @@ get_type_tag()
 template <typename T>
 typename enable_if<!std::is_integral<T>::value
                        && !is_same<T, std::string>::value
-                       && !is_same<T, std::vector<unsigned char> >::value,
+                       && !is_same<T, std::vector<unsigned char>>::value,
                    container_tag>::type
 get_type_tag()
 {

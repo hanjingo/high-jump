@@ -1,3 +1,21 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef PROCESS_HPP
 #define PROCESS_HPP
 
@@ -13,6 +31,7 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#include <tlhelp32.h>
 #else
 #include <unistd.h>
 #include <sys/types.h>
@@ -49,7 +68,26 @@ inline pid_t getpid()
 inline pid_t getppid()
 {
 #if defined(_WIN32)
-    return 0;
+    DWORD  ppid  = 0;
+    DWORD  pid   = GetCurrentProcessId();
+    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if(hSnap == INVALID_HANDLE_VALUE)
+        return ppid;
+
+    PROCESSENTRY32 pe = {sizeof(pe)};
+    if(Process32First(hSnap, &pe))
+    {
+        do
+        {
+            if(pe.th32ProcessID == pid)
+            {
+                ppid = pe.th32ParentProcessID;
+                break;
+            }
+        } while(Process32Next(hSnap, &pe));
+    }
+    CloseHandle(hSnap);
+    return ppid;
 #else
     return ::getppid();
 #endif
@@ -57,11 +95,7 @@ inline pid_t getppid()
 
 inline int system(const std::string &cmd)
 {
-#if defined(_WIN32)
     return std::system(cmd.c_str());
-#else
-    return std::system(cmd.c_str());
-#endif
 }
 
 inline child_t child(const std::string &cmd)
@@ -182,19 +216,17 @@ inline void list(
                 v.end());
         }
 
-        if(vec.size() >= 2 && match(vec))
+        if(vec.size() < 2 || !match(vec))
+            continue;
+
+        try
         {
-            try
-            {
-                if(!vec[1].empty()
-                   && std::all_of(vec[1].begin(), vec[1].end(), ::isdigit))
-                {
-                    result.push_back(static_cast<pid_t>(std::stoi(vec[1])));
-                }
-            }
-            catch(...)
-            {
-            }
+            if(!vec[1].empty()
+               && std::all_of(vec[1].begin(), vec[1].end(), ::isdigit))
+                result.push_back(static_cast<pid_t>(std::stoi(vec[1])));
+        }
+        catch(...)
+        {
         }
     }
     _pclose(fp);
@@ -225,17 +257,17 @@ inline void list(
         for(auto &v : vec)
             v.erase(std::remove_if(v.begin(), v.end(), ::isspace), v.end());
 
-        if(vec.size() >= 2 && match(vec))
+        if(vec.size() < 2 || !match(vec))
+            continue;
+
+        try
         {
-            try
-            {
-                if(!vec[1].empty()
-                   && std::all_of(vec[1].begin(), vec[1].end(), ::isdigit))
-                    result.push_back(static_cast<pid_t>(std::stoi(vec[1])));
-            }
-            catch(...)
-            {
-            }
+            if(!vec[1].empty()
+               && std::all_of(vec[1].begin(), vec[1].end(), ::isdigit))
+                result.push_back(static_cast<pid_t>(std::stoi(vec[1])));
+        }
+        catch(...)
+        {
         }
     }
     pclose(fp);

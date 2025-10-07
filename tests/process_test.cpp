@@ -12,7 +12,7 @@ TEST(process, getpid)
 TEST(process, getppid)
 {
 #if defined(_WIN32)
-    ASSERT_EQ(hj::process::getppid() == 0, true);
+    ASSERT_EQ(hj::process::getppid() >= 0, true);
 #else
     ASSERT_EQ(hj::process::getppid() > -1, true);
 #endif

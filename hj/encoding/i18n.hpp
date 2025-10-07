@@ -1,5 +1,5 @@
 /*
- *  This file is part of hj.
+ *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -155,7 +155,7 @@ class i18n
         void _add_args(std::vector<icu::Formattable> &formattables,
                        T                            &&arg) const
         {
-            if constexpr(std::is_arithmetic_v<std::decay_t<T> >)
+            if constexpr(std::is_arithmetic_v<std::decay_t<T>>)
             {
                 formattables.emplace_back(static_cast<double>(arg));
                 return;
@@ -486,7 +486,7 @@ class i18n
 
   private:
     std::string _current_locale;
-    std::unordered_map<std::string, std::unique_ptr<translator> > _translators;
+    std::unordered_map<std::string, std::unique_ptr<translator>> _translators;
 };
 
 

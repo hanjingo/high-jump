@@ -1,5 +1,5 @@
 /*
- *  This file is part of hj.
+ *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -71,8 +71,7 @@ class regex_cache
         return inst;
     }
 
-    inline const std::regex &
-    detail::regex_cache::get_regex(const std::string &pattern) const
+    inline const std::regex &get_regex(const std::string &pattern) const
     {
         std::lock_guard<std::mutex> lock(_mu);
         for(auto &entry : _cache)
@@ -100,7 +99,7 @@ class regex_cache
         return _cache.back().compiled;
     }
 
-    inline void regex_cache::clear() noexcept
+    inline void clear() noexcept
     {
         std::lock_guard<std::mutex> lock(_mu);
         _cache.clear();

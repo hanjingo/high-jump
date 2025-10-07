@@ -1,5 +1,5 @@
 /*
- *  This file is part of hj.
+ *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ template <typename T, typename Priority>
 struct priority_queue
 {
     typedef std::pair<Priority, T> Element;
-    std::priority_queue<Element, std::vector<Element>, std::greater<Element> >
+    std::priority_queue<Element, std::vector<Element>, std::greater<Element>>
         elements;
 
     inline bool empty() const { return elements.empty(); }

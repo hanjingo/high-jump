@@ -31,10 +31,6 @@
     },
     "flatbuffers",
     "fmt",
-    {
-      "name": "grpc",
-      "default-features": false
-    },
     "gtest",
     "hffix",
     "hidapi",
@@ -148,10 +144,6 @@
     {
       "name": "fmt",
       "version": "11.0.2"
-    },
-    {
-      "name": "grpc",
-      "version": "1.71.0#2"
     },
     {
       "name": "protobuf",

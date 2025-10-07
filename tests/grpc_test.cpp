@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
+
+#ifdef GRPC_ENABLE
 #include <hj/misc/grpc.hpp>
 #include <grpcpp/grpcpp.h>
 #include <thread>
 #include <chrono>
-#include "grpc_test.grpc.pb.h"
+#include "grpc/grpc_test.grpc.pb.h"
 
 using namespace GrpcLibrary;
 
@@ -44,3 +46,5 @@ TEST(GRPCTest, SayHelloUnaryCall)
 
     server.stop();
 }
+
+#endif // GRPC_ENABLE

@@ -77,6 +77,14 @@ jobs:
         export VCPKG_BINARY_SOURCES="clear;x-gha,readwrite"
         echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $GITHUB_ENV
 
+    - name: Clean vcpkg buildtrees before CMake
+      run: |
+        rm -rf tools/vcpkg/buildtrees/*
+        rm -rf tools/vcpkg/packages/*
+        rm -rf tools/vcpkg/downloads/*
+        rm -rf tools/vcpkg/installed/*
+        echo "Cleaned vcpkg cache directories"
+
     - name: Configure CMake
       env:
         CMAKE_MAKE_PROGRAM: ninja
@@ -92,9 +100,7 @@ jobs:
           -G Ninja \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DBUILD_TEST=ON \
-          -DBUILD_LIB=OFF \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
-          -DASAN=OFF \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
         
         echo "=== Post-configure disk usage ==="

@@ -50,7 +50,9 @@ TEST(reflect, offset_size_align_of)
               static_cast<std::size_t>(offsetof(TestStruct, a)));
     ASSERT_EQ(hj::reflect::size_of(&TestStruct::a),
               sizeof(((TestStruct *) 0)->a));
-    // ASSERT_GE(hj::reflect::align_of(&TestStruct::a), alignof(((TestStruct*)0)->a));
+    ASSERT_EQ(hj::reflect::align_of(&TestStruct::a), alignof(int));
+    ASSERT_EQ(hj::reflect::align_of(&TestStruct::b), alignof(double));
+    ASSERT_EQ(hj::reflect::align_of(&TestStruct::c), alignof(char));
 }
 
 TEST(reflect, is_same_type)

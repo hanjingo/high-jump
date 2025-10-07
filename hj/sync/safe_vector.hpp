@@ -2,6 +2,10 @@
 #define SAFE_VECTOR_HPP
 
 #include <oneapi/tbb/concurrent_vector.h>
+#include <vector>
+#include <functional>
+#include <stdexcept>
+#include <algorithm>
 
 namespace hj
 {
@@ -18,11 +22,7 @@ class safe_vector
     using sort_handler_t        = std::function<bool(const T &, const T &)>;
 
   public:
-    safe_vector()
-        : _vector{}
-    {
-    }
-
+    safe_vector() = default;
     virtual ~safe_vector() {}
 
     inline T &operator[](std::size_t index) { return _vector[index]; }
@@ -30,6 +30,12 @@ class safe_vector
     inline void emplace(T &&value) { _vector.emplace_back(std::move(value)); }
 
     inline void emplace(const T &value) { _vector.emplace_back(value); }
+
+    void emplace_bulk(const std::vector<T> &values)
+    {
+        for(const auto &v : values)
+            _vector.emplace_back(v);
+    }
 
     inline void unsafe_clear() { _vector.clear(); }
 
@@ -45,19 +51,42 @@ class safe_vector
             if(!fn(*itr))
                 return;
     }
+
     inline void range(const const_range_handler_t &fn) const
     {
         for(auto itr = _vector.begin(); itr != _vector.end(); ++itr)
             if(!fn(*itr))
                 return;
     }
+
     inline void sort(const sort_handler_t &fn)
     {
         std::sort(_vector.begin(), _vector.end(), fn);
     }
-    inline T &at(std::size_t index) { return _vector.at(index); }
-    inline T &front() { return _vector.front(); }
-    inline T &back() { return _vector.back(); }
+
+    inline T &at(std::size_t index)
+    {
+        if(index >= _vector.size())
+            throw std::out_of_range("safe_vector::at out of range");
+
+        return _vector.at(index);
+    }
+
+    inline T &front()
+    {
+        if(_vector.empty())
+            throw std::out_of_range("safe_vector::front empty");
+
+        return _vector.front();
+    }
+
+    inline T &back()
+    {
+        if(_vector.empty())
+            throw std::out_of_range("safe_vector::back empty");
+
+        return _vector.back();
+    }
 
   private:
     vector_t _vector;

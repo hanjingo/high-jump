@@ -7,8 +7,6 @@
 
 #include <hj/sync/counter.hpp>
 
-#include <hj/sync/ipc.hpp>
-
 #include <hj/sync/object_pool.hpp>
 
 #include <hj/sync/safe_map.hpp>

@@ -11,7 +11,12 @@ struct channel
 {
     channel(const std::size_t min_capa)
         : _q{min_capa * moodycamel::BlockingConcurrentQueue<T>::BLOCK_SIZE} {};
-    ~channel() {};
+    ~channel() = default;
+
+    channel(const channel &)            = delete;
+    channel &operator=(const channel &) = delete;
+    channel(channel &&)                 = delete;
+    channel &operator=(channel &&)      = delete;
 
     inline channel &operator>>(T &t)
     {

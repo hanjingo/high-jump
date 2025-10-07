@@ -33,7 +33,7 @@ int _sqlite_exec_cb(void *in, int argc, char **argv, char **col_name)
     return 0;
 }
 
-TEST(SqliteTest, OpenClose)
+TEST(sqlite, open_close)
 {
     if(!_is_sqlite_valid())
         GTEST_SKIP() << "sqlite not available";
@@ -46,7 +46,7 @@ TEST(SqliteTest, OpenClose)
     remove("OpenCloseTest.db");
 }
 
-TEST(SqliteTest, ExecAndQuery)
+TEST(sqlite, exec_and_query)
 {
     if(!_is_sqlite_valid())
         GTEST_SKIP() << "sqlite not available";
@@ -74,7 +74,7 @@ TEST(SqliteTest, ExecAndQuery)
     db.close();
     remove("ExecAndQueryTest.db");
 }
-TEST(SqliteTest, Transaction)
+TEST(sqlite, transaction)
 {
     if(!_is_sqlite_valid())
         GTEST_SKIP() << "sqlite not available";
@@ -98,7 +98,7 @@ TEST(SqliteTest, Transaction)
     remove("TransTest.db");
 }
 
-TEST(SqliteTest, ExecError)
+TEST(sqlite, exec_error)
 {
     if(!_is_sqlite_valid())
         GTEST_SKIP() << "sqlite not available";
@@ -111,7 +111,7 @@ TEST(SqliteTest, ExecError)
     remove("ExecErrTest.db");
 }
 
-TEST(SqliteTest, QueryNoTable)
+TEST(sqlite, query_no_table)
 {
     if(!_is_sqlite_valid())
         GTEST_SKIP() << "sqlite not available";
@@ -123,7 +123,7 @@ TEST(SqliteTest, QueryNoTable)
     remove("NoTableTest.db");
 }
 
-TEST(SqliteTest, OpenCloseMany)
+TEST(sqlite, open_close_many)
 {
     for(int i = 0; i < 10; ++i)
     {
@@ -136,7 +136,7 @@ TEST(SqliteTest, OpenCloseMany)
     remove("OpenCloseManyTest.db");
 }
 
-TEST(SqliteTest, QueryEmpty)
+TEST(sqlite, query_empty)
 {
     if(!_is_sqlite_valid())
         GTEST_SKIP() << "sqlite not available";
@@ -151,7 +151,7 @@ TEST(SqliteTest, QueryEmpty)
     remove("QueryEmptyTest.db");
 }
 
-TEST(SqliteTest, GetLastError)
+TEST(sqlite, get_last_error)
 {
     if(!_is_sqlite_valid())
         GTEST_SKIP() << "sqlite not available";

@@ -1,9 +1,9 @@
 #ifndef OBJECT_POOL_HPP
 #define OBJECT_POOL_HPP
 
-#include <queue>
-
+#include <cassert>
 #include <boost/pool/object_pool.hpp>
+#include <concurrentqueue/blockingconcurrentqueue.h>
 
 namespace hj
 {
@@ -12,46 +12,94 @@ template <typename T>
 class object_pool
 {
   public:
-    object_pool() {}
-    ~object_pool() {}
+    object_pool() = default;
+    ~object_pool() { clear(); }
 
-    template <typename... Args>
-    void construct(Args &&...args)
+    object_pool(const object_pool &)            = delete;
+    object_pool &operator=(const object_pool &) = delete;
+    object_pool(object_pool &&)                 = delete;
+    object_pool &operator=(object_pool &&)      = delete;
+
+    inline std::size_t size() const noexcept
     {
-        auto ptr = _pool.malloc();
-        new(ptr) typename boost::object_pool<T>::element_type(
-            std::forward<Args>(args)...);
-        push(ptr);
+        return _container.size_approx();
     }
 
-    T *allocate() { return _pool.malloc(); }
-
-    typename boost::object_pool<T>::element_type *pop()
+    template <typename... Args>
+    T *create(Args &&...args)
     {
-        if(_container.empty())
-            return nullptr;
+        T *ptr = _pool.malloc();
+        if(!ptr)
+            throw std::bad_alloc();
 
-        auto ret = _container.front();
-        _container.pop();
+        new(ptr) T(std::forward<Args>(args)...);
+        release(ptr);
+        return ptr;
+    }
+
+    T *allocate()
+    {
+        T *ptr = _pool.malloc();
+        if(!ptr)
+            throw std::bad_alloc();
+
+        return ptr;
+    }
+
+    T *acquire()
+    {
+        T *ret = nullptr;
+        if(!_container.try_dequeue(ret))
+            return nullptr;
         return ret;
     }
 
-    inline void push(typename boost::object_pool<T>::element_type *obj)
+    void acquire_bulk(std::vector<T *> &out, size_t n)
     {
-        _container.push(obj);
+        out.clear();
+        if(n == 0)
+            return;
+
+        out.resize(n, nullptr);
+        size_t actual = _container.try_dequeue_bulk(out.data(), n);
+        out.resize(actual);
     }
 
-    inline std::size_t size() { return _container.size(); }
+    void release(T *obj)
+    {
+        assert(obj != nullptr);
+        _container.enqueue(obj);
+    }
+
+    void release_bulk(const std::vector<T *> &in)
+    {
+        if(in.empty())
+            return;
+
+        _container.enqueue_bulk(in.data(), in.size());
+    }
+
+    void clear() noexcept
+    {
+        T *obj = nullptr;
+        while(_container.try_dequeue(obj))
+        {
+            if(!obj)
+                continue;
+
+            try
+            {
+                obj->~T();
+            }
+            catch(...)
+            {
+            }
+        }
+    }
 
   private:
-    object_pool(const object_pool &)             = delete;
-    object_pool &operator=(const object_pool &)  = delete;
-    object_pool(const object_pool &&)            = delete;
-    object_pool &operator=(const object_pool &&) = delete;
-
-  private:
-    boost::object_pool<T>                                      _pool;
-    std::queue<typename boost::object_pool<T>::element_type *> _container;
+    boost::object_pool<T>                    _pool;
+    moodycamel::BlockingConcurrentQueue<T *> _container;
 };
 
 }

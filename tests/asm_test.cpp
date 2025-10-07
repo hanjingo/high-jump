@@ -21,9 +21,6 @@ TEST(ASMTest, ASM_Macro_Basic)
 
 TEST(ASMTest, ASM_Macro_Empty)
 {
-    ASM_BEGIN ASM_END;
-    ASM_INLINE;
-    ASM_VOLATILE;
     ASM("");
     ASM_V("");
     SUCCEED();
@@ -56,9 +53,6 @@ TEST(ASMTest, Platform_Basic)
 
 TEST(ASMTest, ASM_Empty)
 {
-    ASM_BEGIN ASM_END;
-    ASM_INLINE;
-    ASM_VOLATILE;
     ASM("");
     ASM_V("");
     SUCCEED();

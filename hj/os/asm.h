@@ -19,7 +19,8 @@
 #ifndef ASM_H
 #define ASM_H
 
-#if defined(__cplusplus)
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -40,17 +41,23 @@ extern "C" {
 #define ASM(code)
 #define ASM_V(code)
 #endif
-
 #elif defined(__GNUC__) || defined(__clang__)
+#if defined(__ASSEMBLER__)
+#define ASM_BEGIN
+#define ASM_END
+#define ASM_INLINE
+#define ASM_VOLATILE
+#define ASM(code)
+#define ASM_V(code)
+#else
 #define ASM_BEGIN   asm (
-#define ASM_END     );
+#define ASM_END     )
 #define ASM_INLINE asm
 #define ASM_VOLATILE asm volatile
 #define ASM(code) asm(code)
 #define ASM_V(code) asm volatile(code)
-
+#endif
 #else
-#warning "Inline assembly not supported on this platform."
 #define ASM_BEGIN
 #define ASM_END
 #define ASM_INLINE
@@ -59,7 +66,7 @@ extern "C" {
 #define ASM_V(code)
 #endif
 
-#if defined(__cplusplus)
+#ifdef __cplusplus
 }
 #endif
 

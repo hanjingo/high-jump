@@ -2,6 +2,8 @@
 #define COROUTINE_HPP
 
 #include <boost/coroutine2/all.hpp>
+#include <exception>
+#include <iostream>
 
 namespace hj
 {
@@ -21,6 +23,15 @@ using stack_alloc = boost::context::fixedsize_stack;
 #define COROUTINE(cmd)                                                         \
     hj::coroutine<void>::pull_type __coroutine_cat(__coroutine__,              \
                                                    __COUNTER__)(               \
-        [&](hj::coroutine<void>::push_type &) { cmd; });
+        [&](hj::coroutine<void>::push_type &) {                                \
+            try                                                                \
+            {                                                                  \
+                cmd;                                                           \
+            }                                                                  \
+            catch(const std::exception &e)                                     \
+            {                                                                  \
+                std::cerr << "Coroutine exception: " << e.what() << std::endl; \
+            }                                                                  \
+        });
 
 #endif

@@ -1,3 +1,5 @@
+#include <thread>
+#include <atomic>
 #include <gtest/gtest.h>
 #include <hj/sync/safe_vector.hpp>
 
@@ -296,4 +298,59 @@ TEST(safe_vector, operator_negative_index)
     ASSERT_EQ(vec.size(), 10);
 
     // ASSERT_THROW(vec[-1], std::out_of_range);
+}
+
+TEST(safe_vector, emplace_bulk)
+{
+    hj::safe_vector<int> vec;
+    std::vector<int>     vals{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    vec.emplace_bulk(vals);
+    ASSERT_EQ(vec.size(), 10);
+    for(int i = 0; i < 10; ++i)
+        ASSERT_EQ(vec.at(i), i + 1);
+}
+
+TEST(safe_vector, front_back_exception)
+{
+    hj::safe_vector<int> vec;
+    ASSERT_THROW(vec.front(), std::out_of_range);
+    ASSERT_THROW(vec.back(), std::out_of_range);
+}
+
+TEST(safe_vector, multithread_emplace)
+{
+    hj::safe_vector<int>     vec;
+    constexpr int            threads    = 4;
+    constexpr int            per_thread = 1000;
+    std::vector<std::thread> ths;
+    for(int t = 0; t < threads; ++t)
+    {
+        ths.emplace_back([&vec, t, per_thread]() {
+            for(int i = 0; i < per_thread; ++i)
+                vec.emplace(t * per_thread + i);
+        });
+    }
+    for(auto &th : ths)
+        th.join();
+    ASSERT_EQ(vec.size(), threads * per_thread);
+}
+
+TEST(safe_vector, multithread_range)
+{
+    hj::safe_vector<int> vec;
+    constexpr int        total = 2000;
+    for(int i = 0; i < total; ++i)
+        vec.emplace(i);
+    std::atomic<int> sum{0};
+    std::thread      th([&vec, &sum]() {
+        vec.range([&sum](int &v) {
+            sum += v;
+            return true;
+        });
+    });
+    th.join();
+    int expect = 0;
+    for(int i = 0; i < total; ++i)
+        expect += i;
+    ASSERT_EQ(sum, expect);
 }

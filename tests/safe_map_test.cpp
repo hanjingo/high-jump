@@ -1,3 +1,7 @@
+#include <thread>
+#include <atomic>
+#include <thread>
+#include <optional>
 #include <gtest/gtest.h>
 #include <hj/sync/safe_map.hpp>
 
@@ -191,4 +195,161 @@ TEST(safe_map, swap2)
     ASSERT_EQ(map1.emplace(10, "ten"), true);
 
     map2.swap(std::move(map1));
+}
+
+TEST(safe_map, insert_bulk)
+{
+    hj::safe_map<int, std::string>           map;
+    std::vector<std::pair<int, std::string>> items = {{1, "one"},
+                                                      {2, "two"},
+                                                      {3, "three"},
+                                                      {4, "four"},
+                                                      {5, "five"}};
+    map.insert_bulk(items);
+    ASSERT_EQ(map.size(), 5);
+    std::string value;
+    ASSERT_EQ(map.find(1, value), true);
+    ASSERT_EQ(value, "one");
+}
+
+TEST(safe_map, find_optional)
+{
+    hj::safe_map<int, std::string> map;
+    map.insert(1, "one");
+    auto opt = map.find(1);
+    ASSERT_TRUE(opt.has_value());
+    ASSERT_EQ(opt.value(), "one");
+    auto notfound = map.find(100);
+    ASSERT_FALSE(notfound.has_value());
+}
+
+TEST(safe_map, multithread_insert_find)
+{
+    hj::safe_map<int, int>   map;
+    constexpr int            threads    = 4;
+    constexpr int            per_thread = 1000;
+    std::vector<std::thread> ths;
+    for(int t = 0; t < threads; ++t)
+    {
+        ths.emplace_back([&map, t, per_thread]() {
+            for(int i = 0; i < per_thread; ++i)
+                map.insert(t * per_thread + i, t);
+        });
+    }
+    for(auto &th : ths)
+        th.join();
+    ASSERT_EQ(map.size(), threads * per_thread);
+
+    ths.clear();
+    std::atomic<int> found{0};
+    for(int t = 0; t < threads; ++t)
+    {
+        ths.emplace_back([&map, t, per_thread, &found]() {
+            for(int i = 0; i < per_thread; ++i)
+            {
+                auto opt = map.find(t * per_thread + i);
+                if(opt.has_value() && opt.value() == t)
+                    ++found;
+            }
+        });
+    }
+    for(auto &th : ths)
+        th.join();
+    ASSERT_EQ(found, threads * per_thread);
+}
+
+TEST(safe_map, multithread_insert)
+{
+    hj::safe_map<int, int>   map;
+    constexpr int            threads    = 8;
+    constexpr int            per_thread = 2000;
+    std::vector<std::thread> ths;
+    for(int t = 0; t < threads; ++t)
+    {
+        ths.emplace_back([&map, t, per_thread]() {
+            for(int i = 0; i < per_thread; ++i)
+                map.insert(t * per_thread + i, t);
+        });
+    }
+    for(auto &th : ths)
+        th.join();
+    ASSERT_EQ(map.size(), threads * per_thread);
+}
+
+TEST(safe_map, multithread_find)
+{
+    hj::safe_map<int, int> map;
+    constexpr int          threads    = 4;
+    constexpr int          per_thread = 1000;
+    for(int t = 0; t < threads; ++t)
+        for(int i = 0; i < per_thread; ++i)
+            map.insert(t * per_thread + i, t);
+    std::vector<std::thread> ths;
+    std::atomic<int>         found{0};
+    for(int t = 0; t < threads; ++t)
+    {
+        ths.emplace_back([&map, t, per_thread, &found]() {
+            for(int i = 0; i < per_thread; ++i)
+            {
+                int key = t * per_thread + i;
+                int val = -1;
+                if(map.find(std::move(key), val) && val == t)
+                    ++found;
+            }
+        });
+    }
+    for(auto &th : ths)
+        th.join();
+    ASSERT_EQ(found, threads * per_thread);
+}
+
+TEST(safe_map, multithread_replace)
+{
+    hj::safe_map<int, int> map;
+    constexpr int          threads    = 4;
+    constexpr int          per_thread = 500;
+    for(int i = 0; i < threads * per_thread; ++i)
+        map.insert(i, 0);
+    std::vector<std::thread> ths;
+    for(int t = 0; t < threads; ++t)
+    {
+        ths.emplace_back([&map, t, per_thread, threads]() {
+            for(int i = 0; i < per_thread; ++i)
+            {
+                int key = t * per_thread + i;
+                map.replace(key, t + 100);
+            }
+        });
+    }
+    for(auto &th : ths)
+        th.join();
+
+    for(int t = 0; t < threads; ++t)
+        for(int i = 0; i < per_thread; ++i)
+        {
+            int key = t * per_thread + i;
+            int val = -1;
+            ASSERT_TRUE(map.find(std::move(key), val));
+            ASSERT_EQ(val, t + 100);
+        }
+}
+
+TEST(safe_map, multithread_range)
+{
+    hj::safe_map<int, int> map;
+    constexpr int          total = 2000;
+    for(int i = 0; i < total; ++i)
+        map.insert(i, i);
+    std::atomic<int> sum{0};
+    std::thread      th([&map, &sum]() {
+        map.range([&sum](const int &k, int &v) {
+            sum += v;
+            return true;
+        });
+    });
+    th.join();
+    int expect = 0;
+    for(int i = 0; i < total; ++i)
+        expect += i;
+    ASSERT_EQ(sum, expect);
 }

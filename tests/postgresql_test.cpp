@@ -30,7 +30,7 @@ static bool _is_pg_server_running()
 }
 
 
-TEST(PostgreSQLTest, ConnectAndDisconnect)
+TEST(pg_connection, connect_and_disconnect)
 {
     if(!_is_pg_server_running())
         GTEST_SKIP()
@@ -45,7 +45,7 @@ TEST(PostgreSQLTest, ConnectAndDisconnect)
     ASSERT_TRUE(db.is_open());
 }
 
-TEST(PostgreSQLTest, SetEncoding)
+TEST(pg_connection, set_encoding)
 {
     if(!_is_pg_server_running())
         GTEST_SKIP()
@@ -55,7 +55,7 @@ TEST(PostgreSQLTest, SetEncoding)
     db.set_encoding("UTF8");
 }
 
-TEST(PostgreSQLTest, ExecAndQuery)
+TEST(pg_connection, exec_and_query)
 {
     if(!_is_pg_server_running())
         GTEST_SKIP()
@@ -76,7 +76,7 @@ TEST(PostgreSQLTest, ExecAndQuery)
     db.exec("DROP TABLE test_table");
 }
 
-TEST(PostgreSQLTest, BatchInsertAndEmptyQuery)
+TEST(pg_connection, batch_insert_and_empty_query)
 {
     if(!_is_pg_server_running())
         GTEST_SKIP()
@@ -101,7 +101,7 @@ TEST(PostgreSQLTest, BatchInsertAndEmptyQuery)
     db.exec("DROP TABLE batch_table");
 }
 
-TEST(PostgreSQLTest, InvalidSQLAndReconnect)
+TEST(pg_connection, invalid_sql_and_reconnect)
 {
     if(!_is_pg_server_running())
         GTEST_SKIP()

@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <fcntl.h>
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #else
 #include <unistd.h>
@@ -23,7 +23,7 @@ namespace hj
 class shared_memory
 {
   public:
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
     enum flag : int
     {
         create     = 0,
@@ -66,7 +66,7 @@ class shared_memory
         , _sz{sz}
         , _fd{invalid_fd}
     {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
         _fd = CreateFileMappingA(INVALID_HANDLE_VALUE,
                                  NULL,
                                  (DWORD) op,
@@ -82,12 +82,13 @@ class shared_memory
         if(!is_fd_valid())
             throw std::runtime_error("shared memory open failed");
     }
+
     ~shared_memory()
     {
         unmap();
         if(is_fd_valid())
         {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
             CloseHandle(_fd);
             _fd = nullptr;
 #else
@@ -99,18 +100,9 @@ class shared_memory
         _ptr = nullptr;
     }
 
-    static int remove(const char *name)
-    {
-#if defined(_WIN32)
-        return 0; // auto recycle
-#else
-        return shm_unlink(name);
-#endif
-    }
-
     inline bool is_fd_valid()
     {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
         return _fd != nullptr;
 #else
         return _fd != -1;
@@ -119,6 +111,22 @@ class shared_memory
     inline void       *addr() { return _ptr; }
     inline std::size_t size() { return _sz; }
 
+    static int remove(const char *name)
+    {
+#if defined(_WIN32) || defined(_WIN64)
+        HANDLE h = OpenFileMappingA(flag::read_write, FALSE, name);
+        if(h)
+        {
+            CloseHandle(h);
+            // No direct unlink, rely on OS cleanup
+            return 0;
+        }
+        return 0; // auto cleanup by windows
+#else
+        return shm_unlink(name);
+#endif
+    }
+
     void *map(std::size_t offset = 0,
               const int   prot   = access::all,
               void       *addr   = nullptr)
@@ -126,7 +134,7 @@ class shared_memory
         if(!is_fd_valid())
             return nullptr;
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
         _ptr = MapViewOfFileEx(_fd,
                                prot,
                                static_cast<DWORD>((offset >> 32) & 0xFFFFFFFF),
@@ -149,7 +157,7 @@ class shared_memory
         if(_ptr == nullptr)
             return true;
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(_WIN64)
         if(!UnmapViewOfFile(_ptr))
             return false;
 #else

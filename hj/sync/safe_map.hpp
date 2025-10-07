@@ -2,6 +2,8 @@
 #define SAFE_MAP_HPP
 
 #include <oneapi/tbb/concurrent_hash_map.h>
+#include <vector>
+#include <functional>
 
 namespace hj
 {
@@ -19,21 +21,35 @@ class safe_map
         std::function<bool(const Key &, const Value &)>;
 
   public:
-    safe_map()
-        : _map{}
-    {
-    }
-
+    safe_map() = default;
     virtual ~safe_map() {}
+
+    inline bool insert(const Key &key, const Value &value)
+    {
+        return _map.insert(std::make_pair(key, value));
+    }
 
     inline bool insert(Key &&key, Value &&value)
     {
         return _map.insert(std::make_pair(std::move(key), std::move(value)));
     }
 
+    void insert_bulk(const std::vector<std::pair<Key, Value>> &items)
+    {
+        for(const auto &kv : items)
+            _map.insert(kv);
+    }
+
     inline bool emplace(Key &&key, Value &&value)
     {
         return _map.emplace(std::make_pair(std::move(key), std::move(value)));
+    }
+
+    void replace(const Key &key, const Value &value)
+    {
+        accessor_t acc;
+        _map.insert(acc, key);
+        acc->second = value;
     }
 
     void replace(Key &&key, Value &&value)
@@ -51,15 +67,24 @@ class safe_map
         acc->second = std::move(value);
     }
 
+    std::optional<Value> find(const Key &key) const
+    {
+        const_accessor_t acc;
+        if(_map.find(acc, key))
+            return acc->second;
+
+        return std::nullopt;
+    }
+
     bool find(Key &&key, Value &value) const
     {
         const_accessor_t acc;
         bool             ret = _map.find(acc, key);
-        value                = acc->second;
+        if(ret)
+            value = acc->second;
+
         return ret;
     }
-
-    inline bool erase(Key &&key) { return _map.erase(key); }
 
     void range(const range_handler_t &fn)
     {
@@ -67,12 +92,15 @@ class safe_map
             if(!fn(itr->first, itr->second))
                 return;
     }
+
     void range(const const_range_handler_t &fn) const
     {
         for(auto itr = _map.begin(); itr != _map.end(); ++itr)
             if(!fn(itr->first, itr->second))
                 return;
     }
+
+    inline bool        erase(Key &&key) { return _map.erase(key); }
     inline std::size_t count(Key &&key) const { return _map.count(key); }
     inline std::size_t size() const { return _map.size(); }
     inline bool        empty() const { return _map.empty(); }

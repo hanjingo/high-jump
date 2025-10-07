@@ -15,7 +15,7 @@ bool _is_redis_valid()
     }
 }
 
-TEST(RedisTest, ConnectSetGet)
+TEST(redis, connect_set_get)
 {
     if(!_is_redis_valid())
         GTEST_SKIP() << "Redis is not available";
@@ -36,7 +36,7 @@ TEST(RedisTest, ConnectSetGet)
     EXPECT_EQ(r.get("sp#@!$"), "val!@#");
 }
 
-TEST(RedisTest, GetNonExist)
+TEST(redis, get_non_exist)
 {
     if(!_is_redis_valid())
         GTEST_SKIP() << "Redis is not available";
@@ -46,7 +46,7 @@ TEST(RedisTest, GetNonExist)
     EXPECT_EQ(r.get("not_exist_key"), "");
 }
 
-TEST(RedisTest, AuthAndSelectDb)
+TEST(redis, auth_and_select_db)
 {
     if(!_is_redis_valid())
         GTEST_SKIP() << "Redis is not available";
@@ -61,7 +61,7 @@ TEST(RedisTest, AuthAndSelectDb)
     EXPECT_EQ(r.get("db1key"), "");
 }
 
-TEST(RedisTest, InvalidConnect)
+TEST(redis, invalid_connect)
 {
     hj::redis r;
 
@@ -70,7 +70,7 @@ TEST(RedisTest, InvalidConnect)
     EXPECT_FALSE(r.connect("127.0.0.1", 6379, 2000, "wrongpass"));
 }
 
-TEST(RedisTest, CmdRawInterface)
+TEST(redis, cmd_raw_interface)
 {
     if(!_is_redis_valid())
         GTEST_SKIP() << "Redis is not available";

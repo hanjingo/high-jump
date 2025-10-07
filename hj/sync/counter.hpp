@@ -49,6 +49,9 @@ class counter
     }
     ~counter() {}
 
+    counter(counter &&)            = delete;
+    counter &operator=(counter &&) = delete;
+
     inline counter &operator++()
     {
         T tmp;
@@ -423,11 +426,11 @@ class counter
 
     inline const T &step() { return _step; }
 
-    inline const T value() { return _value.load(); }
+    inline const T value() const noexcept { return _value.load(); }
 
-    inline const T &max() { return _max; }
+    inline const T &max() const noexcept { return _max; }
 
-    inline const T &min() { return _min; }
+    inline const T &min() const noexcept { return _min; }
 
     inline counter &reset(const T &value = 0)
     {

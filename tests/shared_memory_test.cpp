@@ -1,3 +1,5 @@
+#include <vector>
+#include <future>
 #include <gtest/gtest.h>
 #include <hj/os/process.hpp>
 #include <hj/sync/shared_memory.hpp>
@@ -34,6 +36,56 @@ TEST(shared_memory, map)
     ASSERT_EQ(ptr != nullptr, true);
     ASSERT_EQ(shm.addr() != nullptr, true);
     ASSERT_EQ(shm.addr() == ptr, true);
+}
+
+TEST(shared_memory, create_and_open)
+{
+    hj::shared_memory::remove("memtest");
+    hj::shared_memory shm_create{"memtest", 128};
+    ASSERT_EQ(shm_create.size(), 128);
+    auto ptr = shm_create.map();
+    ASSERT_NE(ptr, nullptr);
+    int *iptr = static_cast<int *>(ptr);
+    iptr[0]   = 42;
+    shm_create.unmap();
+
+    hj::shared_memory shm_open{"memtest", 128};
+    auto              ptr2 = shm_open.map();
+    ASSERT_NE(ptr2, nullptr);
+    int *iptr2 = static_cast<int *>(ptr2);
+    ASSERT_EQ(iptr2[0], 42);
+    shm_open.unmap();
+    hj::shared_memory::remove("memtest");
+}
+
+TEST(shared_memory, concurrent_map_unmap)
+{
+    hj::shared_memory::remove("concurrent");
+    hj::shared_memory              shm{"concurrent", 128};
+    std::vector<std::future<void>> futs;
+    for(int i = 0; i < 8; ++i)
+    {
+        futs.push_back(std::async(std::launch::async, [&shm] {
+            auto ptr = shm.map();
+            ASSERT_NE(ptr, nullptr);
+            shm.unmap();
+        }));
+    }
+    for(auto &f : futs)
+        f.get();
+    hj::shared_memory::remove("concurrent");
+}
+
+TEST(shared_memory, boundary)
+{
+    hj::shared_memory::remove("boundary");
+    hj::shared_memory shm{"boundary", 1};
+    auto              ptr = shm.map();
+    ASSERT_NE(ptr, nullptr);
+    char *cptr = static_cast<char *>(ptr);
+    cptr[0]    = 'A';
+    shm.unmap();
+    hj::shared_memory::remove("boundary");
 }
 
 // TEST(shared_memory, producer_1_consume_n)

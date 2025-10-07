@@ -1,92 +1,150 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef SIGNAL_HPP
 #define SIGNAL_HPP
 
 #include <vector>
 #include <atomic>
-#include <mutex>
-#include <signal.h>
 #include <functional>
 #include <initializer_list>
-
-#if defined(NSIG) && !defined(_NSIG)
-#define _NSIG NSIG
-#endif
+#include <csignal>
+#include <mutex>
+#include <unordered_map>
+#include <iostream>
 
 namespace hj
 {
+
 using sig_t = int;
 
-static std::mutex                 _sig_mu;
-static sig_t                      _sig_last;
-static std::function<void(sig_t)> _sighandler_set[_NSIG];
-
-static void _on_sig(sig_t sig)
+class sighandler
 {
-    std::lock_guard<std::mutex> lock(_sig_mu);
-    std::function<void(sig_t)>  fn = _sighandler_set[sig];
-    fn(sig);
-
-    _sig_last = sig;
-}
-
-static void _on_sig_once(sig_t sig)
-{
-    std::lock_guard<std::mutex> lock(_sig_mu);
-    std::function<void(sig_t)>  fn = _sighandler_set[sig];
-    fn(sig);
-
-    _sig_last = sig;
-    signal(sig, SIG_IGN); // Replace sigignore with signal(sig, SIG_IGN)
-}
-
-static std::function<void(sig_t)>
-_sigcatch(sig_t                              sig,
-          const std::function<void(sig_t)> &&cb,
-          const bool                         one_shoot = false)
-{
-    std::lock_guard<std::mutex> lock(_sig_mu);
-    std::function<void(sig_t)>  old = _sighandler_set[sig];
-    _sighandler_set[sig]            = std::move(cb);
-    if(one_shoot)
+  public:
+    sighandler()
+        : _sig_last(0)
     {
-        signal(sig, _on_sig_once);
-    } else
-    {
-        signal(sig, _on_sig);
     }
-    return old;
-}
+    ~sighandler() = default;
 
-inline bool sigcatch(const std::initializer_list<sig_t> &sigs,
-                     const std::function<void(sig_t)>   &cb,
-                     const bool                          one_shoot = false)
-{
-    for(sig_t sig : sigs)
+    sighandler(const sighandler &)            = delete;
+    sighandler &operator=(const sighandler &) = delete;
+    sighandler(sighandler &&)                 = delete;
+    sighandler &operator=(sighandler &&)      = delete;
+
+    static sighandler &instance()
     {
-        std::function<void(sig_t)> copy_cb = cb;
-        _sigcatch(sig, std::move(copy_cb), one_shoot);
-    }
-    return true;
-}
-
-inline int last_signal()
-{
-    return _sig_last;
-}
-
-template <typename... Args>
-inline bool sig_raise(Args... args)
-{
-    std::initializer_list<sig_t> li{std::forward<Args>(args)...};
-    for(sig_t sig : li)
-    {
-        if(raise(sig) != sig)
-            return false;
+        static sighandler inst;
+        return inst;
     }
 
-    return true;
+    inline int  last_signal() const noexcept { return _sig_last.load(); }
+    inline bool is_registered(sig_t sig) noexcept
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        return _callbacks.find(sig) != _callbacks.end();
+    }
+    inline bool is_one_shoot(sig_t sig) noexcept
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        return _one_shoot.find(sig) != _one_shoot.end() && _one_shoot.at(sig);
+    }
+
+    void
+    sigcatch(sig_t sig, std::function<void(sig_t)> cb, bool one_shoot = false)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _callbacks[sig] = cb;
+        _one_shoot[sig] = one_shoot;
+        ::signal(sig, &sighandler::_handle);
+    }
+
+    void sigcatch(const std::vector<sig_t>  &sigs,
+                  std::function<void(sig_t)> cb,
+                  bool                       one_shoot = false)
+    {
+        for(auto sig : sigs)
+            sigcatch(sig, cb, one_shoot);
+    }
+
+    template <typename... Args>
+    bool sigraise(Args... args)
+    {
+        std::initializer_list<sig_t> li{args...};
+        for(sig_t sig : li)
+        {
+            if(::raise(sig) != 0)
+                return false;
+        }
+        return true;
+    }
+
+    // NOTICE: windows only support: SIGABRT, SIGFPE, SIGILL, SIGINT, SIGSEGV, SIGTERM
+    // POSIX support more signals, such as: SIGHUP, SIGQUIT, SIGKILL, SIGUSR1, SIGUSR2, etc.
+    void sigignore(const std::vector<sig_t> &sigs)
+    {
+        for(auto sig : sigs)
+            ::signal(sig, SIG_IGN);
+    }
+
+    void poll()
+    {
+        sig_t sig = _sig_last.exchange(0);
+        if(sig <= 0)
+            return;
+
+        std::lock_guard<std::mutex> lock(_mu);
+        auto                        it = _callbacks.find(sig);
+        if(it == _callbacks.end())
+            return;
+
+        try
+        {
+            it->second(sig);
+        }
+        catch(...)
+        {
+            std::cerr << "Signal callback exception for sig " << sig
+                      << std::endl;
+        }
+
+        if(_one_shoot[sig])
+        {
+            _callbacks.erase(sig);
+            _one_shoot.erase(sig);
+        } else
+        {
+            ::signal(sig, &sighandler::_handle);
+        }
+    }
+
+  private:
+    static void _handle(int sig)
+    {
+        sighandler::instance()._sig_last.store(sig);
+    }
+
+    std::atomic<sig_t>                                    _sig_last;
+    std::mutex                                            _mu;
+    std::unordered_map<sig_t, std::function<void(sig_t)>> _callbacks;
+    std::unordered_map<sig_t, bool>                       _one_shoot;
 };
 
-}
+} // namespace hj
 
 #endif

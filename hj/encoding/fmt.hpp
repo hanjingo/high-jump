@@ -1,5 +1,5 @@
 /*
- *  This file is part of hj.
+ *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify

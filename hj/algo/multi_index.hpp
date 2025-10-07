@@ -1,5 +1,5 @@
 /*
- *  This file is part of hj.
+ *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ struct make_index<unique_index_impl<MemberType, MemberPtr, Tag>, Class>
 {
     using type = boost::multi_index::ordered_unique<
         boost::multi_index::tag<Tag>,
-        boost::multi_index::member<Class, MemberType, MemberPtr> >;
+        boost::multi_index::member<Class, MemberType, MemberPtr>>;
 };
 
 template <typename MemberType, auto MemberPtr, typename Tag, typename Class>
@@ -64,12 +64,12 @@ struct make_index<nonunique_index_impl<MemberType, MemberPtr, Tag>, Class>
 {
     using type = boost::multi_index::ordered_non_unique<
         boost::multi_index::tag<Tag>,
-        boost::multi_index::member<Class, MemberType, MemberPtr> >;
+        boost::multi_index::member<Class, MemberType, MemberPtr>>;
 };
 
 template <typename Class, auto MemberPtr>
 using member_type_t = std::remove_cv_t<
-    std::remove_reference_t<decltype(std::declval<Class>().*MemberPtr)> >;
+    std::remove_reference_t<decltype(std::declval<Class>().*MemberPtr)>>;
 
 } // namespace detail
 
@@ -84,7 +84,7 @@ template <typename Class, typename... IndexConfigs>
 using multi_index = boost::multi_index::multi_index_container<
     Class,
     boost::multi_index::indexed_by<
-        typename detail::make_index<IndexConfigs, Class>::type...> >;
+        typename detail::make_index<IndexConfigs, Class>::type...>>;
 
 #define HJ_UNIQUE_INDEX(member_type, member_ptr, tag)                          \
     hj::unique_index<member_type, member_ptr, tag>,

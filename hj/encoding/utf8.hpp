@@ -1,5 +1,5 @@
 /*
- *  This file is part of hj.
+ *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -411,8 +411,8 @@ inline std::ostream &decode(std::ostream &out, std::wistream &in) noexcept
         return out;
 
 #if (__cplusplus < 201703L)
-    std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
-    wchar_t                                           wc;
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    wchar_t                                          wc;
     while(in.get(wc))
     {
         try
@@ -442,7 +442,7 @@ inline std::string decode(const std::wstring &str, error_code &ec) noexcept
 #if (__cplusplus < 201703L)
     try
     {
-        std::wstring_convert<std::codecvt_utf8<wchar_t> > cvt;
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
         return cvt.to_bytes(str);
     }
     catch(const std::exception &)
@@ -475,8 +475,8 @@ inline unsigned char *decode(unsigned char *out,
 #if (__cplusplus < 201703L)
     try
     {
-        std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
-        std::wstring                                      wstr(in);
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+        std::wstring                                     wstr(in);
         std::string str = converter.to_bytes(wstr);
         if(str.size() + 1 > out_len)
         {
@@ -504,9 +504,9 @@ inline std::wostream &encode(std::wostream &out, std::istream &in) noexcept
         return out;
 
 #if (__cplusplus < 201703L)
-    std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
-    std::string                                       buffer;
-    char                                              temp[UTF8_BUF_SZ];
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    std::string                                      buffer;
+    char                                             temp[UTF8_BUF_SZ];
     while(in.read(temp, UTF8_BUF_SZ) || in.gcount() > 0)
     {
         buffer.assign(temp, static_cast<size_t>(in.gcount()));
@@ -546,7 +546,7 @@ inline std::wstring encode(const std::string &str, error_code &ec) noexcept
 #if (__cplusplus < 201703L)
     try
     {
-        std::wstring_convert<std::codecvt_utf8<wchar_t> > cvt;
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
         return cvt.from_bytes(str);
     }
     catch(const std::exception &)
@@ -578,7 +578,7 @@ inline wchar_t *encode(wchar_t             *out,
 #if (__cplusplus < 201703L)
     try
     {
-        std::wstring_convert<std::codecvt_utf8<wchar_t> > converter;
+        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
         std::string  str(reinterpret_cast<const char *>(in));
         std::wstring wstr = converter.from_bytes(str);
         if(wstr.size() + 1 > out_len)

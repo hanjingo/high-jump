@@ -1,6 +1,9 @@
 {
   "dependencies": [
-    "behaviortree-cpp",
+    {
+      "name": "behaviortree-cpp",
+      "default-features": false
+    },
     "benchmark",
     "bext-sml",
     "boost-math",
@@ -22,7 +25,10 @@
     "clickhouse-cpp",
     "concurrentqueue",
     "cpp-httplib",
-    "eigen3",
+    {
+      "name": "eigen3",
+      "default-features": false
+    },
     "flatbuffers",
     "fmt",
     {
@@ -33,7 +39,10 @@
     "hffix",
     "hidapi",
     "hiredis",
-    "icu",
+    {
+      "name": "icu",
+      "default-features": false
+    },
     "jwt-cpp",
     "libharu",
     "libiconv",
@@ -41,7 +50,10 @@
     "libpqxx",
     "nlohmann-json",
     "opencl",
-    "openssl",
+    {
+      "name": "openssl",
+      "default-features": false
+    },
     {
       "name": "opentelemetry-cpp",
       "features": [
@@ -56,10 +68,19 @@
     "abseil",
     "pugixml",
     "spdlog",
-    "sqlite3",
-    "tbb",
+    {
+      "name": "sqlite3",
+      "default-features": false
+    },
+    {
+      "name": "tbb",
+      "default-features": false
+    },
     "yaml-cpp",
-    "zeromq",
+    {
+      "name": "zeromq",
+      "default-features": false
+    },
     "zlib",
     "zstd"
   ],

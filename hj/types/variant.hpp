@@ -1,7 +1,7 @@
 #ifndef VARIANT_HPP
 #define VARIANT_HPP
 
-#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
+#if __has_include(<variant>)
 #include <variant>
 
 namespace hj
@@ -35,7 +35,7 @@ constexpr const T &&get(const std::variant<Types...> &&v)
 
 }
 
-#else
+#elif __has_include(<boost/variant.hpp>)
 #include <boost/variant.hpp>
 
 namespace hj
@@ -68,6 +68,11 @@ constexpr const T &&get(const boost::variant<Types...> &&v)
 };
 
 }
+
+#else
+#error                                                                         \
+    "No suitable variant implementation found (need C++17 std::variant or boost::variant)"
+
 #endif
 
 #endif

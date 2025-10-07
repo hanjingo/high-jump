@@ -1,3 +1,21 @@
+/*
+ *  This file is part of hj.
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef REFLECT_HPP
 #define REFLECT_HPP
 
@@ -17,7 +35,11 @@ class reflect
     template <typename T>
     static std::string type_name(const T &t)
     {
+#if defined(__GNUC__) || defined(__clang__)
         return boost::core::demangle(typeid(t).name());
+#else
+        return typeid(t).name();
+#endif
     }
 
     template <typename T>
@@ -67,76 +89,16 @@ class reflect
         return sizeof(((T *) 0)->*member);
     }
 
-    // template <typename T, typename Member>
-    // static std::size_t align_of(Member T::* member)
-    // {
-    //     return alignof(((T*)0)->*member);
-    // }
-
-    template <typename T1, typename T2>
-    static bool is_same_type(const T1 &t1, const T2 &t2)
+    template <typename T, typename Member>
+    static std::size_t align_of(Member T::*member)
     {
-        return std::is_same<T1, T2>::value;
+        return alignof(Member);
     }
 
-    template <typename T1, typename T2, typename T3>
-    static bool is_same_type(const T1 &t1, const T2 &t2, const T3 &t3)
+    template <typename T, typename... Others>
+    static bool is_same_type(const T &, const Others &...)
     {
-        return std::is_same<T1, T2>::value && std::is_same<T1, T3>::value;
-    }
-
-    template <typename T1, typename T2, typename T3, typename T4>
-    static bool
-    is_same_type(const T1 &t1, const T2 &t2, const T3 &t3, const T4 &t4)
-    {
-        return std::is_same<T1, T2>::value && std::is_same<T1, T3>::value
-               && std::is_same<T1, T4>::value;
-    }
-
-    template <typename T1, typename T2, typename T3, typename T4, typename T5>
-    static bool is_same_type(
-        const T1 &t1, const T2 &t2, const T3 &t3, const T4 &t4, const T5 &t5)
-    {
-        return std::is_same<T1, T2>::value && std::is_same<T1, T3>::value
-               && std::is_same<T1, T4>::value && std::is_same<T1, T5>::value;
-    }
-
-    template <typename T1,
-              typename T2,
-              typename T3,
-              typename T4,
-              typename T5,
-              typename T6>
-    static bool is_same_type(const T1 &t1,
-                             const T2 &t2,
-                             const T3 &t3,
-                             const T4 &t4,
-                             const T5 &t5,
-                             const T6 &t6)
-    {
-        return std::is_same<T1, T2>::value && std::is_same<T1, T3>::value
-               && std::is_same<T1, T4>::value && std::is_same<T1, T5>::value
-               && std::is_same<T1, T6>::value;
-    }
-
-    template <typename T1,
-              typename T2,
-              typename T3,
-              typename T4,
-              typename T5,
-              typename T6,
-              typename T7>
-    static bool is_same_type(const T1 &t1,
-                             const T2 &t2,
-                             const T3 &t3,
-                             const T4 &t4,
-                             const T5 &t5,
-                             const T6 &t6,
-                             const T7 &t7)
-    {
-        return std::is_same<T1, T2>::value && std::is_same<T1, T3>::value
-               && std::is_same<T1, T4>::value && std::is_same<T1, T5>::value
-               && std::is_same<T1, T6>::value && std::is_same<T1, T7>::value;
+        return (std::conjunction<std::is_same<T, Others>...>::value);
     }
 
   private:

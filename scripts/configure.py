@@ -931,87 +931,6 @@ class LinuxDependencyInstaller:
             except Exception as e:
                 logger.debug(f"Failed to copy venv packages to user site: {e}")
 
-    def install_code_quality_tools(self):
-        """Install code quality tools like clang-format, cppcheck, cpplint."""
-        logger.info("Installing code quality tools...")
-        
-        if self.package_manager == 'apt':
-            # Code quality tools
-            code_quality_packages = [
-                # 'clang-format',      # Code formatter
-                # 'cppcheck',          # Static analysis tool
-                # 'clang-tidy',        # Static analysis and linting
-                # 'iwyu',              # Include what you use (if available)
-                # 'flawfinder',        # Security-focused static analysis
-                # 'vera++',            # Style checker (if available)
-            ]
-            # logger.info("Installing code quality packages...")
-            # failed_packages = CommandRunner.safe_install_packages(code_quality_packages)
-            # if failed_packages:
-            #     logger.warning(f"Failed to install code quality tools: {', '.join(failed_packages)}")
-            # else:
-            #     logger.info("✓ Code quality tools installed successfully")
-            # self._install_cpplint()
-            
-        elif self.package_manager in ['yum', 'dnf']:
-            packages = [
-                'clang-tools-extra',  # Contains clang-format, clang-tidy
-                'cppcheck',
-            ]
-            
-            failed_packages = CommandRunner.safe_install_packages(packages)
-            if failed_packages:
-                logger.warning(f"Failed to install code quality tools: {', '.join(failed_packages)}")
-            
-            self._install_cpplint()
-        
-        elif self.package_manager == 'pacman':
-            packages = [
-                'clang',             # Contains clang-format
-                'cppcheck',
-            ]
-            
-            for package in packages:
-                try:
-                    CommandRunner.run(['sudo', 'pacman', '-S', '--noconfirm', package])
-                except subprocess.CalledProcessError:
-                    logger.warning(f"Failed to install {package}, continuing...")
-            
-            self._install_cpplint()
-    
-    def _install_cpplint(self):
-        """Install cpplint via pip."""
-        logger.info("Installing cpplint via pip...")
-        
-        try:
-            # Try different pip installation strategies
-            strategies = [
-                ['python3', '-m', 'pip', 'install', '--user', 'cpplint'],
-                ['python3', '-m', 'pip', 'install', '--break-system-packages', 'cpplint'],
-                ['pip3', 'install', '--user', 'cpplint'],
-            ]
-            
-            for strategy in strategies:
-                try:
-                    CommandRunner.run(strategy, check=False)
-                    # Verify installation
-                    result = CommandRunner.run(['cpplint', '--version'], capture=True, check=False)
-                    if result.returncode == 0:
-                        logger.info("✓ cpplint installed successfully")
-                        return
-                except:
-                    continue
-            
-            logger.warning("Failed to install cpplint via pip, trying apt...")
-            try:
-                CommandRunner.run(['sudo', 'apt-get', 'install', '-y', 'python3-cpplint'], check=False)
-            except:
-                logger.warning("Could not install cpplint")
-                
-        except Exception as e:
-            logger.warning(f"Failed to install cpplint: {e}")
-
-
 class MacOSDependencyInstaller:
     """Install dependencies on macOS."""
     
@@ -1685,58 +1604,6 @@ class MacOSDependencyInstaller:
         
         logger.info("Python module installation completed")
 
-    def install_code_quality_tools(self):
-        """Install code quality tools on macOS."""
-        logger.info("Installing code quality tools for macOS...")
-        
-        # Ensure Homebrew is available
-        if not self.is_homebrew_available:
-            self._install_homebrew()
-        
-        # Code quality tools
-        code_quality_packages = [
-            'clang-format',      # Code formatter
-            'cppcheck',          # Static analysis tool
-            'llvm',              # Contains clang-tidy
-        ]
-        
-        logger.info("Installing code quality packages...")
-        failed_packages = self._safe_brew_install(code_quality_packages)
-        
-        if failed_packages:
-            logger.warning(f"Failed to install code quality tools: {', '.join(failed_packages)}")
-        else:
-            logger.info("✓ Code quality tools installed successfully")
-        
-        # Install cpplint via pip
-        self._install_cpplint()
-    
-    def _install_cpplint(self):
-        """Install cpplint via pip on macOS."""
-        logger.info("Installing cpplint via pip...")
-        
-        try:
-            strategies = [
-                ['pip3', 'install', '--user', 'cpplint'],
-                ['python3', '-m', 'pip', 'install', '--user', 'cpplint'],
-            ]
-            
-            for strategy in strategies:
-                try:
-                    CommandRunner.run(strategy, check=False)
-                    # Verify installation
-                    result = CommandRunner.run(['cpplint', '--version'], capture=True, check=False)
-                    if result.returncode == 0:
-                        logger.info("✓ cpplint installed successfully")
-                        return
-                except:
-                    continue
-            
-            logger.warning("Could not install cpplint")
-                
-        except Exception as e:
-            logger.warning(f"Failed to install cpplint: {e}")
-
 class WindowsDependencyInstaller:
     """Install dependencies on Windows."""
     
@@ -1746,7 +1613,6 @@ class WindowsDependencyInstaller:
         self.project_root = Path(__file__).parent.parent.absolute()
         self.env_manager = EnvironmentManager()
         self.checker = DependencyChecker()
-        self.code_quality_only = False
         
         if self.platform == 'windows':
             self.installer = WindowsDependencyInstaller()
@@ -1859,7 +1725,6 @@ class EnvironmentConfigurator:
         self.project_root = Path(__file__).parent.parent.absolute()
         self.env_manager = EnvironmentManager()
         self.checker = DependencyChecker()
-        self.code_quality_only = False
         
         if self.platform == 'linux':
             self.installer = LinuxDependencyInstaller()
@@ -1872,10 +1737,6 @@ class EnvironmentConfigurator:
         """Run the complete configuration process."""
         logger.info(f"Starting environment configuration for {self.platform}-{self.arch}")
         logger.info(f"Project root: {self.project_root}")
-
-        if self.code_quality_only:
-            logger.info("Code quality mode: only installing code quality tools")
-            return self._install_code_quality_tools_only()
         
         if PlatformDetector.is_wsl():
             logger.info("WSL environment detected - some packages may fail, this is normal")
@@ -1905,66 +1766,6 @@ class EnvironmentConfigurator:
         except Exception as e:
             logger.error(f"Configuration failed: {e}")
             return False
-        
-    def _install_code_quality_tools_only(self):
-        """Install only code quality tools."""
-        try:
-            if self.installer:
-                # Set flag to install basic dependencies needed for code quality tools
-                basic_packages = []
-                
-                if self.platform == 'linux':
-                    # Install minimal dependencies for code quality tools
-                    basic_packages = ['curl', 'python3', 'python3-pip', 'python3-dev']
-                    CommandRunner.run(['sudo', 'apt-get', 'update'])
-                    failed_packages = CommandRunner.safe_install_packages(basic_packages)
-                    if failed_packages:
-                        logger.warning(f"Failed to install basic packages: {', '.join(failed_packages)}")
-                
-                # Install code quality tools
-                self.installer.install_code_quality_tools()
-                
-                # Verify code quality tools
-                self._verify_code_quality_tools()
-                
-                logger.info("✓ Code quality tools installation completed!")
-                return True
-            else:
-                logger.warning(f"No installer available for platform {self.platform}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Code quality tools installation failed: {e}")
-            return False
-        
-    def _verify_code_quality_tools(self):
-        """Verify code quality tools are installed and working."""
-        logger.info("Verifying code quality tools...")
-        
-        tools_to_check = {
-            'clang-format': ['clang-format', '--version'],
-            'cppcheck': ['cppcheck', '--version'],
-            'cpplint': ['cpplint', '--version'],
-        }
-        
-        if self.platform == 'linux':
-            tools_to_check.update({
-                'clang-tidy': ['clang-tidy', '--version'],
-            })
-        
-        for tool, cmd in tools_to_check.items():
-            if CommandRunner.check_command_exists(cmd[0]):
-                try:
-                    result = CommandRunner.run(cmd, capture=True, check=False)
-                    if result.returncode == 0:
-                        version = result.stdout.split('\n')[0] if result.stdout else 'unknown'
-                        logger.info(f"✓ {tool}: {version}")
-                    else:
-                        logger.warning(f"✗ {tool}: version check failed")
-                except:
-                    logger.warning(f"✗ {tool}: version check failed")
-            else:
-                logger.warning(f"✗ {tool}: not found")
     
     def _check_and_install_basic_tools(self):
         """Check and install basic development tools."""
@@ -2111,8 +1912,6 @@ def main():
                        help="Skip vcpkg setup")
     parser.add_argument("--no-python-modules", action="store_true",
                        help="Skip Python module installation")
-    parser.add_argument("--code-quality", action="store_true",
-                       help="Install only code quality tools (clang-format, cppcheck, cpplint)")
     parser.add_argument("--verbose", "-v", action="store_true", 
                        help="Verbose output")
     
@@ -2128,10 +1927,6 @@ def main():
         logger.info("WSL detected - will handle package installation carefully")
     
     configurator = EnvironmentConfigurator()
-    
-    # Set code quality mode
-    if args.code_quality:
-        configurator.code_quality_only = True
     
     # Pass options to configurator
     if hasattr(configurator, 'installer') and configurator.installer:

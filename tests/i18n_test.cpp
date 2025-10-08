@@ -4,9 +4,7 @@
 #include <fstream>
 #include <iostream>
 
-using namespace hj;
-
-class I18nTest : public ::testing::Test
+class i18n : public ::testing::Test
 {
   protected:
     void SetUp() override
@@ -26,10 +24,10 @@ class I18nTest : public ::testing::Test
         }
 
         create_test_translation_files();
-        i18n::instance().set_locale("en_US");
-        i18n::instance().remove("main");
-        i18n::instance().remove("zh_CN");
-        i18n::instance().remove("ja_JP");
+        hj::i18n::instance().set_locale("en_US");
+        hj::i18n::instance().remove("main");
+        hj::i18n::instance().remove("zh_CN");
+        hj::i18n::instance().remove("ja_JP");
     }
 
     void TearDown() override
@@ -47,12 +45,12 @@ class I18nTest : public ::testing::Test
                       << std::endl;
         }
 
-        i18n::instance().remove("main");
-        i18n::instance().remove("zh_CN");
-        i18n::instance().remove("en_US");
-        i18n::instance().remove("ja_JP");
-        i18n::instance().remove("de_DE");
-        i18n::instance().remove("test");
+        hj::i18n::instance().remove("main");
+        hj::i18n::instance().remove("zh_CN");
+        hj::i18n::instance().remove("en_US");
+        hj::i18n::instance().remove("ja_JP");
+        hj::i18n::instance().remove("de_DE");
+        hj::i18n::instance().remove("test");
     }
 
     void create_test_translation_files()
@@ -139,20 +137,20 @@ class I18nTest : public ::testing::Test
     std::string test_dir_;
 };
 
-TEST_F(I18nTest, TranslatorConstruction)
+TEST_F(i18n, translator_construction)
 {
-    i18n::translator trans1;
+    hj::i18n::translator trans1;
     EXPECT_TRUE(trans1.locale().empty());
     EXPECT_TRUE(trans1.is_empty());
 
-    i18n::translator trans2("zh_CN");
+    hj::i18n::translator trans2("zh_CN");
     EXPECT_EQ(trans2.locale(), "zh_CN");
     EXPECT_TRUE(trans2.is_empty());
 }
 
-TEST_F(I18nTest, TranslatorBasicOperations)
+TEST_F(i18n, translator_basic_operations)
 {
-    i18n::translator trans("en_US");
+    hj::i18n::translator trans("en_US");
 
     trans.add("hello", "Hello");
     trans.add("goodbye", "Goodbye");
@@ -167,14 +165,14 @@ TEST_F(I18nTest, TranslatorBasicOperations)
     EXPECT_EQ(trans.translate("hello"), "hello");
 }
 
-TEST_F(I18nTest, TranslatorFromMap)
+TEST_F(i18n, translator_from_map)
 {
     std::unordered_map<std::string, std::string> translations = {
         {"app.title", "Test Application"},
         {"menu.file", "File Menu"},
         {"status.ok", "OK Status"}};
 
-    i18n::translator trans("en_US");
+    hj::i18n::translator trans("en_US");
     EXPECT_TRUE(trans.load_from_map(translations));
 
     EXPECT_EQ(trans.translate("app.title"), "Test Application");
@@ -183,9 +181,9 @@ TEST_F(I18nTest, TranslatorFromMap)
     EXPECT_EQ(trans.translate("not.found"), "not.found");
 }
 
-TEST_F(I18nTest, TranslatorPropertiesLoading)
+TEST_F(i18n, translator_properties_loading)
 {
-    i18n::translator trans("zh_CN");
+    hj::i18n::translator trans("zh_CN");
 
     std::string file_path = test_dir_ + "/translations_zh_CN.properties";
     if(!trans.load_from_properties(file_path))
@@ -203,9 +201,9 @@ TEST_F(I18nTest, TranslatorPropertiesLoading)
     EXPECT_EQ(trans.translate("not.exist"), "not.exist");
 }
 
-TEST_F(I18nTest, TranslatorPropertiesLoadingErrorHandling)
+TEST_F(i18n, translator_properties_loading_error_handling)
 {
-    i18n::translator trans("en_US");
+    hj::i18n::translator trans("en_US");
 
     EXPECT_FALSE(trans.load_from_properties("non_existent_file.properties"));
 
@@ -218,9 +216,9 @@ TEST_F(I18nTest, TranslatorPropertiesLoadingErrorHandling)
     EXPECT_EQ(trans.translate("invalid"), "invalid");
 }
 
-TEST_F(I18nTest, TranslatorSaveToProperties)
+TEST_F(i18n, translator_save_to_properties)
 {
-    i18n::translator trans("test_locale");
+    hj::i18n::translator trans("test_locale");
     trans.add("key1", "value1");
     trans.add("key2", "测试值");
     trans.add("key3", "value with unicode ü");
@@ -239,7 +237,7 @@ TEST_F(I18nTest, TranslatorSaveToProperties)
 
     EXPECT_TRUE(std::filesystem::exists(save_path));
 
-    i18n::translator loaded_trans("test_locale");
+    hj::i18n::translator loaded_trans("test_locale");
     EXPECT_TRUE(loaded_trans.load_from_properties(save_path));
 
     EXPECT_EQ(loaded_trans.translate("key1"), "value1");
@@ -247,9 +245,9 @@ TEST_F(I18nTest, TranslatorSaveToProperties)
     EXPECT_EQ(loaded_trans.translate("key3"), "value with unicode ü");
 }
 
-TEST_F(I18nTest, TranslatorUnicodeHandling)
+TEST_F(i18n, translator_unicode_handling)
 {
-    i18n::translator trans("zh_CN");
+    hj::i18n::translator trans("zh_CN");
 
     trans.add("chinese", "中文");
     trans.add("japanese", "日本語");
@@ -273,7 +271,7 @@ TEST_F(I18nTest, TranslatorUnicodeHandling)
     }
     EXPECT_TRUE(trans.save_to_properties(unicode_file));
 
-    i18n::translator loaded_trans("zh_CN");
+    hj::i18n::translator loaded_trans("zh_CN");
     EXPECT_TRUE(loaded_trans.load_from_properties(unicode_file));
 
     EXPECT_EQ(loaded_trans.translate("chinese"), "中文");
@@ -281,17 +279,17 @@ TEST_F(I18nTest, TranslatorUnicodeHandling)
     EXPECT_EQ(loaded_trans.translate("mixed"), "Hello 世界 🌍");
 }
 
-TEST_F(I18nTest, I18nSingleton)
+TEST_F(i18n, i18n_singleton)
 {
-    auto &instance1 = i18n::instance();
-    auto &instance2 = i18n::instance();
+    auto &instance1 = hj::i18n::instance();
+    auto &instance2 = hj::i18n::instance();
 
     EXPECT_EQ(&instance1, &instance2);
 }
 
-TEST_F(I18nTest, I18nLocaleManagement)
+TEST_F(i18n, i18n_locale_management)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     i18n_instance.set_locale("zh_CN");
     EXPECT_EQ(i18n_instance.locale(), "zh_CN");
@@ -303,12 +301,12 @@ TEST_F(I18nTest, I18nLocaleManagement)
     EXPECT_EQ(i18n_instance.locale(), "ja_JP");
 }
 
-TEST_F(I18nTest, I18nTranslatorInstallation)
+TEST_F(i18n, i18n_translator_installation)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
     i18n_instance.set_locale("zh_CN");
 
-    auto trans = std::make_unique<i18n::translator>("zh_CN");
+    auto trans = std::make_unique<hj::i18n::translator>("zh_CN");
     trans->add("test.key", "测试值");
     trans->add("app.name", "应用程序");
 
@@ -322,17 +320,17 @@ TEST_F(I18nTest, I18nTranslatorInstallation)
     EXPECT_EQ(i18n_instance.translate("test.key"), "test.key");
 }
 
-TEST_F(I18nTest, I18nMultipleTranslators)
+TEST_F(i18n, i18n_multiple_translators)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
     i18n_instance.set_locale("zh_CN");
 
-    auto main_trans = std::make_unique<i18n::translator>("zh_CN");
+    auto main_trans = std::make_unique<hj::i18n::translator>("zh_CN");
     main_trans->add("common.ok", "确定");
     main_trans->add("common.cancel", "取消");
     i18n_instance.install("main", std::move(main_trans));
 
-    auto module_trans = std::make_unique<i18n::translator>("zh_CN");
+    auto module_trans = std::make_unique<hj::i18n::translator>("zh_CN");
     module_trans->add("module.title", "模块标题");
     module_trans->add("module.description", "模块描述");
     i18n_instance.install("module", std::move(module_trans));
@@ -342,16 +340,16 @@ TEST_F(I18nTest, I18nMultipleTranslators)
     EXPECT_EQ(i18n_instance.translate("module.title"), "模块标题");
     EXPECT_EQ(i18n_instance.translate("module.description"), "模块描述");
 
-    auto priority_trans = std::make_unique<i18n::translator>("zh_CN");
+    auto priority_trans = std::make_unique<hj::i18n::translator>("zh_CN");
     priority_trans->add("common.ok", "优先确定");
     i18n_instance.install("priority", std::move(priority_trans));
 
     EXPECT_EQ(i18n_instance.translate("common.ok"), "确定");
 }
 
-TEST_F(I18nTest, I18nLoadFromDirectory)
+TEST_F(i18n, i18n_load_from_directory)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     if(!std::filesystem::exists(test_dir_))
     {
@@ -368,9 +366,9 @@ TEST_F(I18nTest, I18nLoadFromDirectory)
     i18n_instance.set_locale("en_US");
 }
 
-TEST_F(I18nTest, I18nAutoLoadTranslation)
+TEST_F(i18n, i18n_auto_load_translation)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     i18n_instance.remove("main");
     i18n_instance.remove("zh_CN");
@@ -410,9 +408,9 @@ TEST_F(I18nTest, I18nAutoLoadTranslation)
     EXPECT_EQ(i18n_instance.translate("app.title"), "app.title");
 }
 
-TEST_F(I18nTest, I18nErrorHandling)
+TEST_F(i18n, i18n_error_handling)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     EXPECT_FALSE(
         i18n_instance.load_translations_from_directory("non_existent_dir"));
@@ -423,25 +421,25 @@ TEST_F(I18nTest, I18nErrorHandling)
     EXPECT_FALSE(i18n_instance.load_translations_from_directory(""));
 }
 
-TEST_F(I18nTest, GlobalTrFunction)
+TEST_F(i18n, global_tr_function)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
     i18n_instance.set_locale("zh_CN");
 
     i18n_instance.remove("main");
 
-    auto trans = std::make_unique<i18n::translator>("zh_CN");
+    auto trans = std::make_unique<hj::i18n::translator>("zh_CN");
     trans->add("global.test", "全局测试");
     trans->add("global.not_found", "");
     i18n_instance.install("main", std::move(trans));
 
-    EXPECT_EQ(tr("global.test"), "全局测试");
-    EXPECT_EQ(tr("global.unknown"), "global.unknown");
+    EXPECT_EQ(hj::tr("global.test"), "全局测试");
+    EXPECT_EQ(hj::tr("global.unknown"), "global.unknown");
 }
 
-TEST_F(I18nTest, LargeTranslationSet)
+TEST_F(i18n, large_translation_set)
 {
-    i18n::translator trans("test");
+    hj::i18n::translator trans("test");
 
     const int num_entries = 10000;
     for(int i = 0; i < num_entries; ++i)
@@ -469,9 +467,9 @@ TEST_F(I18nTest, LargeTranslationSet)
     EXPECT_LT(duration.count(), 1000);
 }
 
-TEST_F(I18nTest, SpecialCharactersAndEdgeCases)
+TEST_F(i18n, special_characters_and_edge_cases)
 {
-    i18n::translator trans("test");
+    hj::i18n::translator trans("test");
 
     trans.add("empty", "");
     trans.add("spaces", "   ");
@@ -502,7 +500,7 @@ TEST_F(I18nTest, SpecialCharactersAndEdgeCases)
     }
     EXPECT_TRUE(trans.save_to_properties(special_file));
 
-    i18n::translator loaded_trans("test");
+    hj::i18n::translator loaded_trans("test");
     EXPECT_TRUE(loaded_trans.load_from_properties(special_file));
 
     EXPECT_EQ(loaded_trans.translate("newlines"), "line1\nline2\nline3");
@@ -511,12 +509,12 @@ TEST_F(I18nTest, SpecialCharactersAndEdgeCases)
               "ASCII + 中文 + Русский + العربية");
 }
 
-TEST_F(I18nTest, ConcurrentAccess)
+TEST_F(i18n, concurrent_access)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
     i18n_instance.set_locale("zh_CN");
 
-    auto trans = std::make_unique<i18n::translator>("zh_CN");
+    auto trans = std::make_unique<hj::i18n::translator>("zh_CN");
     trans->add("concurrent.test", "并发测试");
     i18n_instance.install("concurrent", std::move(trans));
 
@@ -545,9 +543,9 @@ TEST_F(I18nTest, ConcurrentAccess)
     EXPECT_EQ(success_count.load(), 1000);
 }
 
-TEST_F(I18nTest, FullWorkflowIntegration)
+TEST_F(i18n, full_workflow_integration)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     if(!i18n_instance.load_translations_from_directory(test_dir_))
         GTEST_SKIP() << "Failed to load translations from directory";
@@ -570,9 +568,9 @@ TEST_F(I18nTest, FullWorkflowIntegration)
     EXPECT_FALSE(ja_title.empty());
 }
 
-TEST_F(I18nTest, MemoryManagement)
+TEST_F(i18n, memory_management)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     i18n_instance.remove("main");
     i18n_instance.remove("zh_CN");
@@ -583,7 +581,7 @@ TEST_F(I18nTest, MemoryManagement)
     for(int i = 0; i < 100; ++i)
     {
         auto trans =
-            std::make_unique<i18n::translator>("test_" + std::to_string(i));
+            std::make_unique<hj::i18n::translator>("test_" + std::to_string(i));
         trans->add("test.key", "test.value." + std::to_string(i));
         trans->add("unique.key." + std::to_string(i),
                    "unique.value." + std::to_string(i));
@@ -618,9 +616,9 @@ TEST_F(I18nTest, MemoryManagement)
     }
 }
 
-TEST_F(I18nTest, GermanTranslatorBasic)
+TEST_F(i18n, german_translator_basic)
 {
-    i18n::translator trans("de_DE");
+    hj::i18n::translator trans("de_DE");
 
     trans.add("hello", "Hallo");
     trans.add("goodbye", "Auf Wiedersehen");
@@ -639,9 +637,9 @@ TEST_F(I18nTest, GermanTranslatorBasic)
     EXPECT_EQ(trans.translate("unknown_key"), "unknown_key");
 }
 
-TEST_F(I18nTest, GermanUmlautsAndSpecialChars)
+TEST_F(i18n, german_umlauts_and_special_chars)
 {
-    i18n::translator trans("de_DE");
+    hj::i18n::translator trans("de_DE");
 
     trans.add("umlaut_a", "Äpfel");      // ä
     trans.add("umlaut_o", "Öl");         // ö
@@ -673,7 +671,7 @@ TEST_F(I18nTest, GermanUmlautsAndSpecialChars)
     }
     EXPECT_TRUE(trans.save_to_properties(german_file));
 
-    i18n::translator loaded_trans("de_DE");
+    hj::i18n::translator loaded_trans("de_DE");
     EXPECT_TRUE(loaded_trans.load_from_properties(german_file));
 
     EXPECT_EQ(loaded_trans.translate("umlaut_a"), "Äpfel");
@@ -682,9 +680,9 @@ TEST_F(I18nTest, GermanUmlautsAndSpecialChars)
     EXPECT_EQ(loaded_trans.translate("eszett"), "Straße");
 }
 
-TEST_F(I18nTest, GermanPropertiesLoading)
+TEST_F(i18n, german_properties_loading)
 {
-    i18n::translator trans("de_DE");
+    hj::i18n::translator trans("de_DE");
 
     std::string file_path = test_dir_ + "/translations_de_DE.properties";
     if(!trans.load_from_properties(file_path))
@@ -713,9 +711,9 @@ TEST_F(I18nTest, GermanPropertiesLoading)
     EXPECT_EQ(trans.translate("not.exist"), "not.exist");
 }
 
-TEST_F(I18nTest, GermanLongWords)
+TEST_F(i18n, german_long_words)
 {
-    i18n::translator trans("de_DE");
+    hj::i18n::translator trans("de_DE");
 
     trans.add("long1", "Donaudampfschifffahrtsgesellschaftskapitän");
     trans.add("long2", "Kraftfahrzeughaftpflichtversicherung");
@@ -744,7 +742,7 @@ TEST_F(I18nTest, GermanLongWords)
     }
     EXPECT_TRUE(trans.save_to_properties(long_words_file));
 
-    i18n::translator loaded_trans("de_DE");
+    hj::i18n::translator loaded_trans("de_DE");
     EXPECT_TRUE(loaded_trans.load_from_properties(long_words_file));
 
     EXPECT_EQ(loaded_trans.translate("long1"),
@@ -753,9 +751,9 @@ TEST_F(I18nTest, GermanLongWords)
               "Kraftfahrzeughaftpflichtversicherung");
 }
 
-TEST_F(I18nTest, I18nGermanAutoLoad)
+TEST_F(i18n, i18n_german_auto_load)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     i18n_instance.remove("main");
     i18n_instance.remove("zh_CN");
@@ -775,9 +773,9 @@ TEST_F(I18nTest, I18nGermanAutoLoad)
     EXPECT_EQ(i18n_instance.translate("german.eszett"), "Straße, weiß, Fuß");
 }
 
-TEST_F(I18nTest, MultiLanguageComparison)
+TEST_F(i18n, multi_language_comparison)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     std::vector<std::string> all_locales = {"main",
                                             "zh_CN",
@@ -847,9 +845,9 @@ TEST_F(I18nTest, MultiLanguageComparison)
     }
 }
 
-TEST_F(I18nTest, GermanMultipleTranslators)
+TEST_F(i18n, german_multiple_translators)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     std::vector<std::string> cleanup_names = {"main",
                                               "app",
@@ -866,21 +864,21 @@ TEST_F(I18nTest, GermanMultipleTranslators)
 
     i18n_instance.set_locale("de_DE");
 
-    auto main_trans = std::make_unique<i18n::translator>("de_DE");
+    auto main_trans = std::make_unique<hj::i18n::translator>("de_DE");
     main_trans->add("common.ok", "OK");
     main_trans->add("common.cancel", "Abbrechen");
     main_trans->add("common.yes", "Ja");
     main_trans->add("common.no", "Nein");
     i18n_instance.install("main", std::move(main_trans));
 
-    auto app_trans = std::make_unique<i18n::translator>("de_DE");
+    auto app_trans = std::make_unique<hj::i18n::translator>("de_DE");
     app_trans->add("app.login", "Anmelden");
     app_trans->add("app.logout", "Abmelden");
     app_trans->add("app.settings", "Einstellungen");
     app_trans->add("app.help", "Hilfe");
     i18n_instance.install("app", std::move(app_trans));
 
-    auto error_trans = std::make_unique<i18n::translator>("de_DE");
+    auto error_trans = std::make_unique<hj::i18n::translator>("de_DE");
     error_trans->add("error.not_found", "Nicht gefunden");
     error_trans->add("error.access_denied", "Zugriff verweigert");
     error_trans->add("error.connection_failed", "Verbindung fehlgeschlagen");
@@ -894,7 +892,7 @@ TEST_F(I18nTest, GermanMultipleTranslators)
     EXPECT_EQ(i18n_instance.translate("error.access_denied"),
               "Zugriff verweigert");
 
-    auto priority_trans = std::make_unique<i18n::translator>("de_DE");
+    auto priority_trans = std::make_unique<hj::i18n::translator>("de_DE");
     priority_trans->add("common.ok", "In Ordnung"); // 重复键
     i18n_instance.install("priority", std::move(priority_trans));
 
@@ -908,9 +906,9 @@ TEST_F(I18nTest, GermanMultipleTranslators)
     }
 }
 
-TEST_F(I18nTest, GermanErrorHandling)
+TEST_F(i18n, german_error_handling)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     i18n_instance.set_locale("de_DE");
 
@@ -925,9 +923,9 @@ TEST_F(I18nTest, GermanErrorHandling)
     EXPECT_EQ(i18n_instance.translate("app.title"), "Meine Anwendung");
 }
 
-TEST_F(I18nTest, GermanCaseVariations)
+TEST_F(i18n, german_case_variations)
 {
-    i18n::translator trans("de_DE");
+    hj::i18n::translator trans("de_DE");
 
     trans.add("word.lowercase", "deutsch");
     trans.add("word.uppercase", "DEUTSCH");
@@ -947,9 +945,9 @@ TEST_F(I18nTest, GermanCaseVariations)
     EXPECT_EQ(trans.translate("umlauts.mixed"), "ÄäÖöÜüß");
 }
 
-TEST_F(I18nTest, FullWorkflowIntegrationWithGerman)
+TEST_F(i18n, full_workflow_integration_with_german)
 {
-    auto &i18n_instance = i18n::instance();
+    auto &i18n_instance = hj::i18n::instance();
 
     if(!i18n_instance.load_translations_from_directory(test_dir_))
         GTEST_SKIP() << "Failed to load translations from directory";

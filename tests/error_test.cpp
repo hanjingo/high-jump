@@ -99,3 +99,54 @@ TEST(error, reg_and_make_nested_err)
     ASSERT_EQ(nested2.cause->ec.message(), std::string("read/write io error"));
     ASSERT_EQ(nested2.cause->cause, nullptr);
 }
+
+TEST(error, concurrent_category)
+{
+    constexpr int            N = 8;
+    std::vector<std::thread> threads;
+    for(int i = 0; i < N; ++i)
+    {
+        threads.emplace_back([i] {
+            std::string cat = "cat" + std::to_string(i);
+            hj::register_err(cat.c_str(), i, "desc" + std::to_string(i));
+            auto ec = hj::make_err(i, cat.c_str());
+            ASSERT_EQ(ec.value(), i);
+            ASSERT_EQ(ec.category().name(), cat);
+            ASSERT_EQ(ec.message(), "desc" + std::to_string(i));
+        });
+    }
+    for(auto &t : threads)
+        t.join();
+}
+
+TEST(error, equivalent)
+{
+    hj::register_err("test", 123, "test error");
+    std::error_code      ec = hj::make_err(123, "test");
+    std::error_condition cond(123, ec.category());
+    ASSERT_TRUE(ec.category().equivalent(123, cond));
+}
+
+TEST(error, unknown_message)
+{
+    std::error_code ec = hj::make_err(9999, "not_exist");
+    ASSERT_EQ(ec.message(), "unknown error");
+}
+
+TEST(error, nested_chain_traverse)
+{
+    hj::register_err("a", 1, "err_a");
+    hj::register_err("b", 2, "err_b");
+    hj::register_err("c", 3, "err_c");
+    auto n3    = hj::make_err(3, "c");
+    auto n2    = hj::make_err(2, "b");
+    auto n1    = hj::make_err(1, "a");
+    auto chain = hj::err_detail::nested_error_code(
+        n1,
+        std::make_shared<hj::err_detail::nested_error_code>(
+            n2,
+            std::make_shared<hj::err_detail::nested_error_code>(n3)));
+    ASSERT_EQ(chain.ec.message(), "err_a");
+    ASSERT_EQ(chain.cause->ec.message(), "err_b");
+    ASSERT_EQ(chain.cause->cause->ec.message(), "err_c");
+}

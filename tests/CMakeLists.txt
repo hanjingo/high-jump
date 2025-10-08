@@ -36,6 +36,7 @@ if(COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 find_package(PkgConfig QUIET)
+find_package(benchmark REQUIRED)
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 find_package(ZeroMQ REQUIRED)
@@ -133,6 +134,7 @@ target_link_libraries(${PROJECT_NAME}
     ${ODBC_LIBRARIES}
     ${ICU_LIBRARIES}
     ${OPENTELEMETRY_CPP_LIBRARIES}
+    benchmark::benchmark
     protobuf::libprotobuf
     pugixml
     BT::behaviortree_cpp

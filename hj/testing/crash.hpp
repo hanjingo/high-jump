@@ -91,7 +91,12 @@ class crash_handler
     {
         set_local_path(abs_path);
     }
-    virtual ~crash_handler() {}
+    virtual ~crash_handler() {};
+
+    crash_handler(const crash_handler &)            = delete;
+    crash_handler &operator=(const crash_handler &) = delete;
+    crash_handler(crash_handler &&)                 = delete;
+    crash_handler &operator=(crash_handler &&)      = delete;
 
     inline void set_dump_callback(const dump_callback_t cb) { _dump_cb = cb; }
 
@@ -103,9 +108,7 @@ class crash_handler
     void set_local_path(const std::string &abs_path)
     {
         if(_handler != nullptr)
-        {
             delete _handler;
-        }
 
 #if defined(_WIN32)
         std::wstring wabs_path(abs_path.begin(), abs_path.end());
@@ -189,8 +192,8 @@ class crash_handler
   public:
     static crash_handler *instance()
     {
-        static crash_handler inst_;
-        return &inst_;
+        static crash_handler inst;
+        return &inst;
     }
 
   private:

@@ -113,7 +113,7 @@ jobs:
         df -h
         echo "============================="
         
-        JOBS=$(($(nproc)-1))
+        JOBS=$(nproc)
         if [ "$JOBS" -lt 1 ]; then JOBS=1; fi
         cmake --build build --config ${{ matrix.build_type }} --parallel $JOBS
         
@@ -409,10 +409,10 @@ jobs:
         
         # Set number of parallel jobs (use fewer cores on macOS to avoid memory issues)
         NPROC=$(sysctl -n hw.ncpu)
-        PARALLEL_JOBS=$((NPROC-1))
+        PARALLEL_JOBS=$NPROC
         if [ "$PARALLEL_JOBS" -lt 1 ]; then PARALLEL_JOBS=1; fi
         echo "Using $PARALLEL_JOBS parallel jobs (total cores: $NPROC)"
-        
+              
         cmake --build build --config ${{ matrix.build_type }} --parallel $PARALLEL_JOBS
         
         echo "=== Post-build disk usage ==="
@@ -424,9 +424,10 @@ jobs:
       run: |
         # Use fewer parallel jobs for testing to avoid resource conflicts
         NPROC=$(sysctl -n hw.ncpu)
-        PARALLEL_JOBS=$((NPROC > 2 ? 2 : NPROC))
+        PARALLEL_JOBS=$NPROC
+        if [ "$PARALLEL_JOBS" -lt 1 ]; then PARALLEL_JOBS=1; fi
         echo "Running tests with $PARALLEL_JOBS parallel jobs"
-        
+              
         ctest --output-on-failure --parallel $PARALLEL_JOBS -C ${{ matrix.build_type }}
 
     - name: Upload build artifacts (macOS)
@@ -489,7 +490,7 @@ jobs:
     - name: Build
       run: |
         echo "=== Building project ==="
-        $env:JOBS = [System.Environment]::ProcessorCount - 1
+        $env:JOBS = [System.Environment]::ProcessorCount
         if ($env:JOBS -lt 1) { $env:JOBS = 1 }
         cmake --build build --config ${{ matrix.build_type }} --parallel $env:JOBS
 

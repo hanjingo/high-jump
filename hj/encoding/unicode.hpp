@@ -63,8 +63,17 @@ inline std::wstring from_utf8(const std::string &str)
                         len);
     return wstr;
 #else
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
-    return cvt.from_bytes(str);
+    if(str.empty())
+        return L"";
+    std::mbstate_t state = std::mbstate_t();
+    const char    *src   = str.data();
+    size_t         len   = std::mbsrtowcs(nullptr, &src, 0, &state);
+    if(len == static_cast<size_t>(-1))
+        throw std::runtime_error("utf8->wstring failed");
+    std::wstring wstr(len, 0);
+    src = str.data();
+    std::mbsrtowcs(&wstr[0], &src, len, &state);
+    return wstr;
 #endif
 
 #else
@@ -101,8 +110,17 @@ inline std::string to_utf8(const std::wstring &wstr)
                         nullptr);
     return str;
 #else
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
-    return cvt.to_bytes(wstr);
+    if(wstr.empty())
+        return "";
+    std::mbstate_t state = std::mbstate_t();
+    const wchar_t *src   = wstr.data();
+    size_t         len   = std::wcsrtombs(nullptr, &src, 0, &state);
+    if(len == static_cast<size_t>(-1))
+        throw std::runtime_error("wstring->utf8 failed");
+    std::string str(len, 0);
+    src = wstr.data();
+    std::wcsrtombs(&str[0], &src, len, &state);
+    return str;
 #endif
 
 #else

@@ -28,14 +28,18 @@ class error_category : public std::error_category
         auto                        it = _messages.find(ev);
         if(it != _messages.end())
             return it->second;
-
         return "unknown error";
     }
-
     void register_message(int ec, const std::string &msg)
     {
         std::lock_guard<std::mutex> lock(_mtx);
         _messages[ec] = msg;
+    }
+    bool
+    equivalent(int                         code,
+               const std::error_condition &condition) const noexcept override
+    {
+        return std::error_category::equivalent(code, condition);
     }
 
   private:
@@ -46,15 +50,17 @@ class error_category : public std::error_category
 
 inline error_category &category(const char *name)
 {
-    static std::mutex                              mtx;
-    static std::map<std::string, error_category *> cats;
-    std::lock_guard<std::mutex>                    lock(mtx);
-    auto                                           it = cats.find(name);
+    static std::mutex                                             mtx;
+    static std::map<std::string, std::unique_ptr<error_category>> cats;
+    std::lock_guard<std::mutex>                                   lock(mtx);
+    auto it = cats.find(name);
     if(it != cats.end())
         return *it->second;
-    auto *cat  = new error_category(name);
-    cats[name] = cat;
-    return *cat;
+
+    auto            cat = std::make_unique<error_category>(name);
+    error_category &ref = *cat;
+    cats[name]          = std::move(cat);
+    return ref;
 }
 
 // nested error code
@@ -62,14 +68,12 @@ struct nested_error_code
 {
     std::error_code                    ec;
     std::shared_ptr<nested_error_code> cause;
-
     nested_error_code(const std::error_code             &e,
                       std::shared_ptr<nested_error_code> c = nullptr)
         : ec(e)
         , cause(std::move(c))
     {
     }
-
     nested_error_code(int                                e,
                       const std::error_category         &cat,
                       std::shared_ptr<nested_error_code> c = nullptr)
@@ -77,7 +81,6 @@ struct nested_error_code
         , cause(std::move(c))
     {
     }
-
     nested_error_code(const nested_error_code &)                = default;
     nested_error_code(nested_error_code &&) noexcept            = default;
     nested_error_code &operator=(const nested_error_code &)     = default;

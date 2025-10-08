@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <hj/hardware/mouse.h>
 
-TEST(MouseTest, EnumerateMouse)
+TEST(mouse, enumerate_mouse)
 {
     mouse_info_t infos[8] = {0};
     int          n        = mouse_enumerate(infos, 8);
@@ -17,7 +17,7 @@ TEST(MouseTest, EnumerateMouse)
     }
 }
 
-TEST(MouseTest, OpenCloseMouse)
+TEST(mouse, open_close_mouse)
 {
     mouse_info_t infos[4] = {0};
     int          n        = mouse_enumerate(infos, 4);
@@ -35,7 +35,7 @@ TEST(MouseTest, OpenCloseMouse)
     mouse_close(handle);
 }
 
-TEST(MouseTest, ReadMouseEvent)
+TEST(mouse, read_mouse_event)
 {
     mouse_info_t infos[2] = {0};
     int          n        = mouse_enumerate(infos, 2);
@@ -55,7 +55,7 @@ TEST(MouseTest, ReadMouseEvent)
     mouse_close(handle);
 }
 
-TEST(MouseTest, SetMouseParam)
+TEST(mouse, set_mouse_param)
 {
     mouse_info_t infos[1] = {0};
     int          n        = mouse_enumerate(infos, 1);

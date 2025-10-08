@@ -19,29 +19,31 @@ static void throw_if_not_false(bool target, const char *memo = "not false")
 }
 
 template <typename T>
-static void throw_if_equal(T target1, T target2, const char *memo = "equal")
+static void
+throw_if_equal(const T &target1, const T &target2, const char *memo = "equal")
 {
     if(target1 == target2)
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void
-throw_if_not_equal(T target1, T target2, const char *memo = "not equal")
+static void throw_if_not_equal(const T    &target1,
+                               const T    &target2,
+                               const char *memo = "not equal")
 {
     if(target1 != target2)
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void throw_if_empty(T target, const char *memo = "empty")
+static void throw_if_empty(const T &target, const char *memo = "empty")
 {
     if(target.empty())
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void throw_if_not_empty(T target, const char *memo = "not empty")
+static void throw_if_not_empty(const T &target, const char *memo = "not empty")
 {
     if(!target.empty())
         throw std::logic_error(memo);
@@ -62,9 +64,9 @@ static void throw_if_not_null(T target, const char *memo = "not null")
 }
 
 template <typename Container, typename T>
-static void throw_if_exists(Container   container,
-                            T           target,
-                            const char *memo = "already exist")
+static void throw_if_exists(const Container &container,
+                            const T         &target,
+                            const char      *memo = "already exist")
 {
     for(auto &elem : container)
     {
@@ -76,9 +78,9 @@ static void throw_if_exists(Container   container,
 }
 
 template <typename Container, typename T>
-static void throw_if_not_exists(Container   container,
-                                T           target,
-                                const char *memo = "not exist")
+static void throw_if_not_exists(const Container &container,
+                                const T         &target,
+                                const char      *memo = "not exist")
 {
     for(auto &elem : container)
     {

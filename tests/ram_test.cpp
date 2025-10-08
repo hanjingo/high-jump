@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <memory>
 
-class RamTest : public ::testing::Test
+class ram : public ::testing::Test
 {
   protected:
     void SetUp() override
@@ -22,7 +22,7 @@ class RamTest : public ::testing::Test
 };
 
 // Test RAM subsystem initialization and cleanup
-TEST_F(RamTest, initialization_and_cleanup)
+TEST_F(ram, initialization_and_cleanup)
 {
     SCOPED_TRACE("Testing RAM initialization and cleanup");
 
@@ -47,7 +47,7 @@ TEST_F(RamTest, initialization_and_cleanup)
 }
 
 // Test system memory information
-TEST_F(RamTest, system_memory_information)
+TEST_F(ram, system_memory_information)
 {
     SCOPED_TRACE("Testing system memory information");
 
@@ -112,7 +112,7 @@ TEST_F(RamTest, system_memory_information)
 }
 
 // Test RAM module enumeration
-TEST_F(RamTest, ram_module_enumeration)
+TEST_F(ram, ram_module_enumeration)
 {
     SCOPED_TRACE("Testing RAM module enumeration");
 
@@ -183,7 +183,7 @@ TEST_F(RamTest, ram_module_enumeration)
 }
 
 // Test aligned memory allocation
-TEST_F(RamTest, aligned_memory_allocation)
+TEST_F(ram, aligned_memory_allocation)
 {
     SCOPED_TRACE("Testing aligned memory allocation");
 
@@ -253,7 +253,7 @@ TEST_F(RamTest, aligned_memory_allocation)
 }
 
 // Test large page allocation
-TEST_F(RamTest, large_page_allocation)
+TEST_F(ram, large_page_allocation)
 {
     SCOPED_TRACE("Testing large page allocation");
 
@@ -312,7 +312,7 @@ TEST_F(RamTest, large_page_allocation)
 }
 
 // Test memory protection
-TEST_F(RamTest, memory_protection)
+TEST_F(ram, memory_protection)
 {
     SCOPED_TRACE("Testing memory protection");
 
@@ -380,7 +380,7 @@ TEST_F(RamTest, memory_protection)
 }
 
 // Test memory locking and unlocking
-TEST_F(RamTest, memory_locking)
+TEST_F(ram, memory_locking)
 {
     SCOPED_TRACE("Testing memory locking");
 
@@ -443,7 +443,7 @@ TEST_F(RamTest, memory_locking)
 }
 
 // Test memory prefetching
-TEST_F(RamTest, memory_prefetching)
+TEST_F(ram, memory_prefetching)
 {
     SCOPED_TRACE("Testing memory prefetching");
 
@@ -499,7 +499,7 @@ TEST_F(RamTest, memory_prefetching)
 }
 
 // Test utility functions
-TEST_F(RamTest, utility_functions)
+TEST_F(ram, utility_functions)
 {
     SCOPED_TRACE("Testing utility functions");
 

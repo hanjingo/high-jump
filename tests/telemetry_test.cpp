@@ -77,7 +77,7 @@ static double _get_mem_usage()
 #endif
 }
 
-TEST(TelemetryTest, TraceOStreamExportDefault)
+TEST(telemetry, trace_ostream_export_default)
 {
     auto tracer = hj::telemetry::make_ostream_tracer("ostream1");
     for(int i = 0; i < 2; ++i)
@@ -92,7 +92,7 @@ TEST(TelemetryTest, TraceOStreamExportDefault)
     }
 }
 
-TEST(TelemetryTest, TraceCustomSpanExporter)
+TEST(telemetry, trace_custom_span_exporter)
 {
     using namespace hj::telemetry;
     class my_custom_trace_span_exporter
@@ -158,7 +158,7 @@ TEST(TelemetryTest, TraceCustomSpanExporter)
     }
 }
 
-TEST(TelemetryTest, TraceOtlpHttpExport)
+TEST(telemetry, trace_otlp_http_export)
 {
     // prefer to use aliyun cloud as otlp server: https://help.aliyun.com/zh/opentelemetry/user-guide/before-you-begin-before-you-begin?spm=a2c4g.11186623.0.0.1ecc7bdb3PnAO4
 
@@ -184,7 +184,7 @@ TEST(TelemetryTest, TraceOtlpHttpExport)
     }
 }
 
-TEST(TelemetryTest, TraceOtlpFileExport)
+TEST(telemetry, trace_otlp_file_export)
 {
     std::string file_pattern = "trace-otlp-file.json";
     auto        tracer =
@@ -201,7 +201,7 @@ TEST(TelemetryTest, TraceOtlpFileExport)
     }
 }
 
-TEST(TelemetryTest, MeterOStreamExportDefault)
+TEST(telemetry, meter_ostream_export_default)
 {
     hj::telemetry::clean_up_metrics();
 
@@ -227,11 +227,11 @@ void async_obs_gauge(opentelemetry::metrics::ObserverResult observer,
 {
     auto observer_double =
         opentelemetry::nostd::get<opentelemetry::nostd::shared_ptr<
-            opentelemetry::metrics::ObserverResultT<double> > >(observer);
+            opentelemetry::metrics::ObserverResultT<double>>>(observer);
     observer_double->Observe(10.2f);
 }
 
-TEST(TelemetryTest, MeterOtlpHttpExport)
+TEST(telemetry, meter_otlp_http_export)
 {
     // prefer to use aliyun cloud as otlp server: https://help.aliyun.com/zh/opentelemetry/user-guide/before-you-begin-before-you-begin?spm=a2c4g.11186623.0.0.1ecc7bdb3PnAO4
 
@@ -262,7 +262,7 @@ TEST(TelemetryTest, MeterOtlpHttpExport)
     }
 }
 
-TEST(TelemetryTest, MeterOtlpFileExport)
+TEST(telemetry, meter_otlp_file_export)
 {
     hj::telemetry::clean_up_metrics();
 

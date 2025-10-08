@@ -116,8 +116,8 @@ TEST(bytes, edge_cases)
     ASSERT_EQ(hj::bytes_to_int64(buf8), INT64_MIN);
     float f = -0.0f;
     hj::float_to_bytes(f, buf4);
-    ASSERT_EQ(signbit(hj::bytes_to_float(buf4)), true);
+    ASSERT_EQ(std::signbit(hj::bytes_to_float(buf4)), true);
     double d = -0.0;
     hj::double_to_bytes(d, buf8);
-    ASSERT_EQ(signbit(hj::bytes_to_double(buf8)), true);
+    ASSERT_EQ(std::signbit(hj::bytes_to_double(buf8)), true);
 }

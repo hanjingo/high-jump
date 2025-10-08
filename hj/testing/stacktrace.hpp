@@ -1,27 +1,27 @@
 #ifndef STACKTRACE_HPP
 #define STACKTRACE_HPP
 
-// #include <boost/stacktrace.hpp>
-// #include <iostream>
+#include <boost/stacktrace.hpp>
+#include <iostream>
 
-// namespace hj
-// {
+namespace hj
+{
 
-// inline auto stacktrace()
-// {
-//     return boost::stacktrace::stacktrace();
-// }
+inline auto stacktrace()
+{
+    return boost::stacktrace::stacktrace();
+}
 
-// } // namespace hj
+} // namespace hj
 
-// #define RECOVER(cmd)                                                           \
-//     try                                                                        \
-//     {                                                                          \
-//         cmd                                                                    \
-//     }                                                                          \
-//     catch (...)                                                                \
-//     {                                                                          \
-//         std::cerr << hj::stacktrace() << std::endl;                        \
-//     }
+#define RECOVER(cmd)                                                           \
+    try                                                                        \
+    {                                                                          \
+        cmd                                                                    \
+    }                                                                          \
+    catch(...)                                                                 \
+    {                                                                          \
+        std::cerr << hj::stacktrace() << std::endl;                            \
+    }
 
 #endif

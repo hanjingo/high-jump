@@ -37,6 +37,8 @@ struct unique_index_impl
     static constexpr auto member_ptr = MemberPtr;
     using tag_type                   = Tag;
     static constexpr bool is_unique  = true;
+    static_assert(std::is_member_pointer_v<decltype(MemberPtr)>,
+                  "MemberPtr must be a member pointer");
 };
 
 template <typename MemberType, auto MemberPtr, typename Tag>
@@ -46,6 +48,8 @@ struct nonunique_index_impl
     static constexpr auto member_ptr = MemberPtr;
     using tag_type                   = Tag;
     static constexpr bool is_unique  = false;
+    static_assert(std::is_member_pointer_v<decltype(MemberPtr)>,
+                  "MemberPtr must be a member pointer");
 };
 
 template <typename IndexConfig, typename Class>
@@ -85,10 +89,10 @@ using multi_index = boost::multi_index::multi_index_container<
     Class,
     boost::multi_index::indexed_by<
         typename detail::make_index<IndexConfigs, Class>::type...>>;
+} // namespace hj
 
 #define HJ_UNIQUE_INDEX(member_type, member_ptr, tag)                          \
     hj::unique_index<member_type, member_ptr, tag>,
-
 #define HJ_NON_UNIQUE_INDEX(member_type, member_ptr, tag)                      \
     hj::nonunique_index<member_type, member_ptr, tag>
 
@@ -97,102 +101,5 @@ using multi_index = boost::multi_index::multi_index_container<
     {                                                                          \
     };
 
-#define HJ_INDEX_TAGS_1(_1) HJ_INDEX_TAG(_1)
-
-#define HJ_INDEX_TAGS_2(_1, _2) HJ_INDEX_TAG(_1) HJ_INDEX_TAG(_2)
-
-#define HJ_INDEX_TAGS_3(_1, _2, _3)                                            \
-    HJ_INDEX_TAG(_1) HJ_INDEX_TAG(_2) HJ_INDEX_TAG(_3)
-
-#define HJ_INDEX_TAGS_4(_1, _2, _3, _4)                                        \
-    HJ_INDEX_TAG(_1)                                                           \
-    HJ_INDEX_TAG(_2)                                                           \
-    HJ_INDEX_TAG(_3)                                                           \
-    HJ_INDEX_TAG(_4)
-
-#define HJ_INDEX_TAGS_5(_1, _2, _3, _4, _5)                                    \
-    HJ_INDEX_TAG(_1)                                                           \
-    HJ_INDEX_TAG(_2)                                                           \
-    HJ_INDEX_TAG(_3)                                                           \
-    HJ_INDEX_TAG(_4)                                                           \
-    HJ_INDEX_TAG(_5)
-
-#define HJ_INDEX_TAGS_6(_1, _2, _3, _4, _5, _6)                                \
-    HJ_INDEX_TAG(_1)                                                           \
-    HJ_INDEX_TAG(_2)                                                           \
-    HJ_INDEX_TAG(_3)                                                           \
-    HJ_INDEX_TAG(_4)                                                           \
-    HJ_INDEX_TAG(_5)                                                           \
-    HJ_INDEX_TAG(_6)
-
-#define HJ_INDEX_TAGS_7(_1, _2, _3, _4, _5, _6, _7)                            \
-    HJ_INDEX_TAG(_1)                                                           \
-    HJ_INDEX_TAG(_2)                                                           \
-    HJ_INDEX_TAG(_3)                                                           \
-    HJ_INDEX_TAG(_4)                                                           \
-    HJ_INDEX_TAG(_5)                                                           \
-    HJ_INDEX_TAG(_6) HJ_INDEX_TAG(_7)
-
-#define HJ_INDEX_TAGS_8(_1, _2, _3, _4, _5, _6, _7, _8)                        \
-    HJ_INDEX_TAG(_1)                                                           \
-    HJ_INDEX_TAG(_2)                                                           \
-    HJ_INDEX_TAG(_3)                                                           \
-    HJ_INDEX_TAG(_4)                                                           \
-    HJ_INDEX_TAG(_5)                                                           \
-    HJ_INDEX_TAG(_6)                                                           \
-    HJ_INDEX_TAG(_7)                                                           \
-    HJ_INDEX_TAG(_8)
-
-#define HJ_INDEX_TAGS_9(_1, _2, _3, _4, _5, _6, _7, _8, _9)                    \
-    HJ_INDEX_TAG(_1)                                                           \
-    HJ_INDEX_TAG(_2)                                                           \
-    HJ_INDEX_TAG(_3)                                                           \
-    HJ_INDEX_TAG(_4)                                                           \
-    HJ_INDEX_TAG(_5)                                                           \
-    HJ_INDEX_TAG(_6)                                                           \
-    HJ_INDEX_TAG(_7)                                                           \
-    HJ_INDEX_TAG(_8)                                                           \
-    HJ_INDEX_TAG(_9)
-
-#define HJ_INDEX_TAGS_10(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10)              \
-    HJ_INDEX_TAG(_1)                                                           \
-    HJ_INDEX_TAG(_2)                                                           \
-    HJ_INDEX_TAG(_3)                                                           \
-    HJ_INDEX_TAG(_4)                                                           \
-    HJ_INDEX_TAG(_5)                                                           \
-    HJ_INDEX_TAG(_6)                                                           \
-    HJ_INDEX_TAG(_7)                                                           \
-    HJ_INDEX_TAG(_8)                                                           \
-    HJ_INDEX_TAG(_9)                                                           \
-    HJ_INDEX_TAG(_10)
-
-#define HJ_GET_MAKE_TAGS_MACRO(_1,                                             \
-                               _2,                                             \
-                               _3,                                             \
-                               _4,                                             \
-                               _5,                                             \
-                               _6,                                             \
-                               _7,                                             \
-                               _8,                                             \
-                               _9,                                             \
-                               _10,                                            \
-                               NAME,                                           \
-                               ...)                                            \
-    NAME
-#define HJ_INDEX_TAGS(...)                                                     \
-    HJ_GET_MAKE_TAGS_MACRO(__VA_ARGS__,                                        \
-                           HJ_INDEX_TAGS_10,                                   \
-                           HJ_INDEX_TAGS_9,                                    \
-                           HJ_INDEX_TAGS_8,                                    \
-                           HJ_INDEX_TAGS_7,                                    \
-                           HJ_INDEX_TAGS_6,                                    \
-                           HJ_INDEX_TAGS_5,                                    \
-                           HJ_INDEX_TAGS_4,                                    \
-                           HJ_INDEX_TAGS_3,                                    \
-                           HJ_INDEX_TAGS_2,                                    \
-                           HJ_INDEX_TAGS_1)                                    \
-    (__VA_ARGS__)
-
-} // namespace hj
 
 #endif // MULTI_INDEX_HPP

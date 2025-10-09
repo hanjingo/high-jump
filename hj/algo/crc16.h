@@ -1,3 +1,20 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef CRC16_H
 #define CRC16_H
 
@@ -9,8 +26,12 @@
 extern "C" {
 #endif
 
+#ifndef CRC16_MODBUS
 #define CRC16_MODBUS 1
+#endif
+#ifndef CRC16_XMODEM
 #define CRC16_XMODEM 2
+#endif
 
 #if defined(CRC16_MODBUS_ENABLED)
 #define CRC16_ALGO CRC16_MODBUS
@@ -38,7 +59,7 @@ extern "C" {
  * 
  * For more detail, see this website: https://crccalc.com/?crc=123456789&method=&datatype=ascii&outtype=hex
  */
-static uint16_t crc16_table[256] = {
+static const uint16_t crc16_table[256] = {
     0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241, 0xC601,
     0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440, 0xCC01, 0x0CC0,
     0x0D80, 0xCD41, 0x0F00, 0xCFC1, 0xCE81, 0x0E40, 0x0A00, 0xCAC1, 0xCB81,
@@ -69,7 +90,8 @@ static uint16_t crc16_table[256] = {
     0x4540, 0x8701, 0x47C0, 0x4680, 0x8641, 0x8201, 0x42C0, 0x4380, 0x8341,
     0x4100, 0x81C1, 0x8081, 0x4040};
 
-static uint16_t crc16(const void *buf, const size_t len, const uint16_t start)
+static inline uint16_t
+crc16(const void *buf, const size_t len, const uint16_t start)
 {
     if(!buf && len > 0)
         return start;
@@ -108,7 +130,7 @@ static uint16_t crc16(const void *buf, const size_t len, const uint16_t start)
  * For more detail, see this website: https://crccalc.com/?crc=123456789&method=&datatype=ascii&outtype=hex
  */
 
-static uint16_t crc16_table[256] = {
+static const uint16_t crc16_table[256] = {
     0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7, 0x8108,
     0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF, 0x1231, 0x0210,
     0x3273, 0x2252, 0x52B5, 0x4294, 0x72F7, 0x62D6, 0x9339, 0x8318, 0xB37B,
@@ -139,7 +161,8 @@ static uint16_t crc16_table[256] = {
     0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8, 0x6E17, 0x7E36, 0x4E55, 0x5E74,
     0x2E93, 0x3EB2, 0x0ED1, 0x1EF0};
 
-static uint16_t crc16(const void *buf, const size_t len, const uint16_t start)
+static inline uint16_t
+crc16(const void *buf, const size_t len, const uint16_t start)
 {
     if(!buf && len > 0)
         return start;

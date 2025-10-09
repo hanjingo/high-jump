@@ -1,3 +1,20 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef TELEMETRY_HPP
 #define TELEMETRY_HPP
 
@@ -87,16 +104,16 @@ using metric_instrument_selector_t =
     opentelemetry::sdk::metrics::InstrumentSelector;
 using metric_meter_selector_t = opentelemetry::sdk::metrics::MeterSelector;
 using metric_reader_t         = opentelemetry::sdk::metrics::MetricReader;
-using metric_u64_counter_t    = opentelemetry::nostd::shared_ptr<
-       opentelemetry::metrics::Counter<uint64_t> >;
+using metric_u64_counter_t =
+    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>;
 using metric_double_counter_t =
-    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double> >;
+    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>;
 using metric_obs_instrument_t = opentelemetry::nostd::shared_ptr<
     opentelemetry::metrics::ObservableInstrument>;
 using metric_u64_histogram_t = opentelemetry::nostd::unique_ptr<
-    opentelemetry::metrics::Histogram<uint64_t> >;
-using metric_double_histogram_t = opentelemetry::nostd::unique_ptr<
-    opentelemetry::metrics::Histogram<double> >;
+    opentelemetry::metrics::Histogram<uint64_t>>;
+using metric_double_histogram_t =
+    opentelemetry::nostd::unique_ptr<opentelemetry::metrics::Histogram<double>>;
 
 using metric_periodic_reader_options_t =
     opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions;
@@ -320,9 +337,9 @@ class custom_trace_span_exporter
             new trace_span_data_t());
     }
 
-    export_result_t Export(
-        const opentelemetry::nostd::span<std::unique_ptr<trace_recordable_t> >
-            &spans) noexcept override
+    export_result_t
+    Export(const opentelemetry::nostd::span<std::unique_ptr<trace_recordable_t>>
+               &spans) noexcept override
     {
         for(const auto &recordable : spans)
         {

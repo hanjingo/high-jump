@@ -1,3 +1,20 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef BEHAVIOR_TREE_HPP
 #define BEHAVIOR_TREE_HPP
 
@@ -28,9 +45,8 @@ input_port(string_view name, string_view description = {})
     return BT::InputPort(name, description);
 }
 
-template <typename T = void>
-inline std::pair<std::string, port_info>
-input_port(string_view name, const T &default_value, string_view description)
+inline std::pair<std::string, port_info> input_port(
+    string_view name, const std::string &default_value, string_view description)
 {
     return BT::InputPort(name, default_value, description);
 }

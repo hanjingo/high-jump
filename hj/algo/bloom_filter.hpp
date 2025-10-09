@@ -1,3 +1,20 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef BLOOM_FILTER_HPP
 #define BLOOM_FILTER_HPP
 
@@ -100,6 +117,7 @@ class dynamic_bitset
 
 } // namespace detail
 
+template <typename T = std::string>
 class bloom_filter
 {
   public:
@@ -141,8 +159,9 @@ class bloom_filter
     inline size_t bit_size() const { return _num_bits; }
     inline size_t hash_count() const { return _num_hash_functions; }
 
-    void add(const std::string &value)
+    void add(const T &value)
     {
+        _assert_not_empty(value);
         for(size_t i = 0; i < _num_hash_functions; ++i)
         {
             size_t hash = _hash_i(value, i);
@@ -150,8 +169,9 @@ class bloom_filter
         }
     }
 
-    bool contains(const std::string &value) const
+    bool contains(const T &value) const
     {
+        _assert_not_empty(value);
         for(size_t i = 0; i < _num_hash_functions; ++i)
         {
             size_t hash = _hash_i(value, i);
@@ -194,13 +214,20 @@ class bloom_filter
             static_cast<size_t>(std::round((double) m / n * std::log(2))));
     }
 
-    static size_t _hash_i(const std::string &value, size_t i)
+    static size_t _hash_i(const T &value, size_t i)
     {
-        std::hash<std::string> h1;
-        std::hash<size_t>      h2;
-        size_t                 hval = h1(value);
-        size_t                 hmix = hval + i * h2(hval);
+        std::hash<T>      h1;
+        std::hash<size_t> h2;
+        size_t            hval = h1(value);
+        size_t            hmix = hval + i * h2(hval);
         return hmix & 0x7FFFFFFFFFFFFFFF;
+    }
+
+    template <typename U = T>
+    static void _assert_not_empty(const U &value)
+    {
+        if constexpr(std::is_same<U, std::string>::value)
+            assert(!value.empty() && "bloom_filter: value must not be empty");
     }
 
   private:

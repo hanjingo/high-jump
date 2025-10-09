@@ -1,3 +1,21 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 // for more information, see:
 // https://github.com/redis/redis/blob/unstable/src/t_zset.c
 
@@ -9,6 +27,7 @@
 #include <functional>
 #include <memory>
 #include <cassert>
+#include <type_traits>
 
 #define SKIPLIST_MAXLEVEL 32
 
@@ -16,59 +35,41 @@
 
 namespace hj
 {
-
-template <typename T>
-struct _skiplist_node
-{
-    T                      obj;      // Data object
-    double                 score;    // Score for ordering
-    struct _skiplist_node *backward; // Backward pointer
-
-    struct _skiplist_level
-    {
-        struct _skiplist_node *forward; // Forward pointer
-        unsigned long          span;    // Span to next node
-    } _level[];                         // Flexible array for levels
-
-    _skiplist_node() = delete;
-    _skiplist_node(int _level, double score, const T &obj)
-        : obj(obj)
-        , score(score)
-        , backward(nullptr)
-    {
-    }
-};
-
 template <typename T>
 class skiplist
 {
   public:
-    using node_t     = _skiplist_node<T>;
-    using compare_fn = std::function<bool(const T &, const T &)>;
+    using comparable = std::function<bool(const T &, const T &)>;
 
-  private:
-    struct _skiplist_level
+    struct node_t
     {
-        node_t       *forward;
-        unsigned long span;
+        T              obj;
+        double         score;
+        struct node_t *backward;
+
+        struct level
+        {
+            struct node_t *forward;
+            unsigned long  span;
+        } _level[];
+
+        node_t() = delete;
+        node_t(int _level, double score, const T &obj)
+            : obj(obj)
+            , score(score)
+            , backward(nullptr)
+        {
+        }
     };
 
-    node_t       *_header; // Header node (sentinel)
-    node_t       *_tail;   // Tail pointer for O(1) access to last element
-    unsigned long _length; // Number of elements
-    int           _level;  // Current maximum level
-
-    // Random number generator for _level generation
-    mutable std::random_device                     _rd;
-    mutable std::mt19937                           _gen;
-    mutable std::uniform_real_distribution<double> _dis;
-    compare_fn                                     _compare;
-
-  public:
     class iterator
     {
-      private:
-        node_t *current;
+      public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type        = T;
+        using difference_type   = std::ptrdiff_t;
+        using pointer           = T *;
+        using reference         = T &;
 
       public:
         iterator(node_t *node)
@@ -114,6 +115,7 @@ class skiplist
         {
             return current == other.current;
         }
+
         bool operator!=(const iterator &other) const
         {
             return current != other.current;
@@ -121,12 +123,19 @@ class skiplist
 
         inline double  score() const { return current ? current->score : 0.0; }
         inline node_t *node() const { return current; }
+
+      private:
+        node_t *current;
     };
 
     class const_iterator
     {
-      private:
-        const node_t *current;
+      public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type        = T;
+        using difference_type   = std::ptrdiff_t;
+        using pointer           = T *;
+        using reference         = T &;
 
       public:
         const_iterator(const node_t *node)
@@ -134,7 +143,6 @@ class skiplist
         {
         }
 
-        // Convert from iterator to const_iterator
         const_iterator(const iterator &it)
             : current(it.node())
         {
@@ -175,16 +183,17 @@ class skiplist
         {
             return current == other.current;
         }
+
         bool operator!=(const const_iterator &other) const
         {
             return current != other.current;
         }
 
-        // Allow comparison between iterator and const_iterator
         bool operator==(const iterator &other) const
         {
             return current == other.node();
         }
+
         bool operator!=(const iterator &other) const
         {
             return current != other.node();
@@ -192,10 +201,13 @@ class skiplist
 
         inline double score() const { return current ? current->score : 0.0; }
         inline const node_t *node() const { return current; }
+
+      private:
+        const node_t *current;
     };
 
   public:
-    explicit skiplist(compare_fn cmp = std::less<T>())
+    explicit skiplist(comparable cmp = std::less<T>())
         : _tail(nullptr)
         , _length(0)
         , _level(1)
@@ -203,7 +215,7 @@ class skiplist
         , _dis(0.0, 1.0)
         , _compare(cmp)
     {
-        _header = create_node_(SKIPLIST_MAXLEVEL, 0, T{});
+        _header = _create_node(SKIPLIST_MAXLEVEL, 0, T{});
         for(int j = 0; j < SKIPLIST_MAXLEVEL; j++)
         {
             _header->_level[j].forward = nullptr;
@@ -213,6 +225,11 @@ class skiplist
     }
 
     ~skiplist() { release(); }
+
+    skiplist(const skiplist &)            = delete;
+    skiplist &operator=(const skiplist &) = delete;
+    skiplist(skiplist &&)                 = delete;
+    skiplist &operator=(skiplist &&)      = delete;
 
     inline unsigned long  size() const { return _length; }
     inline bool           empty() const { return _length == 0; }
@@ -232,7 +249,6 @@ class skiplist
         unsigned long rank[SKIPLIST_MAXLEVEL];
         node_t       *x = _header;
 
-        // Search for insertion point and build update array
         for(int i = _level - 1; i >= 0; i--)
         {
             rank[i] = (i == (_level - 1)) ? 0 : rank[i + 1];
@@ -247,8 +263,7 @@ class skiplist
             update[i] = x;
         }
 
-        // Generate random _level for new node
-        int new_level = random_level_();
+        int new_level = _random_level();
         if(new_level > _level)
         {
             for(int i = _level; i < new_level; i++)
@@ -260,23 +275,19 @@ class skiplist
             _level = new_level;
         }
 
-        // Create and insert new node
-        x = create_node_(new_level, score, obj);
+        x = _create_node(new_level, score, obj);
         for(int i = 0; i < new_level; i++)
         {
             x->_level[i].forward         = update[i]->_level[i].forward;
             update[i]->_level[i].forward = x;
 
-            // Update span
             x->_level[i].span = update[i]->_level[i].span - (rank[0] - rank[i]);
             update[i]->_level[i].span = (rank[0] - rank[i]) + 1;
         }
 
-        // Increment span for untouched levels
         for(int i = new_level; i < _level; i++)
             update[i]->_level[i].span++;
 
-        // Set backward pointer
         x->backward = (update[0] == _header) ? nullptr : update[0];
         if(x->_level[0].forward)
             x->_level[0].forward->backward = x;
@@ -287,13 +298,10 @@ class skiplist
         return x;
     }
 
-    // Delete element by score and object
     bool delete_node(double score, const T &obj)
     {
         node_t *update[SKIPLIST_MAXLEVEL];
         node_t *x = _header;
-
-        // Search for deletion point
         for(int i = _level - 1; i >= 0; i--)
         {
             while(x->_level[i].forward
@@ -310,14 +318,13 @@ class skiplist
         if(x && x->score == score && !_compare(x->obj, obj)
            && !_compare(obj, x->obj))
         {
-            delete_node_internal_(x, update);
+            _delete_node_internal(x, update);
             return true;
         }
 
         return false;
     }
 
-    // Get element by rank (0-based)
     node_t *get_element_by_rank(unsigned long rank) const
     {
         if(rank >= _length)
@@ -340,7 +347,6 @@ class skiplist
         return x;
     }
 
-    // Get rank of element (0-based)
     unsigned long get_rank(double score, const T &obj) const
     {
         node_t       *x    = _header;
@@ -361,17 +367,16 @@ class skiplist
                && !_compare(obj, x->_level[i].forward->obj))
             {
                 rank += x->_level[i].span;
-                return rank - 1; // Convert to 0-based
+                return rank - 1;
             }
         }
 
         return _length; // Not found
     }
 
-    // Find first node in range [min_score, max_score]
     node_t *first_in_range(double min_score, double max_score) const
     {
-        if(!is_in_range_(min_score, max_score))
+        if(!_is_in_range(min_score, max_score))
             return nullptr;
 
         node_t *x = _header;
@@ -389,10 +394,9 @@ class skiplist
         return x;
     }
 
-    // Find last node in range [min_score, max_score]
     node_t *last_in_range(double min_score, double max_score) const
     {
-        if(!is_in_range_(min_score, max_score))
+        if(!_is_in_range(min_score, max_score))
             return nullptr;
 
         node_t *x = _header;
@@ -409,14 +413,11 @@ class skiplist
         return x;
     }
 
-    // Delete nodes in score range
     unsigned long delete_range_by_score(double min_score, double max_score)
     {
         node_t       *update[SKIPLIST_MAXLEVEL];
         node_t       *x       = _header;
         unsigned long removed = 0;
-
-        // Find start position
         for(int i = _level - 1; i >= 0; i--)
         {
             while(x->_level[i].forward
@@ -427,12 +428,10 @@ class skiplist
         }
 
         x = x->_level[0].forward;
-
-        // Delete nodes in range
         while(x && x->score <= max_score)
         {
             node_t *next = x->_level[0].forward;
-            delete_node_internal_(x, update);
+            _delete_node_internal(x, update);
             removed++;
             x = next;
         }
@@ -440,7 +439,6 @@ class skiplist
         return removed;
     }
 
-    // Delete nodes by rank range [start, end] (0-based, inclusive)
     unsigned long delete_range_by_rank(unsigned long start, unsigned long end)
     {
         if(start > end || start >= _length)
@@ -453,8 +451,6 @@ class skiplist
         node_t       *x         = _header;
         unsigned long traversed = 0;
         unsigned long removed   = 0;
-
-        // Find start position
         for(int i = _level - 1; i >= 0; i--)
         {
             while(x->_level[i].forward
@@ -468,12 +464,10 @@ class skiplist
 
         x                          = x->_level[0].forward;
         unsigned long current_rank = start;
-
-        // Delete nodes in range
         while(x && current_rank <= end)
         {
             node_t *next = x->_level[0].forward;
-            delete_node_internal_(x, update);
+            _delete_node_internal(x, update);
             removed++;
             current_rank++;
             x = next;
@@ -482,19 +476,16 @@ class skiplist
         return removed;
     }
 
-    // Validate skiplist structure
     bool validate() const
     {
         node_t       *x     = _header;
         unsigned long count = 0;
-
-        // Check _level 0 (all nodes)
-        x = _header->_level[0].forward;
+        x                   = _header->_level[0].forward;
         while(x)
         {
             count++;
             if(x->_level[0].forward && x->score > x->_level[0].forward->score)
-                return false; // Score order violation
+                return false;
 
             x = x->_level[0].forward;
         }
@@ -502,23 +493,34 @@ class skiplist
         return count == _length;
     }
 
+    void release()
+    {
+        node_t *forward = _header->_level[0].forward;
+        while(forward)
+        {
+            node_t *next = forward->_level[0].forward;
+            _free_node(forward);
+            forward = next;
+        }
+        _free_node(_header);
+    }
+
   private:
-    node_t *create_node_(int _level, double score, const T &obj)
+    node_t *_create_node(int _level, double score, const T &obj)
     {
-        size_t size =
-            sizeof(node_t) + _level * sizeof(typename node_t::_skiplist_level);
-        node_t *node = static_cast<node_t *>(std::malloc(size));
-        new(node) node_t(_level, score, obj);
-        return node;
+        size_t  size = sizeof(node_t) + _level * sizeof(typename node_t::level);
+        void   *raw  = ::operator new(size);
+        node_t *new_node = new(raw) node_t(_level, score, obj);
+        return new_node;
     }
 
-    void free_node_(node_t *node)
+    void _free_node(node_t *node)
     {
-        node->~_skiplist_node();
-        std::free(node);
+        node->~node_t();
+        ::operator delete(node);
     }
 
-    int random_level_() const
+    int _random_level() const
     {
         int _level = 1;
         while(_dis(_gen) < SKIPLIST_P && _level < SKIPLIST_MAXLEVEL)
@@ -527,9 +529,8 @@ class skiplist
         return _level;
     }
 
-    void delete_node_internal_(node_t *x, node_t **update)
+    void _delete_node_internal(node_t *x, node_t **update)
     {
-        // Update forward pointers and spans
         for(int i = 0; i < _level; i++)
         {
             if(update[i]->_level[i].forward == x)
@@ -542,21 +543,19 @@ class skiplist
             }
         }
 
-        // Update backward pointer
         if(x->_level[0].forward)
             x->_level[0].forward->backward = x->backward;
         else
             _tail = x->backward;
 
-        // Free node and update _level if necessary
-        free_node_(x);
+        _free_node(x);
         while(_level > 1 && _header->_level[_level - 1].forward == nullptr)
             _level--;
 
         _length--;
     }
 
-    bool is_in_range_(double min_score, double max_score) const
+    bool _is_in_range(double min_score, double max_score) const
     {
         if(min_score > max_score)
             return false;
@@ -572,17 +571,21 @@ class skiplist
         return true;
     }
 
-    void release()
+  private:
+    struct level
     {
-        node_t *node = _header->_level[0].forward;
-        while(node)
-        {
-            node_t *next = node->_level[0].forward;
-            free_node_(node);
-            node = next;
-        }
-        free_node_(_header);
-    }
+        node_t       *forward;
+        unsigned long span;
+    };
+
+    node_t                                        *_header;
+    node_t                                        *_tail;
+    unsigned long                                  _length;
+    int                                            _level;
+    mutable std::random_device                     _rd;
+    mutable std::mt19937                           _gen;
+    mutable std::uniform_real_distribution<double> _dis;
+    comparable                                     _compare;
 };
 
 // Range result for range queries
@@ -598,13 +601,33 @@ struct range_result
     }
 };
 
-// Get nodes in score range with limit and offset
 template <typename T>
-range_result<T> get_range_by_score(const skiplist<T>  &sl,
-                                   const double        min_score,
-                                   const double        max_score,
-                                   const unsigned long offset = 0,
-                                   const long          limit  = -1)
+inline range_result<T> range_by_score(const skiplist<T>  &sl,
+                                      const double        min_score,
+                                      const double        max_score,
+                                      const unsigned long offset = 0,
+                                      const long          limit  = -1)
+{
+    return detail::_range_by_score(sl, min_score, max_score, offset, limit);
+}
+
+template <typename T>
+inline range_result<T> range_by_rank(const skiplist<T>  &sl,
+                                     const unsigned long start,
+                                     const unsigned long end_param,
+                                     const bool          reverse = false)
+{
+    return detail::_range_by_rank(sl, start, end_param, reverse);
+}
+
+namespace detail
+{
+template <typename T>
+range_result<T> _range_by_score(const skiplist<T>  &sl,
+                                const double        min_score,
+                                const double        max_score,
+                                const unsigned long offset,
+                                const long          limit)
 {
     range_result<T> result;
 
@@ -639,12 +662,11 @@ range_result<T> get_range_by_score(const skiplist<T>  &sl,
     return result;
 }
 
-// Get nodes by rank range with limit and offset
 template <typename T>
-range_result<T> get_range_by_rank(const skiplist<T>  &sl,
-                                  const unsigned long start,
-                                  const unsigned long end_param,
-                                  const bool          reverse = false)
+range_result<T> _range_by_rank(const skiplist<T>  &sl,
+                               const unsigned long start,
+                               const unsigned long end_param,
+                               const bool          reverse)
 {
     range_result<T> result;
 
@@ -684,6 +706,7 @@ range_result<T> get_range_by_rank(const skiplist<T>  &sl,
     return result;
 }
 
+} // namespace detail
 } // namespace hj
 
 #endif // SKIPLIST_HPP

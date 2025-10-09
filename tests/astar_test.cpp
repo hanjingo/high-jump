@@ -8,7 +8,10 @@
 
 using namespace hj::astar;
 
-class AStarTest : public ::testing::Test
+using location_t = location<int>;
+using grid_t     = grid<location<int>>;
+
+class astar : public ::testing::Test
 {
   protected:
     void SetUp() override
@@ -161,15 +164,7 @@ class AStarTest : public ::testing::Test
     }
 
     // Helper function to print path for debugging
-    void print_path(const std::vector<location_t> &path)
-    {
-        // std::cout << "Path: ";
-        // for (size_t i = 0; i < path.size(); ++i) {
-        //     std::cout << "(" << path[i].x << "," << path[i].y << ")";
-        //     if (i < path.size() - 1) std::cout << " -> ";
-        // }
-        // std::cout << std::endl;
-    }
+    void print_path(const std::vector<location_t> &path) {}
 
     // Helper function to print grid_t with path for visualization
     void print_grid_with_path(const std::vector<location_t> &path,
@@ -177,28 +172,6 @@ class AStarTest : public ::testing::Test
                               int                            height,
                               const std::vector<location_t> &obstacles = {})
     {
-        // std::cout << "Grid visualization:" << std::endl;
-        // for (int y = 0; y < height; y++) {
-        //     for (int x = 0; x < width; x++) {
-        //         location_t current{x, y};
-
-        //         if (std::find(obstacles.begin(), obstacles.end(), current) != obstacles.end()) {
-        //             std::cout << "# ";  // Obstacle
-        //         } else if (std::find(path.begin(), path.end(), current) != path.end()) {
-        //             if (current == path.front()) {
-        //                 std::cout << "S ";  // Start
-        //             } else if (current == path.back()) {
-        //                 std::cout << "G ";  // Goal
-        //             } else {
-        //                 std::cout << "* ";  // Path
-        //             }
-        //         } else {
-        //             std::cout << ". ";  // Empty
-        //         }
-        //     }
-        //     std::cout << std::endl;
-        // }
-        // std::cout << std::endl;
     }
 
     // Fixed helper function to validate path
@@ -221,15 +194,11 @@ class AStarTest : public ::testing::Test
                 if(std::find(neighbors.begin(), neighbors.end(), next)
                    == neighbors.end())
                 {
-                    // std::cout << "Invalid step from (" << current.x << "," << current.y
-                    //          << ") to (" << next.x << "," << next.y << ")" << std::endl;
                     return false;
                 }
             }
             catch(const std::exception &e)
             {
-                // std::cout << "Exception checking neighbors for (" << current.x << "," << current.y
-                //          << "): " << e.what() << std::endl;
                 return false;
             }
         }
@@ -267,7 +236,7 @@ class AStarTest : public ::testing::Test
 };
 
 // Test basic location_t functionality
-TEST_F(AStarTest, location_basic_operations)
+TEST_F(astar, location_basic_operations)
 {
     SCOPED_TRACE("Testing location_t basic operations");
 
@@ -289,7 +258,7 @@ TEST_F(AStarTest, location_basic_operations)
 }
 
 // Test location_t hash functionality
-TEST_F(AStarTest, location_hash_function)
+TEST_F(astar, location_hash_function)
 {
     SCOPED_TRACE("Testing location_t hash function");
 
@@ -313,7 +282,7 @@ TEST_F(AStarTest, location_hash_function)
 }
 
 // Test priority queue functionality
-TEST_F(AStarTest, priority_queue_basic)
+TEST_F(astar, priority_queue_basic)
 {
     SCOPED_TRACE("Testing priority queue");
 
@@ -333,7 +302,7 @@ TEST_F(AStarTest, priority_queue_basic)
 }
 
 // Test Manhattan heuristic
-TEST_F(AStarTest, manhattan_heuristic)
+TEST_F(astar, manhattan_heuristic)
 {
     SCOPED_TRACE("Testing Manhattan heuristic");
 
@@ -357,7 +326,7 @@ TEST_F(AStarTest, manhattan_heuristic)
 }
 
 // Test Euclidean heuristic
-TEST_F(AStarTest, euclidean_heuristic)
+TEST_F(astar, euclidean_heuristic)
 {
     SCOPED_TRACE("Testing Euclidean heuristic");
 
@@ -381,7 +350,7 @@ TEST_F(AStarTest, euclidean_heuristic)
 }
 
 // Test path smoothing
-TEST_F(AStarTest, path_smoothing)
+TEST_F(astar, path_smoothing)
 {
     SCOPED_TRACE("Testing path smoothing");
 
@@ -409,7 +378,7 @@ TEST_F(AStarTest, path_smoothing)
 }
 
 // Test grid_t construction
-TEST_F(AStarTest, grid_construction)
+TEST_F(astar, grid_construction)
 {
     SCOPED_TRACE("Testing grid_t construction");
 
@@ -435,7 +404,7 @@ TEST_F(AStarTest, grid_construction)
 }
 
 // Test basic A* search with step validation
-TEST_F(AStarTest, basic_search_step_by_step)
+TEST_F(astar, basic_search_step_by_step)
 {
     SCOPED_TRACE("Testing basic A* search with step validation");
 
@@ -463,8 +432,6 @@ TEST_F(AStarTest, basic_search_step_by_step)
         if(std::find(neighbors.begin(), neighbors.end(), next)
            == neighbors.end())
         {
-            // std::cout << "Invalid step from (" << current.x << "," << current.y
-            //          << ") to (" << next.x << "," << next.y << ")" << std::endl;
             path_valid = false;
         }
     }
@@ -475,7 +442,7 @@ TEST_F(AStarTest, basic_search_step_by_step)
 }
 
 // Test A* with manual path construction (no smoothing)
-TEST_F(AStarTest, search_without_smoothing)
+TEST_F(astar, search_without_smoothing)
 {
     SCOPED_TRACE("Testing A* search without smoothing");
 
@@ -552,7 +519,7 @@ TEST_F(AStarTest, search_without_smoothing)
 }
 
 // Test same start and goal
-TEST_F(AStarTest, same_start_and_goal)
+TEST_F(astar, same_start_and_goal)
 {
     SCOPED_TRACE("Testing same start and goal");
 
@@ -569,7 +536,7 @@ TEST_F(AStarTest, same_start_and_goal)
 }
 
 // Test unreachable goal
-TEST_F(AStarTest, unreachable_goal)
+TEST_F(astar, unreachable_goal)
 {
     SCOPED_TRACE("Testing unreachable goal");
 
@@ -590,7 +557,7 @@ TEST_F(AStarTest, unreachable_goal)
 }
 
 // Test A* with obstacles
-TEST_F(AStarTest, search_with_obstacles_detailed)
+TEST_F(astar, search_with_obstacles_detailed)
 {
     SCOPED_TRACE("Testing A* with obstacles - detailed");
 
@@ -599,24 +566,6 @@ TEST_F(AStarTest, search_with_obstacles_detailed)
 
     location_t start{0, 0};
     location_t goal{2, 2};
-
-    // Debug: Print grid_t structure
-    // std::cout << "Grid structure:" << std::endl;
-    // for (int y = 0; y < 3; y++) {
-    //     for (int x = 0; x < 3; x++) {
-    //         location_t loc{x, y};
-    //         try {
-    //             const auto& neighbors = test_grid.neighbors(loc);
-    //             std::cout << "(" << x << "," << y << ") has " << neighbors.size() << " neighbors: ";
-    //             for (const auto& n : neighbors) {
-    //                 std::cout << "(" << n.x << "," << n.y << ") ";
-    //             }
-    //             std::cout << std::endl;
-    //         } catch (...) {
-    //             std::cout << "(" << x << "," << y << ") - error getting neighbors" << std::endl;
-    //         }
-    //     }
-    // }
 
     std::vector<location_t> path;
     search(path, test_grid, start, goal);
@@ -640,7 +589,7 @@ TEST_F(AStarTest, search_with_obstacles_detailed)
 }
 
 // Test different heuristics with explicit function objects
-TEST_F(AStarTest, different_heuristics)
+TEST_F(astar, different_heuristics)
 {
     SCOPED_TRACE("Testing different heuristic functions");
 
@@ -685,7 +634,7 @@ TEST_F(AStarTest, different_heuristics)
 }
 
 // Test zero heuristic (Dijkstra)
-TEST_F(AStarTest, zero_heuristic_dijkstra)
+TEST_F(astar, zero_heuristic_dijkstra)
 {
     SCOPED_TRACE("Testing zero heuristic (Dijkstra algorithm)");
 
@@ -711,7 +660,7 @@ TEST_F(AStarTest, zero_heuristic_dijkstra)
 }
 
 // Test error conditions with safe error handling
-TEST_F(AStarTest, error_conditions_safe)
+TEST_F(astar, error_conditions_safe)
 {
     SCOPED_TRACE("Testing error conditions safely");
 
@@ -745,7 +694,7 @@ TEST_F(AStarTest, error_conditions_safe)
 }
 
 // Test grid_t connectivity validation
-TEST_F(AStarTest, grid_connectivity_validation)
+TEST_F(astar, grid_connectivity_validation)
 {
     SCOPED_TRACE("Testing grid_t connectivity validation");
 
@@ -766,7 +715,7 @@ TEST_F(AStarTest, grid_connectivity_validation)
 }
 
 // Test path optimality
-TEST_F(AStarTest, path_optimality_check)
+TEST_F(astar, path_optimality_check)
 {
     SCOPED_TRACE("Testing path optimality");
 
@@ -788,13 +737,11 @@ TEST_F(AStarTest, path_optimality_check)
         EXPECT_LE(path.size(), 5); // At most 5 steps (before smoothing)
 
         double path_cost = calculate_path_cost(path, test_grid);
-        // std::cout << "Path cost: " << path_cost << std::endl;
-        // std::cout << "Path length: " << path.size() << std::endl;
     }
 }
 
 // Test large grid_t with known optimal path
-TEST_F(AStarTest, large_grid_optimal_path)
+TEST_F(astar, large_grid_optimal_path)
 {
     SCOPED_TRACE("Testing large grid_t with optimal path");
 
@@ -822,7 +769,7 @@ TEST_F(AStarTest, large_grid_optimal_path)
 }
 
 // Test corridor navigation
-TEST_F(AStarTest, corridor_navigation)
+TEST_F(astar, corridor_navigation)
 {
     SCOPED_TRACE("Testing corridor navigation");
 
@@ -859,7 +806,7 @@ TEST_F(AStarTest, corridor_navigation)
 }
 
 // Test spiral path navigation
-TEST_F(AStarTest, spiral_path_navigation)
+TEST_F(astar, spiral_path_navigation)
 {
     SCOPED_TRACE("Testing spiral path navigation");
 
@@ -888,7 +835,7 @@ TEST_F(AStarTest, spiral_path_navigation)
 }
 
 // Test performance with timing
-TEST_F(AStarTest, performance_timing)
+TEST_F(astar, performance_timing)
 {
     SCOPED_TRACE("Testing performance with timing");
 
@@ -909,10 +856,53 @@ TEST_F(AStarTest, performance_timing)
 
     EXPECT_GT(path.size(), 0);
 
-    // std::cout << "Performance test (" << size << "x" << size << ") took: "
-    //           << duration.count() << " microseconds" << std::endl;
-    // std::cout << "Path length: " << path.size() << std::endl;
-
     // Performance should be reasonable - less than 10s for 20x20 grid_t
     EXPECT_LT(duration.count(), 10000000);
+}
+
+TEST_F(astar, grid_edge_weight)
+{
+    grid_t     test_grid(2, 2);
+    location_t a{0, 0}, b{0, 1};
+    test_grid.add_location(a, {b});
+    test_grid.set_edge_weight(a, b, 3.5);
+
+    EXPECT_DOUBLE_EQ(test_grid.cost(a, b), 3.5);
+    EXPECT_DOUBLE_EQ(test_grid.cost(b, a), 1.0);
+}
+
+TEST_F(astar, grid_add_obstacles)
+{
+    grid_t                  test_grid(2, 2);
+    std::vector<location_t> obs = {location_t(0, 1), location_t(1, 0)};
+    test_grid.add_obstacles(obs);
+
+    EXPECT_TRUE(test_grid.cost(location_t(0, 0), location_t(0, 1))
+                == std::numeric_limits<double>::infinity());
+    EXPECT_TRUE(test_grid.cost(location_t(1, 1), location_t(1, 0))
+                == std::numeric_limits<double>::infinity());
+}
+
+TEST_F(astar, grid_neighbors_exception)
+{
+    grid_t     test_grid(2, 2);
+    location_t invalid{10, 10};
+    EXPECT_THROW(test_grid.neighbors(invalid), std::out_of_range);
+}
+
+TEST(astar_misc, smooth_float_location)
+{
+    using float_loc                 = location<float>;
+    std::vector<float_loc> path     = {float_loc(0.0f, 0.0f),
+                                       float_loc(1.0f, 0.0f),
+                                       float_loc(2.0f, 0.0f)};
+    auto                   smoothed = hj::astar::detail::smooth(path);
+    EXPECT_EQ(smoothed.size(), 2);
+}
+
+TEST(astar_misc, search_result_enum)
+{
+    EXPECT_EQ(static_cast<int>(search_result::found), 0);
+    EXPECT_EQ(static_cast<int>(search_result::not_found), 1);
+    EXPECT_EQ(static_cast<int>(search_result::error), 2);
 }

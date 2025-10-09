@@ -1,3 +1,20 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef ERROR_HANDLER_HPP
 #define ERROR_HANDLER_HPP
 
@@ -73,7 +90,7 @@ struct error_handler_impl
                       / [this]() { on_transition("idle", "failed"); } =
                 boost::sml::state<failed>,
             *boost::sml::state<idle>
-                + boost::sml::event<err_event<T> > /
+                + boost::sml::event<err_event<T>> /
                       [this](const auto &e) {
                           e.cb(e.ec);
                           on_transition("idle", "handling");
@@ -87,7 +104,7 @@ struct error_handler_impl
             boost::sml::state<succed> + boost::sml::event<abort> / [this]() {} =
                 boost::sml::state<succed>,
             boost::sml::state<succed>
-                + boost::sml::event<err_event<T> > /
+                + boost::sml::event<err_event<T>> /
                       [this](const auto &e) {
                           e.cb(e.ec);
                           on_transition("succed", "handling");
@@ -106,7 +123,7 @@ struct error_handler_impl
                       / [this]() { on_transition("handling", "failed"); } =
                 boost::sml::state<failed>,
             boost::sml::state<handling>
-                + boost::sml::event<err_event<T> > / boost::sml::defer,
+                + boost::sml::event<err_event<T>> / boost::sml::defer,
 
             boost::sml::state<failed>
                 + boost::sml::event<reset>
@@ -177,7 +194,7 @@ class error_handler
   private:
     detail::error_handler_impl<T> _base;
     boost::sml::sm<detail::error_handler_impl<T>,
-                   boost::sml::defer_queue<std::deque> >
+                   boost::sml::defer_queue<std::deque>>
         _sm;
 
     std::function<bool(const T &)> _is_ok;

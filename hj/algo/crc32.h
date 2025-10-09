@@ -1,3 +1,20 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef CRC32_H
 #define CRC32_H
 
@@ -10,7 +27,9 @@
 extern "C" {
 #endif
 
+#ifndef CRC32_ISO_HDLC
 #define CRC32_ISO_HDLC 1
+#endif
 
 #if defined(CRC32_ISO_HDLC)
 #define CRC32_ALGO CRC32_ISO_HDLC
@@ -90,7 +109,8 @@ static const uint32_t crc32_table[256] = {
     0x5D681B02L, 0x2A6F2B94L, 0xB40BBE37L, 0xC30C8EA1L, 0x5A05DF1BL,
     0x2D02EF8D};
 
-static uint32_t crc32(const void *buf, const size_t len, const uint32_t start)
+static inline uint32_t
+crc32(const void *buf, const size_t len, const uint32_t start)
 {
     if(!buf && len > 0)
         return start;

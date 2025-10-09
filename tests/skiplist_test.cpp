@@ -9,29 +9,17 @@
 
 using namespace hj;
 
-class SkipListTest : public ::testing::Test
+class skiplist_test : public ::testing::Test
 {
   protected:
-    void SetUp() override
-    {
-        // std::cout << "\n=== Skip List Tests Setup ===" << std::endl;
-    }
+    void SetUp() override {}
 
-    void TearDown() override
-    {
-        // std::cout << "=== Skip List Tests Teardown ===" << std::endl;
-    }
+    void TearDown() override {}
 
     // Helper function to print skiplist for debugging
     template <typename T>
     void print_skiplist_debug(const skiplist<T> &sl)
     {
-        // std::cout << "SkipList size: " << sl.size() << std::endl;
-        // std::cout << "Elements: ";
-        // for (auto it = sl.begin(); it != sl.end(); ++it) {
-        //     std::cout << "[" << it.score() << ":" << *it << "] ";
-        // }
-        // std::cout << std::endl;
     }
 
     // Helper function to verify skiplist order
@@ -51,9 +39,7 @@ class SkipListTest : public ::testing::Test
     }
 };
 
-// ================================ Basic Operations Tests ================================
-
-TEST_F(SkipListTest, constructor_and_basic_properties)
+TEST_F(skiplist_test, constructor_and_basic_properties)
 {
     SCOPED_TRACE("Testing skiplist constructor and basic properties");
 
@@ -66,7 +52,7 @@ TEST_F(SkipListTest, constructor_and_basic_properties)
     EXPECT_EQ(sl.begin(), sl.end());
 }
 
-TEST_F(SkipListTest, single_element_operations)
+TEST_F(skiplist_test, single_element_operations)
 {
     SCOPED_TRACE("Testing single element insert and access");
 
@@ -94,7 +80,7 @@ TEST_F(SkipListTest, single_element_operations)
     EXPECT_EQ(it, sl.end());
 }
 
-TEST_F(SkipListTest, multiple_element_insertion)
+TEST_F(skiplist_test, multiple_element_insertion)
 {
     SCOPED_TRACE("Testing multiple element insertion");
 
@@ -126,7 +112,7 @@ TEST_F(SkipListTest, multiple_element_insertion)
     }
 }
 
-TEST_F(SkipListTest, duplicate_scores)
+TEST_F(skiplist_test, duplicate_scores)
 {
     SCOPED_TRACE("Testing duplicate scores with different objects");
 
@@ -146,9 +132,7 @@ TEST_F(SkipListTest, duplicate_scores)
     print_skiplist_debug(sl);
 }
 
-// ================================ Deletion Tests ================================
-
-TEST_F(SkipListTest, delete_single_element)
+TEST_F(skiplist_test, delete_single_element)
 {
     SCOPED_TRACE("Testing deletion of single element");
 
@@ -162,7 +146,7 @@ TEST_F(SkipListTest, delete_single_element)
     EXPECT_EQ(sl.last(), nullptr);
 }
 
-TEST_F(SkipListTest, delete_multiple_elements)
+TEST_F(skiplist_test, delete_multiple_elements)
 {
     SCOPED_TRACE("Testing deletion of multiple elements");
 
@@ -199,7 +183,7 @@ TEST_F(SkipListTest, delete_multiple_elements)
     }
 }
 
-TEST_F(SkipListTest, delete_nonexistent_element)
+TEST_F(skiplist_test, delete_nonexistent_element)
 {
     SCOPED_TRACE("Testing deletion of non-existent element");
 
@@ -215,9 +199,7 @@ TEST_F(SkipListTest, delete_nonexistent_element)
     EXPECT_EQ(sl.size(), 2);
 }
 
-// ================================ Rank Operations Tests ================================
-
-TEST_F(SkipListTest, get_element_by_rank)
+TEST_F(skiplist_test, get_element_by_rank)
 {
     SCOPED_TRACE("Testing get element by rank");
 
@@ -251,7 +233,7 @@ TEST_F(SkipListTest, get_element_by_rank)
     EXPECT_EQ(sl.get_element_by_rank(100), nullptr);
 }
 
-TEST_F(SkipListTest, get_rank)
+TEST_F(skiplist_test, get_rank)
 {
     SCOPED_TRACE("Testing get rank of elements");
 
@@ -276,9 +258,7 @@ TEST_F(SkipListTest, get_rank)
     EXPECT_EQ(sl.get_rank(1.0, "orange"), sl.size());
 }
 
-// ================================ Range Operations Tests ================================
-
-TEST_F(SkipListTest, first_and_last_in_range)
+TEST_F(skiplist_test, first_and_last_in_range)
 {
     SCOPED_TRACE("Testing first and last in range");
 
@@ -317,7 +297,7 @@ TEST_F(SkipListTest, first_and_last_in_range)
     EXPECT_EQ(invalid2, nullptr);
 }
 
-TEST_F(SkipListTest, get_range_by_score)
+TEST_F(skiplist_test, range_by_score)
 {
     SCOPED_TRACE("Testing get range by score");
 
@@ -333,7 +313,7 @@ TEST_F(SkipListTest, get_range_by_score)
     sl.insert(7.0, "grape");
 
     // Test basic range
-    auto result = get_range_by_score(sl, 2.0, 5.0);
+    auto result = range_by_score(sl, 2.0, 5.0);
     EXPECT_EQ(result.nodes.size(), 4);
     EXPECT_EQ(result.total_in_range, 4);
 
@@ -347,7 +327,7 @@ TEST_F(SkipListTest, get_range_by_score)
     }
 
     // Test with offset and limit
-    auto result_limited = get_range_by_score(sl, 1.0, 7.0, 2, 3);
+    auto result_limited = range_by_score(sl, 1.0, 7.0, 2, 3);
     EXPECT_EQ(result_limited.nodes.size(), 3);
     EXPECT_EQ(result_limited.total_in_range,
               7); // Total in range should count all
@@ -361,7 +341,7 @@ TEST_F(SkipListTest, get_range_by_score)
     }
 }
 
-TEST_F(SkipListTest, get_range_by_rank)
+TEST_F(skiplist_test, range_by_rank)
 {
     SCOPED_TRACE("Testing get range by rank");
 
@@ -375,7 +355,7 @@ TEST_F(SkipListTest, get_range_by_rank)
     sl.insert(5.0, "elderberry");
 
     // Test forward range
-    auto result = get_range_by_rank(sl, 1, 3, false);
+    auto result = range_by_rank(sl, 1, 3, false);
     EXPECT_EQ(result.nodes.size(), 3);
     EXPECT_EQ(result.total_in_range, 3);
 
@@ -386,7 +366,7 @@ TEST_F(SkipListTest, get_range_by_rank)
     }
 
     // Test reverse range
-    auto result_reverse = get_range_by_rank(sl, 1, 3, true);
+    auto result_reverse = range_by_rank(sl, 1, 3, true);
     EXPECT_EQ(result_reverse.nodes.size(), 3);
     EXPECT_EQ(result_reverse.total_in_range, 3);
 
@@ -397,7 +377,7 @@ TEST_F(SkipListTest, get_range_by_rank)
     }
 }
 
-TEST_F(SkipListTest, delete_range_by_score)
+TEST_F(skiplist_test, delete_range_by_score)
 {
     SCOPED_TRACE("Testing delete range by score");
 
@@ -428,7 +408,7 @@ TEST_F(SkipListTest, delete_range_by_score)
     }
 }
 
-TEST_F(SkipListTest, delete_range_by_rank)
+TEST_F(skiplist_test, delete_range_by_rank)
 {
     SCOPED_TRACE("Testing delete range by rank");
 
@@ -459,9 +439,7 @@ TEST_F(SkipListTest, delete_range_by_rank)
     }
 }
 
-// ================================ Iterator Tests ================================
-
-TEST_F(SkipListTest, forward_iteration)
+TEST_F(skiplist_test, forward_iteration)
 {
     SCOPED_TRACE("Testing forward iteration");
 
@@ -486,7 +464,7 @@ TEST_F(SkipListTest, forward_iteration)
     EXPECT_EQ(i, expected.size());
 }
 
-TEST_F(SkipListTest, backward_iteration)
+TEST_F(skiplist_test, backward_iteration)
 {
     SCOPED_TRACE("Testing backward iteration");
 
@@ -517,7 +495,7 @@ TEST_F(SkipListTest, backward_iteration)
     } while(i < expected.size());
 }
 
-TEST_F(SkipListTest, iterator_operators)
+TEST_F(skiplist_test, iterator_operators)
 {
     SCOPED_TRACE("Testing iterator operators");
 
@@ -545,9 +523,7 @@ TEST_F(SkipListTest, iterator_operators)
     EXPECT_EQ(*it2, "banana");
 }
 
-// ================================ Custom Comparison Tests ================================
-
-TEST_F(SkipListTest, custom_comparison_function)
+TEST_F(skiplist_test, custom_comparison_function)
 {
     SCOPED_TRACE("Testing custom comparison function");
 
@@ -574,9 +550,7 @@ TEST_F(SkipListTest, custom_comparison_function)
     }
 }
 
-// ================================ Edge Cases Tests ================================
-
-TEST_F(SkipListTest, empty_skiplist_operations)
+TEST_F(skiplist_test, empty_skiplist_operations)
 {
     SCOPED_TRACE("Testing operations on empty skiplist");
 
@@ -591,12 +565,12 @@ TEST_F(SkipListTest, empty_skiplist_operations)
     EXPECT_EQ(sl.delete_range_by_score(0.0, 10.0), 0);
     EXPECT_EQ(sl.delete_range_by_rank(0, 10), 0);
 
-    auto range_result = get_range_by_score(sl, 0.0, 10.0);
+    auto range_result = range_by_score(sl, 0.0, 10.0);
     EXPECT_EQ(range_result.nodes.size(), 0);
     EXPECT_EQ(range_result.total_in_range, 0);
 }
 
-TEST_F(SkipListTest, large_score_values)
+TEST_F(skiplist_test, large_score_values)
 {
     SCOPED_TRACE("Testing large score values");
 
@@ -622,7 +596,7 @@ TEST_F(SkipListTest, large_score_values)
     EXPECT_EQ(*it, "infinity");
 }
 
-TEST_F(SkipListTest, stress_test_random_operations)
+TEST_F(skiplist_test, stress_test_random_operations)
 {
     SCOPED_TRACE("Testing stress test with random operations");
 
@@ -632,8 +606,8 @@ TEST_F(SkipListTest, stress_test_random_operations)
     std::uniform_real_distribution<double> score_dist(0.0, 100.0);
     std::uniform_int_distribution<int>     value_dist(1, 1000);
 
-    const int                            num_operations = 1000;
-    std::vector<std::pair<double, int> > inserted;
+    const int                           num_operations = 1000;
+    std::vector<std::pair<double, int>> inserted;
 
     // Insert random elements
     for(int i = 0; i < num_operations; ++i)
@@ -661,9 +635,7 @@ TEST_F(SkipListTest, stress_test_random_operations)
     }
 }
 
-// ================================ Performance Tests ================================
-
-TEST_F(SkipListTest, performance_test)
+TEST_F(skiplist_test, performance_test)
 {
     SCOPED_TRACE("Testing performance with large dataset");
 
@@ -682,8 +654,6 @@ TEST_F(SkipListTest, performance_test)
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         end_time - start_time);
 
-    // std::cout << "Inserted " << num_elements << " elements in " << duration.count() << " ms" << std::endl;
-
     EXPECT_EQ(sl.size(), num_elements);
     EXPECT_TRUE(sl.validate());
 
@@ -699,13 +669,9 @@ TEST_F(SkipListTest, performance_test)
     end_time = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         end_time - start_time);
-
-    // std::cout << "1000 rank-based searches took " << duration.count() << " μs" << std::endl;
 }
 
-// ================================ Validation Tests ================================
-
-TEST_F(SkipListTest, validate_structure)
+TEST_F(skiplist_test, validate_structure)
 {
     SCOPED_TRACE("Testing skiplist structure validation");
 
@@ -732,7 +698,7 @@ TEST_F(SkipListTest, validate_structure)
     EXPECT_TRUE(sl.validate());
 }
 
-TEST_F(SkipListTest, integer_type_operations)
+TEST_F(skiplist_test, integer_type_operations)
 {
     SCOPED_TRACE("Testing skiplist with integer type");
 
@@ -756,4 +722,46 @@ TEST_F(SkipListTest, integer_type_operations)
         EXPECT_EQ(*it, expected_values[i]);
         EXPECT_EQ(it.score(), expected_scores[i]);
     }
+}
+
+TEST_F(skiplist_test, exception_safety_on_insert)
+{
+    SCOPED_TRACE("Testing skiplist exception safety on insert");
+
+    skiplist<std::string> sl;
+    try
+    {
+        sl.insert(1.0, std::string());
+        EXPECT_EQ(sl.size(), 1);
+    }
+    catch(const std::exception &e)
+    {
+        ADD_FAILURE() << "Exception thrown: " << e.what();
+    }
+}
+
+TEST_F(skiplist_test, range_by_score_and_rank_interface)
+{
+    SCOPED_TRACE("Testing range_by_score and range_by_rank interface");
+
+    skiplist<std::string> sl;
+    sl.insert(1.0, "apple");
+    sl.insert(2.0, "banana");
+    sl.insert(3.0, "cherry");
+    sl.insert(4.0, "date");
+    sl.insert(5.0, "elderberry");
+
+    auto result = range_by_score(sl, 2.0, 4.0);
+    EXPECT_EQ(result.nodes.size(), 3);
+    EXPECT_EQ(result.total_in_range, 3);
+    std::vector<std::string> expected = {"banana", "cherry", "date"};
+    for(size_t i = 0; i < result.nodes.size(); ++i)
+        EXPECT_EQ(result.nodes[i]->obj, expected[i]);
+
+    auto result2 = range_by_rank(sl, 1, 3, false);
+    EXPECT_EQ(result2.nodes.size(), 3);
+    EXPECT_EQ(result2.total_in_range, 3);
+    std::vector<std::string> expected2 = {"banana", "cherry", "date"};
+    for(size_t i = 0; i < result2.nodes.size(); ++i)
+        EXPECT_EQ(result2.nodes[i]->obj, expected2[i]);
 }

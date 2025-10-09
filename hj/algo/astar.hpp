@@ -22,20 +22,19 @@
 #ifndef ASTAR_HPP
 #define ASTAR_HPP
 
+
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include <queue>
 #include <cstdlib>
 #include <functional>
-#include <cmath> // Add missing header for sqrt
+#include <cmath>
 
 namespace hj::astar
 {
-
 namespace detail
 {
-
-// Priority queue for A* algorithm
 template <typename T, typename Priority>
 struct priority_queue
 {
@@ -50,6 +49,8 @@ struct priority_queue
     }
     T get()
     {
+        assert(!elements.empty()
+               && "priority_queue::get() called on empty queue");
         T best_item = elements.top().second;
         elements.pop();
         return best_item;
@@ -70,7 +71,6 @@ inline double euclidean_heuristic(const Location &a, const Location &b)
     return std::sqrt(dx * dx + dy * dy);
 }
 
-// smooth path - FIXED: Don't smooth for path validation tests
 template <typename Location>
 std::vector<Location> smooth(const std::vector<Location> &path)
 {
@@ -86,13 +86,11 @@ std::vector<Location> smooth(const std::vector<Location> &path)
         const Location &curr = path[i];
         const Location &next = path[i + 1];
 
-        // Check if current point is necessary (not collinear)
         int dx1 = curr.x - prev.x;
         int dy1 = curr.y - prev.y;
         int dx2 = next.x - curr.x;
         int dy2 = next.y - curr.y;
 
-        // If not collinear, keep the point
         if(dx1 * dy2 != dy1 * dx2)
             smoothed_path.push_back(curr);
     }
@@ -100,18 +98,22 @@ std::vector<Location> smooth(const std::vector<Location> &path)
     smoothed_path.push_back(path.back()); // Always keep the end point
     return smoothed_path;
 }
+} // namespace detail
+} // namespace hj::astar
 
-// Basic 2D location structure
+namespace hj::astar
+{
+template <typename T = int>
 struct location
 {
-    int x, y;
+    T x, y;
 
     location()
-        : x(0)
-        , y(0)
+        : x(T{})
+        , y(T{})
     {
     }
-    location(int x_, int y_)
+    location(T x_, T y_)
         : x(x_)
         , y(y_)
     {
@@ -134,84 +136,123 @@ struct location
     {
         std::size_t operator()(const location &loc) const
         {
-            return std::hash<int>()(loc.x) ^ (std::hash<int>()(loc.y) << 1);
+            std::size_t seed = 0;
+            seed ^=
+                std::hash<T>()(loc.x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^=
+                std::hash<T>()(loc.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
         }
     };
 };
+} // namespace hj::astar
 
-// Grid type definition
+// support for std::pair<location, location> as key in unordered_map
+namespace std
+{
+template <typename T>
+struct hash<std::pair<hj::astar::location<T>, hj::astar::location<T>>>
+{
+    std::size_t operator()(
+        const std::pair<hj::astar::location<T>, hj::astar::location<T>> &p)
+        const noexcept
+    {
+        std::size_t h1 = hj::astar::location<T>::hash{}(p.first);
+        std::size_t h2 = hj::astar::location<T>::hash{}(p.second);
+        return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+    }
+};
+}
+
+namespace hj::astar
+{
+template <typename Location>
 struct grid
 {
-    std::unordered_map<location, std::vector<location>, location::hash>
-        adjacency_list;
+    std::unordered_map<Location, std::vector<Location>, typename Location::hash>
+                                                              adjacency_list;
+    std::unordered_map<std::pair<Location, Location>, double> edge_weights;
+    std::unordered_set<Location, typename Location::hash>     obstacles;
 
     grid() = default;
     grid(int width, int height)
     {
-        // Initialize grid with empty adjacency list
+        assert(width > 0 && height > 0);
         for(int y = 0; y < height; y++)
         {
             for(int x = 0; x < width; x++)
             {
-                location loc{x, y};
-                adjacency_list[loc] = std::vector<location>();
+                Location loc{x, y};
+                adjacency_list[loc] = std::vector<Location>();
             }
         }
     }
 
-    // Add a location with its neighbors
-    void add_location(const location              &loc,
-                      const std::vector<location> &neighbors)
+    void add_location(const Location              &loc,
+                      const std::vector<Location> &neighbors)
     {
         adjacency_list[loc] = neighbors;
     }
 
-    // Get neighbors of a location
-    virtual const std::vector<location> &neighbors(const location &loc) const
+    void add_obstacles(const std::vector<Location> &obs)
+    {
+        for(const auto &o : obs)
+            obstacles.insert(o);
+    }
+
+    void set_edge_weight(const Location &from, const Location &to, double w)
+    {
+        edge_weights[{from, to}] = w;
+    }
+
+    virtual const std::vector<Location> &neighbors(const Location &loc) const
     {
         return adjacency_list.at(loc);
     }
 
-    // Get cost between two locations
-    virtual double cost(const location &from, const location &to) const
+    virtual double cost(const Location &from, const Location &to) const
     {
-        // Default cost is 1 (for unweighted grids)
-        return 1.0;
+        if(obstacles.count(to))
+            return std::numeric_limits<double>::infinity();
+
+        auto it = edge_weights.find({from, to});
+        return it != edge_weights.end() ? it->second : 1.0;
     }
 };
 
-} // namespace detail
-
-// ----------------------------------- api -----------------------------------
-using cost_t     = double;
-using location_t = detail::location;
-using grid_t     = detail::grid;
+using cost_t = double;
 
 template <typename Location>
 using heuristic_fn = std::function<cost_t(const Location &, const Location &)>;
 
+enum class search_result
+{
+    found,
+    not_found,
+    error
+};
+
 template <typename Grid, typename Location>
-void search(
-    std::vector<Location> &path,
-    const Grid            &grid,
-    const Location        &start,
-    const Location        &goal,
-    heuristic_fn<Location> heuristic = detail::manhattan_heuristic<Location>)
+search_result
+search(std::vector<Location> &path,
+       const Grid            &grid,
+       const Location        &start,
+       const Location        &goal,
+       heuristic_fn<Location> heuristic = detail::manhattan_heuristic<Location>)
 {
     path.clear();
 
-    // Check if start and goal are the same
     if(start == goal)
     {
         path.push_back(start);
-        return;
+        return search_result::found;
     }
 
     detail::priority_queue<Location, cost_t> frontier;
     frontier.put(start, 0);
 
-    std::unordered_map<Location, Location, detail::location::hash> came_from;
-    std::unordered_map<Location, cost_t, detail::location::hash>   cost_so_far;
+    std::unordered_map<Location, Location, Location::hash> came_from;
+    std::unordered_map<Location, cost_t, Location::hash>   cost_so_far;
     came_from[start]   = start;
     cost_so_far[start] = 0;
 
@@ -229,7 +270,6 @@ void search(
                 cost_t new_cost =
                     cost_so_far[current] + grid.cost(current, next);
 
-                // FIXED: Proper condition for updating costs
                 if(cost_so_far.find(next) == cost_so_far.end()
                    || new_cost < cost_so_far[next])
                 {
@@ -240,16 +280,15 @@ void search(
                 }
             }
         }
-        catch(const std::exception &)
+        catch(const std::exception &e)
         {
-            // Handle case where current location is not in grid
+            std::cerr << "[astar] Exception: " << e.what() << std::endl;
             continue;
         }
     }
 
-    // construct path
     if(came_from.find(goal) == came_from.end())
-        return; // No path found
+        return search_result::not_found;
 
     Location current = goal;
     while(current != start)
@@ -257,13 +296,15 @@ void search(
         path.push_back(current);
         auto it = came_from.find(current);
         if(it == came_from.end())
-            return; // construct failed
+            return search_result::error;
 
         current = it->second;
     }
     path.push_back(start);
     std::reverse(path.begin(), path.end());
+    return search_result::found;
 }
 
 } // namespace hj::astar
+
 #endif // ASTAR_HPP

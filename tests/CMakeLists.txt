@@ -22,6 +22,8 @@ if (WIN32)
         -D_WIN32_WINNT=0x0A00     # Windows 10
         -D_WINSOCK_DEPRECATED_NO_WARNINGS
     )
+
+    add_compile_options(/bigobj)
 endif()
 
 if(COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -237,6 +239,10 @@ file(GLOB TEST_CONFIG_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/json_test.json"
     "${CMAKE_CURRENT_SOURCE_DIR}/crypto.log"
     "${CMAKE_CURRENT_SOURCE_DIR}/crypto_nopadding.log"
+    "${CMAKE_CURRENT_SOURCE_DIR}/client.crt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/client.key"
+    "${CMAKE_CURRENT_SOURCE_DIR}/server.crt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/server.key"
 )
 add_custom_target(copy_test_configs ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>

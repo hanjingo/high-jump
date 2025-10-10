@@ -608,27 +608,6 @@ inline range_result<T> range_by_score(const skiplist<T>  &sl,
                                       const unsigned long offset = 0,
                                       const long          limit  = -1)
 {
-    return detail::_range_by_score(sl, min_score, max_score, offset, limit);
-}
-
-template <typename T>
-inline range_result<T> range_by_rank(const skiplist<T>  &sl,
-                                     const unsigned long start,
-                                     const unsigned long end_param,
-                                     const bool          reverse = false)
-{
-    return detail::_range_by_rank(sl, start, end_param, reverse);
-}
-
-namespace detail
-{
-template <typename T>
-range_result<T> _range_by_score(const skiplist<T>  &sl,
-                                const double        min_score,
-                                const double        max_score,
-                                const unsigned long offset,
-                                const long          limit)
-{
     range_result<T> result;
 
     auto *x = sl.first_in_range(min_score, max_score);
@@ -663,10 +642,10 @@ range_result<T> _range_by_score(const skiplist<T>  &sl,
 }
 
 template <typename T>
-range_result<T> _range_by_rank(const skiplist<T>  &sl,
-                               const unsigned long start,
-                               const unsigned long end_param,
-                               const bool          reverse)
+inline range_result<T> range_by_rank(const skiplist<T>  &sl,
+                                     const unsigned long start,
+                                     const unsigned long end_param,
+                                     const bool          reverse = false)
 {
     range_result<T> result;
 
@@ -706,7 +685,6 @@ range_result<T> _range_by_rank(const skiplist<T>  &sl,
     return result;
 }
 
-} // namespace detail
 } // namespace hj
 
 #endif // SKIPLIST_HPP

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #ifdef GRPC_ENABLE
-#include <hj/misc/grpc.hpp>
+#include <hj/net/grpc.hpp>
 #include <grpcpp/grpcpp.h>
 #include <thread>
 #include <chrono>

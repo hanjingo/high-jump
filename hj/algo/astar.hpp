@@ -157,8 +157,8 @@ struct hash<std::pair<hj::astar::location<T>, hj::astar::location<T>>>
         const std::pair<hj::astar::location<T>, hj::astar::location<T>> &p)
         const noexcept
     {
-        std::size_t h1 = hj::astar::location<T>::hash{}(p.first);
-        std::size_t h2 = hj::astar::location<T>::hash{}(p.second);
+        std::size_t h1 = typename hj::astar::location<T>::hash{}(p.first);
+        std::size_t h2 = typename hj::astar::location<T>::hash{}(p.second);
         return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
     }
 };
@@ -251,8 +251,8 @@ search(std::vector<Location> &path,
     detail::priority_queue<Location, cost_t> frontier;
     frontier.put(start, 0);
 
-    std::unordered_map<Location, Location, Location::hash> came_from;
-    std::unordered_map<Location, cost_t, Location::hash>   cost_so_far;
+    std::unordered_map<Location, Location, typename Location::hash> came_from;
+    std::unordered_map<Location, cost_t, typename Location::hash>   cost_so_far;
     came_from[start]   = start;
     cost_so_far[start] = 0;
 

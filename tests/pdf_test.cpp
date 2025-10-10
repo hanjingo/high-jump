@@ -361,7 +361,7 @@ TEST(pdf, save_to_file)
     doc.set_permission(hj::pdf::document::permission::print);
 
     // Save to a file
-    ASSERT_TRUE(doc.save_to_file("test_document.pdf"));
+    ASSERT_TRUE(doc.save("test_document.pdf"));
 }
 
 TEST(pdf, save_to_memory)
@@ -381,7 +381,7 @@ TEST(pdf, save_to_memory)
     page.end_text();
 
     std::vector<unsigned char> buffer;
-    EXPECT_NO_THROW(doc.save_to_memory(buffer));
+    EXPECT_NO_THROW(doc.save(buffer));
     EXPECT_GT(buffer.size(), 0);
     EXPECT_LT(buffer.size(), 1024 * 1024);
 
@@ -390,4 +390,25 @@ TEST(pdf, save_to_memory)
     EXPECT_EQ(buffer[1], 'P');
     EXPECT_EQ(buffer[2], 'D');
     EXPECT_EQ(buffer[3], 'F');
+}
+
+TEST(pdf, save_to_ostream)
+{
+    hj::pdf::document doc;
+    doc.set_title("OStream Test");
+    auto &page = doc.add_page();
+    page.set_font(hj::pdf::font_name::helvetica, 12);
+    page.begin_text();
+    page.show_text_at("Stream Content", hj::pdf::point(100, 700));
+    page.end_text();
+
+    std::stringstream ss;
+    EXPECT_NO_THROW(doc.save(ss));
+    std::string pdf_data = ss.str();
+    EXPECT_GT(pdf_data.size(), 0);
+    ASSERT_GE(pdf_data.size(), 4);
+    EXPECT_EQ(pdf_data[0], '%');
+    EXPECT_EQ(pdf_data[1], 'P');
+    EXPECT_EQ(pdf_data[2], 'D');
+    EXPECT_EQ(pdf_data[3], 'F');
 }

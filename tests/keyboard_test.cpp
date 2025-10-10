@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <hj/hardware/keyboard.h>
 
-TEST(KeyboardTest, EnumerateKeyboards)
+TEST(keyboard, enumerate_keyboards)
 {
     keyboard_info_t infos[8] = {0};
     int             n        = keyboard_enumerate(infos, 8);
@@ -13,7 +13,7 @@ TEST(KeyboardTest, EnumerateKeyboards)
     }
 }
 
-TEST(KeyboardTest, OpenCloseKeyboard)
+TEST(keyboard, open_close_keyboard)
 {
     keyboard_info_t infos[4] = {0};
     int             n        = keyboard_enumerate(infos, 4);
@@ -28,7 +28,7 @@ TEST(KeyboardTest, OpenCloseKeyboard)
     }
 }
 
-TEST(KeyboardTest, ReadKeyEvent)
+TEST(keyboard, read_key_event)
 {
     keyboard_info_t infos[4] = {0};
     int             n        = keyboard_enumerate(infos, 4);
@@ -44,7 +44,7 @@ TEST(KeyboardTest, ReadKeyEvent)
     keyboard_close(handle);
 }
 
-TEST(KeyboardTest, SetRepeat)
+TEST(keyboard, set_repeat)
 {
     int handle = keyboard_open(NULL);
     int ret    = keyboard_set_repeat(handle, 500, 30);

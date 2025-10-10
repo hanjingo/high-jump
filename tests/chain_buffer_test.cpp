@@ -5,7 +5,7 @@
 
 using hj::chain_buffer;
 
-TEST(ChainBufferTest, AppendAndRead)
+TEST(chain_buffer, append_and_read)
 {
     chain_buffer buf;
     std::string  data = "hello world";
@@ -18,7 +18,7 @@ TEST(ChainBufferTest, AppendAndRead)
     ASSERT_EQ(std::string(out, n), data);
 }
 
-TEST(ChainBufferTest, Consume)
+TEST(chain_buffer, consume)
 {
     chain_buffer buf;
     std::string  data = "abcdef";
@@ -32,7 +32,7 @@ TEST(ChainBufferTest, Consume)
     ASSERT_EQ(std::string(out, n), "cdef");
 }
 
-TEST(ChainBufferTest, AppendLarge)
+TEST(chain_buffer, append_large)
 {
     chain_buffer buf(8); // small block size for test
     std::string  data(100, 'x');
@@ -45,7 +45,7 @@ TEST(ChainBufferTest, AppendLarge)
     ASSERT_EQ(std::string(out, n), data);
 }
 
-TEST(ChainBufferTest, Clear)
+TEST(chain_buffer, clear)
 {
     chain_buffer buf;
     std::string  data = "test";
@@ -55,7 +55,7 @@ TEST(ChainBufferTest, Clear)
     ASSERT_TRUE(buf.empty());
 }
 
-TEST(ChainBufferTest, AppendChainBuffer)
+TEST(chain_buffer, append_chain_buffer)
 {
     chain_buffer buf1, buf2;
     std::string  d1 = "foo";
@@ -70,7 +70,7 @@ TEST(ChainBufferTest, AppendChainBuffer)
     ASSERT_EQ(std::string(out, n), d1 + d2);
 }
 
-TEST(ChainBufferTest, ConsumeOver)
+TEST(chain_buffer, consume_over)
 {
     chain_buffer buf;
     std::string  data = "12345";
@@ -82,7 +82,7 @@ TEST(ChainBufferTest, ConsumeOver)
     ASSERT_TRUE(buf.empty());
 }
 
-TEST(ChainBufferTest, AppendEmptyBuffer)
+TEST(chain_buffer, append_empty_buffer)
 {
     chain_buffer buf1, buf2;
     buf1.append(buf2);
@@ -93,7 +93,7 @@ TEST(ChainBufferTest, AppendEmptyBuffer)
     ASSERT_EQ(buf1.size(), 1u);
 }
 
-TEST(ChainBufferTest, BlockSize)
+TEST(chain_buffer, block_size)
 {
     chain_buffer buf(32);
     ASSERT_EQ(buf.block_size(), 32u);
@@ -102,7 +102,7 @@ TEST(ChainBufferTest, BlockSize)
     ASSERT_EQ(buf.size(), 100u);
 }
 
-TEST(ChainBufferTest, ClearReuse)
+TEST(chain_buffer, clear_reuse)
 {
     chain_buffer buf;
     std::string  d = "abc";
@@ -117,7 +117,7 @@ TEST(ChainBufferTest, ClearReuse)
     ASSERT_EQ(std::string(out, n), d);
 }
 
-TEST(ChainBufferTest, MultiAppendConsume)
+TEST(chain_buffer, multi_append_consume)
 {
     chain_buffer buf;
     std::string  d1 = "abc", d2 = "defg", d3 = "hij";

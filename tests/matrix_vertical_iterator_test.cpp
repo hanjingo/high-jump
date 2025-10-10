@@ -5,7 +5,7 @@
 
 using hj::matrix_vertical_iterator;
 
-TEST(matrix_vertical_iterator, StdVector2DArray)
+TEST(matrix_vertical_iterator, std_vector2d_array)
 {
     std::vector<std::vector<int>> arr = {{1, 4}, {2, 5}, {3, 6}};
     struct Wrapper
@@ -34,7 +34,7 @@ TEST(matrix_vertical_iterator, StdVector2DArray)
     EXPECT_EQ(result, std::vector<int>({1, 2, 3, 4, 5, 6}));
 }
 
-TEST(matrix_vertical_iterator, EigenMatrix)
+TEST(matrix_vertical_iterator, eigen_matrix)
 {
     Eigen::Matrix<int, 3, 2> emat;
     emat << 1, 2, 3, 4, 5, 6;

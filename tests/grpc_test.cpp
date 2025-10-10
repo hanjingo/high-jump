@@ -24,7 +24,7 @@ class TestGrpcServiceImpl : public GrpcService::Service
 
 TestGrpcServiceImpl *g_service = new TestGrpcServiceImpl();
 
-TEST(GRPCTest, SayHelloUnaryCall)
+TEST(grpc, say_hello_unary_call)
 {
     hj::grpc_server server;
     std::string     address = "127.0.0.1:50051";

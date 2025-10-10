@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-class DiskTest : public ::testing::Test
+class disk : public ::testing::Test
 {
   protected:
     void SetUp() override
@@ -17,7 +17,7 @@ class DiskTest : public ::testing::Test
 };
 
 // Test disk subsystem initialization and cleanup
-TEST_F(DiskTest, initialization_and_cleanup)
+TEST_F(disk, initialization_and_cleanup)
 {
     SCOPED_TRACE("Testing disk subsystem initialization and cleanup");
 
@@ -31,7 +31,7 @@ TEST_F(DiskTest, initialization_and_cleanup)
 }
 
 // Test size formatting function
-TEST_F(DiskTest, size_formatting)
+TEST_F(disk, size_formatting)
 {
     SCOPED_TRACE("Testing size formatting");
     char buffer[256];
@@ -69,7 +69,7 @@ TEST_F(DiskTest, size_formatting)
 }
 
 // Test disk count retrieval
-TEST_F(DiskTest, disk_count_retrieval)
+TEST_F(disk, disk_count_retrieval)
 {
     SCOPED_TRACE("Testing disk count retrieval");
 
@@ -81,7 +81,7 @@ TEST_F(DiskTest, disk_count_retrieval)
 }
 
 // Test disk enumeration
-TEST_F(DiskTest, disk_enumeration)
+TEST_F(disk, disk_enumeration)
 {
     SCOPED_TRACE("Testing disk enumeration");
 
@@ -124,7 +124,7 @@ TEST_F(DiskTest, disk_enumeration)
 }
 
 // Test disk information retrieval
-TEST_F(DiskTest, disk_info_retrieval)
+TEST_F(disk, disk_info_retrieval)
 {
     SCOPED_TRACE("Testing disk information retrieval");
 
@@ -181,7 +181,7 @@ TEST_F(DiskTest, disk_info_retrieval)
 }
 
 // Test disk readiness check
-TEST_F(DiskTest, disk_readiness_check)
+TEST_F(disk, disk_readiness_check)
 {
     SCOPED_TRACE("Testing disk readiness check");
 
@@ -211,7 +211,7 @@ TEST_F(DiskTest, disk_readiness_check)
 }
 
 // Test partition information retrieval
-TEST_F(DiskTest, partition_info_retrieval)
+TEST_F(disk, partition_info_retrieval)
 {
     SCOPED_TRACE("Testing partition information retrieval");
 
@@ -269,7 +269,7 @@ TEST_F(DiskTest, partition_info_retrieval)
 }
 
 // Test disk performance testing
-TEST_F(DiskTest, disk_performance_testing)
+TEST_F(disk, disk_performance_testing)
 {
     SCOPED_TRACE("Testing disk performance testing");
 
@@ -322,7 +322,7 @@ TEST_F(DiskTest, disk_performance_testing)
 }
 
 // Test parameter validation across all functions
-TEST_F(DiskTest, parameter_validation)
+TEST_F(disk, parameter_validation)
 {
     SCOPED_TRACE("Testing parameter validation");
 
@@ -359,7 +359,7 @@ TEST_F(DiskTest, parameter_validation)
 }
 
 // Integration test - comprehensive disk system test
-TEST_F(DiskTest, comprehensive_disk_system_test)
+TEST_F(disk, comprehensive_disk_system_test)
 {
     SCOPED_TRACE("Comprehensive disk system test");
 

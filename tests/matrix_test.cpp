@@ -1,84 +1,82 @@
 #include <gtest/gtest.h>
 #include <hj/math/matrix.hpp>
 
-using hj::matrix;
-
-// TEST(MatrixTest, DefaultConstructor)
+// TEST(matrix, default_constructor)
 // {
-//     matrix<int> m;
+//     hj::matrix<int> m;
 //     EXPECT_EQ(m.row_n(), 0);
 //     EXPECT_EQ(m.col_n(), 0);
 //     EXPECT_EQ(m.size(), 0);
 // }
 
-// TEST(MatrixTest, SizeConstructor)
+// TEST(matrix, size_constructor)
 // {
-//     matrix<int> m(3, 4);
+//     hj::matrix<int> m(3, 4);
 //     EXPECT_EQ(m.row_n(), 3);
 //     EXPECT_EQ(m.col_n(), 4);
 //     EXPECT_EQ(m.size(), 12);
 // }
 
-// TEST(MatrixTest, ValueConstructor)
+// TEST(matrix, value_constructor)
 // {
-//     matrix<int> m(2, 2, 7);
+//     hj::matrix<int> m(2, 2, 7);
 //     EXPECT_EQ(m.at(0, 0), 7);
 //     EXPECT_EQ(m.at(1, 1), 7);
 // }
 
-// TEST(MatrixTest, VectorConstructor)
+// TEST(matrix, vector_constructor)
 // {
 //     std::vector<std::vector<int>> buf = {{1, 2}, {3, 4}};
-//     matrix<int>                   m(buf);
+//     hj::matrix<int>               m(buf);
 //     EXPECT_EQ(m.row_n(), 2);
 //     EXPECT_EQ(m.col_n(), 2);
 //     EXPECT_EQ(m.at(0, 0), 1);
 //     EXPECT_EQ(m.at(1, 1), 4);
 // }
 
-// TEST(MatrixTest, CopyConstructorAndAssignment)
+// TEST(matrix, copy_constructor_and_assignment)
 // {
-//     matrix<int> m1(2, 2, 5);
-//     matrix<int> m2(m1);
+//     hj::matrix<int> m1(2, 2, 5);
+//     hj::matrix<int> m2(m1);
 //     EXPECT_EQ(m2.at(0, 0), 5);
-//     matrix<int> m3;
+//     hj::matrix<int> m3;
 //     m3 = m1;
 //     EXPECT_EQ(m3.at(1, 1), 5);
 // }
 
-// TEST(MatrixTest, ElementAccess)
+// TEST(matrix, element_access)
 // {
-//     matrix<int> m(2, 3, 0);
+//     hj::matrix<int> m(2, 3, 0);
 //     m.at(1, 2) = 42;
 //     EXPECT_EQ(m.at(1, 2), 42);
 //     m[0][1] = 99;
 //     EXPECT_EQ(m.at(0, 1), 99);
 // }
 
-// TEST(MatrixTest, EqualityOperators)
+// TEST(matrix, equality_operators)
 // {
-//     matrix<int> m1(2, 2, 1);
-//     matrix<int> m2(2, 2, 1);
-//     matrix<int> m3(2, 2, 2);
+//     hj::matrix<int> m1(2, 2, 1);
+//     hj::matrix<int> m2(2, 2, 1);
+//     hj::matrix<int> m3(2, 2, 2);
 //     EXPECT_TRUE(m1 == m2);
 //     EXPECT_FALSE(m1 == m3);
 //     EXPECT_TRUE(m1 != m3);
 // }
 
-// TEST(MatrixTest, Resize)
+// TEST(matrix, resize)
 // {
-//     matrix<int> m(2, 2, 3);
-//     auto        old_size = m.size();
+//     hj::matrix<int> m(2, 2, 3);
+//     auto            old_size = m.size();
 //     m.resize(3, 4);
 //     EXPECT_EQ(m.row_n(), 3);
 //     EXPECT_EQ(m.col_n(), 4);
 //     EXPECT_EQ(m.size(), 12);
 // }
 
-// TEST(MatrixTest, IteratorBasic)
+// TEST(matrix, iterator_basic)
 // {
-//     matrix<int> m(2, 2, 1);
-//     auto        it = m.begin();
+//     hj::matrix<int> m(2, 2, 1);
+//     auto            it = m.begin();
 //     EXPECT_EQ(*it, 1);
 //     ++it;
 //     EXPECT_EQ(*it, 1);
@@ -91,10 +89,10 @@ using hj::matrix;
 //     EXPECT_EQ(count, 4);
 // }
 
-// TEST(MatrixTest, RowIteratorBasic)
+// TEST(matrix, row_iterator_basic)
 // {
-//     matrix<int> m(2, 2, 2);
-//     auto        it = m.vbegin();
+//     hj::matrix<int> m(2, 2, 2);
+//     auto            it = m.vbegin();
 //     EXPECT_EQ(*it, 2);
 //     auto end   = m.vend();
 //     int  count = 0;

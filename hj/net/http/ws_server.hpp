@@ -11,9 +11,35 @@
 #include <condition_variable>
 
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 
+#include <boost/beast/websocket.hpp>
+#include <boost/asio/ssl/stream.hpp>
+
+// support for boost.beast websocket ssl teardown
+namespace boost
+{
+namespace beast
+{
+
+template <class Executor>
+void teardown(
+    boost::beast::role_type,
+    boost::asio::ssl::stream<boost::asio::basic_stream_socket<Executor>>
+                              &stream,
+    boost::system::error_code &ec)
+{
+    stream.next_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both,
+                                 ec);
+    stream.next_layer().close(ec);
+}
+
+} // namespace beast
+} // namespace boost
+
+// ws_server / ws_server_ssl
 namespace hj
 {
 
@@ -28,7 +54,7 @@ class ws_server
     using ws_stream_t =
         boost::beast::websocket::stream<boost::asio::ip::tcp::socket>;
     using ws_stream_ptr_t = std::shared_ptr<
-        boost::beast::websocket::stream<boost::asio::ip::tcp::socket> >;
+        boost::beast::websocket::stream<boost::asio::ip::tcp::socket>>;
     using err_t = boost::system::error_code;
 
     using opt_reuse_address = boost::asio::socket_base::reuse_address;
@@ -39,6 +65,7 @@ class ws_server
         std::function<void(const err_t &, ws_stream_ptr_t, std::string)>;
     using send_handler_t =
         std::function<void(const err_t &, ws_stream_ptr_t, std::size_t)>;
+    using close_handler_t = std::function<void(const err_t &)>;
 
   public:
     ws_server() = delete;
@@ -83,24 +110,29 @@ class ws_server
 
     ws_stream_ptr_t accept(const endpoint_t &ep, err_t &err)
     {
+        _mu.lock();
         if(_binded_endpoint == ep)
-            return accept(err);
-
-        if(_acceptor != nullptr)
         {
-            _acceptor->close();
-            delete _acceptor;
-            _acceptor = nullptr;
+            _mu.unlock();
+            return accept(err);
         }
 
-        _acceptor = new acceptor_t(_io, ep);
+        if(_acceptor)
+        {
+            _acceptor->close();
+            _acceptor.reset();
+        }
+
+        _acceptor = std::make_unique<acceptor_t>(_io, ep);
         _acceptor->set_option(opt_reuse_address(true));
         _binded_endpoint = ep;
+        _mu.unlock();
         return accept(err);
     }
 
     ws_stream_ptr_t accept(err_t &err)
     {
+        std::lock_guard<std::mutex> lock(_mu);
         if(_closed.load() || _acceptor == nullptr || !_acceptor->is_open())
         {
             err = boost::asio::error::not_connected;
@@ -135,10 +167,10 @@ class ws_server
             return;
         }
 
-        if(_acceptor != nullptr)
+        if(_acceptor)
             _acceptor->close();
 
-        _acceptor = new acceptor_t(_io, ep);
+        _acceptor = std::make_unique<acceptor_t>(_io, ep);
         _acceptor->set_option(opt_reuse_address(true));
         _binded_endpoint = ep;
         async_accept(std::move(handler));
@@ -146,7 +178,7 @@ class ws_server
 
     void async_accept(accept_handler_t &&handler)
     {
-        if(_closed.load() || _acceptor == nullptr || !_acceptor->is_open())
+        if(_closed.load() || !_acceptor || !_acceptor->is_open())
         {
             if(handler)
                 handler(make_error_code(boost::system::errc::not_connected),
@@ -191,7 +223,7 @@ class ws_server
             if(handler)
                 handler(make_error_code(boost::system::errc::not_connected),
                         ws,
-                        "");
+                        std::string());
 
             return;
         }
@@ -230,7 +262,8 @@ class ws_server
             return;
         }
 
-        ws->async_write(boost::asio::buffer(msg),
+        auto msg_ptr = std::make_shared<std::string>(msg);
+        ws->async_write(boost::asio::buffer(*msg_ptr),
                         [handler, ws](const err_t &ec, std::size_t bytes) {
                             handler(ec, ws, bytes);
                         });
@@ -242,20 +275,232 @@ class ws_server
             return;
 
         _closed.store(true);
+        std::lock_guard<std::mutex> lock(_mu);
         if(_acceptor)
         {
             _acceptor->close();
-            delete _acceptor;
-            _acceptor = nullptr;
+            _acceptor.reset();
+        }
+        _binded_endpoint = endpoint_t();
+    }
+
+    void async_close(close_handler_t              handler,
+                     std::vector<ws_stream_ptr_t> conns = {})
+    {
+        if(_closed.load())
+        {
+            if(handler)
+                handler(boost::asio::error::not_connected);
+
+            return;
+        }
+        _closed.store(true);
+
+        std::lock_guard<std::mutex> lock(_mu);
+        if(_acceptor)
+        {
+            _acceptor->close();
+            _acceptor.reset();
+        }
+
+        _binded_endpoint = endpoint_t();
+        auto left        = std::make_shared<size_t>(conns.size());
+        for(auto &ws : conns)
+        {
+            if(ws && ws->is_open())
+            {
+                ws->async_close(boost::beast::websocket::close_code::normal,
+                                [left, handler](const err_t &e) {
+                                    if(--(*left) == 0 && handler)
+                                        handler(e);
+                                });
+            } else
+            {
+                if(--(*left) == 0 && handler)
+                    handler(boost::asio::error::not_connected);
+            }
+        }
+    }
+
+  private:
+    io_t                       &_io;
+    std::mutex                  _mu;
+    std::unique_ptr<acceptor_t> _acceptor;
+    endpoint_t                  _binded_endpoint;
+    std::atomic<bool>           _closed;
+};
+
+class ws_server_ssl
+{
+  public:
+    using io_t              = boost::asio::io_context;
+    using ssl_ctx_t         = boost::asio::ssl::context;
+    using ssl_ctx_ptr_t     = std::shared_ptr<ssl_ctx_t>;
+    using addr_t            = boost::asio::ip::address;
+    using sock_t            = boost::asio::ip::tcp::socket;
+    using endpoint_t        = boost::asio::ip::tcp::endpoint;
+    using acceptor_t        = boost::asio::ip::tcp::acceptor;
+    using ssl_stream_t      = boost::asio::ssl::stream<sock_t>;
+    using ws_stream_t       = boost::beast::websocket::stream<ssl_stream_t>;
+    using ws_stream_ptr_t   = std::shared_ptr<ws_stream_t>;
+    using err_t             = boost::system::error_code;
+    using opt_reuse_address = boost::asio::socket_base::reuse_address;
+
+    using accept_handler_t =
+        std::function<void(const err_t &, ws_stream_ptr_t)>;
+    using recv_handler_t =
+        std::function<void(const err_t &, ws_stream_ptr_t, std::string)>;
+    using send_handler_t =
+        std::function<void(const err_t &, ws_stream_ptr_t, std::size_t)>;
+
+  public:
+    ws_server_ssl() = delete;
+    ws_server_ssl(io_t &io, ssl_ctx_ptr_t ssl_ctx)
+        : _io{io}
+        , _ssl_ctx{ssl_ctx}
+        , _binded_endpoint{}
+        , _closed{false}
+        , _acceptor{nullptr}
+    {
+    }
+    virtual ~ws_server_ssl() { close(); }
+
+    inline bool              is_closed() { return _closed.load(); }
+    inline endpoint_t       &binded_endpoint() { return _binded_endpoint; }
+    static inline endpoint_t make_endpoint(const uint16_t port)
+    {
+        return endpoint_t(boost::asio::ip::tcp::v4(), port);
+    }
+    static inline endpoint_t make_endpoint(const char    *host,
+                                           const uint16_t port)
+    {
+#if BOOST_VERSION < 108700
+        return endpoint_t(addr_t::from_string(host), port);
+#else
+        return endpoint_t(boost::asio::ip::make_address(host), port);
+#endif
+    }
+
+    static ssl_ctx_ptr_t make_ctx(const std::string &cert_file,
+                                  const std::string &key_file,
+                                  const std::string &ca_file = "")
+    {
+        auto ctx = std::make_shared<ssl_ctx_t>(ssl_ctx_t::sslv23);
+        ctx->set_options(boost::asio::ssl::context::default_workarounds
+                         | boost::asio::ssl::context::no_sslv2);
+        ctx->use_certificate_chain_file(cert_file);
+        ctx->use_private_key_file(key_file, boost::asio::ssl::context::pem);
+        if(!ca_file.empty())
+        {
+            ctx->load_verify_file(ca_file);
+            ctx->set_verify_mode(boost::asio::ssl::verify_peer);
+        } else
+        {
+            ctx->set_verify_mode(boost::asio::ssl::verify_none);
+        }
+        return ctx;
+    }
+
+    ws_stream_ptr_t accept(const uint16_t port, err_t &err)
+    {
+        endpoint_t ep{boost::asio::ip::tcp::v4(), port};
+        return accept(ep, err);
+    }
+
+    ws_stream_ptr_t accept(const endpoint_t &ep, err_t &err)
+    {
+        _mu.lock();
+        if(_binded_endpoint == ep)
+        {
+            _mu.unlock();
+            return accept(err);
+        }
+
+        if(_acceptor)
+        {
+            _acceptor->close();
+            _acceptor.reset();
+        }
+
+        _acceptor = std::make_unique<acceptor_t>(_io, ep);
+        _acceptor->set_option(opt_reuse_address(true));
+        _binded_endpoint = ep;
+        _mu.unlock();
+        return accept(err);
+    }
+
+    ws_stream_ptr_t accept(err_t &err)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        if(_closed.load() || _acceptor == nullptr || !_acceptor->is_open())
+        {
+            err = boost::asio::error::not_connected;
+            return nullptr;
+        }
+
+        auto sock = std::make_shared<sock_t>(_io);
+        _acceptor->accept(*sock);
+        auto ssl_stream =
+            std::make_shared<ssl_stream_t>(std::move(*sock), *_ssl_ctx);
+        ssl_stream->handshake(boost::asio::ssl::stream_base::server, err);
+        if(err)
+            return nullptr;
+
+        auto ws = std::make_shared<ws_stream_t>(std::move(*ssl_stream));
+        ws->accept(err);
+        if(err)
+            return nullptr;
+
+        return ws;
+    }
+
+    std::string recv(std::shared_ptr<ws_stream_t> ws, err_t &err)
+    {
+        if(_closed.load() || !ws)
+        {
+            err = boost::asio::error::not_connected;
+            return std::string();
+        }
+        boost::beast::flat_buffer buffer(1024);
+        auto                      sz = ws->read(buffer, err);
+        if(err)
+            return std::string();
+        return boost::beast::buffers_to_string(buffer.data());
+    }
+
+    size_t
+    send(std::shared_ptr<ws_stream_t> ws, err_t &err, const std::string &msg)
+    {
+        if(_closed.load() || !ws)
+        {
+            err = boost::asio::error::not_connected;
+            return 0;
+        }
+        return ws->write(boost::asio::buffer(msg), err);
+    }
+
+    void close()
+    {
+        if(_closed.load())
+            return;
+
+        _closed.store(true);
+        std::lock_guard<std::mutex> lock(_mu);
+        if(_acceptor)
+        {
+            _acceptor->close();
+            _acceptor.reset();
         }
         _binded_endpoint = endpoint_t();
     }
 
   private:
-    io_t             &_io;
-    acceptor_t       *_acceptor;
-    endpoint_t        _binded_endpoint;
-    std::atomic<bool> _closed;
+    io_t                       &_io;
+    ssl_ctx_ptr_t               _ssl_ctx;
+    std::mutex                  _mu;
+    std::unique_ptr<acceptor_t> _acceptor;
+    endpoint_t                  _binded_endpoint;
+    std::atomic<bool>           _closed;
 };
 
 } // namespace hj

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <hj/os/asm.h>
 
-TEST(ASMTest, ASM_Macro_Basic)
+TEST(asm, asm_macro_basic)
 {
     int a = 1, b = 2, c = 0;
 #if defined(_MSC_VER) && defined(_M_IX86)
@@ -19,14 +19,14 @@ TEST(ASMTest, ASM_Macro_Basic)
 #endif
 }
 
-TEST(ASMTest, ASM_Macro_Empty)
+TEST(asm, asm_macro_empty)
 {
     ASM("");
     ASM_V("");
     SUCCEED();
 }
 
-TEST(ASMTest, Platform_Basic)
+TEST(asm, platform_basic)
 {
 #if defined(_MSC_VER) && defined(_M_IX86)
     // MSVC x86
@@ -51,14 +51,14 @@ TEST(ASMTest, Platform_Basic)
 #endif
 }
 
-TEST(ASMTest, ASM_Empty)
+TEST(asm, asm_empty)
 {
     ASM("");
     ASM_V("");
     SUCCEED();
 }
 
-TEST(ASMTest, ASM_Invalid)
+TEST(asm, asm_invalid)
 {
 #if defined(_MSC_VER) && defined(_M_IX86)
     // ASM_BEGIN invalid_instruction ASM_END;

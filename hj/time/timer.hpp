@@ -54,7 +54,11 @@ class timer : public std::enable_shared_from_this<timer>
     }
 
     ~timer() { cancel(); }
-    inline void cancel() { _tm.cancel(); }
+    inline void cancel()
+    {
+        _tm.cancel();
+        _fn = [](const boost::system::error_code &) {};
+    }
 
     template <typename F>
     void start(F &&f)
@@ -62,13 +66,11 @@ class timer : public std::enable_shared_from_this<timer>
         static std::once_flag io_run_once;
 
         auto self = this->shared_from_this();
-        _fn       = [wself = std::weak_ptr<timer>(self),
-               fn    = std::move(f)](const timer::err_t &err) {
+        _fn       = [self, fn = std::move(f)](const timer::err_t &err) {
             if(err.failed())
                 return;
 
-            if(auto spt = wself.lock())
-                fn();
+            fn();
         };
 
         std::call_once(io_run_once, [=]() {

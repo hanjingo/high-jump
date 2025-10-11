@@ -77,12 +77,14 @@ class matrix
 
     matrix &operator=(const matrix &rhs)
     {
-        _clean(_buf);
-        _buf = _create(rhs._row_n, rhs._col_n);
-        _copy_from(rhs);
+        if(this == &rhs)
+            return *this;
 
+        _clean(_buf);
         _row_n = rhs._row_n;
         _col_n = rhs._col_n;
+        _buf   = _create(_row_n, _col_n);
+        _copy_from(rhs);
         return *this;
     }
 

@@ -101,16 +101,6 @@ class object_pool
         T *obj = nullptr;
         while(_container.try_dequeue(obj))
         {
-            if(!obj)
-                continue;
-
-            try
-            {
-                obj->~T();
-            }
-            catch(...)
-            {
-            }
         }
     }
 

@@ -2,6 +2,14 @@
 #include <hj/encoding/unicode.hpp>
 #include <string>
 
+#include <locale.h>
+
+struct UnicodeLocaleInit
+{
+    UnicodeLocaleInit() { setlocale(LC_ALL, "en_US.UTF-8"); }
+};
+static UnicodeLocaleInit _unicode_locale_init;
+
 TEST(unicode, from_utf8_to_utf8_basic)
 {
     std::string  utf8_en = "hello";

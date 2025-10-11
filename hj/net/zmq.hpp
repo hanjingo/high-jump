@@ -16,6 +16,109 @@ namespace hj
 namespace zmq
 {
 
+class context
+{
+  public:
+    context()
+        : _ctx(zmq_ctx_new())
+    {
+        assert(_ctx != nullptr);
+    }
+    ~context()
+    {
+        if(_ctx)
+            zmq_ctx_term(_ctx);
+    }
+    context(const context &)            = delete;
+    context &operator=(const context &) = delete;
+    context(context &&other) noexcept
+        : _ctx(other._ctx)
+    {
+        other._ctx = nullptr;
+    }
+    context &operator=(context &&other) noexcept
+    {
+        if(this == &other)
+            return *this;
+
+        if(_ctx)
+            zmq_ctx_term(_ctx);
+
+        _ctx       = other._ctx;
+        other._ctx = nullptr;
+        return *this;
+    }
+    void *get() const { return _ctx; }
+
+  private:
+    void *_ctx;
+}; // context
+
+class message
+{
+  public:
+    message()
+    {
+        if(zmq_msg_init(&_msg) != 0)
+            throw std::runtime_error("zmq_msg_init failed");
+    }
+    explicit message(size_t size)
+    {
+        if(zmq_msg_init_size(&_msg, size) != 0)
+            throw std::runtime_error("zmq_msg_init_size failed");
+    }
+    ~message() noexcept { zmq_msg_close(&_msg); }
+
+    message(const message &other)
+    {
+        if(zmq_msg_init(&_msg) != 0)
+            throw std::runtime_error("zmq_msg_init failed");
+        if(zmq_msg_copy(&_msg, const_cast<zmq_msg_t *>(&other._msg)) != 0)
+            throw std::runtime_error("zmq_msg_copy failed");
+    }
+    message &operator=(const message &other)
+    {
+        if(this == &other)
+            return *this;
+        zmq_msg_close(&_msg);
+        if(zmq_msg_init(&_msg) != 0)
+            throw std::runtime_error("zmq_msg_init failed");
+        if(zmq_msg_copy(&_msg, const_cast<zmq_msg_t *>(&other._msg)) != 0)
+            throw std::runtime_error("zmq_msg_copy failed");
+        return *this;
+    }
+    message(message &&rhs)
+    {
+        if(zmq_msg_init(&_msg) != 0)
+            throw std::runtime_error("zmq_msg_init failed");
+        if(zmq_msg_move(&_msg, &rhs._msg) != 0)
+            throw std::runtime_error("zmq_msg_move failed");
+    }
+    message &operator=(message &&rhs)
+    {
+        if(this == &rhs)
+            return *this;
+        zmq_msg_close(&_msg);
+        if(zmq_msg_init(&_msg) != 0)
+            throw std::runtime_error("zmq_msg_init failed");
+        if(zmq_msg_move(&_msg, &rhs._msg) != 0)
+            throw std::runtime_error("zmq_msg_move failed");
+        return *this;
+    }
+
+    zmq_msg_t       *get() { return &_msg; }
+    const zmq_msg_t *get() const { return &_msg; }
+    void            *data() { return zmq_msg_data(&_msg); }
+    const void      *data() const
+    {
+        return zmq_msg_data(const_cast<zmq_msg_t *>(&_msg));
+    }
+    size_t size() const { return zmq_msg_size(&_msg); }
+
+  private:
+    zmq_msg_t _msg;
+}; // message
+
 class chan
 {
   public:
@@ -102,36 +205,35 @@ class chan
     zmq_msg_t _buf_in;
 }; // chan
 
-class pubsub_broker
+class broker
 {
   public:
-    pubsub_broker(void *ctx)
-        : _ctx{ctx}
-        , _back{zmq_socket(ctx, ZMQ_XPUB)}
-        , _front{zmq_socket(ctx, ZMQ_XSUB)}
+    broker(void *back, void *front)
+        : _back{back}
+        , _front{front}
     {
     }
-    virtual ~pubsub_broker()
+    virtual ~broker()
     {
         if(_back != nullptr)
-        {
-            zmq_close(_back);
             _back = nullptr;
-        }
+
         if(_front != nullptr)
-        {
-            zmq_close(_front);
             _front = nullptr;
-        }
     }
 
-    inline int bind(const std::string &xpub_addr, const std::string &xsub_addr)
+    broker(const broker &)            = delete;
+    broker &operator=(const broker &) = delete;
+    broker(broker &&)                 = delete;
+    broker &operator=(broker &&)      = delete;
+
+    inline int bind(const std::string &back_addr, const std::string &front_addr)
     {
-        int ret = zmq_bind(_back, xpub_addr.c_str());
+        int ret = zmq_bind(_back, back_addr.c_str());
         if(ret != 0)
             return ret;
 
-        ret = zmq_bind(_front, xsub_addr.c_str());
+        ret = zmq_bind(_front, front_addr.c_str());
         if(ret != 0)
             return ret;
 
@@ -144,10 +246,9 @@ class pubsub_broker
     }
 
   private:
-    void *_ctx;
     void *_back;
     void *_front;
-}; // pubsub_broker
+}; // broker
 
 class consumer
 {
@@ -165,6 +266,11 @@ class consumer
 
         zmq_msg_close(&_buf);
     }
+
+    consumer(const consumer &)            = delete;
+    consumer &operator=(const consumer &) = delete;
+    consumer(consumer &&)                 = delete;
+    consumer &operator=(consumer &&)      = delete;
 
     inline int set_opt(const int opt, const int value)
     {
@@ -221,6 +327,11 @@ class producer
 
         zmq_msg_close(&_buf);
     }
+
+    producer(const producer &)            = delete;
+    producer &operator=(const producer &) = delete;
+    producer(producer &&)                 = delete;
+    producer &operator=(producer &&)      = delete;
 
     inline int set_opt(const int opt, const int value)
     {
@@ -280,6 +391,11 @@ class publisher
 
         zmq_msg_close(&_buf);
     }
+
+    publisher(const publisher &)            = delete;
+    publisher &operator=(const publisher &) = delete;
+    publisher(publisher &&)                 = delete;
+    publisher &operator=(publisher &&)      = delete;
 
     inline int set_opt(const int opt, const int value)
     {
@@ -343,6 +459,11 @@ class subscriber
 
         zmq_msg_close(&_buf);
     }
+
+    subscriber(const subscriber &)            = delete;
+    subscriber &operator=(const subscriber &) = delete;
+    subscriber(subscriber &&)                 = delete;
+    subscriber &operator=(subscriber &&)      = delete;
 
     inline int set_opt(const int opt, const int value)
     {

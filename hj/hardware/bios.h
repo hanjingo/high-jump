@@ -214,8 +214,10 @@ bios_sys_file_read(const char *path, char *buffer, size_t buffer_size)
         return BIOS_ERROR_NOT_FOUND;
 
     if(!fgets(buffer, buffer_size, fp))
+    {
         fclose(fp);
-    return BIOS_ERROR_SYSTEM_CALL_FAILED;
+        return BIOS_ERROR_SYSTEM_CALL_FAILED;
+    }
 
     fclose(fp);
     size_t len = strlen(buffer);

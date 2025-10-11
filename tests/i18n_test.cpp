@@ -70,13 +70,16 @@ class i18n : public ::testing::Test
 
         std::ofstream zh_file(test_dir_ + "/translations_zh_CN.properties",
                               std::ios::binary);
+        zh_file.put(0xEF);
+        zh_file.put(0xBB);
+        zh_file.put(0xBF);
         zh_file << "# Chinese translations\n";
         zh_file << "app.title=我的应用程序\n";
         zh_file << "menu.file=文件\n";
         zh_file << "menu.edit=编辑\n";
         zh_file << "status.ready=就绪\n";
         zh_file << "msg.welcome=欢迎 {0}!\n";
-        zh_file << "msg.hello_unicode=\\u4f60\\u597d\\u4e16\\u754c\n";
+        zh_file << "msg.hello_unicode=你好世界\n";
         zh_file << "msg.with_spaces=  带空格的文本  \n";
         zh_file << "# This is a comment\n";
         zh_file << "! This is also a comment\n";
@@ -85,6 +88,9 @@ class i18n : public ::testing::Test
 
         std::ofstream en_file(test_dir_ + "/translations_en_US.properties",
                               std::ios::binary);
+        zh_file.put(0xEF);
+        zh_file.put(0xBB);
+        zh_file.put(0xBF);
         en_file << "# English translations\n";
         en_file << "app.title=My Application\n";
         en_file << "menu.file=File\n";
@@ -97,6 +103,9 @@ class i18n : public ::testing::Test
 
         std::ofstream ja_file(test_dir_ + "/translations_ja_JP.properties",
                               std::ios::binary);
+        zh_file.put(0xEF);
+        zh_file.put(0xBB);
+        zh_file.put(0xBF);
         ja_file << "# Japanese translations\n";
         ja_file << "app.title=私のアプリケーション\n";
         ja_file << "menu.file=ファイル\n";
@@ -107,6 +116,9 @@ class i18n : public ::testing::Test
 
         std::ofstream de_file(test_dir_ + "/translations_de_DE.properties",
                               std::ios::binary);
+        zh_file.put(0xEF);
+        zh_file.put(0xBB);
+        zh_file.put(0xBF);
         de_file << "# German translations\n";
         de_file << "app.title=Meine Anwendung\n";
         de_file << "menu.file=Datei\n";
@@ -127,6 +139,9 @@ class i18n : public ::testing::Test
 
         std::ofstream invalid_file(test_dir_ + "/invalid_file.properties",
                                    std::ios::binary);
+        zh_file.put(0xEF);
+        zh_file.put(0xBB);
+        zh_file.put(0xBF);
         invalid_file << "invalid content without equals sign\n";
         invalid_file << "key1=value1\n";
         invalid_file << "malformed line\n";

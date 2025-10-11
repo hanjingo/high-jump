@@ -3,7 +3,7 @@
 #include <vector>
 #include <cmath>
 
-TEST(SIMDTest, AddF32)
+TEST(simd, add_f32)
 {
     float a[8]   = {1, 2, 3, 4, 5, 6, 7, 8};
     float b[8]   = {8, 7, 6, 5, 4, 3, 2, 1};
@@ -13,7 +13,7 @@ TEST(SIMDTest, AddF32)
         EXPECT_FLOAT_EQ(out[i], a[i] + b[i]);
 }
 
-TEST(SIMDTest, MulF32)
+TEST(simd, mul_f32)
 {
     float a[4]   = {1.5f, 2.0f, -3.0f, 0.5f};
     float b[4]   = {2.0f, -1.0f, 4.0f, 8.0f};
@@ -23,7 +23,7 @@ TEST(SIMDTest, MulF32)
         EXPECT_FLOAT_EQ(out[i], a[i] * b[i]);
 }
 
-TEST(SIMDTest, DotF32)
+TEST(simd, dot_f32)
 {
     float a[4]     = {1.0f, 2.0f, 3.0f, 4.0f};
     float b[4]     = {5.0f, 6.0f, 7.0f, 8.0f};
@@ -32,7 +32,7 @@ TEST(SIMDTest, DotF32)
     EXPECT_NEAR(result, expected, 1e-5f);
 }
 
-TEST(SIMDTest, DotF32_NonMultipleOf4)
+TEST(simd, dot_f32_non_multiple_of_4)
 {
     float a[6]     = {1, 2, 3, 4, 5, 6};
     float b[6]     = {6, 5, 4, 3, 2, 1};

@@ -16,12 +16,12 @@ static void create_test_rom(const char *filename, const char *content)
     fclose(fp);
 }
 
-class RomTest : public ::testing::Test
+class rom : public ::testing::Test
 {
   protected:
     std::string test_file;
     std::string test_content;
-    rom_t       rom;
+    rom_t       _rom;
 
     void SetUp() override
     {
@@ -29,18 +29,18 @@ class RomTest : public ::testing::Test
         test_file    = (cwd / "test.rom").string();
         test_content = "ROMDATA123";
         create_test_rom(test_file.c_str(), test_content.c_str());
-        rom_init(&rom);
+        rom_init(&_rom);
     }
 
     void TearDown() override
     {
-        rom_free(&rom);
+        rom_free(&_rom);
         remove(test_file.c_str());
     }
 };
 
 // Test ROM initialization
-TEST_F(RomTest, Initialization)
+TEST_F(rom, initialization)
 {
     rom_t r;
     rom_init(&r);
@@ -50,99 +50,84 @@ TEST_F(RomTest, Initialization)
 }
 
 // Test loading ROM from file
-TEST_F(RomTest, Load)
+TEST_F(rom, load)
 {
     if(!std::filesystem::exists(test_file))
     {
         test_content = "ROMDATA123";
         create_test_rom(test_file.c_str(), test_content.c_str());
-        rom_init(&rom);
+        rom_init(&_rom);
     }
 
-    EXPECT_TRUE(rom_load(&rom, test_file.c_str()));
-    EXPECT_TRUE(rom.loaded);
-    EXPECT_EQ(rom.size, test_content.size());
+    EXPECT_TRUE(rom_load(&_rom, test_file.c_str()));
+    EXPECT_TRUE(_rom.loaded);
+    EXPECT_EQ(_rom.size, test_content.size());
 }
 
 // Test reading from ROM
-TEST_F(RomTest, Read)
+TEST_F(rom, read)
 {
     if(!std::filesystem::exists(test_file))
     {
         test_content = "ROMDATA123";
         create_test_rom(test_file.c_str(), test_content.c_str());
-        rom_init(&rom);
+        rom_init(&_rom);
     }
 
-    ASSERT_TRUE(rom_load(&rom, test_file.c_str()));
+    ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
     char   buf[16] = {0};
-    size_t n       = rom_read(&rom, 0, buf, 4);
+    size_t n       = rom_read(&_rom, 0, buf, 4);
     EXPECT_EQ(n, 4u);
     EXPECT_EQ(std::string(buf, 4), "ROMD");
 
-    n = rom_read(&rom, 5, buf, 16);
+    n = rom_read(&_rom, 5, buf, 16);
     EXPECT_EQ(n, test_content.size() - 5);
     EXPECT_EQ(std::string(buf, n), "TA123");
 }
 
 // Test reading with offset out of range
-TEST_F(RomTest, ReadOffsetOutOfRange)
+TEST_F(rom, read_offset_out_of_range)
 {
     if(!std::filesystem::exists(test_file))
     {
         test_content = "ROMDATA123";
         create_test_rom(test_file.c_str(), test_content.c_str());
-        rom_init(&rom);
+        rom_init(&_rom);
     }
 
-    ASSERT_TRUE(rom_load(&rom, test_file.c_str()));
+    ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
     char   buf[8] = {0};
-    size_t n      = rom_read(&rom, 100, buf, 4);
+    size_t n      = rom_read(&_rom, 100, buf, 4);
     EXPECT_EQ(n, 0u);
 }
 
-// Test reading with null buffer
-TEST_F(RomTest, ReadNullBuffer)
-{
-    // if(!std::filesystem::exists(test_file))
-    // {
-    //     test_content = "ROMDATA123";
-    //     create_test_rom(test_file.c_str(), test_content.c_str());
-    //     rom_init(&rom);
-    // }
-
-    // ASSERT_TRUE(rom_load(&rom, test_file.c_str()));
-    // size_t n = rom_read(&rom, 0, nullptr, 4);
-    // EXPECT_EQ(n, 0u);
-}
-
 // Test loading with invalid arguments
-TEST_F(RomTest, LoadInvalidArgs)
+TEST_F(rom, load_invalid_args)
 {
     if(!std::filesystem::exists(test_file))
     {
         test_content = "ROMDATA123";
         create_test_rom(test_file.c_str(), test_content.c_str());
-        rom_init(&rom);
+        rom_init(&_rom);
     }
 
     EXPECT_FALSE(rom_load(nullptr, test_file.c_str()));
-    EXPECT_FALSE(rom_load(&rom, nullptr));
+    EXPECT_FALSE(rom_load(&_rom, nullptr));
 }
 
 // Test freeing ROM
-TEST_F(RomTest, Free)
+TEST_F(rom, free)
 {
     if(!std::filesystem::exists(test_file))
     {
         test_content = "ROMDATA123";
         create_test_rom(test_file.c_str(), test_content.c_str());
-        rom_init(&rom);
+        rom_init(&_rom);
     }
 
-    ASSERT_TRUE(rom_load(&rom, test_file.c_str()));
-    rom_free(&rom);
-    EXPECT_EQ(rom.data, nullptr);
-    EXPECT_EQ(rom.size, 0u);
-    EXPECT_FALSE(rom.loaded);
+    ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
+    rom_free(&_rom);
+    EXPECT_EQ(_rom.data, nullptr);
+    EXPECT_EQ(_rom.size, 0u);
+    EXPECT_FALSE(_rom.loaded);
 }

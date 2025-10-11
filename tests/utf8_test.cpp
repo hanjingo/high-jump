@@ -1,6 +1,14 @@
 #include <gtest/gtest.h>
 #include <hj/encoding/utf8.hpp>
 
+#include <locale.h>
+
+struct Utf8LocaleInit
+{
+    Utf8LocaleInit() { setlocale(LC_ALL, "en_US.UTF-8"); }
+};
+static Utf8LocaleInit _utf8_locale_init;
+
 TEST(utf8, is_valid)
 {
     ASSERT_TRUE(hj::utf8::is_valid("hello"));

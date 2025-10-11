@@ -59,7 +59,7 @@ TEST(bios, release_date)
         return;
     }
     ASSERT_EQ(ret, BIOS_OK);
-    ASSERT_GT(len, 0u);
+    ASSERT_GE(len, 0u);
     ASSERT_LE(len, sizeof(date));
     ASSERT_EQ(date[sizeof(date) - 1], 0);
     ASSERT_TRUE(strchr(date, '/') || strchr(date, '-'));

@@ -144,8 +144,33 @@ class i18n
             file << "# Translation file for locale: " << _locale_name << "\n";
             file << "# Generated on " << _current_timestamp() << "\n\n";
             for(const auto &[key, value] : _translations)
-                file << key << "=" << _escape_unicode(value) << "\n";
-
+            {
+                std::string out;
+                for(char ch : value)
+                {
+                    switch(ch)
+                    {
+                        case '\n':
+                            out += "\\n";
+                            break;
+                        case '\t':
+                            out += "\\t";
+                            break;
+                        case '\\':
+                            out += "\\\\";
+                            break;
+                        case '=':
+                            out += "\\=";
+                            break;
+                        case ':':
+                            out += "\\:";
+                            break;
+                        default:
+                            out += ch;
+                    }
+                }
+                file << key << "=" << out << "\n";
+            }
             file.close();
             return true;
         }
@@ -276,16 +301,14 @@ class i18n
                 {
                     result += '\\';
                     ++i;
-                } else if(str[i + 1] == 'u' && i + 5 < str.length())
+                } else if(str[i + 1] == '=')
                 {
-                    std::string hex = str.substr(i + 2, 4);
-                    uint16_t    code =
-                        static_cast<uint16_t>(std::stoul(hex, nullptr, 16));
-                    icu::UnicodeString unicode_char(code);
-                    std::string        utf8_char;
-                    unicode_char.toUTF8String(utf8_char);
-                    result += utf8_char;
-                    i += 5;
+                    result += '=';
+                    ++i;
+                } else if(str[i + 1] == ':')
+                {
+                    result += ':';
+                    ++i;
                 }
             }
             return result;

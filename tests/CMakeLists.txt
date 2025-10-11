@@ -136,6 +136,7 @@ target_link_libraries(${PROJECT_NAME}
     ${ODBC_LIBRARIES}
     ${ICU_LIBRARIES}
     ${OPENTELEMETRY_CPP_LIBRARIES}
+    libzmq
     benchmark::benchmark
     protobuf::libprotobuf
     pugixml

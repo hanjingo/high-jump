@@ -62,9 +62,17 @@ TEST(thread_pool, clear_then_enqueue)
 
 TEST(thread_pool, affinity_ctor)
 {
-    std::unordered_set<unsigned int> cores{0};
-    hj::thread_pool                  tp{cores};
-    ASSERT_EQ(tp.size(), 1);
+    try
+    {
+        std::unordered_set<unsigned int> cores{0};
+        hj::thread_pool                  tp{cores};
+        ASSERT_EQ(tp.size(), 1);
+    }
+    catch(const std::runtime_error &e)
+    {
+        GTEST_SKIP() << "Affinity not supported or permission denied: "
+                     << e.what();
+    }
 }
 
 TEST(thread_pool, stress)

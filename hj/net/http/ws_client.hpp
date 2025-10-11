@@ -490,17 +490,19 @@ class ws_client_ssl
         if(!_ws)
             return;
 
-        _ws->async_close(boost::beast::websocket::close_code::normal,
-                         [this, handler](const err_t &ec) {
-                             _ws.reset();
-                             if(ec == boost::asio::error::connection_reset
-                                || ec == boost::asio::error::connection_aborted
-                                || ec == boost::beast::websocket::error::closed
-                                || ec == boost::asio::error::eof)
-                                 handler({});
-                             else
-                                 handler(ec);
-                         });
+        _ws->async_close(
+            boost::beast::websocket::close_code::normal,
+            [this, handler](const err_t &ec) {
+                _ws.reset();
+                if(ec == boost::asio::error::connection_reset
+                   || ec == boost::asio::error::connection_aborted
+                   || ec == boost::beast::websocket::error::closed
+                   || ec == boost::asio::error::eof
+                   || ec == boost::asio::ssl::error::stream_truncated)
+                    handler({});
+                else
+                    handler(ec);
+            });
     }
 
   private:

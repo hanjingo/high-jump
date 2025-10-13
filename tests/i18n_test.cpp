@@ -979,12 +979,20 @@ TEST_F(i18n, full_workflow_integration_with_german)
     i18n_instance.set_locale("de_DE");
     std::string de_title = i18n_instance.translate("app.title");
 
-    EXPECT_FALSE(zh_title.empty());
-    EXPECT_FALSE(en_title.empty());
-    EXPECT_FALSE(ja_title.empty());
-    EXPECT_FALSE(de_title.empty());
+    EXPECT_FALSE(zh_title.empty())
+        << "zh_CN app.title not found, got: " << zh_title;
+    EXPECT_FALSE(en_title.empty())
+        << "en_US app.title not found, got: " << en_title;
+    EXPECT_FALSE(ja_title.empty())
+        << "ja_JP app.title not found, got: " << ja_title;
+    EXPECT_FALSE(de_title.empty())
+        << "de_DE app.title not found, got: " << de_title;
 
-    EXPECT_EQ(de_title, "Meine Anwendung");
-    EXPECT_EQ(i18n_instance.translate("menu.file"), "Datei");
-    EXPECT_EQ(i18n_instance.translate("german.umlauts"), "Äpfel, Öl, Übung");
+    EXPECT_EQ(de_title, "Meine Anwendung")
+        << "de_DE app.title wrong, got: " << de_title;
+    std::string de_file = i18n_instance.translate("menu.file");
+    EXPECT_EQ(de_file, "Datei") << "de_DE menu.file wrong, got: " << de_file;
+    std::string de_umlauts = i18n_instance.translate("german.umlauts");
+    EXPECT_EQ(de_umlauts, "Äpfel, Öl, Übung")
+        << "de_DE german.umlauts wrong, got: " << de_umlauts;
 }

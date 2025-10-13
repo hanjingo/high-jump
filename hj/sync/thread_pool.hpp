@@ -73,7 +73,7 @@ class thread_pool
         using return_type = typename std::result_of<F(Args...)>::type;
 #endif
 
-        auto task = std::make_shared<std::packaged_task<return_type()> >(
+        auto task = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 
         std::future<return_type> res = task->get_future();
@@ -177,14 +177,17 @@ class thread_pool
         DWORD_PTR mask =
             SetThreadAffinityMask(hThread, (DWORD_PTR) (1LLU << core));
         return (mask != 0);
+
 #elif __linux__
         cpu_set_t mask;
         CPU_ZERO(&mask);
         CPU_SET(core, &mask);
         return (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask)
                 >= 0);
+
 #else
-    return false;
+    return true; // macOS and other systems do not support setting thread affinity
+
 #endif
     }
 

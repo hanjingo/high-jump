@@ -15,7 +15,7 @@
 namespace hj
 {
 
-class ws_client
+class ws_client : public std::enable_shared_from_this<ws_client>
 {
   public:
     using io_t       = boost::asio::io_context;
@@ -104,11 +104,12 @@ class ws_client
                        const std::string &target,
                        conn_handler_t     handler)
     {
+        auto self     = shared_from_this();
         auto resolver = std::make_shared<resolver_t>(_io);
         resolver->async_resolve(
             host,
             port,
-            [this, resolver, host, target, handler](
+            [self, resolver, host, target, handler](
                 const err_t             &ec,
                 resolver_t::results_type results) {
                 if(ec)
@@ -118,22 +119,23 @@ class ws_client
                 }
 
                 boost::asio::async_connect(
-                    _ws->next_layer(),
+                    self->_ws->next_layer(),
                     results.begin(),
                     results.end(),
-                    [this, host, target, handler](const err_t &ec, auto) {
+                    [self, host, target, handler](const err_t &ec, auto) {
                         if(ec)
                         {
                             handler(ec);
                             return;
                         }
-                        _ws->async_handshake(host,
-                                             target,
-                                             [this, handler](const err_t &ec) {
-                                                 if(!ec)
-                                                     _connected = true;
-                                                 handler(ec);
-                                             });
+                        self->_ws->async_handshake(
+                            host,
+                            target,
+                            [self, handler](const err_t &ec) {
+                                if(!ec)
+                                    self->_connected = true;
+                                handler(ec);
+                            });
                     });
             });
     }
@@ -150,13 +152,18 @@ class ws_client
 
     void async_send(const std::string &msg, send_handler_t handler)
     {
-        if(!_connected)
+        auto self = shared_from_this();
+        if(!self->_connected)
         {
             handler(boost::asio::error::not_connected, 0);
             return;
         }
-
-        _ws->async_write(boost::asio::buffer(msg), handler);
+        auto msg_ptr = std::make_shared<std::string>(msg);
+        self->_ws->async_write(
+            boost::asio::buffer(*msg_ptr),
+            [self, handler, msg_ptr](const err_t &ec, std::size_t sz) {
+                handler(ec, sz);
+            });
     }
 
     bool recv(std::string &out)
@@ -176,23 +183,25 @@ class ws_client
 
     void async_recv(recv_handler_t handler)
     {
-        if(!_connected)
+        auto self = shared_from_this();
+        if(!self->_connected)
         {
             handler(boost::asio::error::not_connected, "");
             return;
         }
-
-        _ws->async_read(_buffer,
-                        [this, handler](const err_t &ec, std::size_t sz) {
-                            if(ec || sz == 0 || _buffer.size() == 0)
-                            {
-                                handler(ec, "");
-                                return;
-                            }
-                            std::string msg =
-                                boost::beast::buffers_to_string(_buffer.data());
-                            handler(ec, msg);
-                        });
+        auto buffer = std::make_shared<buffer_t>();
+        self->_ws->async_read(
+            *buffer,
+            [self, buffer, handler](const err_t &ec, std::size_t sz) {
+                if(ec || sz == 0 || buffer->size() == 0)
+                {
+                    handler(ec, "");
+                    return;
+                }
+                std::string msg =
+                    boost::beast::buffers_to_string(buffer->data());
+                handler(ec, msg);
+            });
     }
 
     void close()
@@ -213,26 +222,28 @@ class ws_client
 
     void async_close(close_handler_t handler)
     {
-        if(!_connected)
+        auto self = shared_from_this();
+        if(!self->_connected)
         {
             handler(boost::asio::error::not_connected);
             return;
         }
-        _connected = false;
-        if(!_ws)
+        self->_connected = false;
+        if(!self->_ws)
             return;
 
-        _ws->async_close(boost::beast::websocket::close_code::normal,
-                         [this, handler](const err_t &ec) {
-                             _ws.reset();
-                             if(ec == boost::asio::error::connection_reset
-                                || ec == boost::asio::error::connection_aborted
-                                || ec == boost::beast::websocket::error::closed
-                                || ec == boost::asio::error::eof)
-                                 handler({});
-                             else
-                                 handler(ec);
-                         });
+        self->_ws->async_close(
+            boost::beast::websocket::close_code::normal,
+            [self, handler](const err_t &ec) {
+                self->_ws.reset();
+                if(ec == boost::asio::error::connection_reset
+                   || ec == boost::asio::error::connection_aborted
+                   || ec == boost::beast::websocket::error::closed
+                   || ec == boost::asio::error::eof)
+                    handler({});
+                else
+                    handler(ec);
+            });
     }
 
   private:

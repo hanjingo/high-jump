@@ -43,7 +43,7 @@ void teardown(
 namespace hj
 {
 
-class ws_server
+class ws_server : public std::enable_shared_from_this<ws_server>
 {
   public:
     using io_t       = boost::asio::io_context;
@@ -178,7 +178,9 @@ class ws_server
 
     void async_accept(accept_handler_t &&handler)
     {
-        if(_closed.load() || !_acceptor || !_acceptor->is_open())
+        auto self = shared_from_this();
+        if(self->_closed.load() || !self->_acceptor
+           || !self->_acceptor->is_open())
         {
             if(handler)
                 handler(make_error_code(boost::system::errc::not_connected),
@@ -186,18 +188,21 @@ class ws_server
             return;
         }
 
-        auto sock = std::make_shared<sock_t>(_io);
-        _acceptor->async_accept(*sock, [this, sock, handler](const err_t &ec) {
-            if(ec)
-            {
-                handler(ec, nullptr);
-                return;
-            }
+        auto sock = std::make_shared<sock_t>(self->_io);
+        self->_acceptor->async_accept(
+            *sock,
+            [self, sock, handler](const err_t &ec) {
+                if(ec)
+                {
+                    handler(ec, nullptr);
+                    return;
+                }
 
-            auto ws = std::make_shared<ws_stream_t>(std::move(*sock));
-            ws->async_accept(
-                [this, ws, handler](const err_t &ec2) { handler(ec2, ws); });
-        });
+                auto ws = std::make_shared<ws_stream_t>(std::move(*sock));
+                ws->async_accept([self, ws, handler](const err_t &ec2) {
+                    handler(ec2, ws);
+                });
+            });
     }
 
     std::string recv(std::shared_ptr<ws_stream_t> ws, err_t &err)
@@ -218,26 +223,25 @@ class ws_server
 
     void async_recv(std::shared_ptr<ws_stream_t> ws, recv_handler_t handler)
     {
-        if(_closed.load() || !ws)
+        auto self = shared_from_this();
+        if(self->_closed.load() || !ws)
         {
             if(handler)
                 handler(make_error_code(boost::system::errc::not_connected),
                         ws,
                         std::string());
-
             return;
         }
 
         auto buffer = std::make_shared<boost::beast::flat_buffer>();
-        ws->async_read(*buffer,
-                       [buffer, handler, ws](const err_t &ec, std::size_t) {
-                           std::string msg;
-                           if(!ec)
-                               msg = boost::beast::buffers_to_string(
-                                   buffer->data());
-
-                           handler(ec, ws, msg);
-                       });
+        ws->async_read(
+            *buffer,
+            [self, buffer, handler, ws](const err_t &ec, std::size_t) {
+                std::string msg;
+                if(!ec)
+                    msg = boost::beast::buffers_to_string(buffer->data());
+                handler(ec, ws, msg);
+            });
     }
 
     size_t
@@ -256,17 +260,19 @@ class ws_server
                     const std::string           &msg,
                     send_handler_t               handler)
     {
-        if(_closed.load() || !ws)
+        auto self = shared_from_this();
+        if(self->_closed.load() || !ws)
         {
             handler(boost::asio::error::not_connected, ws, 0);
             return;
         }
 
         auto msg_ptr = std::make_shared<std::string>(msg);
-        ws->async_write(boost::asio::buffer(*msg_ptr),
-                        [handler, ws](const err_t &ec, std::size_t bytes) {
-                            handler(ec, ws, bytes);
-                        });
+        ws->async_write(
+            boost::asio::buffer(*msg_ptr),
+            [self, handler, ws, msg_ptr](const err_t &ec, std::size_t bytes) {
+                handler(ec, ws, bytes);
+            });
     }
 
     void close()
@@ -304,7 +310,8 @@ class ws_server
         }
 
         _binded_endpoint = endpoint_t();
-        auto left        = std::make_shared<size_t>(conns.size());
+        // wait all ws closed
+        auto left = std::make_shared<size_t>(conns.size());
         for(auto &ws : conns)
         {
             if(ws && ws->is_open())
@@ -314,12 +321,12 @@ class ws_server
                                     if(--(*left) == 0 && handler)
                                         handler(e);
                                 });
-            } else
-            {
-                if(--(*left) == 0 && handler)
-                    handler(boost::asio::error::not_connected);
+                return;
             }
         }
+
+        if(handler)
+            handler({});
     }
 
   private:
@@ -330,7 +337,7 @@ class ws_server
     std::atomic<bool>           _closed;
 };
 
-class ws_server_ssl
+class ws_server_ssl : public std::enable_shared_from_this<ws_server_ssl>
 {
   public:
     using io_t              = boost::asio::io_context;
@@ -352,6 +359,7 @@ class ws_server_ssl
         std::function<void(const err_t &, ws_stream_ptr_t, std::string)>;
     using send_handler_t =
         std::function<void(const err_t &, ws_stream_ptr_t, std::size_t)>;
+    using close_handler_t = std::function<void(const err_t &)>;
 
   public:
     ws_server_ssl() = delete;
@@ -454,6 +462,72 @@ class ws_server_ssl
         return ws;
     }
 
+    void async_accept(endpoint_t ep, accept_handler_t &&handler)
+    {
+        if(_closed.load())
+        {
+            if(handler)
+                handler(make_error_code(boost::system::errc::not_connected),
+                        nullptr);
+            return;
+        }
+
+        if(_binded_endpoint == ep)
+        {
+            async_accept(std::move(handler));
+            return;
+        }
+
+        if(_acceptor)
+            _acceptor->close();
+
+        _acceptor = std::make_unique<acceptor_t>(_io, ep);
+        _acceptor->set_option(opt_reuse_address(true));
+        _binded_endpoint = ep;
+        async_accept(std::move(handler));
+    }
+
+    void async_accept(accept_handler_t &&handler)
+    {
+        auto self = shared_from_this();
+        if(self->_closed.load() || !self->_acceptor
+           || !self->_acceptor->is_open())
+        {
+            if(handler)
+                handler(make_error_code(boost::system::errc::not_connected),
+                        nullptr);
+            return;
+        }
+
+        auto sock = std::make_shared<sock_t>(self->_io);
+        self->_acceptor->async_accept(
+            *sock,
+            [self, sock, handler](const err_t &ec) {
+                if(ec)
+                {
+                    handler(ec, nullptr);
+                    return;
+                }
+                auto ssl_stream =
+                    std::make_shared<ssl_stream_t>(std::move(*sock),
+                                                   *self->_ssl_ctx);
+                ssl_stream->async_handshake(
+                    boost::asio::ssl::stream_base::server,
+                    [self, ssl_stream, handler](const err_t &ec2) {
+                        if(ec2)
+                        {
+                            handler(ec2, nullptr);
+                            return;
+                        }
+                        auto ws = std::make_shared<ws_stream_t>(
+                            std::move(*ssl_stream));
+                        ws->async_accept([self, ws, handler](const err_t &ec3) {
+                            handler(ec3, ws);
+                        });
+                    });
+            });
+    }
+
     std::string recv(std::shared_ptr<ws_stream_t> ws, err_t &err)
     {
         if(_closed.load() || !ws)
@@ -468,6 +542,28 @@ class ws_server_ssl
         return boost::beast::buffers_to_string(buffer.data());
     }
 
+    void async_recv(std::shared_ptr<ws_stream_t> ws, recv_handler_t handler)
+    {
+        auto self = shared_from_this();
+        if(self->_closed.load() || !ws)
+        {
+            if(handler)
+                handler(make_error_code(boost::system::errc::not_connected),
+                        ws,
+                        std::string());
+            return;
+        }
+        auto buffer = std::make_shared<boost::beast::flat_buffer>();
+        ws->async_read(
+            *buffer,
+            [self, buffer, handler, ws](const err_t &ec, std::size_t) {
+                std::string msg;
+                if(!ec)
+                    msg = boost::beast::buffers_to_string(buffer->data());
+                handler(ec, ws, msg);
+            });
+    }
+
     size_t
     send(std::shared_ptr<ws_stream_t> ws, err_t &err, const std::string &msg)
     {
@@ -477,6 +573,24 @@ class ws_server_ssl
             return 0;
         }
         return ws->write(boost::asio::buffer(msg), err);
+    }
+
+    void async_send(std::shared_ptr<ws_stream_t> ws,
+                    const std::string           &msg,
+                    send_handler_t               handler)
+    {
+        auto self = shared_from_this();
+        if(self->_closed.load() || !ws)
+        {
+            handler(boost::asio::error::not_connected, ws, 0);
+            return;
+        }
+        auto msg_ptr = std::make_shared<std::string>(msg);
+        ws->async_write(
+            boost::asio::buffer(*msg_ptr),
+            [self, handler, ws, msg_ptr](const err_t &ec, std::size_t bytes) {
+                handler(ec, ws, bytes);
+            });
     }
 
     void close()
@@ -492,6 +606,44 @@ class ws_server_ssl
             _acceptor.reset();
         }
         _binded_endpoint = endpoint_t();
+    }
+
+    void async_close(close_handler_t              handler,
+                     std::vector<ws_stream_ptr_t> conns = {})
+    {
+        if(_closed.load())
+        {
+            if(handler)
+                handler(boost::asio::error::not_connected);
+
+            return;
+        }
+
+        _closed.store(true);
+        std::lock_guard<std::mutex> lock(_mu);
+        if(_acceptor)
+        {
+            _acceptor->close();
+            _acceptor.reset();
+        }
+
+        _binded_endpoint = endpoint_t();
+        // wait all ws closed
+        auto left = std::make_shared<size_t>(conns.size());
+        for(auto &ws : conns)
+        {
+            if(ws && ws->is_open())
+            {
+                ws->async_close(boost::beast::websocket::close_code::normal,
+                                [left, handler](const err_t &e) {
+                                    if(--(*left) == 0 && handler)
+                                        handler(e);
+                                });
+            }
+        }
+
+        if(handler)
+            handler({});
     }
 
   private:

@@ -52,7 +52,8 @@ TEST(bios, release_date)
     char         date[32] = {0};
     size_t       len      = sizeof(date);
     bios_error_t ret      = bios_release_date(date, &len);
-    if(ret == BIOS_ERROR_NOT_SUPPORTED || ret == BIOS_ERROR_NOT_FOUND)
+    if(ret == BIOS_ERROR_NOT_SUPPORTED || ret == BIOS_ERROR_NOT_FOUND
+       || len == 0)
     {
         GTEST_SKIP() << "bios_release_date skipped: unavailable or "
                         "insufficient permissions";

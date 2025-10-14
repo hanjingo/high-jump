@@ -314,15 +314,17 @@ class ws_server : public std::enable_shared_from_this<ws_server>
         auto left = std::make_shared<size_t>(conns.size());
         for(auto &ws : conns)
         {
-            if(ws && ws->is_open())
-            {
-                ws->async_close(boost::beast::websocket::close_code::normal,
-                                [left, handler](const err_t &e) {
-                                    if(--(*left) == 0 && handler)
-                                        handler(e);
-                                });
-                return;
-            }
+            if(!ws || !ws->is_open())
+                continue;
+
+            ws->async_close(boost::beast::websocket::close_code::normal,
+                            [left, handler](const err_t &e) {
+                                if(--(*left) > 0 || !handler)
+                                    return;
+
+                                handler({});
+                            });
+            return;
         }
 
         if(handler)
@@ -632,14 +634,16 @@ class ws_server_ssl : public std::enable_shared_from_this<ws_server_ssl>
         auto left = std::make_shared<size_t>(conns.size());
         for(auto &ws : conns)
         {
-            if(ws && ws->is_open())
-            {
-                ws->async_close(boost::beast::websocket::close_code::normal,
-                                [left, handler](const err_t &e) {
-                                    if(--(*left) == 0 && handler)
-                                        handler(e);
-                                });
-            }
+            if(!ws || !ws->is_open())
+                continue;
+
+            ws->async_close(boost::beast::websocket::close_code::normal,
+                            [left, handler](const err_t &e) {
+                                if(--(*left) > 0 || !handler)
+                                    return;
+
+                                handler({});
+                            });
         }
 
         if(handler)

@@ -44,13 +44,13 @@ TEST(zmq, publisher_subscriber_basic)
     ASSERT_EQ(recv, msg);
 }
 
-// TEST(zmq, pubsub_broker_lifecycle)
-// {
-//     hj::zmq::context ctx;
-//     auto             xpub = zmq_socket(&ctx, ZMQ_XPUB);
-//     auto             xsub = zmq_socket(&ctx, ZMQ_XSUB);
-//     hj::zmq::broker  bk(xpub, xsub);
-//     std::string      xpub_addr = "inproc://xpub";
-//     std::string      xsub_addr = "inproc://xsub";
-//     ASSERT_EQ(bk.bind(xpub_addr, xsub_addr), 0);
-// }
+TEST(zmq, broker_basic)
+{
+    hj::zmq::context ctx;
+    hj::zmq::socket  xpub(ctx.get(), ZMQ_XPUB);
+    hj::zmq::socket  xsub(ctx.get(), ZMQ_XSUB);
+    hj::zmq::broker  bk(xpub.get(), xsub.get());
+    std::string      xpub_addr = "inproc://xpub";
+    std::string      xsub_addr = "inproc://xsub";
+    ASSERT_EQ(bk.bind(xpub_addr, xsub_addr), 0);
+}

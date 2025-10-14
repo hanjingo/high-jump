@@ -11,7 +11,7 @@ TEST(ws_server, accept_recv_send_close)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         hj::ws_client::io_t io;
         auto                client = std::make_shared<hj::ws_client>(io);
-        ASSERT_TRUE(client->connect("127.0.0.1", "9003", "/"));
+        ASSERT_TRUE(client->connect("127.0.0.1", "21001", "/"));
         ASSERT_TRUE(client->is_connected());
 
         std::string msg = "hello";
@@ -27,7 +27,7 @@ TEST(ws_server, accept_recv_send_close)
 
     hj::ws_server::io_t  io;
     hj::ws_server::err_t err;
-    auto                 ep = hj::ws_server::make_endpoint("127.0.0.1", 9003);
+    auto                 ep = hj::ws_server::make_endpoint("127.0.0.1", 21001);
 
     auto serv = std::make_shared<hj::ws_server>(io);
     auto ws   = serv->accept(ep, err);
@@ -53,7 +53,7 @@ TEST(ws_server, async_accept_recv_send_close)
     auto                     client = std::make_shared<hj::ws_client>(io);
     client->async_connect(
         "127.0.0.1",
-        "9003",
+        "21002",
         "/",
         [client](const hj::ws_client::err_t &err) {
             ASSERT_FALSE(err);
@@ -77,7 +77,7 @@ TEST(ws_server, async_accept_recv_send_close)
         });
 
     serv->async_accept(
-        hj::ws_server::make_endpoint("127.0.0.1", 9003),
+        hj::ws_server::make_endpoint("127.0.0.1", 21002),
         [serv](const hj::ws_server::err_t    &err,
                hj::ws_server::ws_stream_ptr_t ws) {
             std::cout << "ws_server async_accept callback" << std::endl;
@@ -126,7 +126,8 @@ TEST(ws_server, async_accept_recv_send_close)
                                             << err.message() << std::endl;
                                     is_async_ws_server_running.store(true);
                                     ASSERT_FALSE(err);
-                                });
+                                },
+                                {ws});
                         });
                 });
         });
@@ -142,7 +143,7 @@ TEST(ws_server_ssl, connect_recv_send_close)
         hj::ws_client_ssl::io_t io;
         auto ssl_ctx = hj::ws_client_ssl::make_ctx("client.crt", "client.key");
         auto client  = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx);
-        ASSERT_TRUE(client->connect("127.0.0.1", "9004", "/"));
+        ASSERT_TRUE(client->connect("127.0.0.1", "21003", "/"));
         ASSERT_TRUE(client->is_connected());
 
         std::string msg = "hello_ssl";
@@ -159,7 +160,7 @@ TEST(ws_server_ssl, connect_recv_send_close)
     hj::ws_server_ssl::io_t io;
     auto ssl_ctx = hj::ws_server_ssl::make_ctx("server.crt", "server.key");
     hj::ws_server_ssl::err_t err;
-    auto              ep = hj::ws_server_ssl::make_endpoint("127.0.0.1", 9004);
+    auto              ep = hj::ws_server_ssl::make_endpoint("127.0.0.1", 21003);
     hj::ws_server_ssl serv(io, ssl_ctx);
     auto              ws = serv.accept(ep, err);
     ASSERT_FALSE(err);
@@ -185,7 +186,7 @@ TEST(ws_server_ssl, async_connect_recv_send_close)
     auto client     = std::make_shared<hj::ws_client_ssl>(io, client_ctx);
     client->async_connect(
         "127.0.0.1",
-        "9004",
+        "21004",
         "/",
         [client](const hj::ws_client_ssl::err_t &err) {
             ASSERT_FALSE(err);
@@ -210,7 +211,7 @@ TEST(ws_server_ssl, async_connect_recv_send_close)
         });
 
     serv->async_accept(
-        hj::ws_server_ssl::make_endpoint("127.0.0.1", 9004),
+        hj::ws_server_ssl::make_endpoint("127.0.0.1", 21004),
         [serv](const hj::ws_server_ssl::err_t    &err,
                hj::ws_server_ssl::ws_stream_ptr_t ws) {
             std::cout << "ws_server_ssl async_accept callback" << std::endl;

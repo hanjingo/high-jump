@@ -22,7 +22,7 @@
 #ifndef ASTAR_HPP
 #define ASTAR_HPP
 
-
+#include <iostream>
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>

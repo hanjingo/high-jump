@@ -1,5 +1,6 @@
 #include <thread>
 #include <atomic>
+#include <set>
 #include <gtest/gtest.h>
 #include <hj/sync/object_pool.hpp>
 #include <string>
@@ -180,11 +181,20 @@ TEST(object_pool, multithread_acquire)
         th.join();
     ASSERT_EQ(success, total);
     ASSERT_EQ(pool.size(), 0);
+    
+    // Check that all objects are non-null and collect their names
+    std::set<std::string> expected_names;
+    std::set<std::string> actual_names;
+    
     for(int i = 0; i < total; ++i)
     {
+        expected_names.insert("acquire" + std::to_string(i));
         ASSERT_NE(results[i], nullptr);
-        ASSERT_EQ(results[i]->name, "acquire" + std::to_string(i));
+        actual_names.insert(results[i]->name);
     }
+    
+    // Verify we got exactly the expected set of objects (order doesn't matter in concurrent access)
+    ASSERT_EQ(expected_names, actual_names);
 
     for(auto *obj : results)
         pool.release(obj);

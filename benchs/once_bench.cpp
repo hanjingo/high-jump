@@ -44,18 +44,22 @@ static void bm_once_macro_complex_operation(benchmark::State &state)
 }
 BENCHMARK(bm_once_macro_complex_operation);
 
-// ONCE_RETURN macro benchmarks
-static void bm_once_return_simple(benchmark::State &state)
+// ONCE with return value simulation
+static void bm_once_with_result_simple(benchmark::State &state)
 {
-    int result;
+    static int result = 0;
+    static bool initialized = false;
 
     for(auto _ : state)
     {
-        ONCE_RETURN(result, 42);
-        benchmark::DoNotOptimize(result);
+        ONCE(result = 42; initialized = true;);
+        if(initialized)
+        {
+            benchmark::DoNotOptimize(result);
+        }
     }
 }
-BENCHMARK(bm_once_return_simple);
+BENCHMARK(bm_once_with_result_simple);
 
 static int complex_calculation()
 {
@@ -67,187 +71,135 @@ static int complex_calculation()
     return sum;
 }
 
-static void bm_once_return_complex_calculation(benchmark::State &state)
+static void bm_once_complex_calculation(benchmark::State &state)
 {
-    int result;
+    static int result = 0;
 
     for(auto _ : state)
     {
-        ONCE_RETURN(result, complex_calculation());
+        ONCE(result = complex_calculation(););
         benchmark::DoNotOptimize(result);
     }
 }
-BENCHMARK(bm_once_return_complex_calculation);
+BENCHMARK(bm_once_complex_calculation);
 
-static void bm_once_return_string(benchmark::State &state)
+static void bm_once_string_operation(benchmark::State &state)
 {
-    std::string result;
+    static std::string result;
 
     for(auto _ : state)
     {
-        ONCE_RETURN(result, std::string("Hello, World! ") + std::to_string(42));
+        ONCE(result = std::string("Hello, World! ") + std::to_string(42););
         benchmark::DoNotOptimize(result);
     }
 }
-BENCHMARK(bm_once_return_string);
+BENCHMARK(bm_once_string_operation);
 
-// ONCE_NAMED macro benchmarks
-static void bm_once_named_single(benchmark::State &state)
-{
-    static int counter = 0;
-
-    for(auto _ : state)
-    {
-        ONCE_NAMED("benchmark_counter", counter++;);
-        benchmark::DoNotOptimize(counter);
-    }
-}
-BENCHMARK(bm_once_named_single);
-
-static void bm_once_named_multiple(benchmark::State &state)
+// Multiple ONCE operations
+static void bm_once_multiple_operations(benchmark::State &state)
 {
     static int counter1 = 0, counter2 = 0, counter3 = 0;
 
     for(auto _ : state)
     {
-        ONCE_NAMED("counter1", counter1++;);
-        ONCE_NAMED("counter2", counter2 += 2;);
-        ONCE_NAMED("counter3", counter3 += 3;);
+        ONCE(counter1++;);
+        ONCE(counter2 += 2;);
+        ONCE(counter3 += 3;);
         benchmark::DoNotOptimize(counter1);
         benchmark::DoNotOptimize(counter2);
         benchmark::DoNotOptimize(counter3);
     }
 }
-BENCHMARK(bm_once_named_multiple);
+BENCHMARK(bm_once_multiple_operations);
 
-// ONCE_SAFE macro benchmarks
-static void bm_once_safe_no_exception(benchmark::State &state)
+// ONCE with exception handling (built into the macro)
+static void bm_once_with_exception(benchmark::State &state)
+{
+    static int counter = 0;
+    static bool exception_thrown = false;
+
+    for(auto _ : state)
+    {
+        ONCE(
+            counter++;
+            if(!exception_thrown) {
+                exception_thrown = true;
+                throw std::runtime_error("test error"); // This will be caught by ONCE macro
+            }
+        );
+        benchmark::DoNotOptimize(counter);
+    }
+}
+BENCHMARK(bm_once_with_exception);
+
+// Simulated executor pattern with ONCE
+static void bm_once_function_execution(benchmark::State &state)
+{
+    static int result = 0;
+
+    for(auto _ : state)
+    {
+        ONCE(result = 42;);
+        benchmark::DoNotOptimize(result);
+    }
+}
+BENCHMARK(bm_once_function_execution);
+
+static void bm_once_void_execution(benchmark::State &state)
 {
     static int counter = 0;
 
     for(auto _ : state)
     {
-        ONCE_SAFE(counter++;, [](const std::string &) {});
+        ONCE(counter++;);
         benchmark::DoNotOptimize(counter);
     }
 }
-BENCHMARK(bm_once_safe_no_exception);
+BENCHMARK(bm_once_void_execution);
 
-static void bm_once_safe_with_exception(benchmark::State &state)
+// Multiple ONCE operations with different static variables
+static void bm_once_multiple_functions(benchmark::State &state)
 {
-    static int         counter = 0;
-    static std::string error_msg;
+    const int count = static_cast<int>(state.range(0));
 
     for(auto _ : state)
     {
-        ONCE_SAFE(counter++;
-                  if(counter == 1) throw std::runtime_error("test error");
-                  , [](const std::string &msg) {
-                      static std::string *local_error_msg = &error_msg;
-                      *local_error_msg                    = msg;
-                  });
-        benchmark::DoNotOptimize(counter);
-        benchmark::DoNotOptimize(error_msg);
-    }
-}
-BENCHMARK(bm_once_safe_with_exception);
-
-// once_executor benchmarks
-static void bm_once_executor_creation(benchmark::State &state)
-{
-    for(auto _ : state)
-    {
-        auto executor =
-            hj::make_once_executor<std::function<int()>>("test_executor");
-        benchmark::DoNotOptimize(executor);
-    }
-}
-BENCHMARK(bm_once_executor_creation);
-
-static void bm_once_executor_execution(benchmark::State &state)
-{
-    auto executor =
-        hj::make_once_executor<std::function<int()>>("test_executor");
-
-    for(auto _ : state)
-    {
-        auto result = executor.execute([]() { return 42; });
-        benchmark::DoNotOptimize(result);
-    }
-}
-BENCHMARK(bm_once_executor_execution);
-
-static void bm_once_executor_void_execution(benchmark::State &state)
-{
-    auto executor =
-        hj::make_once_executor<std::function<void()>>("void_executor");
-    static int counter = 0;
-
-    for(auto _ : state)
-    {
-        auto result = executor.execute([&]() { counter++; });
-        benchmark::DoNotOptimize(result);
-        benchmark::DoNotOptimize(counter);
-    }
-}
-BENCHMARK(bm_once_executor_void_execution);
-
-// execute_once_named benchmarks
-static void bm_execute_once_named_simple(benchmark::State &state)
-{
-    for(auto _ : state)
-    {
-        auto result =
-            hj::execute_once_named("simple_test", []() { return 42; });
-        benchmark::DoNotOptimize(result);
-    }
-}
-BENCHMARK(bm_execute_once_named_simple);
-
-static void bm_execute_once_named_multiple_names(benchmark::State &state)
-{
-    const int name_count = static_cast<int>(state.range(0));
-
-    for(auto _ : state)
-    {
-        for(int i = 0; i < name_count; ++i)
+        for(int i = 0; i < count; ++i)
         {
-            std::string name = "test_" + std::to_string(i);
-            auto result = hj::execute_once_named(name, [i]() { return i * i; });
-            benchmark::DoNotOptimize(result);
+            if(i == 0) {
+                static int result0 = 0;
+                ONCE(result0 = i * i;);
+                benchmark::DoNotOptimize(result0);
+            } else if(i == 1) {
+                static int result1 = 0;
+                ONCE(result1 = i * i;);
+                benchmark::DoNotOptimize(result1);
+            } else if(i == 2) {
+                static int result2 = 0;
+                ONCE(result2 = i * i;);
+                benchmark::DoNotOptimize(result2);
+            }
+            // Note: For larger counts, this becomes impractical but demonstrates concept
         }
     }
 }
-BENCHMARK(bm_execute_once_named_multiple_names)
-    ->Arg(1)
-    ->Arg(10)
-    ->Arg(50)
-    ->Arg(100);
+BENCHMARK(bm_once_multiple_functions)->Arg(1)->Arg(2)->Arg(3);
 
-// execute_once benchmarks
-static void bm_execute_once_function(benchmark::State &state)
+static void bm_once_complex_lambda(benchmark::State &state)
 {
+    static int result = 0;
+
     for(auto _ : state)
     {
-        auto result = hj::execute_once([]() { return 42; });
-        benchmark::DoNotOptimize(result);
-    }
-}
-BENCHMARK(bm_execute_once_function);
-
-static void bm_execute_once_complex_lambda(benchmark::State &state)
-{
-    for(auto _ : state)
-    {
-        auto result = hj::execute_once([]() {
+        ONCE(
             std::vector<int> vec(100);
             std::iota(vec.begin(), vec.end(), 0);
-            return std::accumulate(vec.begin(), vec.end(), 0);
-        });
+            result = std::accumulate(vec.begin(), vec.end(), 0);
+        );
         benchmark::DoNotOptimize(result);
     }
 }
-BENCHMARK(bm_execute_once_complex_lambda);
+BENCHMARK(bm_once_complex_lambda);
 
 // Memory allocation benchmarks
 static void bm_once_memory_allocation(benchmark::State &state)
@@ -256,9 +208,12 @@ static void bm_once_memory_allocation(benchmark::State &state)
 
     for(auto _ : state)
     {
-        ONCE(storage.reserve(1000); for(int i = 0; i < 100; ++i) {
-            storage.push_back(std::make_unique<int>(i));
-        });
+        ONCE(
+            storage.reserve(1000);
+            for(int i = 0; i < 100; ++i) {
+                storage.push_back(std::make_unique<int>(i));
+            }
+        );
         benchmark::DoNotOptimize(storage);
     }
 }
@@ -271,9 +226,12 @@ static void bm_once_string_operations(benchmark::State &state)
 
     for(auto _ : state)
     {
-        ONCE(global_string.reserve(10000); for(int i = 0; i < 100; ++i) {
-            global_string += "Hello World " + std::to_string(i) + " ";
-        });
+        ONCE(
+            global_string.reserve(10000);
+            for(int i = 0; i < 100; ++i) {
+                global_string += "Hello World " + std::to_string(i) + " ";
+            }
+        );
         benchmark::DoNotOptimize(global_string);
     }
 }
@@ -294,26 +252,24 @@ static void bm_once_atomic_operations(benchmark::State &state)
 BENCHMARK(bm_once_atomic_operations);
 
 // Exception handling benchmarks
-static void bm_once_executor_exception_handling(benchmark::State &state)
+static void bm_once_exception_handling(benchmark::State &state)
 {
-    auto executor =
-        hj::make_once_executor<std::function<int()>>("exception_executor");
+    static int result = 0;
+    static bool exception_handled = false;
 
     for(auto _ : state)
     {
-        auto result = executor.execute([]() -> int {
-            static bool first_call = true;
-            if(first_call)
-            {
-                first_call = false;
-                throw std::runtime_error("Test exception");
+        ONCE(
+            if(!exception_handled) {
+                exception_handled = true;
+                throw std::runtime_error("Test exception"); // Will be caught by ONCE
             }
-            return 42;
-        });
+            result = 42;
+        );
         benchmark::DoNotOptimize(result);
     }
 }
-BENCHMARK(bm_once_executor_exception_handling);
+BENCHMARK(bm_once_exception_handling);
 
 // Comparison with std::call_once
 static void bm_std_call_once_simple(benchmark::State &state)
@@ -356,21 +312,27 @@ static void bm_once_batch_operations(benchmark::State &state)
 
     for(auto _ : state)
     {
-        ONCE(counters.resize(batch_size);
-             for(int i = 0; i < batch_size; ++i) { counters[i] = i * 2; });
+        ONCE(
+            counters.resize(batch_size);
+            for(int i = 0; i < batch_size; ++i) { 
+                counters[i] = i * 2; 
+            }
+        );
         benchmark::DoNotOptimize(counters);
     }
 }
 BENCHMARK(bm_once_batch_operations)->Arg(10)->Arg(50)->Arg(100)->Arg(500);
 
-// Nested once operations
+// Nested once operations (note: this won't work as expected since each ONCE has its own flag)
 static void bm_once_nested_operations(benchmark::State &state)
 {
     static int level1 = 0, level2 = 0, level3 = 0;
 
     for(auto _ : state)
     {
-        ONCE(level1 = 1; ONCE(level2 = 2; ONCE(level3 = 3;);););
+        ONCE(level1 = 1;);
+        ONCE(level2 = 2;); 
+        ONCE(level3 = 3;);
         benchmark::DoNotOptimize(level1);
         benchmark::DoNotOptimize(level2);
         benchmark::DoNotOptimize(level3);
@@ -418,8 +380,8 @@ class OnceTestClass
 
     int get_once_value()
     {
-        int result;
-        ONCE_RETURN(result, class_counter * 2);
+        static int result = 0;
+        ONCE(result = class_counter * 2;);
         return result;
     }
 };
@@ -439,17 +401,6 @@ static void bm_once_class_method(benchmark::State &state)
 }
 BENCHMARK(bm_once_class_method);
 
-// Manager operations
-static void bm_once_manager_operations(benchmark::State &state)
-{
-    for(auto _ : state)
-    {
-        auto names = hj::get_once_names();
-        benchmark::DoNotOptimize(names);
-    }
-}
-BENCHMARK(bm_once_manager_operations);
-
 // Large data structure initialization
 static void bm_once_large_data_structure(benchmark::State &state)
 {
@@ -457,10 +408,12 @@ static void bm_once_large_data_structure(benchmark::State &state)
 
     for(auto _ : state)
     {
-        ONCE(large_map.reserve(10000); for(int i = 0; i < 1000; ++i) {
-            large_map[i] =
-                "Value_" + std::to_string(i) + "_" + std::string(20, 'x');
-        });
+        ONCE(
+            large_map.reserve(10000);
+            for(int i = 0; i < 1000; ++i) {
+                large_map[i] = "Value_" + std::to_string(i) + "_" + std::string(20, 'x');
+            }
+        );
         benchmark::DoNotOptimize(large_map);
     }
 }

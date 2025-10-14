@@ -41,6 +41,7 @@ find_package(OpenSSL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(jwt-cpp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -56,6 +57,7 @@ target_link_libraries(${PROJECT_NAME}
     OpenSSL::SSL 
     OpenSSL::Crypto
     spdlog::spdlog
+    BT::behaviortree_cpp
 )
 
 if (WIN32)

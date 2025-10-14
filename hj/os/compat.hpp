@@ -36,6 +36,8 @@
 #elif (__cplusplus >= 201703L)
 #if defined(__GLIBCXX__)
 #define HJ_UNARY_FUNCTION_DEFINED 1
+#elif defined(_LIBCPP_VERSION)
+#define HJ_UNARY_FUNCTION_DEFINED 1
 #elif defined(_HJ_VERSION)
 #define HJ_UNARY_FUNCTION_DEFINED 0
 #else

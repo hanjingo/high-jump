@@ -262,7 +262,9 @@ class socket : public std::enable_shared_from_this<hj::udp::socket>
             ec = make_err(error_code::invalid_argument);
             return 0;
         }
-        return recv(multi_buffer_t{data, len}, ep, ec);
+
+        multi_buffer_t buf{data, len};
+        return recv(buf, ep, ec);
     }
 
     size_t recv(std::vector<multi_buffer_t> &bufs,
@@ -298,7 +300,9 @@ class socket : public std::enable_shared_from_this<hj::udp::socket>
             fn(make_err(error_code::invalid_argument), 0);
             return;
         }
-        async_recv(multi_buffer_t{data, len}, ep, std::move(fn));
+
+        multi_buffer_t buf{data, len};
+        async_recv(buf, ep, std::move(fn));
     }
 
     void close() noexcept

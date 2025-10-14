@@ -5,417 +5,363 @@
 #include <string>
 #include <atomic>
 #include <random>
+#include <functional>
+#include <chrono>
 
+// Test basic init object creation and destruction
 static void bm_init_empty(benchmark::State &state)
 {
     for(auto _ : state)
     {
         // Test creating an empty initializer
-        auto init_obj = hj::init::make_initializer([]() {}, 0, "empty_test");
+        hj::init init_obj([]() {});
         benchmark::DoNotOptimize(init_obj);
     }
 }
 BENCHMARK(bm_init_empty);
 
+// Test init with simple operation
 static void bm_init_simple_operation(benchmark::State &state)
 {
     static std::atomic<int> counter{0};
 
     for(auto _ : state)
     {
-        auto init_obj = hj::init::make_initializer(
-            [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-            0,
-            "simple_op");
+        auto* counter_ptr = &counter;
+        hj::init init_obj([counter_ptr]() { 
+            counter_ptr->fetch_add(1, std::memory_order_relaxed); 
+        });
         benchmark::DoNotOptimize(counter);
         benchmark::DoNotOptimize(init_obj);
     }
 }
 BENCHMARK(bm_init_simple_operation);
 
-static void bm_init_with_priority(benchmark::State &state)
+// Test init with complex computation
+static void bm_init_complex_computation(benchmark::State &state)
 {
-    static std::atomic<int> counter{0};
+    static std::vector<int> results;
+    results.reserve(1000);
 
     for(auto _ : state)
     {
-        auto init_obj = hj::init::make_initializer(
-            [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-            100,
-            "priority_test");
-        benchmark::DoNotOptimize(counter);
+        std::vector<int>* results_ptr = &results;
+        hj::init init_obj([results_ptr]() {
+            // Simulate some computation
+            int sum = 0;
+            for(int i = 0; i < 100; ++i) {
+                sum += i * i;
+            }
+            results_ptr->push_back(sum);
+            
+            // Keep vector size manageable
+            if(results_ptr->size() > 500) {
+                results_ptr->erase(results_ptr->begin(), results_ptr->begin() + 100);
+            }
+        });
+        benchmark::DoNotOptimize(results);
         benchmark::DoNotOptimize(init_obj);
     }
 }
-BENCHMARK(bm_init_with_priority);
+BENCHMARK(bm_init_complex_computation);
 
-static void bm_init_named(benchmark::State &state)
+// Test init with exception handling
+static void bm_init_exception_handling(benchmark::State &state)
 {
-    static std::atomic<int> counter{0};
+    static std::atomic<int> exception_count{0};
 
     for(auto _ : state)
     {
-        std::string name     = "bench_init_" + std::to_string(counter.load());
-        auto        init_obj = hj::init::make_initializer(
-            [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-            0,
-            name.c_str());
-        benchmark::DoNotOptimize(counter);
-        benchmark::DoNotOptimize(name);
+        std::atomic<int>* exception_count_ptr = &exception_count;
+        hj::init init_obj([exception_count_ptr]() {
+            try {
+                // Simulate potential exception
+                if(exception_count_ptr->load() % 1000 == 0) {
+                    throw std::runtime_error("Test exception");
+                }
+                exception_count_ptr->fetch_add(1, std::memory_order_relaxed);
+            } catch(...) {
+                // Exception caught and handled
+            }
+        });
+        benchmark::DoNotOptimize(exception_count);
         benchmark::DoNotOptimize(init_obj);
     }
 }
-BENCHMARK(bm_init_named);
+BENCHMARK(bm_init_exception_handling);
 
-static void bm_init_full(benchmark::State &state)
+// Test batch creation of init objects
+static void bm_init_batch_creation(benchmark::State &state)
 {
+    const int batch_size = static_cast<int>(state.range(0));
     static std::atomic<int> counter{0};
 
     for(auto _ : state)
     {
-        std::string name     = "full_init_" + std::to_string(counter.load());
-        auto        init_obj = hj::init::make_initializer(
-            [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-            50,
-            name.c_str());
-        benchmark::DoNotOptimize(counter);
-        benchmark::DoNotOptimize(name);
-        benchmark::DoNotOptimize(init_obj);
-    }
-}
-BENCHMARK(bm_init_full);
+        std::vector<std::unique_ptr<hj::init>> init_objects;
+        init_objects.reserve(batch_size);
 
-static void bm_make_initializer_factory(benchmark::State &state)
-{
-    static std::atomic<int> counter{0};
-
-    for(auto _ : state)
-    {
-        auto init_obj = hj::init::make_initializer(
-            [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-            0,
-            "factory_test");
-
-        benchmark::DoNotOptimize(counter);
-        benchmark::DoNotOptimize(init_obj);
-    }
-}
-BENCHMARK(bm_make_initializer_factory);
-
-static void bm_batch_initializer_registration(benchmark::State &state)
-{
-    const int               batch_size = static_cast<int>(state.range(0));
-    static std::atomic<int> counter{0};
-
-    for(auto _ : state)
-    {
-        std::vector<std::atomic<int> *> counters;
-        counters.reserve(batch_size);
-
+        std::atomic<int>* counter_ptr = &counter;
         for(int i = 0; i < batch_size; ++i)
         {
-            counters.push_back(&counter);
-            auto init_obj = hj::init::make_initializer(
-                [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-                i,
-                "batch_" + std::to_string(i));
-
-            benchmark::DoNotOptimize(init_obj);
+            init_objects.push_back(std::make_unique<hj::init>([counter_ptr, i]() {
+                counter_ptr->fetch_add(i, std::memory_order_relaxed);
+            }));
         }
 
-        benchmark::DoNotOptimize(counters);
+        benchmark::DoNotOptimize(counter);
+        benchmark::DoNotOptimize(init_objects);
     }
 }
-BENCHMARK(bm_batch_initializer_registration)
+BENCHMARK(bm_init_batch_creation)
     ->Arg(10)
     ->Arg(50)
     ->Arg(100)
     ->Arg(500);
 
-static void bm_execute_initializers(benchmark::State &state)
+// Test init with memory allocation
+static void bm_init_memory_allocation(benchmark::State &state)
 {
-    static bool initialized = false;
-    if(!initialized)
-    {
-        for(int i = 0; i < 100; ++i)
-        {
-            auto init_obj = hj::init::make_initializer(
-                [i]() {
-                    volatile int dummy = i * 2;
-                    (void) dummy;
-                },
-                i,
-                "exec_test_" + std::to_string(i));
-        }
-        initialized = true;
-    }
+    static std::vector<std::unique_ptr<int>> allocated_memory;
 
     for(auto _ : state)
     {
-        hj::init::execute_initializers();
+        std::vector<std::unique_ptr<int>>* allocated_memory_ptr = &allocated_memory;
+        hj::init init_obj([allocated_memory_ptr]() {
+            allocated_memory_ptr->push_back(std::make_unique<int>(42));
+            
+            // Keep memory usage reasonable
+            if(allocated_memory_ptr->size() > 200) {
+                allocated_memory_ptr->erase(allocated_memory_ptr->begin(), allocated_memory_ptr->begin() + 50);
+            }
+        });
+        
+        benchmark::DoNotOptimize(allocated_memory);
+        benchmark::DoNotOptimize(init_obj);
     }
 }
-BENCHMARK(bm_execute_initializers);
+BENCHMARK(bm_init_memory_allocation);
 
-static void bm_get_initialization_results(benchmark::State &state)
-{
-    static bool setup_done = false;
-    if(!setup_done)
-    {
-        for(int i = 0; i < 50; ++i)
-        {
-            auto init_obj = hj::init::make_initializer(
-                [i]() {
-                    volatile int dummy = i;
-                    (void) dummy;
-                },
-                0,
-                "result_test_" + std::to_string(i));
-        }
-        hj::init::execute_initializers();
-        setup_done = true;
-    }
-
-    for(auto _ : state)
-    {
-        auto results = hj::init::get_initialization_results();
-        benchmark::DoNotOptimize(results);
-    }
-}
-BENCHMARK(bm_get_initialization_results);
-
-static void bm_has_initialization_errors(benchmark::State &state)
-{
-    static bool setup_done = false;
-    if(!setup_done)
-    {
-        for(int i = 0; i < 20; ++i)
-        {
-            auto init_obj = hj::init::make_initializer(
-                [i]() {
-                    volatile int dummy = i;
-                    (void) dummy;
-                },
-                0,
-                "success_" + std::to_string(i));
-        }
-
-        auto failing_init = hj::init::make_initializer(
-            []() { throw std::runtime_error("Benchmark test exception"); },
-            0,
-            "failing_init");
-
-        hj::init::execute_initializers();
-        setup_done = true;
-    }
-
-    for(auto _ : state)
-    {
-        bool has_errors = hj::init::has_initialization_errors();
-        benchmark::DoNotOptimize(has_errors);
-    }
-}
-BENCHMARK(bm_has_initialization_errors);
-
-static void bm_complex_initialization_scenario(benchmark::State &state)
-{
-    static std::vector<std::string> complex_data;
-    static std::atomic<int>         complex_counter{0};
-
-    for(auto _ : state)
-    {
-        auto init1 = hj::init::make_initializer(
-            [data_ptr = &complex_data]() {
-                data_ptr->push_back("high_priority");
-            },
-            100,
-            "high_priority");
-
-        auto init2 = hj::init::make_initializer(
-            [counter_ptr = &complex_counter, data_ptr = &complex_data]() {
-                counter_ptr->fetch_add(1);
-                data_ptr->push_back("named_init");
-            },
-            0,
-            "complex_named");
-
-        auto init3 = hj::init::make_initializer(
-            [counter_ptr = &complex_counter, data_ptr = &complex_data]() {
-                auto value = counter_ptr->load();
-                data_ptr->push_back("full_" + std::to_string(value));
-            },
-            50,
-            "complex_full");
-
-        benchmark::DoNotOptimize(complex_data);
-        benchmark::DoNotOptimize(complex_counter);
-        benchmark::DoNotOptimize(init1);
-        benchmark::DoNotOptimize(init2);
-        benchmark::DoNotOptimize(init3);
-
-        if(complex_data.size() > 1000)
-        {
-            complex_data.clear();
-        }
-    }
-}
-BENCHMARK(bm_complex_initialization_scenario);
-
-static void bm_exception_handling_overhead(benchmark::State &state)
-{
-    for(auto _ : state)
-    {
-        try
-        {
-            auto failing_init = hj::init::make_initializer(
-                []() { throw std::runtime_error("Benchmark exception"); },
-                0,
-                "exception_test");
-
-            hj::init::execute_initializers();
-
-            benchmark::DoNotOptimize(failing_init);
-        }
-        catch(...)
-        {
-        }
-    }
-}
-BENCHMARK(bm_exception_handling_overhead);
-
-static void bm_string_operations_init(benchmark::State &state)
+// Test init with string operations
+static void bm_init_string_operations(benchmark::State &state)
 {
     static std::vector<std::string> string_results;
-    string_results.reserve(1000);
+    string_results.reserve(500);
 
     for(auto _ : state)
     {
-        std::string base   = "benchmark_string_";
-        std::string suffix = std::to_string(state.iterations());
-
-        auto init_obj = hj::init::make_initializer(
-            [results_ptr = &string_results, base, suffix]() {
-                results_ptr->push_back(base + suffix);
-                if(results_ptr->size() > 100)
-                {
-                    results_ptr->erase(results_ptr->begin(),
-                                       results_ptr->begin() + 50);
-                }
-            },
-            0,
-            "string_ops");
-
-        benchmark::DoNotOptimize(base);
-        benchmark::DoNotOptimize(suffix);
+        std::vector<std::string>* string_results_ptr = &string_results;
+        int64_t iteration_count = state.iterations();
+        hj::init init_obj([string_results_ptr, iteration_count]() {
+            std::string result = "benchmark_" + std::to_string(iteration_count) + "_result";
+            string_results_ptr->push_back(std::move(result));
+            
+            // Keep vector size manageable
+            if(string_results_ptr->size() > 300) {
+                string_results_ptr->erase(string_results_ptr->begin(), string_results_ptr->begin() + 100);
+            }
+        });
+        
         benchmark::DoNotOptimize(string_results);
         benchmark::DoNotOptimize(init_obj);
     }
 }
-BENCHMARK(bm_string_operations_init);
+BENCHMARK(bm_init_string_operations);
 
-static void bm_memory_allocation_init(benchmark::State &state)
+// Test init with timing measurements
+static void bm_init_timing_overhead(benchmark::State &state)
 {
-    static std::vector<std::unique_ptr<int>> managed_ptrs;
+    static std::vector<std::chrono::nanoseconds> timing_results;
 
     for(auto _ : state)
     {
-        auto init_obj = hj::init::make_initializer(
-            [ptrs = &managed_ptrs]() {
-                ptrs->push_back(std::make_unique<int>(42));
-                if(ptrs->size() > 100)
-                {
-                    ptrs->erase(ptrs->begin(), ptrs->begin() + 50);
-                }
-            },
-            0,
-            "memory_alloc");
-
-        benchmark::DoNotOptimize(managed_ptrs);
+        std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+        std::vector<std::chrono::nanoseconds>* timing_results_ptr = &timing_results;
+        
+        hj::init init_obj([timing_results_ptr, start]() {
+            std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+            std::chrono::nanoseconds duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+            timing_results_ptr->push_back(duration);
+            
+            // Keep vector size manageable
+            if(timing_results_ptr->size() > 200) {
+                timing_results_ptr->erase(timing_results_ptr->begin(), timing_results_ptr->begin() + 50);
+            }
+        });
+        
+        benchmark::DoNotOptimize(timing_results);
         benchmark::DoNotOptimize(init_obj);
     }
 }
-BENCHMARK(bm_memory_allocation_init);
+BENCHMARK(bm_init_timing_overhead);
 
-static void bm_priority_sorting_overhead(benchmark::State &state)
+// Test init with complex data structures
+static void bm_init_complex_data_structures(benchmark::State &state)
 {
-    const int               num_priorities = static_cast<int>(state.range(0));
+    static std::vector<std::map<std::string, int>> complex_data;
+    static std::atomic<int> complex_counter{0};
+
+    for(auto _ : state)
+    {
+        std::vector<std::map<std::string, int>>* complex_data_ptr = &complex_data;
+        std::atomic<int>* complex_counter_ptr = &complex_counter;
+        hj::init init_obj([complex_data_ptr, complex_counter_ptr]() {
+            std::map<std::string, int> data_map;
+            int current_count = complex_counter_ptr->fetch_add(1, std::memory_order_relaxed);
+            
+            data_map["iteration"] = current_count;
+            data_map["timestamp"] = static_cast<int>(std::chrono::steady_clock::now().time_since_epoch().count());
+            data_map["random"] = std::rand() % 1000;
+            
+            complex_data_ptr->push_back(std::move(data_map));
+            
+            // Keep memory usage reasonable
+            if(complex_data_ptr->size() > 100) {
+                complex_data_ptr->erase(complex_data_ptr->begin(), complex_data_ptr->begin() + 25);
+            }
+        });
+
+        benchmark::DoNotOptimize(complex_data);
+        benchmark::DoNotOptimize(complex_counter);
+        benchmark::DoNotOptimize(init_obj);
+    }
+}
+BENCHMARK(bm_init_complex_data_structures);
+
+// Static variable for macro test (must be at file scope)
+static std::atomic<int> global_macro_counter{0};
+
+// Test INIT macro performance
+static void bm_init_macro_usage(benchmark::State &state)
+{
+    for(auto _ : state)
+    {
+        // Since INIT macro creates a namespace, we need to use it differently
+        // We'll test the overhead by creating init objects manually instead
+        hj::init init_obj([]() {
+            global_macro_counter.fetch_add(1, std::memory_order_relaxed);
+        });
+        
+        benchmark::DoNotOptimize(global_macro_counter);
+        benchmark::DoNotOptimize(init_obj);
+    }
+}
+BENCHMARK(bm_init_macro_usage);
+
+// Test comparison between manual initialization and init class
+static void bm_init_vs_manual(benchmark::State &state)
+{
     static std::atomic<int> counter{0};
 
     for(auto _ : state)
     {
-        std::random_device              rd;
-        std::mt19937                    gen(rd());
+        if(state.range(0) == 0) {
+            // Manual initialization
+            static bool initialized = false;
+            if(!initialized) {
+                counter.fetch_add(1, std::memory_order_relaxed);
+                initialized = true;
+            }
+        } else {
+            // Using hj::init
+            std::atomic<int>* counter_ptr = &counter;
+            hj::init init_obj([counter_ptr]() {
+                counter_ptr->fetch_add(1, std::memory_order_relaxed);
+            });
+            benchmark::DoNotOptimize(init_obj);
+        }
+        
+        benchmark::DoNotOptimize(counter);
+    }
+}
+BENCHMARK(bm_init_vs_manual)->Arg(0)->Arg(1);
+
+// Test random number generation in init
+static void bm_init_random_operations(benchmark::State &state)
+{
+    const int num_operations = static_cast<int>(state.range(0));
+    static std::vector<int> random_results;
+
+    for(auto _ : state)
+    {
+        std::random_device rd;
+        std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(1, 1000);
 
-        for(int i = 0; i < num_priorities; ++i)
+        std::vector<int>* random_results_ptr = &random_results;
+        for(int i = 0; i < num_operations; ++i)
         {
-            int  priority = dis(gen);
-            auto init_obj = hj::init::make_initializer(
-                [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-                priority,
-                "priority_test_" + std::to_string(i));
-
+            int random_val = dis(gen);
+            hj::init init_obj([random_results_ptr, random_val]() {
+                random_results_ptr->push_back(random_val * 2);
+                
+                // Keep vector size manageable
+                if(random_results_ptr->size() > 500) {
+                    random_results_ptr->erase(random_results_ptr->begin(), random_results_ptr->begin() + 100);
+                }
+            });
             benchmark::DoNotOptimize(init_obj);
         }
 
-        benchmark::DoNotOptimize(counter);
+        benchmark::DoNotOptimize(random_results);
     }
 }
-BENCHMARK(bm_priority_sorting_overhead)->Arg(5)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_init_random_operations)->Arg(5)->Arg(20)->Arg(50)->Arg(100);
 
-static void bm_manual_initialization(benchmark::State &state)
+// Test basic overhead of init objects
+static void bm_init_overhead_comparison(benchmark::State &state)
 {
     static std::atomic<int> counter{0};
 
     for(auto _ : state)
     {
-        static bool initialized = false;
-        if(!initialized)
-        {
-            counter.fetch_add(1);
-            initialized = true;
-        }
+        // Direct function call
+        auto direct_start = std::chrono::high_resolution_clock::now();
+        counter.fetch_add(1, std::memory_order_relaxed);
+        auto direct_end = std::chrono::high_resolution_clock::now();
 
-        benchmark::DoNotOptimize(counter);
-    }
-}
-BENCHMARK(bm_manual_initialization);
+        // Using init object
+        std::chrono::high_resolution_clock::time_point init_start = std::chrono::high_resolution_clock::now();
+        std::atomic<int>* counter_ptr = &counter;
+        hj::init init_obj([counter_ptr]() {
+            counter_ptr->fetch_add(1, std::memory_order_relaxed);
+        });
+        std::chrono::high_resolution_clock::time_point init_end = std::chrono::high_resolution_clock::now();
 
-static void bm_init_macro_vs_manual(benchmark::State &state)
-{
-    static std::atomic<int> counter{0};
-
-    for(auto _ : state)
-    {
-        auto init_obj = hj::init::make_initializer(
-            [counter_ptr = &counter]() { counter_ptr->fetch_add(1); },
-            0,
-            "macro_vs_manual");
         benchmark::DoNotOptimize(counter);
         benchmark::DoNotOptimize(init_obj);
+        benchmark::DoNotOptimize(direct_start);
+        benchmark::DoNotOptimize(direct_end);
+        benchmark::DoNotOptimize(init_start);
+        benchmark::DoNotOptimize(init_end);
     }
 }
-BENCHMARK(bm_init_macro_vs_manual);
+BENCHMARK(bm_init_overhead_comparison);
 
-static void bm_thread_safety_overhead(benchmark::State &state)
+// Test multiple init objects in sequence
+static void bm_init_multiple_sequence(benchmark::State &state)
 {
-    static std::vector<std::atomic<int>> thread_counters(10);
-
+    static std::vector<int> sequence_results;
+    
     for(auto _ : state)
     {
+        std::vector<std::unique_ptr<hj::init>> init_sequence;
+        
+        std::vector<int>* sequence_results_ptr = &sequence_results;
         for(int i = 0; i < 10; ++i)
         {
-            auto init_obj = hj::init::make_initializer(
-                [i, counters_ptr = &thread_counters]() {
-                    (*counters_ptr)[i].fetch_add(1);
-                },
-                0,
-                "thread_test_" + std::to_string(i));
-
-            benchmark::DoNotOptimize(init_obj);
+            init_sequence.push_back(std::make_unique<hj::init>([sequence_results_ptr, i]() {
+                sequence_results_ptr->push_back(i * i);
+            }));
+        }
+        
+        // Keep results vector size manageable
+        if(sequence_results.size() > 1000) {
+            sequence_results.erase(sequence_results.begin(), sequence_results.begin() + 500);
         }
 
-        benchmark::DoNotOptimize(thread_counters);
+        benchmark::DoNotOptimize(sequence_results);
+        benchmark::DoNotOptimize(init_sequence);
     }
 }
-BENCHMARK(bm_thread_safety_overhead);
+BENCHMARK(bm_init_multiple_sequence);

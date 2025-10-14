@@ -22,20 +22,23 @@ class context
     context()
         : _ctx(zmq_ctx_new())
     {
-        assert(_ctx != nullptr);
+        if(!_ctx)
+            throw std::runtime_error("zmq_ctx_new failed");
     }
-    ~context()
-    {
-        if(_ctx)
-            zmq_ctx_term(_ctx);
-    }
-    context(const context &)            = delete;
-    context &operator=(const context &) = delete;
+    context(const context &) = delete;
     context(context &&other) noexcept
         : _ctx(other._ctx)
     {
         other._ctx = nullptr;
     }
+
+    ~context()
+    {
+        if(_ctx)
+            zmq_ctx_term(_ctx);
+    }
+
+    context &operator=(const context &) = delete;
     context &operator=(context &&other) noexcept
     {
         if(this == &other)
@@ -67,57 +70,80 @@ class message
         if(zmq_msg_init_size(&_msg, size) != 0)
             throw std::runtime_error("zmq_msg_init_size failed");
     }
+    message(const message &) = delete;
+    message(message &&rhs) noexcept
+    {
+        zmq_msg_init(&_msg);
+        zmq_msg_move(&_msg, &rhs._msg);
+    }
+
     ~message() noexcept { zmq_msg_close(&_msg); }
 
-    message(const message &other)
+    message &operator=(message &&rhs) noexcept
     {
-        if(zmq_msg_init(&_msg) != 0)
-            throw std::runtime_error("zmq_msg_init failed");
-        if(zmq_msg_copy(&_msg, const_cast<zmq_msg_t *>(&other._msg)) != 0)
-            throw std::runtime_error("zmq_msg_copy failed");
-    }
-    message &operator=(const message &other)
-    {
-        if(this == &other)
-            return *this;
-        zmq_msg_close(&_msg);
-        if(zmq_msg_init(&_msg) != 0)
-            throw std::runtime_error("zmq_msg_init failed");
-        if(zmq_msg_copy(&_msg, const_cast<zmq_msg_t *>(&other._msg)) != 0)
-            throw std::runtime_error("zmq_msg_copy failed");
-        return *this;
-    }
-    message(message &&rhs)
-    {
-        if(zmq_msg_init(&_msg) != 0)
-            throw std::runtime_error("zmq_msg_init failed");
-        if(zmq_msg_move(&_msg, &rhs._msg) != 0)
-            throw std::runtime_error("zmq_msg_move failed");
-    }
-    message &operator=(message &&rhs)
-    {
-        if(this == &rhs)
-            return *this;
-        zmq_msg_close(&_msg);
-        if(zmq_msg_init(&_msg) != 0)
-            throw std::runtime_error("zmq_msg_init failed");
-        if(zmq_msg_move(&_msg, &rhs._msg) != 0)
-            throw std::runtime_error("zmq_msg_move failed");
+        if(this != &rhs)
+        {
+            zmq_msg_close(&_msg);
+            zmq_msg_init(&_msg);
+            zmq_msg_move(&_msg, &rhs._msg);
+        }
+
         return *this;
     }
 
-    zmq_msg_t       *get() { return &_msg; }
-    const zmq_msg_t *get() const { return &_msg; }
-    void            *data() { return zmq_msg_data(&_msg); }
-    const void      *data() const
+    zmq_msg_t       *get() noexcept { return &_msg; }
+    const zmq_msg_t *get() const noexcept { return &_msg; }
+    void            *data() noexcept { return zmq_msg_data(&_msg); }
+    const void      *data() const noexcept
     {
         return zmq_msg_data(const_cast<zmq_msg_t *>(&_msg));
     }
-    size_t size() const { return zmq_msg_size(&_msg); }
+    size_t size() const noexcept { return zmq_msg_size(&_msg); }
 
   private:
     zmq_msg_t _msg;
 }; // message
+
+class socket
+{
+  public:
+    socket(void *ctx, int type)
+        : _sock(zmq_socket(ctx, type))
+    {
+        if(!_sock)
+            throw std::runtime_error("zmq_socket failed");
+    }
+    socket(const socket &) = delete;
+    socket(socket &&other) noexcept
+        : _sock(other._sock)
+    {
+        other._sock = nullptr;
+    }
+
+    ~socket()
+    {
+        if(_sock)
+            zmq_close(_sock);
+    }
+
+    socket &operator=(const socket &) = delete;
+    socket &operator=(socket &&other) noexcept
+    {
+        if(this != &other)
+        {
+            if(_sock)
+                zmq_close(_sock);
+            _sock       = other._sock;
+            other._sock = nullptr;
+        }
+        return *this;
+    }
+
+    inline void *get() const noexcept { return _sock; }
+
+  private:
+    void *_sock;
+};
 
 class chan
 {
@@ -158,7 +184,7 @@ class chan
             zmq_close(_sock_out);
 
         zmq_msg_close(&_buf_in);
-        zmq_msg_close(&_buf_in);
+        zmq_msg_close(&_buf_out);
     }
 
     chan(const chan &)            = delete;

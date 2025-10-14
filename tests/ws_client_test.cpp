@@ -10,7 +10,7 @@ TEST(ws_client, connect_send_recv_close)
     std::thread([]() {
         hj::ws_server::io_t  io;
         hj::ws_server::err_t err;
-        auto ep = hj::ws_server::make_endpoint("127.0.0.1", 9003);
+        auto ep = hj::ws_server::make_endpoint("127.0.0.1", 20001);
 
         auto serv = std::make_shared<hj::ws_server>(io);
         auto ws   = serv->accept(ep, err);
@@ -30,7 +30,7 @@ TEST(ws_client, connect_send_recv_close)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::ws_client::io_t io;
     auto                client = std::make_shared<hj::ws_client>(io);
-    ASSERT_TRUE(client->connect("127.0.0.1", "9003", "/"));
+    ASSERT_TRUE(client->connect("127.0.0.1", "20001", "/"));
     ASSERT_TRUE(client->is_connected());
 
     std::string msg = "hello";
@@ -50,7 +50,7 @@ TEST(ws_client, async_connect_send_recv_close)
     std::thread t([]() {
         hj::ws_server::io_t  io;
         hj::ws_server::err_t err;
-        auto ep = hj::ws_server::make_endpoint("127.0.0.1", 12345);
+        auto ep = hj::ws_server::make_endpoint("127.0.0.1", 20002);
 
         auto serv = std::make_shared<hj::ws_server>(io);
         auto ws   = serv->accept(ep, err);
@@ -71,7 +71,7 @@ TEST(ws_client, async_connect_send_recv_close)
     auto                client = std::make_shared<hj::ws_client>(io);
     client->async_connect(
         "127.0.0.1",
-        "12345",
+        "20002",
         "/",
         [client](const hj::ws_client::err_t &err) {
             ASSERT_FALSE(err);

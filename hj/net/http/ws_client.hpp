@@ -232,18 +232,11 @@ class ws_client : public std::enable_shared_from_this<ws_client>
         if(!self->_ws)
             return;
 
-        self->_ws->async_close(
-            boost::beast::websocket::close_code::normal,
-            [self, handler](const err_t &ec) {
-                self->_ws.reset();
-                if(ec == boost::asio::error::connection_reset
-                   || ec == boost::asio::error::connection_aborted
-                   || ec == boost::beast::websocket::error::closed
-                   || ec == boost::asio::error::eof)
-                    handler({});
-                else
-                    handler(ec);
-            });
+        self->_ws->async_close(boost::beast::websocket::close_code::normal,
+                               [self, handler](const err_t &ec) {
+                                   self->_ws.reset();
+                                   handler({});
+                               });
     }
 
   private:
@@ -253,7 +246,7 @@ class ws_client : public std::enable_shared_from_this<ws_client>
     buffer_t              _buffer;
 };
 
-class ws_client_ssl
+class ws_client_ssl : public std::enable_shared_from_this<ws_client_ssl>
 {
   public:
     using io_t          = boost::asio::io_context;
@@ -501,19 +494,11 @@ class ws_client_ssl
         if(!_ws)
             return;
 
-        _ws->async_close(
-            boost::beast::websocket::close_code::normal,
-            [this, handler](const err_t &ec) {
-                _ws.reset();
-                if(ec == boost::asio::error::connection_reset
-                   || ec == boost::asio::error::connection_aborted
-                   || ec == boost::beast::websocket::error::closed
-                   || ec == boost::asio::error::eof
-                   || ec == boost::asio::ssl::error::stream_truncated)
-                    handler({});
-                else
-                    handler(ec);
-            });
+        _ws->async_close(boost::beast::websocket::close_code::normal,
+                         [this, handler](const err_t &ec) {
+                             _ws.reset();
+                             handler({});
+                         });
     }
 
   private:

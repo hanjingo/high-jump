@@ -116,8 +116,6 @@ TEST(tcp_conn, set_w_closed)
         ASSERT_EQ(sock == nullptr, false);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         li.close();
-
-        delete sock;
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -147,8 +145,6 @@ TEST(tcp_conn, set_r_closed)
         ASSERT_EQ(sock == nullptr, false);
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         li.close();
-
-        delete sock;
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -181,7 +177,6 @@ TEST(tcp_conn, connect)
             sock->close();
 
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            delete sock;
         }
         li.close();
     });
@@ -210,7 +205,6 @@ TEST(tcp_conn, async_connect)
             auto sock = li.accept(10011);
             ASSERT_EQ(sock == nullptr, false);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -261,7 +255,6 @@ TEST(tcp_conn, disconnect)
             auto sock = li.accept(10012);
             ASSERT_EQ(sock == nullptr, false);
             sock->close();
-            delete sock;
         }
         li.close();
     });

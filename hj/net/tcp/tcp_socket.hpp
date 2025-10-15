@@ -1,3 +1,21 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef TCP_SOCKET_HPP
 #define TCP_SOCKET_HPP
 
@@ -25,16 +43,11 @@
 namespace hj
 {
 
-class tcp_socket
+class tcp_socket : public std::enable_shared_from_this<tcp_socket>
 {
   public:
-#ifdef SMART_PTR_ENABLE
     using tcp_socket_ptr_t = std::shared_ptr<tcp_socket>;
-#else
-    using tcp_socket_ptr_t = tcp_socket *;
-#endif
-
-    using io_t = boost::asio::io_context;
+    using io_t             = boost::asio::io_context;
 #if BOOST_VERSION < 108700
     using io_work_t = boost::asio::io_service::work;
 #endif
@@ -68,24 +81,31 @@ class tcp_socket
     using recv_handler_t = std::function<void(const err_t &, std::size_t)>;
 
   public:
-    tcp_socket() = delete;
     explicit tcp_socket(io_t &io)
         : _io{io}
+        , _sock{std::make_unique<sock_t>(io)}
     {
     }
+    // NOTE: sock must be created by new operator
     explicit tcp_socket(io_t &io, sock_t *sock)
         : _io{io}
-        , _sock{sock}
+        , _sock{std::unique_ptr<sock_t>(sock)}
     {
     }
     virtual ~tcp_socket() { close(); }
+
+    tcp_socket()                              = delete;
+    tcp_socket(const tcp_socket &)            = delete;
+    tcp_socket &operator=(const tcp_socket &) = delete;
+    tcp_socket(tcp_socket &&)                 = default;
+    tcp_socket &operator=(tcp_socket &&)      = default;
 
     inline io_t &io() { return _io; }
 
     template <typename T>
     inline bool set_option(T opt)
     {
-        if(_sock == nullptr || !_sock->is_open())
+        if(!_sock || !_sock->is_open())
             return false;
 
         err_t err;
@@ -93,25 +113,24 @@ class tcp_socket
         if(!err.failed())
             return true;
 
-        assert(false);
         std::cerr << err << std::endl;
         return false;
     }
 
-    inline bool is_connected()
+    inline bool is_connected() const noexcept
     {
-        return _sock != nullptr && _is_connected.load();
+        return _sock && _is_connected.load();
     }
 
-    bool check_connected()
+    inline bool check_connected() noexcept
     {
         err_t err;
         return check_connected(err);
     }
 
-    bool check_connected(err_t &err)
+    inline bool check_connected(err_t &err) noexcept
     {
-        if(_sock == nullptr)
+        if(!_sock)
             return false;
 
         _sock->remote_endpoint(err);
@@ -140,14 +159,10 @@ class tcp_socket
         for(int i = 0; i < try_times; ++i)
         {
             set_conn_status(false);
-
-            if(_sock != nullptr)
-            {
+            if(_sock && _sock->is_open())
                 _sock->close();
-                delete _sock;
-                _sock = nullptr;
-            }
-            _sock = new sock_t(_io);
+
+            _sock = std::make_unique<sock_t>(_io);
 
             std::atomic_bool finished{false};
             std::atomic_bool success{false};
@@ -155,33 +170,35 @@ class tcp_socket
             steady_timer_t timer(_io);
             timer.expires_after(timeout);
 
-            _sock->async_connect(ep, [&](const err_t &err) {
-                if(finished.exchange(true))
-                    return;
+            _sock->async_connect(
+                ep,
+                [this, &finished, &success, &timer](const err_t &err) {
+                    if(finished.exchange(true))
+                        return;
 
-                if(!err.failed())
-                {
-                    set_conn_status(true);
-                    success.exchange(true);
-                } else
-                    set_conn_status(false);
-                timer.cancel();
-            });
+                    if(!err.failed())
+                    {
+                        this->set_conn_status(true);
+                        success.exchange(true);
+                    } else
+                        this->set_conn_status(false);
 
-            timer.async_wait([&](const err_t &err) {
+                    timer.cancel();
+                });
+
+            timer.async_wait([this, &finished](const err_t &err) {
                 (void) err; // ignore timer error
                 if(finished.exchange(true))
                     return;
 
-                if(_sock)
-                    _sock->close();
+                if(this->_sock)
+                    this->_sock->close();
 
-                set_conn_status(false);
+                this->set_conn_status(false);
             });
 
             _io.restart();
             _io.run();
-
             if(success.load())
                 return true;
         }
@@ -207,20 +224,18 @@ class tcp_socket
             return;
         }
 
-        if(this->_sock != nullptr)
-        {
-            this->_sock->close();
-            delete this->_sock;
-            this->_sock = nullptr;
-        }
-        _sock = new sock_t(_io);
+        if(_sock && _sock->is_open())
+            _sock->close();
+
+        _sock = std::make_unique<sock_t>(_io);
         _sock->async_connect(ep, [this, fn](const err_t &err) {
             if(!err.failed())
-                set_conn_status(true);
+                this->set_conn_status(true);
             else
-                set_conn_status(false);
+                this->set_conn_status(false);
 
-            fn(err);
+            if(fn)
+                fn(err);
         });
     }
 
@@ -241,8 +256,14 @@ class tcp_socket
         {
             return _sock->send(buf);
         }
+        catch(const std::exception &e)
+        {
+            std::cerr << "send exception: " << e.what() << std::endl;
+            return 0;
+        }
         catch(...)
         {
+            std::cerr << "send unknown exception" << std::endl;
             return 0;
         }
     }
@@ -266,10 +287,14 @@ class tcp_socket
         {
             _sock->async_send(buf, std::move(fn));
         }
-        catch(const boost::system::error_code &ec)
+        catch(const std::exception &e)
         {
-            assert(false);
-            std::cerr << ec << std::endl;
+            std::cerr << "async_send exception: " << e.what() << std::endl;
+            return;
+        }
+        catch(...)
+        {
+            std::cerr << "async_send unknown exception" << std::endl;
             return;
         }
     }
@@ -342,30 +367,35 @@ class tcp_socket
         async_recv(buf, std::move(fn));
     }
 
-    bool set_conn_status(bool is_connected)
+    bool set_conn_status(bool is_connected) noexcept
     {
         bool old = _is_connected.load();
         return _is_connected.compare_exchange_strong(old, is_connected);
     }
 
-    void close() { _disconnect_anyway(); }
+    void close()
+    {
+        if(!is_connected())
+            return;
+
+        _disconnect_anyway();
+    }
 
   private:
     void _disconnect_anyway()
     {
         set_conn_status(false);
-        if(_sock != nullptr)
-        {
+        if(_sock && _sock->is_open())
             _sock->close();
-            delete _sock;
-            _sock = nullptr;
-        }
+
+        if(_sock)
+            _sock.reset();
     }
 
   private:
-    io_t            &_io;
-    sock_t          *_sock = nullptr;
-    std::atomic_bool _is_connected{false};
+    io_t                   &_io;
+    std::unique_ptr<sock_t> _sock;
+    std::atomic_bool        _is_connected{false};
 };
 
 }

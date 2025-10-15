@@ -1,3 +1,21 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef TCP_CONN
 #define TCP_CONN
 
@@ -21,10 +39,18 @@
 #define MTU 1500
 #endif
 
+#ifndef MAX_TCP_CONN_RBUF_SZ
+#define MAX_TCP_CONN_RBUF_SZ 65535
+#endif
+
+#ifndef MAX_TCP_CONN_WBUF_SZ
+#define MAX_TCP_CONN_WBUF_SZ 65535
+#endif
+
 namespace hj
 {
 
-class tcp_conn
+class tcp_conn : public std::enable_shared_from_this<tcp_conn>
 {
   public:
     using flag_t = std::int64_t;
@@ -36,13 +62,8 @@ class tcp_conn
     using msg_ptr_t = void *;
     using channel_t = moodycamel::BlockingConcurrentQueue<msg_ptr_t>;
 
-#ifdef SMART_PTR_ENABLE
-    using conn_ptr_t = std::shared_ptr<hj::tcp_conn>;
-    using sock_ptr_t = std::shared_ptr<hj::tcp_socket>;
-#else
     using conn_ptr_t = hj::tcp_conn *;
-    using sock_ptr_t = hj::tcp_socket *;
-#endif
+    using sock_ptr_t = std::shared_ptr<hj::tcp_socket>;
 
     using conn_handler_t    = std::function<void(conn_ptr_t, const err_t &)>;
     using send_handler_t    = std::function<void(conn_ptr_t, msg_ptr_t)>;
@@ -57,11 +78,11 @@ class tcp_conn
         moodycamel::BlockingConcurrentQueue<msg_ptr_t>::BLOCK_SIZE;
 
   public:
-    tcp_conn() = delete;
-
-    tcp_conn(io_t &io, std::size_t rbuf_sz = 65535, std::size_t wbuf_sz = 65535)
+    tcp_conn(io_t       &io,
+             std::size_t rbuf_sz = MAX_TCP_CONN_RBUF_SZ,
+             std::size_t wbuf_sz = MAX_TCP_CONN_WBUF_SZ)
         : _io{io}
-        , _sock{new tcp_socket(_io)}
+        , _sock{std::make_shared<tcp_socket>(_io)}
         , _r_buf{rbuf_sz}
         , _r_ch{rbuf_sz / MTU * block_sz}
         , _w_ch{wbuf_sz / MTU * block_sz}
@@ -69,8 +90,8 @@ class tcp_conn
     }
     tcp_conn(io_t       &io,
              sock_ptr_t  sock,
-             std::size_t rbuf_sz = 65535,
-             std::size_t wbuf_sz = 65535)
+             std::size_t rbuf_sz = MAX_TCP_CONN_RBUF_SZ,
+             std::size_t wbuf_sz = MAX_TCP_CONN_WBUF_SZ)
         : _io{io}
         , _sock{sock}
         , _r_buf{rbuf_sz}
@@ -80,41 +101,48 @@ class tcp_conn
     }
     ~tcp_conn() { close(); }
 
-    inline void set_send_handler(const send_handler_t &&fn)
+    tcp_conn()                            = delete;
+    tcp_conn(const tcp_conn &)            = delete;
+    tcp_conn &operator=(const tcp_conn &) = delete;
+    tcp_conn(tcp_conn &&)                 = default;
+    tcp_conn &operator=(tcp_conn &&)      = default;
+
+    void set_send_handler(const send_handler_t &fn) noexcept
     {
-        _send_handler = std::move(fn);
+        _send_handler = fn;
     }
-    inline void set_recv_handler(const recv_handler_t &&fn)
+    void set_recv_handler(const recv_handler_t &fn) noexcept
     {
-        _recv_handler = std::move(fn);
+        _recv_handler = fn;
     }
-    inline void set_disconn_handler(const disconn_handler_t &&fn)
+    void set_disconn_handler(const disconn_handler_t &fn) noexcept
     {
-        _disconn_handler = std::move(fn);
+        _disconn_handler = fn;
     }
-    inline void set_encode_handler(const encode_handler_t &&fn)
+    void set_encode_handler(const encode_handler_t &fn) noexcept
     {
-        _encode_handler = std::move(fn);
+        _encode_handler = fn;
     }
-    inline void set_decode_handler(const decode_handler_t &&fn)
+    void set_decode_handler(const decode_handler_t &fn) noexcept
     {
-        _decode_handler = std::move(fn);
+        _decode_handler = fn;
     }
-    inline flag_t get_flag() { return _flag.load(); }
-    inline void   set_flag(const flag_t flag)
+
+    inline flag_t get_flag() const noexcept { return _flag.load(); }
+    inline void   set_flag(const flag_t flag) noexcept
     {
-        _flag.store(_flag.load() | flag);
+        _flag.fetch_or(flag, std::memory_order_relaxed);
     }
-    inline void unset_flag(const flag_t flag)
+    inline void unset_flag(const flag_t flag) noexcept
     {
-        _flag.store(_flag.load() & (~flag));
+        _flag.fetch_and(~flag, std::memory_order_relaxed);
     }
-    inline bool is_connected()
+    inline bool is_connected() const noexcept
     {
         return _sock != nullptr && _sock->is_connected();
     }
-    inline bool is_w_closed() { return _w_closed.load(); }
-    inline bool is_r_closed() { return _r_closed.load(); }
+    inline bool is_w_closed() const noexcept { return _w_closed.load(); }
+    inline bool is_r_closed() const noexcept { return _r_closed.load(); }
     void        set_w_closed(bool is_closed)
     {
         _w_closed.store(is_closed);
@@ -192,6 +220,7 @@ class tcp_conn
         _sock->disconnect();
         if(_disconn_handler)
             _disconn_handler(this);
+
         return true;
     }
 
@@ -248,11 +277,11 @@ class tcp_conn
         set_w_closed(true);
         set_r_closed(true);
 
-        if(_sock == nullptr)
+        if(!_sock)
             return;
+
         _sock->close();
-        delete _sock;
-        _sock = nullptr;
+        _sock.reset();
     }
 
   private:
@@ -442,7 +471,7 @@ class tcp_conn
 
   private:
     io_t               &_io;
-    sock_ptr_t          _sock = nullptr;
+    sock_ptr_t          _sock;
     std::atomic<flag_t> _flag{0};
 
     std::atomic<bool> _w_closed{false};

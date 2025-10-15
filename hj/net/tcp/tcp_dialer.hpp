@@ -1,3 +1,21 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef TCP_DIALER_HPP
 #define TCP_DIALER_HPP
 
@@ -7,40 +25,44 @@
 #include <boost/version.hpp>
 #include <hj/net/tcp/tcp_socket.hpp>
 
+#ifndef TCP_DIALER_MAX_SIZE
+#define TCP_DIALER_MAX_SIZE 1024
+#endif
+
 namespace hj
 {
 
-class tcp_dialer
+class tcp_dialer : public std::enable_shared_from_this<tcp_dialer>
 {
   public:
-    using io_t  = hj::tcp_socket::io_t;
-    using err_t = hj::tcp_socket::err_t;
-
-#ifdef SMART_PTR_ENABLE
-    using sock_ptr_t = std::shared_ptr<hj::tcp_socket>;
-#else
-    using sock_ptr_t = hj::tcp_socket *;
-#endif
-
+    using io_t            = hj::tcp_socket::io_t;
+    using err_t           = hj::tcp_socket::err_t;
+    using sock_ptr_t      = std::shared_ptr<hj::tcp_socket>;
     using dial_handler_t  = std::function<void(const err_t &, sock_ptr_t)>;
     using range_handler_t = std::function<bool(sock_ptr_t)>;
 
   public:
-    tcp_dialer() = delete;
-    explicit tcp_dialer(io_t &io)
+    explicit tcp_dialer(io_t &io, std::size_t max_size = TCP_DIALER_MAX_SIZE)
         : _io{io}
+        , _max_size{max_size}
     {
     }
 
     virtual ~tcp_dialer() { close(); }
 
-    inline std::size_t size()
+    tcp_dialer()                              = delete;
+    tcp_dialer(const tcp_dialer &)            = delete;
+    tcp_dialer &operator=(const tcp_dialer &) = delete;
+    tcp_dialer(tcp_dialer &&)                 = default;
+    tcp_dialer &operator=(tcp_dialer &&)      = default;
+
+    inline std::size_t size() const noexcept
     {
         std::lock_guard<std::mutex> lock(_mu);
         return _socks.size();
     }
 
-    inline bool is_exist(sock_ptr_t sock)
+    inline bool is_exist(sock_ptr_t sock) const noexcept
     {
         std::lock_guard<std::mutex> lock(_mu);
         return _socks.find(sock) != _socks.end();
@@ -52,74 +74,103 @@ class tcp_dialer
          std::chrono::milliseconds timeout   = std::chrono::milliseconds(2000),
          int                       try_times = 1)
     {
-        sock_ptr_t sock = new tcp_socket(_io);
-        if(sock->connect(ip, port, timeout, try_times))
+        if(size() > _max_size)
+            return nullptr;
+
+        auto sock = std::make_shared<tcp_socket>(_io);
+        try
         {
-            return add_(sock) ? sock : nullptr;
+            if(sock->connect(ip, port, timeout, try_times))
+            {
+                return _add(sock) ? sock : nullptr;
+            }
+        }
+        catch(const std::exception &e)
+        {
+            std::cerr << "dial exception: " << e.what() << std::endl;
         }
 
-        delete sock;
-        sock = nullptr;
         return nullptr;
     }
 
     void async_dial(const char *ip, const uint16_t port, dial_handler_t &&fn)
     {
-        sock_ptr_t sock = new tcp_socket(_io);
+        if(size() > _max_size)
+        {
+            fn(make_error_code(std::errc::no_buffer_space), nullptr);
+            return;
+        }
+
+        auto sock = std::make_shared<tcp_socket>(_io);
         sock->async_connect(
             ip,
             port,
             [this, sock, fn = std::move(fn)](const err_t &err) mutable {
-                this->add_(sock);
-                fn(err, sock);
+                if(!err)
+                {
+                    this->_add(sock);
+                    if(fn)
+                        fn(err, sock);
+                } else
+                {
+                    if(fn)
+                        fn(err, nullptr);
+                }
             });
     }
 
     void range(range_handler_t &&handler)
     {
+        if(!handler)
+            return;
+
         std::lock_guard<std::mutex> lock(_mu);
         for(auto sock : _socks)
         {
-            if(!handler(sock))
-                return;
+            try
+            {
+                if(!handler(sock))
+                    return;
+            }
+            catch(...)
+            {
+            }
         }
     }
 
     void remove(sock_ptr_t sock)
     {
-        if(sock == nullptr || !is_exist(sock))
+        if(!sock || !is_exist(sock))
             return;
 
         if(sock->is_connected())
             sock->close();
-        del_(sock);
-        delete sock;
-        sock = nullptr;
+
+        _del(sock);
     }
 
     void close()
     {
         std::lock_guard<std::mutex> lock(_mu);
-        for(auto itr = _socks.begin(); itr != _socks.end(); ++itr)
+        for(auto &sock : _socks)
         {
-            if(*itr == nullptr)
-                continue;
-
-            sock_ptr_t sock = (*itr);
-            sock->close();
-            delete sock;
+            if(sock)
+                sock->close();
         }
         _socks.clear();
     }
 
   private:
-    bool add_(sock_ptr_t sock)
+    bool _add(sock_ptr_t sock)
     {
         std::lock_guard<std::mutex> lock(_mu);
+        if(_socks.size() > _max_size)
+            return false;
+
         return _socks.insert(sock).second;
     }
 
-    bool del_(sock_ptr_t sock)
+    bool _del(sock_ptr_t sock)
     {
         std::lock_guard<std::mutex> lock(_mu);
         return _socks.erase(sock) > 0;
@@ -128,7 +179,8 @@ class tcp_dialer
   private:
     io_t                          &_io;
     std::unordered_set<sock_ptr_t> _socks;
-    std::mutex                     _mu;
+    mutable std::mutex             _mu;
+    std::size_t                    _max_size;
 };
 
 }

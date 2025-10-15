@@ -2,77 +2,6 @@
 #include <hj/net/tcp.hpp>
 #include <hj/testing/stacktrace.hpp>
 
-// TEST(tcp_socket, sig_catch)
-// {
-//     static int sigill_lambda_entryed_times = 0;
-//     static int sigint_lambda_entryed_times = 0;
-//     static int last_sig = 0;
-
-//     hj::tcp_socket::io_t io;
-//     hj::tcp_socket sock{io};
-
-//     sock.signal_catch({SIGILL}, [](const hj::tcp_socket::err_t& err, hj::tcp_socket::signal_t sig)->bool{
-//         std::cout << "sigill_lambda_entryed_times++" << std::endl;
-//         sigill_lambda_entryed_times++;
-//         last_sig = sig;
-//         return true;
-//     }, true);
-
-//     raise(SIGILL);
-//     io.run();
-//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(sigint_lambda_entryed_times == 0, true);
-//     ASSERT_EQ(last_sig == SIGILL, true);
-
-//     raise(SIGILL);
-//     io.run();
-//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(sigint_lambda_entryed_times == 0, true);
-//     ASSERT_EQ(last_sig == SIGILL, true);
-
-//     sock.signal_catch({SIGINT, SIGILL}, [](const hj::tcp_socket::err_t& err, hj::tcp_socket::signal_t sig)->bool{
-//         std::cout << "sigint_lambda_entryed_times++" << std::endl;
-//         sigint_lambda_entryed_times++;
-//         last_sig = sig;
-//         return true;
-//     }, true);
-//     raise(SIGINT);
-//     io.run();
-//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(sigint_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(last_sig == SIGINT, true);
-
-//     raise(SIGILL);
-//     io.run();
-//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(sigint_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(last_sig == SIGINT, true);
-
-//     sock.signal_catch({SIGINT, SIGILL}, [](const hj::tcp_socket::err_t& err, hj::tcp_socket::signal_t sig)->bool{
-//         std::cout << "sigint_lambda_entryed_times++" << std::endl;
-//         sigint_lambda_entryed_times++;
-//         last_sig = sig;
-//         return true;
-//     }, false);
-//     raise(SIGINT);
-//     io.run();
-//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(sigint_lambda_entryed_times == 2, true);
-//     ASSERT_EQ(last_sig == SIGINT, true);
-
-//     raise(SIGILL);
-//     io.run();
-//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(sigint_lambda_entryed_times == 3, true);
-//     ASSERT_EQ(last_sig == SIGILL, true);
-
-//     raise(SIGTERM);
-//     io.run();
-//     ASSERT_EQ(sigill_lambda_entryed_times == 1, true);
-//     ASSERT_EQ(sigint_lambda_entryed_times == 3, true);
-//     ASSERT_EQ(last_sig == SIGILL, true);
-// }
-
 TEST(tcp_socket, set_option)
 {
     hj::tcp_socket::io_t io;
@@ -112,9 +41,8 @@ TEST(tcp_socket, is_connected)
         for(int i = 0; i < 1; i++)
         {
             auto sock = li.accept(13000);
-            ASSERT_EQ(sock != nullptr, true);
+            ASSERT_TRUE(sock);
             sock->close();
-            delete sock;
         }
     });
 
@@ -136,9 +64,8 @@ TEST(tcp_socket, check_connected)
         for(int i = 0; i < 1; i++)
         {
             auto sock = li.accept(13001);
-            ASSERT_EQ(sock != nullptr, true);
+            ASSERT_TRUE(sock);
             sock->close();
-            delete sock;
         }
     });
 
@@ -162,10 +89,9 @@ TEST(tcp_socket, connect)
         for(int i = 0; i < 3; i++)
         {
             auto sock = li.accept(13002);
-            ASSERT_EQ(sock != nullptr, true);
+            ASSERT_TRUE(sock);
             accept_times++;
             sock->close();
-            delete sock;
         }
     });
 
@@ -194,26 +120,25 @@ TEST(tcp_socket, async_connect)
     int                  accept_times = 0;
     hj::tcp_socket::io_t io;
     hj::tcp_listener     li{io};
-    li.async_accept(13003,
-                    [&li, &accept_times](const hj::tcp_listener::err_t &err,
-                                         hj::tcp_socket                *sock) {
-                        ASSERT_EQ(err.failed(), false);
-                        ASSERT_EQ(sock != nullptr, true);
-                        accept_times++;
-                        sock->close();
-                        delete sock;
+    li.async_accept(
+        13003,
+        [&li, &accept_times](const hj::tcp_listener::err_t  &err,
+                             std::shared_ptr<hj::tcp_socket> sock) {
+            ASSERT_EQ(err.failed(), false);
+            ASSERT_TRUE(sock);
+            accept_times++;
+            sock->close();
 
-                        li.async_accept(
-                            13003,
-                            [&accept_times](const hj::tcp_listener::err_t &err,
-                                            hj::tcp_socket *sock) {
-                                ASSERT_EQ(err.failed(), false);
-                                ASSERT_EQ(sock != nullptr, true);
-                                accept_times++;
-                                sock->close();
-                                delete sock;
-                            });
-                    });
+            li.async_accept(
+                13003,
+                [&accept_times](const hj::tcp_listener::err_t  &err,
+                                std::shared_ptr<hj::tcp_socket> sock) {
+                    ASSERT_EQ(err.failed(), false);
+                    ASSERT_TRUE(sock);
+                    accept_times++;
+                    sock->close();
+                });
+        });
 
     hj::tcp_socket sock{io};
     bool           lambda1_entryed = false;
@@ -248,9 +173,7 @@ TEST(tcp_socket, disconnect)
         for(int i = 0; i < 1; i++)
         {
             auto sock = li.accept(13004);
-            ASSERT_EQ(sock != nullptr, true);
-
-            delete sock;
+            ASSERT_TRUE(sock);
         }
     });
 
@@ -279,7 +202,7 @@ TEST(tcp_socket, send)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(13005);
-            ASSERT_EQ(sock != nullptr, true);
+            ASSERT_TRUE(sock);
 
             unsigned char buf[1024];
             ASSERT_EQ(sock->recv(buf, 1024) == 6, true);
@@ -293,7 +216,6 @@ TEST(tcp_socket, send)
                 ASSERT_EQ(true, false);
 
             sock->close();
-            delete sock;
         }
     });
 
@@ -323,11 +245,11 @@ TEST(tcp_socket, async_send)
     std::thread t([]() {
         hj::tcp_socket::io_t io;
         hj::tcp_listener     li{io};
-        auto buf_ptr = std::make_shared<std::array<unsigned char, 1024> >();
+        auto buf_ptr = std::make_shared<std::array<unsigned char, 1024>>();
         li.async_accept(
             13006,
-            [buf_ptr](const hj::tcp_listener::err_t &err,
-                      hj::tcp_socket                *sock) {
+            [buf_ptr](const hj::tcp_listener::err_t  &err,
+                      std::shared_ptr<hj::tcp_socket> sock) {
                 ASSERT_EQ(err.failed(), false);
                 ASSERT_EQ(sock->is_connected(), true);
 
@@ -343,7 +265,6 @@ TEST(tcp_socket, async_send)
                                       5)
                                       == "hello",
                                   true);
-                        delete sock;
                     });
             });
 
@@ -353,7 +274,7 @@ TEST(tcp_socket, async_send)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::tcp_socket::io_t io;
     hj::tcp_socket       sock{io};
-    auto send_buf = std::make_shared<std::array<unsigned char, 5> >();
+    auto send_buf = std::make_shared<std::array<unsigned char, 5>>();
     std::memcpy(send_buf->data(), "hello", 5);
     sock.async_connect(
         "127.0.0.1",
@@ -384,7 +305,7 @@ TEST(tcp_socket, recv)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(13007);
-            ASSERT_EQ(sock != nullptr, true);
+            ASSERT_TRUE(sock);
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char *>(
                                      std::string("hello").c_str()),
                                  6)
@@ -397,7 +318,6 @@ TEST(tcp_socket, recv)
                           == 6,
                       true);
             sock->close();
-            delete sock;
         }
     });
 
@@ -439,7 +359,7 @@ TEST(tcp_socket, recv_until)
         for(int i = 0; i < 1; i++)
         {
             auto sock = li.accept(13008);
-            ASSERT_EQ(sock != nullptr, true);
+            ASSERT_TRUE(sock);
             ASSERT_EQ(sock->send(reinterpret_cast<const unsigned char *>(
                                      std::string("hello").c_str()),
                                  6)
@@ -452,7 +372,6 @@ TEST(tcp_socket, recv_until)
                           == 6,
                       true);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -494,13 +413,14 @@ TEST(tcp_socket, async_recv)
     std::thread t([]() {
         hj::tcp_socket::io_t io;
         hj::tcp_listener     li{io};
-        auto buf_ptr = std::make_shared<std::array<unsigned char, 1024> >();
-        std::size_t     nrecved  = 0;
-        hj::tcp_socket *sock_ptr = nullptr;
+        auto buf_ptr = std::make_shared<std::array<unsigned char, 1024>>();
+        std::size_t                     nrecved = 0;
+        std::shared_ptr<hj::tcp_socket> sock_ptr;
         li.async_accept(
             13009,
-            [buf_ptr, &nrecved, &sock_ptr](const hj::tcp_listener::err_t &err,
-                                           hj::tcp_socket *sock) {
+            [buf_ptr, &nrecved, &sock_ptr](
+                const hj::tcp_listener::err_t  &err,
+                std::shared_ptr<hj::tcp_socket> sock) {
                 ASSERT_EQ(err.failed(), false);
                 ASSERT_EQ(sock->is_connected(), true);
                 sock_ptr = sock;
@@ -528,15 +448,14 @@ TEST(tcp_socket, async_recv)
 
         io.run_for(std::chrono::milliseconds(100));
         ASSERT_EQ(nrecved, 10);
-        delete sock_ptr;
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::tcp_socket::io_t io;
     hj::tcp_socket       sock{io};
-    auto send_buf1 = std::make_shared<std::array<unsigned char, 5> >();
+    auto send_buf1 = std::make_shared<std::array<unsigned char, 5>>();
     std::memcpy(send_buf1->data(), "hello", 5);
-    auto send_buf2 = std::make_shared<std::array<unsigned char, 5> >();
+    auto send_buf2 = std::make_shared<std::array<unsigned char, 5>>();
     std::memcpy(send_buf2->data(), "harry", 5);
     sock.async_connect(
         "127.0.0.1",

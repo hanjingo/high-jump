@@ -47,6 +47,9 @@ struct err_event
 struct finish
 {
 };
+struct fail
+{
+};
 struct abort
 {
 };
@@ -86,6 +89,10 @@ struct error_handler_impl
                       / [this]() { on_transition("idle", "succed"); } =
                 boost::sml::state<succed>,
             *boost::sml::state<idle>
+                + boost::sml::event<fail>
+                      / [this]() { on_transition("idle", "failed"); } =
+                boost::sml::state<failed>,
+            *boost::sml::state<idle>
                 + boost::sml::event<abort>
                       / [this]() { on_transition("idle", "failed"); } =
                 boost::sml::state<failed>,
@@ -119,6 +126,14 @@ struct error_handler_impl
                       / [this]() { on_transition("handling", "succed"); } =
                 boost::sml::state<succed>,
             boost::sml::state<handling>
+                + boost::sml::event<fail>
+                      / [this]() { on_transition("handling", "failed"); } =
+                boost::sml::state<failed>,
+            boost::sml::state<handling>
+                + boost::sml::event<reset>
+                      / [this]() { on_transition("handling", "idle"); } =
+                boost::sml::state<idle>,
+            boost::sml::state<handling>
                 + boost::sml::event<abort>
                       / [this]() { on_transition("handling", "failed"); } =
                 boost::sml::state<failed>,
@@ -136,6 +151,15 @@ struct error_handler_impl
 
 } // namespace detail
 
+enum class err_status
+{
+    idle,
+    handling,
+    failed,
+    succed,
+    unknown
+};
+
 template <typename T = std::error_code>
 class error_handler
 {
@@ -152,43 +176,106 @@ class error_handler
         , _is_ok{[](const T &t) { return !t; }}
     {
     }
-    error_handler(transaction_fn &&on_transition)
+    explicit error_handler(transaction_fn &&on_transition)
         : _base{std::move(on_transition)}
         , _sm{_base}
         , _is_ok{[](const T &t) { return !t; }}
     {
     }
-    error_handler(is_ok_fn &&is_ok)
+    explicit error_handler(is_ok_fn &&is_ok)
         : _base{[](const char *src, const char *dst) {}}
+        , _sm{_base}
+        , _is_ok{std::move(is_ok)}
+    {
+    }
+    explicit error_handler(T ok)
+        : _base{[](const char *src, const char *dst) {}}
+        , _sm{_base}
+        , _is_ok{[ok](const T &t) { return t == ok; }}
+    {
+    }
+    error_handler(is_ok_fn &&is_ok, transaction_fn &&on_transition) noexcept
+        : _base{std::move(on_transition)}
         , _sm{_base}
         , _is_ok{std::move(is_ok)}
     {
     }
     ~error_handler() { _sm.process_event(detail::reset{}); }
 
-    inline void match(const T &err, match_fn &&cb = [](const T &) {})
+    error_handler(const error_handler &)                = delete;
+    error_handler &operator=(const error_handler &)     = delete;
+    error_handler(error_handler &&) noexcept            = default;
+    error_handler &operator=(error_handler &&) noexcept = default;
+
+    inline error_handler<T> &match(T &err, match_fn &&cb = nullptr) noexcept
     {
         if(_is_ok(err))
+        {
             _sm.process_event(detail::finish{});
-        else
+        } else
+        {
             _sm.process_event(detail::err_event<T>{err, std::move(cb)});
+        }
+
+        return *this;
     }
 
-    inline void abort() { _sm.process_event(detail::abort{}); }
+    inline error_handler<T> &finish() noexcept
+    {
+        _sm.process_event(detail::finish{});
+        return *this;
+    }
 
-    inline void reset() { _sm.process_event(detail::reset{}); }
+    inline error_handler<T> &fail() noexcept
+    {
+        _sm.process_event(detail::fail{});
+        return *this;
+    }
 
-    inline const char *status() const
+    inline error_handler<T> &abort() noexcept
+    {
+        _sm.process_event(detail::abort{});
+        return *this;
+    }
+
+    inline error_handler<T> &reset() noexcept
+    {
+        _sm.process_event(detail::reset{});
+        return *this;
+    }
+
+    inline bool is_idle() const noexcept
+    {
+        return _sm.is(boost::sml::state<detail::idle>);
+    }
+
+    inline bool is_handling() const noexcept
+    {
+        return _sm.is(boost::sml::state<detail::handling>);
+    }
+
+    inline bool is_succed() const noexcept
+    {
+        return _sm.is(boost::sml::state<detail::succed>);
+    }
+
+    inline bool is_failed() const noexcept
+    {
+        return _sm.is(boost::sml::state<detail::failed>);
+    }
+
+    inline err_status status() const noexcept
     {
         if(_sm.is(boost::sml::state<detail::idle>))
-            return "idle";
+            return err_status::idle;
         if(_sm.is(boost::sml::state<detail::handling>))
-            return "handling";
+            return err_status::handling;
         if(_sm.is(boost::sml::state<detail::succed>))
-            return "succed";
+            return err_status::succed;
         if(_sm.is(boost::sml::state<detail::failed>))
-            return "failed";
-        return "unknown";
+            return err_status::failed;
+
+        return err_status::unknown;
     }
 
   private:

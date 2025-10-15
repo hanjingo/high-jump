@@ -9,9 +9,8 @@ TEST(tcp_dialer, accept)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(11000);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_TRUE(sock);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -19,8 +18,8 @@ TEST(tcp_dialer, accept)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::tcp_dialer::io_t io;
     hj::tcp_dialer       dialer{io};
-    ASSERT_EQ(dialer.dial("127.0.0.1", 11000) != nullptr, true);
-    ASSERT_EQ(dialer.dial("127.0.0.1", 11000) != nullptr, true);
+    EXPECT_TRUE(dialer.dial("127.0.0.1", 11000));
+    EXPECT_TRUE(dialer.dial("127.0.0.1", 11000));
     t.join();
 }
 
@@ -32,9 +31,8 @@ TEST(tcp_dialer, async_dial)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(11001);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_TRUE(sock);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -46,15 +44,15 @@ TEST(tcp_dialer, async_dial)
         "127.0.0.1",
         11001,
         [](const hj::tcp_dialer::err_t &err, hj::tcp_dialer::sock_ptr_t sock) {
-            ASSERT_EQ(err.failed(), false);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_EQ(err.failed(), false);
+            EXPECT_TRUE(sock);
         });
     dialer.async_dial(
         "127.0.0.1",
         11001,
         [](const hj::tcp_dialer::err_t &err, hj::tcp_dialer::sock_ptr_t sock) {
-            ASSERT_EQ(err.failed(), false);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_EQ(err.failed(), false);
+            EXPECT_TRUE(sock);
         });
     io.run();
     t.join();
@@ -68,9 +66,8 @@ TEST(tcp_dialer, size)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(11002);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_TRUE(sock);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -79,10 +76,10 @@ TEST(tcp_dialer, size)
     hj::tcp_dialer::io_t io;
     hj::tcp_dialer       dialer{io};
     auto                 sock1 = dialer.dial("127.0.0.1", 11002);
-    ASSERT_EQ(sock1 != nullptr, true);
+    EXPECT_TRUE(sock1);
     auto sock2 = dialer.dial("127.0.0.1", 11002);
-    ASSERT_EQ(sock2 != nullptr, true);
-    ASSERT_EQ(dialer.size(), 2);
+    EXPECT_TRUE(sock2);
+    EXPECT_EQ(dialer.size(), 2);
     t.join();
 }
 
@@ -94,9 +91,8 @@ TEST(tcp_dialer, range)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(11003);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_TRUE(sock);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -104,15 +100,15 @@ TEST(tcp_dialer, range)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::tcp_dialer::io_t io;
     hj::tcp_dialer       dialer{io};
-    ASSERT_EQ(dialer.dial("127.0.0.1", 11003) != nullptr, true);
-    ASSERT_EQ(dialer.dial("127.0.0.1", 11003) != nullptr, true);
+    EXPECT_TRUE(dialer.dial("127.0.0.1", 11003));
+    EXPECT_TRUE(dialer.dial("127.0.0.1", 11003));
     int count = 0;
     dialer.range([&](hj::tcp_dialer::sock_ptr_t sock) -> bool {
         (void) sock;
         count++;
         return true;
     });
-    ASSERT_EQ(count, 2);
+    EXPECT_EQ(count, 2);
     t.join();
 }
 
@@ -124,9 +120,8 @@ TEST(tcp_dialer, remove)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(11004);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_TRUE(sock);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -136,11 +131,11 @@ TEST(tcp_dialer, remove)
     hj::tcp_dialer       dialer{io};
     auto                 sock1 = dialer.dial("127.0.0.1", 11004);
     auto                 sock2 = dialer.dial("127.0.0.1", 11004);
-    ASSERT_EQ(dialer.size(), 2);
+    EXPECT_EQ(dialer.size(), 2);
     dialer.remove(sock1);
-    ASSERT_EQ(dialer.size(), 1);
+    EXPECT_EQ(dialer.size(), 1);
     dialer.remove(sock2);
-    ASSERT_EQ(dialer.size(), 0);
+    EXPECT_EQ(dialer.size(), 0);
     t.join();
 }
 
@@ -152,9 +147,8 @@ TEST(tcp_dialer, close)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(11005);
-            ASSERT_EQ(sock != nullptr, true);
+            EXPECT_TRUE(sock);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -163,10 +157,10 @@ TEST(tcp_dialer, close)
     hj::tcp_dialer::io_t io;
     hj::tcp_dialer       dialer{io};
     auto                 sock1 = dialer.dial("127.0.0.1", 11005);
-    ASSERT_EQ(sock1 != nullptr, true);
+    EXPECT_TRUE(sock1);
     auto sock2 = dialer.dial("127.0.0.1", 11005);
-    ASSERT_EQ(sock2 != nullptr, true);
+    EXPECT_TRUE(sock2);
     dialer.close();
-    ASSERT_EQ(dialer.size(), 0);
+    EXPECT_EQ(dialer.size(), 0);
     t.join();
 }

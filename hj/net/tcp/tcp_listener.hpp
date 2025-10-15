@@ -1,3 +1,21 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef TCP_LISTENER_HPP
 #define TCP_LISTENER_HPP
 
@@ -16,7 +34,7 @@
 namespace hj
 {
 
-class tcp_listener
+class tcp_listener : public std::enable_shared_from_this<tcp_listener>
 {
   public:
 #if BOOST_VERSION < 108700
@@ -34,11 +52,10 @@ class tcp_listener
 
     using opt_reuse_address = boost::asio::socket_base::reuse_address;
 
-    using accept_handler_t = std::function<void(const err_t &, tcp_socket *)>;
+    using accept_handler_t =
+        std::function<void(const err_t &, std::shared_ptr<tcp_socket>)>;
 
   public:
-    tcp_listener() = delete;
-
     explicit tcp_listener(io_t &io)
         : _io{io}
         , _accept_handler{}
@@ -51,12 +68,18 @@ class tcp_listener
     }
     virtual ~tcp_listener() { close(); }
 
-    inline bool is_closed() { return _closed.load(); }
+    tcp_listener()                                = delete;
+    tcp_listener(const tcp_listener &)            = delete;
+    tcp_listener &operator=(const tcp_listener &) = delete;
+    tcp_listener(tcp_listener &&)                 = default;
+    tcp_listener &operator=(tcp_listener &&)      = default;
+
+    inline bool is_closed() const noexcept { return _closed.load(); }
 
     template <typename T>
     inline bool set_option(T opt)
     {
-        if(_acceptor == nullptr || !_acceptor->is_open())
+        if(!_acceptor || !_acceptor->is_open())
             return false;
 
         err_t err;
@@ -69,13 +92,13 @@ class tcp_listener
         return false;
     }
 
-    tcp_socket *accept(uint16_t port)
+    std::shared_ptr<tcp_socket> accept(uint16_t port)
     {
         endpoint_t ep{boost::asio::ip::tcp::v4(), port};
         return accept(ep);
     }
 
-    tcp_socket *accept(const char *ip, uint16_t port)
+    std::shared_ptr<tcp_socket> accept(const char *ip, uint16_t port)
     {
 #if BOOST_VERSION < 108700
         endpoint_t ep{address_t::from_string(ip), port};
@@ -85,27 +108,24 @@ class tcp_listener
         return accept(ep);
     }
 
-    tcp_socket *accept(const endpoint_t &ep)
+    std::shared_ptr<tcp_socket> accept(const endpoint_t &ep)
     {
         if(_binded_endpoint == ep)
             return accept();
 
-        if(_acceptor != nullptr)
-        {
+        if(_acceptor)
             _acceptor->close();
-            delete _acceptor;
-            _acceptor = nullptr;
-        }
 
-        _acceptor = new acceptor_t(_io, ep);
+        _acceptor = std::make_unique<acceptor_t>(_io, ep);
         _acceptor->set_option(opt_reuse_address(true));
         _binded_endpoint = ep;
         return accept();
     }
 
-    tcp_socket *accept()
+    std::shared_ptr<tcp_socket> accept()
     {
-        assert(_acceptor != nullptr);
+        if(!_acceptor)
+            return nullptr;
 
         err_t err;
         auto  sock = new sock_t(_io);
@@ -113,19 +133,16 @@ class tcp_listener
         {
             _acceptor->accept(*sock, err);
         }
-        catch(...)
+        catch(const std::exception &e)
         {
-            assert(false);
-        }
-
-        if(err.failed())
-        {
-            delete sock;
-            sock = nullptr;
+            std::cerr << "accept exception: " << e.what() << std::endl;
             return nullptr;
         }
 
-        auto ret = new tcp_socket(_io, sock);
+        if(err.failed())
+            return nullptr;
+
+        auto ret = std::make_shared<tcp_socket>(_io, sock);
         ret->set_conn_status(true);
         return ret;
     }
@@ -181,7 +198,7 @@ class tcp_listener
         if(_acceptor != nullptr)
             _acceptor->close();
 
-        _acceptor = new acceptor_t(_io, ep);
+        _acceptor = std::make_unique<acceptor_t>(_io, ep);
         _acceptor->set_option(opt_reuse_address(true));
         _binded_endpoint = ep;
         async_accept(std::move(fn));
@@ -189,29 +206,30 @@ class tcp_listener
 
     void async_accept(accept_handler_t &&fn)
     {
-        assert(_acceptor != nullptr);
+        if(!_acceptor)
+            return;
 
-        sock_t     *base = new sock_t(_io);
-        tcp_socket *sock = new tcp_socket(_io, base);
+        auto base = new sock_t(_io);
+        auto sock = std::make_shared<tcp_socket>(_io, base);
         try
         {
             _acceptor->async_accept(*base, [fn, sock](const err_t &err) {
                 if(err.failed())
                 {
-                    delete sock;
-                    fn(err, nullptr);
+                    if(fn)
+                        fn(err, nullptr);
+
                     return;
                 }
 
                 sock->set_conn_status(true);
-                fn(err, sock);
+                if(fn)
+                    fn(err, sock);
             });
         }
-        catch(...)
+        catch(const std::exception &e)
         {
-            assert(false);
-            if(sock != nullptr)
-                delete sock;
+            std::cerr << "async_accept exception: " << e.what() << std::endl;
         }
     }
 
@@ -221,22 +239,20 @@ class tcp_listener
             return;
 
         _closed.store(true);
-        if(_acceptor != nullptr)
+        if(_acceptor)
         {
             _acceptor->close();
-            delete _acceptor;
-            _acceptor = nullptr;
+            _acceptor.reset();
         }
         _binded_endpoint = endpoint_t();
     }
 
   private:
-    io_t             &_io;
-    acceptor_t       *_acceptor = nullptr;
-    endpoint_t        _binded_endpoint;
-    std::atomic<bool> _closed{false};
-
-    accept_handler_t _accept_handler;
+    io_t                       &_io;
+    std::unique_ptr<acceptor_t> _acceptor;
+    endpoint_t                  _binded_endpoint;
+    std::atomic<bool>           _closed{false};
+    accept_handler_t            _accept_handler;
 };
 
 }

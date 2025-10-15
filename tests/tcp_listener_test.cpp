@@ -18,15 +18,13 @@ TEST(tcp_listener, set_option)
         hj::tcp_listener       li{io};
 
         ASSERT_EQ(li.set_option(hj::tcp_socket::opt_reuse_addr(true)), false);
-        li.async_accept(
-            12000,
-            [](const hj::tcp_listener::err_t &err, hj::tcp_socket *sock) {
-                ASSERT_EQ(err.failed(), false);
-                ASSERT_EQ(sock != nullptr, true);
-                sock->close();
-
-                delete sock;
-            });
+        li.async_accept(12000,
+                        [](const hj::tcp_listener::err_t  &err,
+                           std::shared_ptr<hj::tcp_socket> sock) {
+                            ASSERT_EQ(err.failed(), false);
+                            ASSERT_EQ(sock != nullptr, true);
+                            sock->close();
+                        });
         ASSERT_EQ(li.set_option(hj::tcp_socket::opt_reuse_addr(true)), true);
 
         io.run();
@@ -49,9 +47,8 @@ TEST(tcp_listener, accept)
         for(int i = 0; i < 2; i++)
         {
             auto sock = li.accept(12001);
-            ASSERT_EQ(sock != nullptr, true);
+            ASSERT_TRUE(sock);
             sock->close();
-            delete sock;
         }
         li.close();
     });
@@ -59,10 +56,10 @@ TEST(tcp_listener, accept)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::tcp_socket::io_t io;
     hj::tcp_socket       sock{io};
-    ASSERT_EQ(sock.connect("127.0.0.1", 12001), true);
+    ASSERT_TRUE(sock.connect("127.0.0.1", 12001));
 
     hj::tcp_socket sock1{io};
-    ASSERT_EQ(sock1.connect("127.0.0.1", 12001), true);
+    ASSERT_TRUE(sock1.connect("127.0.0.1", 12001));
     t.join();
 }
 
@@ -72,16 +69,14 @@ TEST(tcp_listener, async_accept)
     static int  async_accept_times2 = 0;
     std::thread t1([]() {
         hj::tcp_socket::io_t io;
-        hj::tcp_listener     li{
-            io,
-            [](const hj::tcp_listener::err_t &err, hj::tcp_socket *sock) {
-                ASSERT_EQ(err.failed(), false);
-                ASSERT_EQ(sock->is_connected(), true);
-                ASSERT_EQ(sock->check_connected(), true);
-                async_accept_times1++;
-
-                delete sock;
-            }};
+        hj::tcp_listener     li{io,
+                            [](const hj::tcp_listener::err_t  &err,
+                               std::shared_ptr<hj::tcp_socket> sock) {
+                                ASSERT_EQ(err.failed(), false);
+                                ASSERT_EQ(sock->is_connected(), true);
+                                ASSERT_EQ(sock->check_connected(), true);
+                                async_accept_times1++;
+                            }};
         for(int i = 0; i < 2; i++)
             li.async_accept(12002);
 
@@ -93,16 +88,14 @@ TEST(tcp_listener, async_accept)
         hj::tcp_listener     li{io};
         for(int i = 0; i < 2; i++)
         {
-            li.async_accept(
-                12003,
-                [](const hj::tcp_listener::err_t &err, hj::tcp_socket *sock) {
-                    ASSERT_EQ(err.failed(), false);
-                    ASSERT_EQ(sock->is_connected(), true);
-                    ASSERT_EQ(sock->check_connected(), true);
-                    async_accept_times2++;
-
-                    delete sock;
-                });
+            li.async_accept(12003,
+                            [](const hj::tcp_listener::err_t  &err,
+                               std::shared_ptr<hj::tcp_socket> sock) {
+                                ASSERT_EQ(err.failed(), false);
+                                ASSERT_EQ(sock->is_connected(), true);
+                                ASSERT_EQ(sock->check_connected(), true);
+                                async_accept_times2++;
+                            });
         }
 
         io.run();

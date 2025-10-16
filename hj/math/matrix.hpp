@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <vector>
 #include <functional>
+#include <stdexcept>
 
 #include <hj/math/matrix_iterator.hpp>
 #include <hj/math/matrix_vertical_iterator.hpp>

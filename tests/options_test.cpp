@@ -38,13 +38,13 @@ class OptionsTest : public ::testing::Test
             std::strcpy(argv[i], args[i].c_str());
             allocated_args.push_back(argv[i]);
         }
-        allocated_argv_arrays.push_back(argv); // 跟踪 argv 指针数组
+        allocated_argv_arrays.push_back(argv);
         return argv;
     }
 
     std::unique_ptr<options> opts;
     std::vector<char *>      allocated_args;
-    std::vector<char **>     allocated_argv_arrays; // 新增
+    std::vector<char **>     allocated_argv_arrays;
 };
 
 TEST_F(OptionsTest, ParseIntegerOption)

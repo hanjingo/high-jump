@@ -59,5 +59,3 @@ static void bm_bloom_filter_serialize(benchmark::State &state)
 BENCHMARK(bm_bloom_filter_add)->Arg(100)->Arg(1000)->Arg(10000);
 BENCHMARK(bm_bloom_filter_contains)->Arg(100)->Arg(1000)->Arg(10000);
 BENCHMARK(bm_bloom_filter_serialize)->Arg(100)->Arg(1000)->Arg(10000);
-
-BENCHMARK_MAIN();

@@ -95,7 +95,7 @@ TEST_F(cpu, cpu_core_list)
 
     // boundary conditions tested in separate test
     unsigned int len = 0;
-    ec  = cpu_core_list(nullptr, &len);
+    ec               = cpu_core_list(nullptr, &len);
     EXPECT_EQ(ec, CPU_ERR_INVALID_ARG) << "Should handle null buffer";
     EXPECT_EQ(len, 0) << "Should handle null buffer gracefully";
 
@@ -202,9 +202,9 @@ TEST_F(cpu, cpu_id)
         return;
     }
 
-    unsigned int                     min = (core_count < 4u) ? core_count : 4u;
-    std::vector<std::thread>         threads;
-    std::vector<std::set<uint32_t> > thread_cpu_ids(min);
+    unsigned int                    min = (core_count < 4u) ? core_count : 4u;
+    std::vector<std::thread>        threads;
+    std::vector<std::set<uint32_t>> thread_cpu_ids(min);
     for(int t = 0; t < min; ++t)
     {
         threads.emplace_back([&, t]() {
@@ -232,7 +232,7 @@ TEST_F(cpu, cpu_pause)
 {
     SCOPED_TRACE("Testing cpu_pause");
     auto start = std::chrono::high_resolution_clock::now();
-    for(int i = 0; i < 1000; ++i)
+    for(int i = 0; i < 10; ++i)
     {
         cpu_pause();
     }

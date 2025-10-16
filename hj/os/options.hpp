@@ -29,6 +29,9 @@
 #else
 #define HJ_UNARY_FUNCTION_DEFINED 1
 #endif
+#elif defined(_LIBCPP_VERSION)
+// libc++ (macOS, some Linux) still provides std::unary_function even in C++17+
+#define HJ_UNARY_FUNCTION_DEFINED 1
 #elif (__cplusplus >= 201703L)
 #if defined(__GLIBCXX__)
 #define HJ_UNARY_FUNCTION_DEFINED 1

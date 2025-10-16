@@ -27,6 +27,7 @@
 #include <mutex>
 #include <queue>
 #include <condition_variable>
+#include <filesystem>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -416,11 +417,11 @@ class ws_server_ssl : public std::enable_shared_from_this<ws_server_ssl>
         auto ctx = std::make_shared<ssl_ctx_t>(ssl_ctx_t::sslv23);
         ctx->set_options(boost::asio::ssl::context::default_workarounds
                          | boost::asio::ssl::context::no_sslv2);
-        ctx->use_certificate_chain_file(cert_file);
-        ctx->use_private_key_file(key_file, boost::asio::ssl::context::pem);
+        ctx->use_certificate_chain_file(_resolve_path(cert_file));
+        ctx->use_private_key_file(_resolve_path(key_file), boost::asio::ssl::context::pem);
         if(!ca_file.empty())
         {
-            ctx->load_verify_file(ca_file);
+            ctx->load_verify_file(_resolve_path(ca_file));
             ctx->set_verify_mode(boost::asio::ssl::verify_peer);
         } else
         {
@@ -669,6 +670,22 @@ class ws_server_ssl : public std::enable_shared_from_this<ws_server_ssl>
     }
 
   private:
+    static std::string _resolve_path(const std::string &path)
+    {
+        if (path.empty()) return path;
+        
+        namespace fs = std::filesystem;
+        fs::path file_path(path);
+        
+        // If already absolute, return as-is
+        if (file_path.is_absolute()) {
+            return path;
+        }
+        
+        // For relative paths, resolve against current working directory
+        return fs::absolute(file_path).string();
+    }
+
     io_t                       &_io;
     ssl_ctx_ptr_t               _ssl_ctx;
     std::mutex                  _mu;

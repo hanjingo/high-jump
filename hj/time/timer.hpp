@@ -64,16 +64,17 @@ class timer : public std::enable_shared_from_this<timer>
     void start(F &&f)
     {
         static std::once_flag io_run_once;
-
-        auto self = this->shared_from_this();
-        _fn       = [self, fn = std::move(f)](const timer::err_t &err) {
+        auto                  self = this->shared_from_this();
+        std::weak_ptr<timer>  wself(self);
+        _fn = [wself, fn = std::move(f)](const timer::err_t &err) {
             if(err.failed())
                 return;
 
-            fn();
+            if(auto s = wself.lock())
+                fn();
         };
 
-        std::call_once(io_run_once, [=]() {
+        std::call_once(io_run_once, []() {
             (void) worker_global();
             std::thread([]() { io_global().run(); }).detach();
         });
@@ -90,9 +91,9 @@ class timer : public std::enable_shared_from_this<timer>
     template <typename F>
     void reset(unsigned long long us, F &&f)
     {
-        auto self = this->shared_from_this();
-        _fn       = [wself = std::weak_ptr<timer>(self),
-               fn    = std::move(f)](const boost::system::error_code &err) {
+        auto                 self = this->shared_from_this();
+        std::weak_ptr<timer> wself(self);
+        _fn = [wself, fn = std::move(f)](const boost::system::error_code &err) {
             if(err.failed())
                 return;
 

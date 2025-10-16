@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <ostream>
 #include <stdexcept>
 
 namespace hj

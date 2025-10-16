@@ -4,6 +4,7 @@
 #include <thread>
 #include <chrono>
 #include <iostream> // Include iostream for std::cout
+#include <filesystem>
 
 TEST(ws_client, connect_send_recv_close)
 {
@@ -104,7 +105,11 @@ TEST(ws_client_ssl, connect_send_recv_close)
 {
     std::thread([]() {
         hj::ws_server_ssl::io_t io;
-        auto ssl_ctx = hj::ws_server_ssl::make_ctx("server.crt", "server.key");
+        namespace fs        = std::filesystem;
+        fs::path base       = fs::current_path();
+        auto     server_crt = (base / "server.crt").string();
+        auto     server_key = (base / "server.key").string();
+        auto     ssl_ctx = hj::ws_server_ssl::make_ctx(server_crt, server_key);
         hj::ws_server_ssl        serv(io, ssl_ctx);
         hj::ws_server_ssl::err_t err;
         auto ep = hj::ws_server_ssl::make_endpoint("127.0.0.1", 9004);
@@ -124,8 +129,12 @@ TEST(ws_client_ssl, connect_send_recv_close)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::ws_client_ssl::io_t io;
-    auto ssl_ctx = hj::ws_client_ssl::make_ctx("client.crt", "client.key");
-    auto client  = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx);
+    namespace fs        = std::filesystem;
+    fs::path base       = fs::current_path();
+    auto     client_crt = (base / "client.crt").string();
+    auto     client_key = (base / "client.key").string();
+    auto     ssl_ctx    = hj::ws_client_ssl::make_ctx(client_crt, client_key);
+    auto     client     = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx);
     ASSERT_TRUE(client->connect("127.0.0.1", "9004", "/"));
     ASSERT_TRUE(client->is_connected());
 
@@ -145,7 +154,11 @@ TEST(ws_client_ssl, async_connect_send_recv_close)
     static bool is_async_ws_client_ssl_running = false;
     std::thread t([]() {
         hj::ws_server_ssl::io_t io;
-        auto ssl_ctx = hj::ws_server_ssl::make_ctx("server.crt", "server.key");
+        namespace fs         = std::filesystem;
+        fs::path base        = fs::current_path();
+        auto     server_crt2 = (base / "server.crt").string();
+        auto     server_key2 = (base / "server.key").string();
+        auto ssl_ctx = hj::ws_server_ssl::make_ctx(server_crt2, server_key2);
         hj::ws_server_ssl        serv(io, ssl_ctx);
         hj::ws_server_ssl::err_t err;
         auto ep = hj::ws_server_ssl::make_endpoint("127.0.0.1", 12346);
@@ -173,8 +186,12 @@ TEST(ws_client_ssl, async_connect_send_recv_close)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     hj::ws_client_ssl::io_t io;
-    auto ssl_ctx = hj::ws_client_ssl::make_ctx("client.crt", "client.key");
-    auto client  = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx);
+    namespace fs         = std::filesystem;
+    fs::path base        = fs::current_path();
+    auto     client_crt2 = (base / "client.crt").string();
+    auto     client_key2 = (base / "client.key").string();
+    auto     ssl_ctx2 = hj::ws_client_ssl::make_ctx(client_crt2, client_key2);
+    auto     client   = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx2);
     client->async_connect(
         "127.0.0.1",
         "12346",

@@ -468,10 +468,31 @@ inline void cpu_pause(void)
 #endif
 
 #elif defined(__linux__)
+    /* Use CPU PAUSE instruction on x86/x64 to yield a short time without
+     * invoking full scheduler yield which can be slow. Fall back to
+     * sched_yield() on other architectures. */
+#if defined(__i386__) || defined(__x86_64__)
+#if defined(__GNUC__) || defined(__clang__)
+    __asm__ volatile("pause" ::: "memory");
+#else
     sched_yield();
+#endif
+#else
+    sched_yield();
+#endif
 
 #elif defined(__APPLE__)
+    /* macOS: prefer a short processor pause on x86/x64 to avoid heavy
+     * scheduling delays; otherwise fall back to sched_yield(). */
+#if defined(__i386__) || defined(__x86_64__)
+#if defined(__GNUC__) || defined(__clang__)
+    __asm__ volatile("pause" ::: "memory");
+#else
     sched_yield();
+#endif
+#else
+    sched_yield();
+#endif
 
 #else
     (void) 0;

@@ -9,6 +9,8 @@
 
 #include <hj/net/udp.hpp>
 
+#include <hj/net/winsock.h>
+
 #include <hj/net/zmq.hpp>
 
 #endif

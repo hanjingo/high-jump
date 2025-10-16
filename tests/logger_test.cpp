@@ -41,6 +41,11 @@ TEST_F(logger, create_stdout_sink)
 
 TEST_F(logger, create_rotate_file_sink)
 {
+    if(!std::filesystem::exists("test_logs"))
+    {
+        GTEST_SKIP() << "skip test create_rotate_file_sink create dir failed";
+    }
+
     const std::string filename  = "test_logs/rotate_test.log";
     const std::size_t max_size  = 1024 * 1024; // 1MB
     const std::size_t max_files = 3;
@@ -58,6 +63,11 @@ TEST_F(logger, create_rotate_file_sink)
 
 TEST_F(logger, create_daily_file_sink)
 {
+    if(!std::filesystem::exists("test_logs"))
+    {
+        GTEST_SKIP() << "skip test create_daily_file_sink create dir failed";
+    }
+
     const std::string filename = "test_logs/daily_test.log";
 
     auto sink =
@@ -287,6 +297,11 @@ TEST_F(logger, custom_logger_construction)
 
 TEST_F(logger, file_logging)
 {
+    if(!std::filesystem::exists("test_logs"))
+    {
+        GTEST_SKIP() << "skip test file_logging create dir failed";
+    }
+
     hj::log::logger file_logger("file_test", false);
 
     auto file_sink =

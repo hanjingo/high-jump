@@ -82,7 +82,14 @@ find_package(CUDA QUIET)
 find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
 find_library(QRENCODE_LIBRARY_RELEASE qrencode)
 find_library(QRENCODE_LIBRARY_DEBUG qrencoded)
-set(QRENCODE_LIBRARIES optimized ${QRENCODE_LIBRARY_RELEASE} debug ${QRENCODE_LIBRARY_DEBUG})
+
+# Handle missing debug library gracefully
+if(QRENCODE_LIBRARY_DEBUG)
+    set(QRENCODE_LIBRARIES optimized ${QRENCODE_LIBRARY_RELEASE} debug ${QRENCODE_LIBRARY_DEBUG})
+else()
+    # Use release library for both debug and release if debug version not found
+    set(QRENCODE_LIBRARIES ${QRENCODE_LIBRARY_RELEASE})
+endif()
 # for qrcode decode
 find_package(quirc CONFIG REQUIRED)
 

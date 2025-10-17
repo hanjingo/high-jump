@@ -39,8 +39,17 @@
 // libstdc++ (GNU) typically keeps the compatibility typedefs
 #define HJ_UNARY_FUNCTION_DEFINED 1
 #elif defined(_LIBCPP_VERSION)
-// libc++ removed unary_function in newer versions; provide fallback
+// libc++ behavior varies by version - check if unary_function is available
+#ifdef _LIBCPP_HAS_NO_DEPRECATED_UNARY_FUNCTION
 #define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+// Check if unary_function is available by testing for its existence
+#if __has_include(<__functional/unary_function.h>)
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#endif
+#endif
 #elif (__cplusplus >= 201703L)
 // Unknown stdlib under C++17+: conservatively treat as missing and provide fallback
 #define HJ_UNARY_FUNCTION_DEFINED 0

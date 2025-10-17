@@ -15,8 +15,6 @@
 
 #include <hj/types/string_view.hpp>
 
-#include <hj/types/striped_map.hpp>
-
 #include <hj/types/variant.hpp>
 
 #endif // TYPES_HPP

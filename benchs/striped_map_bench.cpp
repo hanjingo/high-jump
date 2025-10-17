@@ -1,5 +1,5 @@
 #include <benchmark/benchmark.h>
-#include <hj/types/striped_map.hpp>
+#include <hj/sync/striped_map.hpp>
 #include <string>
 #include <vector>
 #include <thread>

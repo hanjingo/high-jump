@@ -42,7 +42,7 @@ C_STYLE_EXPORT void crypto_init(sdk_context ctx)
         hj::crash_handler::instance()->set_local_path("./");
 
         // add log support
-        hj::logger::instance()->set_level(hj::log_lvl::debug);
+        hj::log::logger::instance()->set_level(hj::log::level::debug);
 
         // add your code here ...
         if(ctx.user_data == NULL) return;

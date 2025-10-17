@@ -28,9 +28,9 @@ int main(int argc, char *argv[])
 
     // add log support
 #ifdef DEBUG
-    hj::logger::instance()->set_level(hj::log_lvl::debug);
+    hj::log::logger::instance()->set_level(hj::log::level::debug);
 #else
-    hj::logger::instance()->set_level(hj::log_lvl::info);
+    hj::log::logger::instance()->set_level(hj::log::level::info);
 #endif
 
     // add i18n support
@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
         hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
 
     // add signals handle support
-    hj::sigcatch({SIGABRT, SIGTERM}, [](int sig) {});
+    hj::sighandler::instance().sigcatch({SIGABRT, SIGTERM}, [](int sig) {});
 
     // add license check support
     hj::license::verifier vef{LIC_ISSUER, hj::license::sign_algo::none, {}};
@@ -565,8 +565,8 @@ int main(int argc, char *argv[])
         LOG_DEBUG("num:{}", num);
         LOG_DEBUG("content:{}", content);
 
-        std::vector<std::vector<std::string> > outs;
-        std::vector<std::string>               contents{content};
+        std::vector<std::vector<std::string>> outs;
+        std::vector<std::string>              contents{content};
         auto otype = select_output_type(output);
         auto err   = db_sdk.query(outs, "dict", "passwords", contents, num);
         if(!err)

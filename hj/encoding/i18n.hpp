@@ -374,7 +374,7 @@ class i18n
     inline void install(const std::string          &name,
                         std::unique_ptr<translator> trans)
     {
-        trans->set_locale(_current_locale);
+        trans->set_locale(name);
         _translators[name] = std::move(trans);
     }
 

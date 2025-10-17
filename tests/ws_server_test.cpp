@@ -138,18 +138,25 @@ TEST(ws_server, async_accept_recv_send_close)
 
 TEST(ws_server_ssl, connect_recv_send_close)
 {
-    std::thread([]() {
+    auto client_crt = "./client.crt";
+    auto client_key = "./client.key";
+    auto server_crt = "./server.crt";
+    auto server_key = "./server.key";
+    if(!std::filesystem::exists(client_crt)
+       || !std::filesystem::exists(client_key)
+       || !std::filesystem::exists(server_crt)
+       || !std::filesystem::exists(server_key))
+    {
+        GTEST_SKIP() << "skip test ws_server_ssl connect_recv_send_close "
+                        "with file not exist: "
+                     << client_crt << " " << client_key << " " << server_crt
+                     << " " << server_key;
+    }
+
+    std::thread([client_crt, client_key]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         hj::ws_client_ssl::io_t io;
-        auto                    client_crt = "./client.crt";
-        auto                    client_key = "./client.key";
-        if(!std::filesystem::exists(client_crt)
-           || !std::filesystem::exists(client_key))
-        {
-            GTEST_SKIP() << "skip test ws_server_ssl connect_recv_send_close "
-                            "with file not exist: "
-                         << client_crt << " " << client_key;
-        }
+
 
         auto ssl_ctx = hj::ws_client_ssl::make_ctx(client_crt, client_key);
         auto client  = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx);
@@ -168,16 +175,6 @@ TEST(ws_server_ssl, connect_recv_send_close)
     }).detach();
 
     hj::ws_server_ssl::io_t io;
-    auto                    server_crt = "./server.crt";
-    auto                    server_key = "./server.key";
-    if(!std::filesystem::exists(server_crt)
-       || !std::filesystem::exists(server_key))
-    {
-        GTEST_SKIP() << "skip test ws_server_ssl connect_recv_send_close "
-                        "with file not exist: "
-                     << server_crt << " " << server_key;
-    }
-
     auto ssl_ctx = hj::ws_server_ssl::make_ctx(server_crt, server_key);
     hj::ws_server_ssl::err_t err;
     auto              ep = hj::ws_server_ssl::make_endpoint("127.0.0.1", 21003);

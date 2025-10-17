@@ -6,12 +6,10 @@
 
 #include <algorithm>
 
-using namespace hj;
-
-class OptionsTest : public ::testing::Test
+class options : public ::testing::Test
 {
   protected:
-    void SetUp() override { opts = std::make_unique<options>(); }
+    void SetUp() override { opts = std::make_unique<hj::options>(); }
 
     void TearDown() override
     {
@@ -42,12 +40,12 @@ class OptionsTest : public ::testing::Test
         return argv;
     }
 
-    std::unique_ptr<options> opts;
-    std::vector<char *>      allocated_args;
-    std::vector<char **>     allocated_argv_arrays;
+    std::unique_ptr<hj::options> opts;
+    std::vector<char *>          allocated_args;
+    std::vector<char **>         allocated_argv_arrays;
 };
 
-TEST_F(OptionsTest, ParseIntegerOption)
+TEST_F(options, parse_integer_option)
 {
     opts->add<int>("port", 8080, "Server port number");
 
@@ -58,7 +56,7 @@ TEST_F(OptionsTest, ParseIntegerOption)
     EXPECT_EQ(result, 9000);
 }
 
-TEST_F(OptionsTest, ParseIntegerOptionWithDefault)
+TEST_F(options, parse_integer_option_with_default)
 {
     opts->add<int>("port", 8080, "Server port number");
 
@@ -69,7 +67,7 @@ TEST_F(OptionsTest, ParseIntegerOptionWithDefault)
     EXPECT_EQ(result, 8080);
 }
 
-TEST_F(OptionsTest, ParseStringOption)
+TEST_F(options, parse_string_option)
 {
     opts->add<std::string>("host", "localhost", "Server hostname");
 
@@ -81,7 +79,7 @@ TEST_F(OptionsTest, ParseStringOption)
     EXPECT_EQ(result, "example.com");
 }
 
-TEST_F(OptionsTest, ParseStringOptionWithDefault)
+TEST_F(options, parse_string_option_with_default)
 {
     opts->add<std::string>("host", "localhost", "Server hostname");
 
@@ -93,7 +91,7 @@ TEST_F(OptionsTest, ParseStringOptionWithDefault)
     EXPECT_EQ(result, "localhost");
 }
 
-TEST_F(OptionsTest, ParseFloatOption)
+TEST_F(options, parse_float_option)
 {
     opts->add<float>("timeout", 30.5f, "Connection timeout in seconds");
 
@@ -105,7 +103,7 @@ TEST_F(OptionsTest, ParseFloatOption)
     EXPECT_FLOAT_EQ(result, 45.25f);
 }
 
-TEST_F(OptionsTest, ParseDoubleOption)
+TEST_F(options, parse_double_option)
 {
     opts->add<double>("precision", 0.001, "Calculation precision");
 
@@ -117,7 +115,7 @@ TEST_F(OptionsTest, ParseDoubleOption)
     EXPECT_DOUBLE_EQ(result, 0.0001);
 }
 
-TEST_F(OptionsTest, ParseBoolOption)
+TEST_F(options, parse_bool_option)
 {
     opts->add<bool>("verbose", false, "Enable verbose output");
 
@@ -129,7 +127,7 @@ TEST_F(OptionsTest, ParseBoolOption)
     EXPECT_TRUE(result);
 }
 
-TEST_F(OptionsTest, ParseBoolOptionVariations)
+TEST_F(options, parse_bool_option_variations)
 {
     opts->add<bool>("debug", true, "Enable debug mode");
 
@@ -148,7 +146,7 @@ TEST_F(OptionsTest, ParseBoolOptionVariations)
     EXPECT_TRUE(result2);
 }
 
-TEST_F(OptionsTest, ParseMultipleOptions)
+TEST_F(options, parse_multiple_options)
 {
     opts->add<std::string>("host", "localhost", "Server hostname");
     opts->add<int>("port", 8080, "Server port number");
@@ -174,7 +172,7 @@ TEST_F(OptionsTest, ParseMultipleOptions)
     EXPECT_TRUE(verbose);
 }
 
-TEST_F(OptionsTest, ParseNonExistentKey)
+TEST_F(options, parse_non_existent_key)
 {
     opts->add<int>("port", 8080, "Server port number");
 
@@ -189,7 +187,7 @@ TEST_F(OptionsTest, ParseNonExistentKey)
     EXPECT_EQ(result2, 0);
 }
 
-TEST_F(OptionsTest, ParseInvalidValue)
+TEST_F(options, parse_invalid_value)
 {
     opts->add<int>("port", 8080, "Server port number");
 
@@ -201,7 +199,7 @@ TEST_F(OptionsTest, ParseInvalidValue)
     EXPECT_EQ(result, 9999);
 }
 
-TEST_F(OptionsTest, ParseSuccessIgnoresDefault)
+TEST_F(options, parse_success_ignores_default)
 {
     opts->add<int>("port", 8080, "Server port number");
 
@@ -213,7 +211,7 @@ TEST_F(OptionsTest, ParseSuccessIgnoresDefault)
     EXPECT_EQ(result, 9000);
 }
 
-TEST_F(OptionsTest, ParseWithDifferentTypeDefaults)
+TEST_F(options, parse_with_different_type_defaults)
 {
     opts->add<std::string>("host", "localhost", "Server hostname");
     opts->add<bool>("verbose", false, "Enable verbose output");
@@ -237,7 +235,7 @@ TEST_F(OptionsTest, ParseWithDifferentTypeDefaults)
     EXPECT_DOUBLE_EQ(ratio, 0.75);
 }
 
-TEST_F(OptionsTest, ExplicitValueIgnoresParseDefault)
+TEST_F(options, explicit_value_ignores_parse_default)
 {
     opts->add<std::string>("host", "localhost", "Server hostname");
     opts->add<bool>("verbose", false, "Enable verbose output");
@@ -267,7 +265,7 @@ TEST_F(OptionsTest, ExplicitValueIgnoresParseDefault)
     EXPECT_DOUBLE_EQ(ratio, 0.25);
 }
 
-TEST_F(OptionsTest, AddDefaultVsParseDefault)
+TEST_F(options, add_default_vs_parse_default)
 {
     opts->add<int>("port", 8080, "Server port");
     opts->add<std::string>("host", "localhost", "Server host");
@@ -296,7 +294,7 @@ TEST_F(OptionsTest, AddDefaultVsParseDefault)
     EXPECT_EQ(host2, "example.com");
 }
 
-TEST_F(OptionsTest, ParseComplexScenarioWithDefaults)
+TEST_F(options, parse_complex_scenario_with_defaults)
 {
     opts->add<int>("workers", 4, "Number of worker threads");
     opts->add<std::string>("database",
@@ -332,7 +330,7 @@ TEST_F(OptionsTest, ParseComplexScenarioWithDefaults)
     EXPECT_EQ(timeout, 30);
 }
 
-TEST_F(OptionsTest, BackwardCompatibilityAndEdgeCases)
+TEST_F(options, backward_compatibility_and_edge_cases)
 {
     opts->add<int>("value", 42, "Test value");
 
@@ -356,7 +354,7 @@ TEST_F(OptionsTest, BackwardCompatibilityAndEdgeCases)
     EXPECT_EQ(new_missing, 777);
 }
 
-TEST_F(OptionsTest, ParseBoundaryValues)
+TEST_F(options, parse_boundary_values)
 {
     opts->add<int>("int_val", 0, "Integer value");
     opts->add<float>("float_val", 0.0f, "Float value");
@@ -381,7 +379,7 @@ TEST_F(OptionsTest, ParseBoundaryValues)
     EXPECT_EQ(int_result2, -2147483648);
 }
 
-TEST_F(OptionsTest, TypeSafety)
+TEST_F(options, type_safety)
 {
     opts->add<int>("number", 42, "A number");
 
@@ -397,7 +395,7 @@ TEST_F(OptionsTest, TypeSafety)
     EXPECT_EQ(correct_type, 123);
 }
 
-TEST_F(OptionsTest, ParseSinglePositionalArgument)
+TEST_F(options, parse_single_positional_argument)
 {
     opts->add<std::string>("input", "", "input file");
     opts->add_positional("input", 1);
@@ -408,7 +406,7 @@ TEST_F(OptionsTest, ParseSinglePositionalArgument)
     EXPECT_EQ(input, "file.txt");
 }
 
-TEST_F(OptionsTest, ParseMultiplePositionalArguments)
+TEST_F(options, parse_multiple_positional_arguments)
 {
     opts->add<std::string>("input", "", "input file");
     opts->add<std::string>("output", "", "output file");
@@ -424,13 +422,13 @@ TEST_F(OptionsTest, ParseMultiplePositionalArguments)
     EXPECT_EQ(output, "out.txt");
 }
 
-TEST_F(OptionsTest, ParsePositionalVector)
+TEST_F(options, parse_positional_vector)
 {
-    opts->add<std::vector<std::string> >("files", {}, "input files");
+    opts->add<std::vector<std::string>>("files", {}, "input files");
     opts->add_positional("files", 3);
     std::vector<std::string> args = {"program", "a.txt", "b.txt", "c.txt"};
     char                   **argv = create_argv(args);
-    auto files = opts->parse_positional<std::vector<std::string> >(
+    auto files = opts->parse_positional<std::vector<std::string>>(
         static_cast<int>(args.size()),
         argv,
         "files");
@@ -440,7 +438,7 @@ TEST_F(OptionsTest, ParsePositionalVector)
     EXPECT_TRUE(std::find(files.begin(), files.end(), "c.txt") != files.end());
 }
 
-TEST_F(OptionsTest, ParseMixedOptionsAndPositional)
+TEST_F(options, parse_mixed_options_and_positional)
 {
     opts->add<std::string>("output,o", "", "output file");
     opts->add<std::string>("input", "", "input file");

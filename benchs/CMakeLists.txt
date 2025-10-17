@@ -123,6 +123,13 @@ endif()
 aux_source_directory(. SRC)
 add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
 
+# MSVC may hit the object file section limit when compiling many sources.
+# Add /bigobj for this target to increase object file section table size.
+if(MSVC)
+    message(STATUS "Building with MSVC: enabling /bigobj for ${PROJECT_NAME}")
+    target_compile_options(${PROJECT_NAME} PRIVATE /bigobj)
+endif()
+
 target_link_libraries(${PROJECT_NAME} 
     ${Boost_LIBRARIES} 
     ${GTEST_LIBRARIES} 

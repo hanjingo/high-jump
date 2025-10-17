@@ -21,12 +21,15 @@
 
 #include <cstdlib>
 #include <future>
+#include <functional>
 #include <chrono>
 #include <memory>
 #include <atomic>
 #include <mutex>
 #include <unordered_map>
 #include <thread>
+#include <iostream>
+
 #include <boost/version.hpp>
 #include <boost/asio.hpp>
 
@@ -38,6 +41,10 @@ class timer : public std::enable_shared_from_this<timer>
   public:
     using callback_t = std::function<void()>;
     using err_t      = boost::system::error_code;
+    using io_t       = boost::asio::io_context;
+#if BOOST_VERSION < 108700
+    using io_work_t = boost::asio::io_service::work;
+#endif
 
     timer(const timer &)            = delete;
     timer &operator=(const timer &) = delete;
@@ -64,14 +71,20 @@ class timer : public std::enable_shared_from_this<timer>
     void start(F &&f)
     {
         static std::once_flag io_run_once;
-        auto                  self = this->shared_from_this();
-        std::weak_ptr<timer>  wself(self);
-        _fn = [wself, fn = std::move(f)](const timer::err_t &err) {
-            if(err.failed())
-                return;
+        callback_t            fn = std::forward<F>(f);
+        _fn = [fn = std::move(fn)](const timer::err_t &err) {
+            try
+            {
+                if(err.failed())
+                    return;
 
-            if(auto s = wself.lock())
-                fn();
+                if(fn)
+                    fn();
+            }
+            catch(...)
+            {
+                std::cerr << "timer callback exception" << std::endl;
+            }
         };
 
         std::call_once(io_run_once, []() {
@@ -91,14 +104,20 @@ class timer : public std::enable_shared_from_this<timer>
     template <typename F>
     void reset(unsigned long long us, F &&f)
     {
-        auto                 self = this->shared_from_this();
-        std::weak_ptr<timer> wself(self);
-        _fn = [wself, fn = std::move(f)](const boost::system::error_code &err) {
-            if(err.failed())
-                return;
+        callback_t fn = std::forward<F>(f);
+        _fn = [fn = std::move(fn)](const boost::system::error_code &err) {
+            try
+            {
+                if(err.failed())
+                    return;
 
-            if(auto spt = wself.lock())
-                fn();
+                if(fn)
+                    fn();
+            }
+            catch(...)
+            {
+                std::cerr << "timer callback exception" << std::endl;
+            }
         };
         reset(us);
     }
@@ -113,28 +132,26 @@ class timer : public std::enable_shared_from_this<timer>
 
   private:
 #if BOOST_VERSION < 108700
-    static boost::asio::io_context &io_global()
+    static boost::asio::io_service &io_global()
     {
         static boost::asio::io_service io_global_inst;
         return io_global_inst;
     }
-    static boost::asio::io_service::work &worker_global()
+    static io_work_t &worker_global()
     {
-        static boost::asio::io_service::work worker_global_inst{io_global()};
+        static io_work_t worker_global_inst{io_global()};
         return worker_global_inst;
     }
 #else
-    static boost::asio::io_context &io_global()
+    static io_t &io_global()
     {
-        static boost::asio::io_context io_global;
+        static io_t io_global;
         return io_global;
     }
-    static boost::asio::executor_work_guard<
-        boost::asio::io_context::executor_type> &
+    static boost::asio::executor_work_guard<io_t::executor_type> &
     worker_global()
     {
-        static boost::asio::executor_work_guard<
-            boost::asio::io_context::executor_type>
+        static boost::asio::executor_work_guard<io_t::executor_type>
             worker_global_inst{io_global().get_executor()};
         return worker_global_inst;
     }

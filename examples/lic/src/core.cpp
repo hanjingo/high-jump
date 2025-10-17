@@ -139,7 +139,7 @@ err_t lic_core::add_issuer(const std::string &issuer,
     // parse keys
     std::vector<std::string> keys;
     if(!key_str.empty())
-        keys = hj::string::split(key_str, ",");
+        keys = hj::string_util::split(key_str, ",");
 
     auto param       = new lic_param_add_issuer{};
     param->issuer_id = issuer.c_str();

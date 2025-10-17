@@ -2,7 +2,7 @@
 #include <atomic>
 #include <vector>
 #include <gtest/gtest.h>
-#include <hj/types/striped_map.hpp>
+#include <hj/sync/striped_map.hpp>
 #include <string>
 
 TEST(striped_map, emplace)

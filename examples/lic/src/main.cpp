@@ -30,9 +30,9 @@ int main(int argc, char *argv[])
 
     // add log support
 #ifdef DEBUG
-    hj::logger::instance()->set_level(hj::log_lvl::debug);
+    hj::log::logger::instance()->set_level(hj::log::level::debug);
 #else
-    hj::logger::instance()->set_level(hj::log_lvl::info);
+    hj::log::logger::instance()->set_level(hj::log::level::info);
 #endif
 
     // add i18n support
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
         hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
 
     // add signals handle support
-    hj::sigcatch({SIGABRT, SIGTERM}, [](int sig) {});
+    hj::sighandler::instance().sigcatch({SIGABRT, SIGTERM}, [](int sig) {});
 
     // // add license check support
     // hj::license::verifier vef{"tourist", hj::license::sign_algo::none, {}};

@@ -5,12 +5,10 @@
 #include <string>
 #include <fstream>
 
-using namespace hj;
-
-TEST(YamlTest, ParseFromString)
+TEST(yaml, parse_from_string)
 {
     const char *text = "name: test\nvalue: 42\n";
-    yaml        y    = yaml::load(text);
+    hj::yaml    y    = hj::yaml::load(text);
     auto        n1   = y["name"];
     auto        n2   = y["value"];
     EXPECT_TRUE(n1.is_defined());
@@ -22,17 +20,17 @@ TEST(YamlTest, ParseFromString)
     EXPECT_TRUE(n3.is_null() || !n3);
 }
 
-TEST(YamlTest, ReadWriteFile)
+TEST(yaml, read_write_file)
 {
     std::ofstream fout("test.yaml", std::ios::binary);
-    yaml          y;
+    hj::yaml      y;
     y["foo"] = "bar";
     y["num"] = 123;
     ASSERT_TRUE(y.dump(fout));
     fout.close();
 
     std::ifstream fin("test.yaml", std::ios::binary);
-    yaml          y2;
+    hj::yaml      y2;
     y2.load(fin);
     auto nfoo = y2["foo"];
     auto nnum = y2["num"];
@@ -44,9 +42,9 @@ TEST(YamlTest, ReadWriteFile)
     std::remove("test.yaml");
 }
 
-TEST(YamlTest, SerializeToString)
+TEST(yaml, serialize_to_string)
 {
-    yaml y;
+    hj::yaml y;
     y["a"]        = 1;
     y["b"]        = 2;
     std::string s = y.str();
@@ -54,9 +52,9 @@ TEST(YamlTest, SerializeToString)
     EXPECT_NE(s.find("b: 2"), std::string::npos);
 }
 
-TEST(YamlTest, DumpToBuffer)
+TEST(yaml, dump_to_buffer)
 {
-    yaml y;
+    hj::yaml y;
     y["x"]          = 100;
     char   buf[128] = {};
     size_t sz       = sizeof(buf);
@@ -69,10 +67,10 @@ TEST(YamlTest, DumpToBuffer)
     EXPECT_FALSE(y.dump(small, small_sz));
 }
 
-TEST(YamlTest, IteratorAndTypeChecks)
+TEST(yaml, iterator_and_type_checks)
 {
     const char *text = "arr:\n  - 1\n  - 2\n  - 3\nmap:\n  k1: v1\n  k2: v2\n";
-    yaml        y    = yaml::load(text);
+    hj::yaml    y    = hj::yaml::load(text);
     auto        arr  = y["arr"];
     auto        map  = y["map"];
     EXPECT_TRUE(arr.is_sequence());
@@ -91,11 +89,11 @@ TEST(YamlTest, IteratorAndTypeChecks)
     EXPECT_EQ(count, 2);
 }
 
-TEST(YamlTest, AssignmentAndCopy)
+TEST(yaml, assignment_and_copy)
 {
-    yaml y1;
-    y1["a"] = 10;
-    yaml y2 = y1;
+    hj::yaml y1;
+    y1["a"]     = 10;
+    hj::yaml y2 = y1;
     EXPECT_EQ(y2["a"].as<int>(), 10);
     y2["a"] = 20;
     EXPECT_EQ(y2["a"].as<int>(), 20);
@@ -105,23 +103,23 @@ TEST(YamlTest, AssignmentAndCopy)
     EXPECT_EQ(y1["a"].as<int>(), 20);
 }
 
-TEST(YamlTest, ForceInsertAndPushBack)
+TEST(yaml, force_insert_and_push_back)
 {
-    yaml y;
+    hj::yaml y;
     y.force_insert("k", "v");
     EXPECT_EQ(y["k"].as<std::string>(), "v");
-    yaml arr;
+    hj::yaml arr;
     arr.push_back(1);
     arr.push_back(2);
     EXPECT_EQ(arr[0].as<int>(), 1);
     EXPECT_EQ(arr[1].as<int>(), 2);
-    arr.push_back(yaml::load("x: 5"));
+    arr.push_back(hj::yaml::load("x: 5"));
     EXPECT_EQ(arr[2]["x"].as<int>(), 5);
 }
 
-TEST(YamlTest, TagAndScalar)
+TEST(yaml, tag_and_scalar)
 {
-    yaml y = yaml::load("!!str tagged: value");
+    hj::yaml y = hj::yaml::load("!!str tagged: value");
     EXPECT_TRUE(y.is_map());
     auto n = y["tagged"];
     EXPECT_TRUE(n.is_scalar());
@@ -132,15 +130,15 @@ TEST(YamlTest, TagAndScalar)
     EXPECT_EQ(n.scalar(), "value");
 }
 
-TEST(YamlTest, InvalidLoad)
+TEST(yaml, invalid_load)
 {
-    yaml y = yaml::load("::not_yaml");
+    hj::yaml y = hj::yaml::load("::not_yaml");
 
     EXPECT_TRUE(y.is_scalar());
     EXPECT_EQ(y.scalar(), "::not_yaml");
 
     std::ifstream fin("not_exist.yaml");
-    yaml          y2;
+    hj::yaml      y2;
     y2.load(fin);
 
     EXPECT_TRUE(y2.is_null() || !y2);

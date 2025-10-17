@@ -46,8 +46,6 @@
 
 namespace hj
 {
-namespace string
-{
 namespace detail
 {
 class regex_cache
@@ -223,377 +221,405 @@ wide_to_utf8_impl(std::wstring_view wide_str) noexcept
 #endif
 } // namespace detail
 
-enum class error_code
+class string_util
 {
-    ok = 0,
-    invalid_argument,
-    conversion_error,
-    regex_error,
-    out_of_memory
-};
-
-template <typename StringType1, typename StringType2>
-constexpr bool contains(const StringType1 &src, const StringType2 &sub) noexcept
-{
-    static_assert(std::is_convertible_v<StringType1, std::string_view>);
-    static_assert(std::is_convertible_v<StringType2, std::string_view>);
-
-    std::string_view src_view = src;
-    std::string_view sub_view = sub;
-    return src_view.find(sub_view) != std::string_view::npos;
-}
-
-template <typename StringType1, typename StringType2>
-constexpr bool starts_with(const StringType1 &src,
-                           const StringType2 &prefix) noexcept
-{
-    static_assert(std::is_convertible_v<StringType1, std::string_view>);
-    static_assert(std::is_convertible_v<StringType2, std::string_view>);
-
-    std::string_view src_view    = src;
-    std::string_view prefix_view = prefix;
-
-    return src_view.size() >= prefix_view.size()
-           && src_view.substr(0, prefix_view.size()) == prefix_view;
-}
-
-template <typename StringType1, typename StringType2>
-constexpr bool ends_with(const StringType1 &src,
-                         const StringType2 &suffix) noexcept
-{
-    static_assert(std::is_convertible_v<StringType1, std::string_view>);
-    static_assert(std::is_convertible_v<StringType2, std::string_view>);
-
-    std::string_view src_view    = src;
-    std::string_view suffix_view = suffix;
-
-    return src_view.size() >= suffix_view.size()
-           && src_view.substr(src_view.size() - suffix_view.size())
-                  == suffix_view;
-}
-
-std::vector<std::string> split(std::string_view str, std::string_view delimiter)
-{
-    if(str.empty() || delimiter.empty())
-        return {std::string(str)};
-
-    std::vector<std::string> result;
-    result.reserve(8);
-    size_t start = 0;
-    size_t found = str.find(delimiter, start);
-    while(found != std::string_view::npos)
+  public:
+    enum class error_code
     {
-        if(found > start)
-            result.emplace_back(str.substr(start, found - start));
+        ok = 0,
+        invalid_argument,
+        conversion_error,
+        regex_error,
+        out_of_memory
+    };
 
-        start = found + delimiter.length();
-        found = str.find(delimiter, start);
+    string_util()                               = delete;
+    ~string_util()                              = delete;
+    string_util(const string_util &)            = delete;
+    string_util &operator=(const string_util &) = delete;
+    string_util(string_util &&)                 = delete;
+    string_util &operator=(string_util &&)      = delete;
+
+    template <typename StringType1, typename StringType2>
+    static constexpr bool contains(const StringType1 &src,
+                                   const StringType2 &sub) noexcept
+    {
+        static_assert(std::is_convertible_v<StringType1, std::string_view>);
+        static_assert(std::is_convertible_v<StringType2, std::string_view>);
+
+        std::string_view src_view = src;
+        std::string_view sub_view = sub;
+        return src_view.find(sub_view) != std::string_view::npos;
     }
 
-    if(start < str.length())
-        result.emplace_back(str.substr(start));
+    template <typename StringType1, typename StringType2>
+    static constexpr bool starts_with(const StringType1 &src,
+                                      const StringType2 &prefix) noexcept
+    {
+        static_assert(std::is_convertible_v<StringType1, std::string_view>);
+        static_assert(std::is_convertible_v<StringType2, std::string_view>);
 
-    return result;
-}
+        std::string_view src_view    = src;
+        std::string_view prefix_view = prefix;
 
-std::string
-replace_all(std::string str, std::string_view from, std::string_view to)
-{
-    if(from.empty())
+        return src_view.size() >= prefix_view.size()
+               && src_view.substr(0, prefix_view.size()) == prefix_view;
+    }
+
+    template <typename StringType1, typename StringType2>
+    static constexpr bool ends_with(const StringType1 &src,
+                                    const StringType2 &suffix) noexcept
+    {
+        static_assert(std::is_convertible_v<StringType1, std::string_view>);
+        static_assert(std::is_convertible_v<StringType2, std::string_view>);
+
+        std::string_view src_view    = src;
+        std::string_view suffix_view = suffix;
+
+        return src_view.size() >= suffix_view.size()
+               && src_view.substr(src_view.size() - suffix_view.size())
+                      == suffix_view;
+    }
+
+    static std::vector<std::string> split(std::string_view str,
+                                          std::string_view delimiter)
+    {
+        if(str.empty() || delimiter.empty())
+            return {std::string(str)};
+
+        std::vector<std::string> result;
+        result.reserve(8);
+        size_t start = 0;
+        size_t found = str.find(delimiter, start);
+        while(found != std::string_view::npos)
+        {
+            if(found > start)
+                result.emplace_back(str.substr(start, found - start));
+
+            start = found + delimiter.length();
+            found = str.find(delimiter, start);
+        }
+
+        if(start < str.length())
+            result.emplace_back(str.substr(start));
+
+        return result;
+    }
+
+    static std::string
+    replace_all(std::string str, std::string_view from, std::string_view to)
+    {
+        if(from.empty())
+            return str;
+
+        size_t pos = 0;
+        while((pos = str.find(from, pos)) != std::string::npos)
+        {
+            str.replace(pos, from.length(), to);
+            pos += to.length();
+        }
         return str;
-
-    size_t pos = 0;
-    while((pos = str.find(from, pos)) != std::string::npos)
-    {
-        str.replace(pos, from.length(), to);
-        pos += to.length();
     }
-    return str;
-}
 
-std::string &replace_all_inplace(std::string     &str,
-                                 std::string_view from,
-                                 std::string_view to)
-{
-    if(from.empty())
+    static std::string &replace_all_inplace(std::string     &str,
+                                            std::string_view from,
+                                            std::string_view to)
+    {
+        if(from.empty())
+            return str;
+
+        size_t pos = 0;
+        while((pos = str.find(from, pos)) != std::string::npos)
+        {
+            str.replace(pos, from.length(), to);
+            pos += to.length();
+        }
         return str;
-
-    size_t pos = 0;
-    while((pos = str.find(from, pos)) != std::string::npos)
-    {
-        str.replace(pos, from.length(), to);
-        pos += to.length();
     }
-    return str;
-}
 
-std::optional<std::string> regex_search(std::string_view   src,
-                                        const std::string &pattern) noexcept
-{
-    try
+    static std::optional<std::string>
+    regex_search(std::string_view src, const std::string &pattern) noexcept
     {
-        std::smatch match;
-        const auto &regex = detail::regex_cache::instance().get_regex(pattern);
-        std::string src_str(src); // Required for smatch
+        try
+        {
+            std::smatch match;
+            const auto &regex =
+                detail::regex_cache::instance().get_regex(pattern);
+            std::string src_str(src); // Required for smatch
 
-        if(std::regex_search(src_str, match, regex))
-            return match[0].str();
-    }
-    catch(const std::regex_error &)
-    {
+            if(std::regex_search(src_str, match, regex))
+                return match[0].str();
+        }
+        catch(const std::regex_error &)
+        {
+            return std::nullopt;
+        }
         return std::nullopt;
     }
-    return std::nullopt;
-}
 
-std::vector<std::string> regex_search_all(std::string_view   src,
-                                          const std::string &pattern) noexcept
-{
-    std::vector<std::string> results;
-    try
+    static std::vector<std::string>
+    regex_search_all(std::string_view src, const std::string &pattern) noexcept
     {
-        const auto &regex = detail::regex_cache::instance().get_regex(pattern);
-        std::string src_str(src);
+        std::vector<std::string> results;
+        try
+        {
+            const auto &regex =
+                detail::regex_cache::instance().get_regex(pattern);
+            std::string src_str(src);
 
-        std::sregex_iterator begin(src_str.begin(), src_str.end(), regex), end;
-        results.reserve(std::distance(begin, end));
-        for(auto it = begin; it != end; ++it)
-            results.emplace_back(it->str());
+            std::sregex_iterator begin(src_str.begin(), src_str.end(), regex),
+                end;
+            results.reserve(std::distance(begin, end));
+            for(auto it = begin; it != end; ++it)
+                results.emplace_back(it->str());
+        }
+        catch(const std::regex_error &)
+        {
+            // Log error in production code
+        }
+        return results;
     }
-    catch(const std::regex_error &)
+
+    static std::vector<std::string>
+    regex_split(std::string_view str, const std::string &pattern) noexcept
     {
-        // Log error in production code
+        try
+        {
+            const auto &regex =
+                detail::regex_cache::instance().get_regex(pattern);
+            std::string str_copy(str);
+
+            std::sregex_token_iterator first{str_copy.begin(),
+                                             str_copy.end(),
+                                             regex,
+                                             -1},
+                last;
+            return {first, last};
+        }
+        catch(const std::regex_error &)
+        {
+            return {std::string(str)};
+        }
     }
-    return results;
-}
 
-std::vector<std::string> regex_split(std::string_view   str,
-                                     const std::string &pattern) noexcept
-{
-    try
+    // Regex replace
+    static std::string regex_replace(std::string        str,
+                                     const std::string &pattern,
+                                     std::string_view   replacement) noexcept
     {
-        const auto &regex = detail::regex_cache::instance().get_regex(pattern);
-        std::string str_copy(str);
-
-        std::sregex_token_iterator first{str_copy.begin(),
-                                         str_copy.end(),
-                                         regex,
-                                         -1},
-            last;
-        return {first, last};
+        try
+        {
+            const auto &regex =
+                detail::regex_cache::instance().get_regex(pattern);
+            return std::regex_replace(str, regex, std::string(replacement));
+        }
+        catch(const std::regex_error &)
+        {
+            return str;
+        }
     }
-    catch(const std::regex_error &)
+
+    static inline bool equal(const char *a, const char *b) noexcept
     {
-        return {std::string(str)};
+        if(a == b)
+            return true; // Same pointer (including both null)
+
+        if(!a || !b)
+            return false; // One is null, the other is not
+
+        return std::strcmp(a, b) == 0;
     }
-}
 
-// Regex replace
-std::string regex_replace(std::string        str,
-                          const std::string &pattern,
-                          std::string_view   replacement) noexcept
-{
-    try
+    static bool iequal(std::string_view a, std::string_view b) noexcept
     {
-        const auto &regex = detail::regex_cache::instance().get_regex(pattern);
-        return std::regex_replace(str, regex, std::string(replacement));
+        return std::equal(a.begin(),
+                          a.end(),
+                          b.begin(),
+                          b.end(),
+                          [](char a, char b) {
+                              return std::tolower(static_cast<unsigned char>(a))
+                                     == std::tolower(
+                                         static_cast<unsigned char>(b));
+                          });
     }
-    catch(const std::regex_error &)
+
+    static inline std::optional<std::wstring>
+    to_wstring(std::string_view src) noexcept
     {
-        return str;
+        return detail::utf8_to_wide_impl(src);
     }
-}
 
-inline bool equal(const char *a, const char *b) noexcept
-{
-    if(a == b)
-        return true; // Same pointer (including both null)
-
-    if(!a || !b)
-        return false; // One is null, the other is not
-
-    return std::strcmp(a, b) == 0;
-}
-
-bool iequal(std::string_view a, std::string_view b) noexcept
-{
-    return std::equal(a.begin(),
-                      a.end(),
-                      b.begin(),
-                      b.end(),
-                      [](char a, char b) {
-                          return std::tolower(static_cast<unsigned char>(a))
-                                 == std::tolower(static_cast<unsigned char>(b));
-                      });
-}
-
-inline std::optional<std::wstring> to_wstring(std::string_view src) noexcept
-{
-    return detail::utf8_to_wide_impl(src);
-}
-
-inline std::optional<std::wstring> to_wchar(std::string_view src) noexcept
-{
-    return to_wstring(src);
-}
-
-inline std::optional<std::string> from_wstring(std::wstring_view src) noexcept
-{
-    return detail::wide_to_utf8_impl(src);
-}
-
-inline std::optional<std::string> from_wchar_opt(const wchar_t *src) noexcept
-{
-    if(!src)
-        return std::string{};
-
-    return from_wstring(std::wstring_view{src});
-}
-
-inline std::wstring to_wstring_safe(std::string_view src) noexcept
-{
-    auto result = to_wstring(src);
-    return result ? std::move(*result) : std::wstring{};
-}
-
-inline std::string from_wstring_safe(std::wstring_view src) noexcept
-{
-    auto result = from_wstring(src);
-    return result ? std::move(*result) : std::string{};
-}
-
-inline std::string from_ptr_addr(const void *ptr, bool is_hex = true) noexcept
-{
-    if(!ptr)
-        return is_hex ? "0x0" : "0";
-
-    char       buffer[32]; // Enough for 64-bit pointer
-    const auto addr = reinterpret_cast<std::uintptr_t>(ptr);
-
-    if(is_hex)
-        std::snprintf(buffer, sizeof(buffer), "0x%" PRIxPTR, addr);
-    else
-        std::snprintf(buffer, sizeof(buffer), "%" PRIuPTR, addr);
-
-    return std::string{buffer};
-}
-
-inline std::string_view trim_left(std::string_view str) noexcept
-{
-    const auto first_non_space = str.find_first_not_of(" \t\n\r\f\v");
-    return (first_non_space == std::string_view::npos)
-               ? std::string_view{}
-               : str.substr(first_non_space);
-}
-
-inline std::string_view trim_right(std::string_view str) noexcept
-{
-    const auto last_non_space = str.find_last_not_of(" \t\n\r\f\v");
-    return (last_non_space == std::string_view::npos)
-               ? std::string_view{}
-               : str.substr(0, last_non_space + 1);
-}
-
-inline std::string_view trim(std::string_view str) noexcept
-{
-    return trim_left(trim_right(str));
-}
-
-inline std::string &trim_inplace(std::string &str)
-{
-    str.erase(str.find_last_not_of(" \t\n\r\f\v") + 1);
-    str.erase(0, str.find_first_not_of(" \t\n\r\f\v"));
-    return str;
-}
-
-inline std::string to_lower(std::string str)
-{
-    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
-        return std::tolower(c);
-    });
-    return str;
-}
-
-inline std::string to_upper(std::string str)
-{
-    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
-        return std::toupper(c);
-    });
-    return str;
-}
-
-inline std::string search(const std::string &src, const std::string &pattern)
-{
-    auto result = regex_search(src, pattern);
-    return result ? *result : std::string{};
-}
-
-inline std::vector<std::string> search_n(const std::string &src,
-                                         const std::string &pattern)
-{
-    return regex_search_all(src, pattern);
-}
-
-inline void search(const std::string &src,
-                   std::smatch       &match,
-                   const std::string &pattern) noexcept
-{
-    try
+    static inline std::optional<std::wstring>
+    to_wchar(std::string_view src) noexcept
     {
-        const auto &regex = detail::regex_cache::instance().get_regex(pattern);
-        std::regex_search(src, match, regex);
+        return to_wstring(src);
     }
-    catch(const std::regex_error &)
+
+    static inline std::optional<std::string>
+    from_wstring(std::wstring_view src) noexcept
     {
-        match = std::smatch{};
+        return detail::wide_to_utf8_impl(src);
     }
-}
 
-inline std::vector<std::string> split_regex(const std::string &str,
-                                            const std::string &pattern)
-{
-    return regex_split(str, pattern);
-}
-
-inline std::string &
-replace(std::string &str, const std::string &from, const std::string &to)
-{
-    if(from.find_first_of("^$.*+?{}[]|()\\") == std::string::npos)
+    static inline std::optional<std::string>
+    from_wchar_opt(const wchar_t *src) noexcept
     {
-        replace_all_inplace(str, from, to);
+        if(!src)
+            return std::string{};
+
+        return from_wstring(std::wstring_view{src});
+    }
+
+    static inline std::wstring to_wstring_safe(std::string_view src) noexcept
+    {
+        auto result = to_wstring(src);
+        return result ? std::move(*result) : std::wstring{};
+    }
+
+    static inline std::string from_wstring_safe(std::wstring_view src) noexcept
+    {
+        auto result = from_wstring(src);
+        return result ? std::move(*result) : std::string{};
+    }
+
+    static inline std::string from_ptr_addr(const void *ptr,
+                                            bool        is_hex = true) noexcept
+    {
+        if(!ptr)
+            return is_hex ? "0x0" : "0";
+
+        char       buffer[32]; // Enough for 64-bit pointer
+        const auto addr = reinterpret_cast<std::uintptr_t>(ptr);
+
+        if(is_hex)
+            std::snprintf(buffer, sizeof(buffer), "0x%" PRIxPTR, addr);
+        else
+            std::snprintf(buffer, sizeof(buffer), "%" PRIuPTR, addr);
+
+        return std::string{buffer};
+    }
+
+    static inline std::string_view trim_left(std::string_view str) noexcept
+    {
+        const auto first_non_space = str.find_first_not_of(" \t\n\r\f\v");
+        return (first_non_space == std::string_view::npos)
+                   ? std::string_view{}
+                   : str.substr(first_non_space);
+    }
+
+    static inline std::string_view trim_right(std::string_view str) noexcept
+    {
+        const auto last_non_space = str.find_last_not_of(" \t\n\r\f\v");
+        return (last_non_space == std::string_view::npos)
+                   ? std::string_view{}
+                   : str.substr(0, last_non_space + 1);
+    }
+
+    static inline std::string_view trim(std::string_view str) noexcept
+    {
+        return trim_left(trim_right(str));
+    }
+
+    static inline std::string &trim_inplace(std::string &str)
+    {
+        str.erase(str.find_last_not_of(" \t\n\r\f\v") + 1);
+        str.erase(0, str.find_first_not_of(" \t\n\r\f\v"));
         return str;
     }
 
-    str = regex_replace(str, from, to);
-    return str;
-}
+    static inline std::string to_lower(std::string str)
+    {
+        std::transform(str.begin(),
+                       str.end(),
+                       str.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        return str;
+    }
 
-inline std::wstring to_wchar(const std::string &src)
-{
-    return to_wstring_safe(src);
-}
+    static inline std::string to_upper(std::string str)
+    {
+        std::transform(str.begin(),
+                       str.end(),
+                       str.begin(),
+                       [](unsigned char c) { return std::toupper(c); });
+        return str;
+    }
 
-inline std::wstring to_wstring(const std::string &src)
-{
-    return to_wstring_safe(src);
-}
+    static inline std::string search(const std::string &src,
+                                     const std::string &pattern)
+    {
+        auto result = regex_search(src, pattern);
+        return result ? *result : std::string{};
+    }
 
-inline std::string from_wchar(const wchar_t *src)
-{
-    if(!src)
-        return std::string{};
+    static inline std::vector<std::string> search_n(const std::string &src,
+                                                    const std::string &pattern)
+    {
+        return regex_search_all(src, pattern);
+    }
 
-    auto result = from_wchar_opt(src);
-    return result ? *result : std::string{};
-}
+    static inline void search(const std::string &src,
+                              std::smatch       &match,
+                              const std::string &pattern) noexcept
+    {
+        try
+        {
+            const auto &regex =
+                detail::regex_cache::instance().get_regex(pattern);
+            std::regex_search(src, match, regex);
+        }
+        catch(const std::regex_error &)
+        {
+            match = std::smatch{};
+        }
+    }
 
-inline std::string from_wstring(const std::wstring &src)
-{
-    auto result = from_wstring(std::wstring_view{src});
-    return result ? *result : std::string{};
-}
+    static inline std::vector<std::string>
+    split_regex(const std::string &str, const std::string &pattern)
+    {
+        return regex_split(str, pattern);
+    }
 
-} // namespace string
+    static inline std::string &
+    replace(std::string &str, const std::string &from, const std::string &to)
+    {
+        if(from.find_first_of("^$.*+?{}[]|()\\") == std::string::npos)
+        {
+            replace_all_inplace(str, from, to);
+            return str;
+        }
+
+        str = regex_replace(str, from, to);
+        return str;
+    }
+
+    static inline std::wstring to_wchar(const std::string &src)
+    {
+        return to_wstring_safe(src);
+    }
+
+    static inline std::wstring to_wstring(const std::string &src)
+    {
+        return to_wstring_safe(src);
+    }
+
+    static inline std::string from_wchar(const wchar_t *src)
+    {
+        if(!src)
+            return std::string{};
+
+        auto result = from_wchar_opt(src);
+        return result ? *result : std::string{};
+    }
+
+    static inline std::string from_wstring(const std::wstring &src)
+    {
+        auto result = from_wstring(std::wstring_view{src});
+        return result ? *result : std::string{};
+    }
+
+}; // class string
+
 } // namespace hj
 
 #endif // STRING_UTIL_HPP

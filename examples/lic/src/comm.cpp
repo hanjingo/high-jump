@@ -39,22 +39,22 @@ void print(const std::vector<std::string> &msgs, const output_type &otype)
         print(msg, otype);
 }
 
-void print(const std::vector<std::vector<std::string> > &msgs,
-           const output_type                            &otype)
+void print(const std::vector<std::vector<std::string>> &msgs,
+           const output_type                           &otype)
 {
     for(const auto &row : msgs)
         for(const auto &msg : row)
             print(msg, otype);
 }
 
-std::vector<std::pair<std::string, std::string> >
+std::vector<std::pair<std::string, std::string>>
 parse_claims(const std::string &s)
 {
-    std::vector<std::pair<std::string, std::string> > claims;
-    auto pairs = hj::string::split(s, ","); // xxx,xxx
+    std::vector<std::pair<std::string, std::string>> claims;
+    auto pairs = hj::string_util::split(s, ","); // xxx,xxx
     for(const auto &p : pairs)
     {
-        auto kv = hj::string::split(p, ":"); // xxx:xxx
+        auto kv = hj::string_util::split(p, ":"); // xxx:xxx
         if(kv.size() == 2)
             claims.emplace_back(std::make_pair(kv[0], kv[1]));
     }

@@ -15,6 +15,8 @@
 
 #include <hj/sync/shared_memory.hpp>
 
+#include <hj/sync/striped_map.hpp>
+
 #include <hj/sync/thread_pool.hpp>
 
 #endif

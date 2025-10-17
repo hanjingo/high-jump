@@ -27,23 +27,28 @@
 
 // c++ std::unary_function compatibility
 #ifndef HJ_UNARY_FUNCTION_DEFINED
+/*
+ * Determine whether the standard library provides std::unary_function.
+ * libc++ (used on macOS) removed this type; libstdc++ may still provide it.
+ * For C++17 and later, provide a small fallback when the type is missing so
+ * legacy code compiling against older headers keeps working.
+ */
 #if defined(_MSC_VER)
+// MSVC: older toolchains provided unary_function
 #if (_MSC_VER >= 1910)
 #define HJ_UNARY_FUNCTION_DEFINED 0
 #else
 #define HJ_UNARY_FUNCTION_DEFINED 1
 #endif
+#elif defined(__GLIBCXX__)
+// libstdc++ (GNU) typically keeps the compatibility typedefs
+#define HJ_UNARY_FUNCTION_DEFINED 1
 #elif defined(_LIBCPP_VERSION)
-// libc++ (macOS, some Linux) still provides std::unary_function even in C++17+
-#define HJ_UNARY_FUNCTION_DEFINED 1
+// libc++ removed unary_function in newer versions; provide fallback
+#define HJ_UNARY_FUNCTION_DEFINED 0
 #elif (__cplusplus >= 201703L)
-#if defined(__GLIBCXX__)
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#elif defined(_HJ_VERSION)
+// Unknown stdlib under C++17+: conservatively treat as missing and provide fallback
 #define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#endif
 #else
 #define HJ_UNARY_FUNCTION_DEFINED 1
 #endif
@@ -58,7 +63,7 @@ struct unary_function
     typedef Arg    argument_type;
     typedef Result result_type;
 };
-}
+} // namespace std
 #undef HJ_UNARY_FUNCTION_DEFINED
 #define HJ_UNARY_FUNCTION_DEFINED 1
 #endif

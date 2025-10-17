@@ -141,10 +141,18 @@ TEST(ws_server_ssl, connect_recv_send_close)
     std::thread([]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         hj::ws_client_ssl::io_t io;
-        auto     client_crt = "./client.crt";
-        auto     client_key = "./client.key";
-        auto     ssl_ctx = hj::ws_client_ssl::make_ctx(client_crt, client_key);
-        auto     client  = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx);
+        auto                    client_crt = "./client.crt";
+        auto                    client_key = "./client.key";
+        if(!std::filesystem::exists(client_crt)
+           || !std::filesystem::exists(client_key))
+        {
+            GTEST_SKIP() << "skip test ws_server_ssl connect_recv_send_close "
+                            "with file not exist: "
+                         << client_crt << " " << client_key;
+        }
+
+        auto ssl_ctx = hj::ws_client_ssl::make_ctx(client_crt, client_key);
+        auto client  = std::make_shared<hj::ws_client_ssl>(io, ssl_ctx);
         ASSERT_TRUE(client->connect("127.0.0.1", "21003", "/"));
         ASSERT_TRUE(client->is_connected());
 
@@ -160,9 +168,17 @@ TEST(ws_server_ssl, connect_recv_send_close)
     }).detach();
 
     hj::ws_server_ssl::io_t io;
-    auto     server_crt = "./server.crt";
-    auto     server_key = "./server.key";
-    auto     ssl_ctx    = hj::ws_server_ssl::make_ctx(server_crt, server_key);
+    auto                    server_crt = "./server.crt";
+    auto                    server_key = "./server.key";
+    if(!std::filesystem::exists(server_crt)
+       || !std::filesystem::exists(server_key))
+    {
+        GTEST_SKIP() << "skip test ws_server_ssl connect_recv_send_close "
+                        "with file not exist: "
+                     << server_crt << " " << server_key;
+    }
+
+    auto ssl_ctx = hj::ws_server_ssl::make_ctx(server_crt, server_key);
     hj::ws_server_ssl::err_t err;
     auto              ep = hj::ws_server_ssl::make_endpoint("127.0.0.1", 21003);
     hj::ws_server_ssl serv(io, ssl_ctx);
@@ -184,14 +200,25 @@ TEST(ws_server_ssl, async_connect_recv_send_close)
 {
     static bool             is_async_ws_server_ssl_running = false;
     hj::ws_server_ssl::io_t io;
-    auto     server_crt2 = "./server.crt";
-    auto     server_key2 = "./server.key";
-    auto     ssl_ctx2 = hj::ws_server_ssl::make_ctx(server_crt2, server_key2);
-    auto     serv     = std::make_shared<hj::ws_server_ssl>(io, ssl_ctx2);
-    auto     client_crt2 = "./client.crt";
-    auto     client_key2 = "./client.key";
-    auto     client_ctx = hj::ws_client_ssl::make_ctx(client_crt2, client_key2);
-    auto     client     = std::make_shared<hj::ws_client_ssl>(io, client_ctx);
+    auto                    client_crt2 = "./client.crt";
+    auto                    client_key2 = "./client.key";
+    auto                    server_crt2 = "./server.crt";
+    auto                    server_key2 = "./server.key";
+    if(!std::filesystem::exists(client_crt2)
+       || !std::filesystem::exists(client_key2)
+       || !std::filesystem::exists(server_crt2)
+       || !std::filesystem::exists(server_key2))
+    {
+        GTEST_SKIP() << "skip test ws_server_ssl connect_recv_send_close "
+                        "with file not exist: "
+                     << client_crt2 << " " << client_key2 << " " << server_crt2
+                     << " " << server_key2;
+    }
+
+    auto ssl_ctx2   = hj::ws_server_ssl::make_ctx(server_crt2, server_key2);
+    auto serv       = std::make_shared<hj::ws_server_ssl>(io, ssl_ctx2);
+    auto client_ctx = hj::ws_client_ssl::make_ctx(client_crt2, client_key2);
+    auto client     = std::make_shared<hj::ws_client_ssl>(io, client_ctx);
     client->async_connect(
         "127.0.0.1",
         "21004",

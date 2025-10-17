@@ -1,6 +1,8 @@
 #ifndef HJ_HPP
 #define HJ_HPP
 
+#include <hj/ai/ai.hpp>
+
 #include <hj/algo/algo.hpp>
 
 #include <hj/compress/compress.hpp>

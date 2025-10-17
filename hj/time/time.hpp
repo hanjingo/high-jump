@@ -5,6 +5,4 @@
 
 #include <hj/time/duration.hpp>
 
-#include <hj/time/timer.hpp>
-
 #endif

@@ -1,5 +1,6 @@
 {
   "dependencies": [
+    "abseil",
     {
       "name": "behaviortree-cpp",
       "default-features": false
@@ -44,6 +45,7 @@
     "libiconv",
     "libnice",
     "libpqxx",
+    "libqrencode",
     "nlohmann-json",
     "opencl",
     {
@@ -61,8 +63,8 @@
       "name": "protobuf",
       "default-features": false
     },
-    "abseil",
     "pugixml",
+    "quirc",
     "spdlog",
     {
       "name": "sqlite3",
@@ -84,6 +86,10 @@
     {
       "name": "pugixml",
       "version": "1.15"
+    },
+    {
+      "name": "quirc",
+      "version": "1.2"
     },
     {
       "name": "zeromq",
@@ -184,6 +190,10 @@
     {
       "name": "libpqxx",
       "version": "7.10.1"
+    },
+    {
+      "name": "libqrencode",
+      "version": "4.1.1#2"
     },
     {
       "name": "libnice",

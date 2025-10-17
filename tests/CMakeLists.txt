@@ -79,6 +79,14 @@ find_package(Boost REQUIRED COMPONENTS
 find_package(OpenCL QUIET)
 find_package(CUDA QUIET)
 
+# for qrcode encode
+find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
+find_library(QRENCODE_LIBRARY_RELEASE qrencode)
+find_library(QRENCODE_LIBRARY_DEBUG qrencoded)
+set(QRENCODE_LIBRARIES optimized ${QRENCODE_LIBRARY_RELEASE} debug ${QRENCODE_LIBRARY_DEBUG})
+# for qrcode decode
+find_package(quirc CONFIG REQUIRED)
+
 # DPDK support - optional and only on non-Windows platforms
 if(NOT WIN32)
     if(PkgConfig_FOUND)
@@ -128,6 +136,9 @@ if(DPDK_FOUND)
     target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
 endif()
 
+# Add libqrencode include directories and link libraries
+target_include_directories(${PROJECT_NAME} PRIVATE ${QRENCODE_INCLUDE_DIR})
+
 target_link_libraries(${PROJECT_NAME} 
     ${Boost_LIBRARIES} 
     ${GTEST_LIBRARIES} 
@@ -136,6 +147,8 @@ target_link_libraries(${PROJECT_NAME}
     ${ODBC_LIBRARIES}
     ${ICU_LIBRARIES}
     ${OPENTELEMETRY_CPP_LIBRARIES}
+    ${QRENCODE_LIBRARIES}
+    quirc::quirc
     libzmq
     benchmark::benchmark
     protobuf::libprotobuf

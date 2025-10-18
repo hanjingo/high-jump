@@ -19,59 +19,81 @@
 #ifndef OPTIONS_HPP
 #define OPTIONS_HPP
 
+#ifdef __cplusplus
 #include <functional>
 
-// c++ std::unary_function compatibility
-#ifndef HJ_UNARY_FUNCTION_DEFINED
-/*
- * Determine whether the standard library provides std::unary_function.
- * libc++ (used on macOS) removed this type; libstdc++ may still provide it.
- * For C++17 and later, provide a small fallback when the type is missing so
- * legacy code compiling against older headers keeps working.
- */
-#if defined(_MSC_VER)
-// MSVC: older toolchains provided unary_function
-#if (_MSC_VER >= 1910)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
-#elif defined(__GLIBCXX__)
-// libstdc++ (GNU) typically keeps the compatibility typedefs
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#elif defined(_LIBCPP_VERSION)
-// libc++ behavior varies by version - check if unary_function is available
-#ifdef _LIBCPP_HAS_NO_DEPRECATED_UNARY_FUNCTION
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-// Check if unary_function is available by testing for its existence
-#if __has_include(<__functional/unary_function.h>)
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#endif
-#endif
-#elif (__cplusplus >= 201703L)
-// Unknown stdlib under C++17+: conservatively treat as missing and provide fallback
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
+// Detect C++ standard level safely across compilers
+#ifndef HJ_CPP_VERSION
+#  if defined(_MSC_VER)
+#    if defined(_MSVC_LANG)
+#      define HJ_CPP_VERSION _MSVC_LANG
+#    else
+#      define HJ_CPP_VERSION __cplusplus
+#    endif
+#  else
+#    define HJ_CPP_VERSION __cplusplus
+#  endif
 #endif
 
+// Determine whether std::unary_function exists
+#ifndef HJ_UNARY_FUNCTION_DEFINED
+#  if defined(_MSC_VER)
+#    if (_MSC_VER >= 1910 && HJ_CPP_VERSION >= 201703L)
+#      define HJ_UNARY_FUNCTION_DEFINED 0
+#    else
+#      define HJ_UNARY_FUNCTION_DEFINED 1
+#    endif
+#  elif defined(__GLIBCXX__)
+#    define HJ_UNARY_FUNCTION_DEFINED 1
+#  elif defined(_LIBCPP_VERSION)
+#    if defined(_LIBCPP_HAS_NO_DEPRECATED_UNARY_FUNCTION)
+#      define HJ_UNARY_FUNCTION_DEFINED 0
+#    elif defined(__has_include)
+#      if __has_include(<__functional/unary_function.h>)
+#        define HJ_UNARY_FUNCTION_DEFINED 1
+#      else
+#        define HJ_UNARY_FUNCTION_DEFINED 0
+#      endif
+#    else
+#      define HJ_UNARY_FUNCTION_DEFINED 1
+#    endif
+#  elif (HJ_CPP_VERSION >= 201703L)
+#    define HJ_UNARY_FUNCTION_DEFINED 0
+#  else
+#    define HJ_UNARY_FUNCTION_DEFINED 1
+#  endif
+#endif // HJ_UNARY_FUNCTION_DEFINED
+
+// Provide fallback definition if missing
 #if !HJ_UNARY_FUNCTION_DEFINED
-namespace std
-{
+#  define HJ_UNARY_FUNCTION_COMPAT_ACTIVE 1
+#  if defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wc++17-extensions"
+#  elif defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wpedantic"
+#  endif
+
+namespace std {
 template <class Arg, class Result>
-struct unary_function
-{
-    typedef Arg    argument_type;
-    typedef Result result_type;
+struct unary_function {
+  typedef Arg    argument_type;
+  typedef Result result_type;
 };
-}
-#undef HJ_UNARY_FUNCTION_DEFINED
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
+} // namespace std
+
+#  if defined(__clang__)
+#    pragma clang diagnostic pop
+#  elif defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#  endif
+
+#  undef HJ_UNARY_FUNCTION_DEFINED
+#  define HJ_UNARY_FUNCTION_DEFINED 1
+#endif // !HJ_UNARY_FUNCTION_DEFINED
+
+#endif // __cplusplus
 
 #include <thread>
 #include <chrono>

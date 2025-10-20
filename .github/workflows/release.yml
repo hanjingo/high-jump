@@ -65,9 +65,16 @@ jobs:
         mkdir -p dist
         
         # Create detailed exclusion list
+        # Important: exclude the output directories (dist/packages) to avoid including
+        # the archive in itself which causes `tar: file changed as we read it` errors.
         cat > .package_exclude << 'EOF'
         # Build artifacts
         build/*
+        # Exclude packaging output directories to avoid including archives into themselves
+        dist
+        dist/*
+        packages
+        packages/*
         tools/vcpkg/buildtrees/*
         tools/vcpkg/packages/*  
         tools/vcpkg/downloads/*

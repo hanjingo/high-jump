@@ -21,75 +21,83 @@
 #ifdef __cplusplus
 #include <functional>
 
-// Detect C++ standard level safely across compilers
+// -------- detect compiler C++ version ------------
 #ifndef HJ_CPP_VERSION
-#  if defined(_MSC_VER)
-#    if defined(_MSVC_LANG)
-#      define HJ_CPP_VERSION _MSVC_LANG
-#    else
-#      define HJ_CPP_VERSION __cplusplus
-#    endif
-#  else
-#    define HJ_CPP_VERSION __cplusplus
-#  endif
+#if defined(_MSC_VER)
+#if defined(_MSVC_LANG)
+#define HJ_CPP_VERSION _MSVC_LANG
+#else
+#define HJ_CPP_VERSION __cplusplus
+#endif
+#else
+#define HJ_CPP_VERSION __cplusplus
+#endif
+#endif // HJ_CPP_VERSION
+
+// -------- detect whether std::unary_function exists ------------
+#ifndef HJ_UNARY_FUNCTION_DEFINED
+// Historically std::unary_function was provided by the standard
+// library implementations but has been removed in C++17. Some
+// libstdc++/libc++/MSVC versions may still provide a deprecated
+// definition or a compatibility macro. We try to detect common
+// cases conservatively and only provide a fallback when the symbol
+// is truly absent.
+
+// MSVC (Visual Studio) removed unary_function in recent toolsets
+#if defined(_MSC_VER)
+#if (_MSC_VER >= 1910 && HJ_CPP_VERSION >= 201703L)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 1
 #endif
 
-// Determine whether std::unary_function exists
-#ifndef HJ_UNARY_FUNCTION_DEFINED
-#  if defined(_MSC_VER)
-#    if (_MSC_VER >= 1910 && HJ_CPP_VERSION >= 201703L)
-#      define HJ_UNARY_FUNCTION_DEFINED 0
-#    else
-#      define HJ_UNARY_FUNCTION_DEFINED 1
-#    endif
-#  elif defined(__GLIBCXX__)
-#    define HJ_UNARY_FUNCTION_DEFINED 1
-#  elif defined(_LIBCPP_VERSION)
-#    if defined(_LIBCPP_HAS_NO_DEPRECATED_UNARY_FUNCTION)
-#      define HJ_UNARY_FUNCTION_DEFINED 0
-#    elif defined(__has_include)
-#      if __has_include(<__functional/unary_function.h>)
-#        define HJ_UNARY_FUNCTION_DEFINED 1
-#      else
-#        define HJ_UNARY_FUNCTION_DEFINED 0
-#      endif
-#    else
-#      define HJ_UNARY_FUNCTION_DEFINED 1
-#    endif
-#  elif (HJ_CPP_VERSION >= 201703L)
-#    define HJ_UNARY_FUNCTION_DEFINED 0
-#  else
-#    define HJ_UNARY_FUNCTION_DEFINED 1
-#  endif
+// libstdc++ (GCC's C++ library) historically provided unary_function
+#elif defined(__GLIBCXX__)
+#define HJ_UNARY_FUNCTION_DEFINED 1
+
+// libc++ (LLVM's C++ library) removed many deprecated symbols; newer
+// releases may define a feature-test macro to indicate removal.
+#elif defined(_LIBCPP_VERSION)
+#if defined(_LIBCPP_HAS_NO_DEPRECATED_UNARY_FUNCTION)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#if (HJ_CPP_VERSION >= 201703L)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#endif
+#endif
+
+// Generic fallback: if compiling in C++17 or newer, assume unary_function
+// is not present unless a known library macro indicates otherwise.
+#else
+#if (HJ_CPP_VERSION >= 201703L)
+#define HJ_UNARY_FUNCTION_DEFINED 0
+#else
+#define HJ_UNARY_FUNCTION_DEFINED 1
+#endif
+#endif
+
 #endif // HJ_UNARY_FUNCTION_DEFINED
 
-// Provide fallback definition if missing
+// -------- provide fallback only when truly missing ------------
 #if !HJ_UNARY_FUNCTION_DEFINED
-#  define HJ_UNARY_FUNCTION_COMPAT_ACTIVE 1
-#  if defined(__clang__)
-#    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wc++17-extensions"
-#  elif defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wpedantic"
-#  endif
-
-namespace std {
+// Note: injecting names into namespace std is undefined behavior in the
+// C++ standard. In practice many implementations accept this for
+// compatibility shims, but a safer approach is to provide the shim in
+// a separate compatibility namespace and adapt callers. To minimize
+// disruption we keep the original behavior here but document the risk.
+namespace std
+{
 template <class Arg, class Result>
-struct unary_function {
-  typedef Arg    argument_type;
-  typedef Result result_type;
+struct unary_function
+{
+    typedef Arg    argument_type;
+    typedef Result result_type;
 };
 } // namespace std
-
-#  if defined(__clang__)
-#    pragma clang diagnostic pop
-#  elif defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#  endif
-
-#  undef HJ_UNARY_FUNCTION_DEFINED
-#  define HJ_UNARY_FUNCTION_DEFINED 1
+#undef HJ_UNARY_FUNCTION_DEFINED
+#define HJ_UNARY_FUNCTION_DEFINED 1
 #endif // !HJ_UNARY_FUNCTION_DEFINED
 
 #endif // __cplusplus

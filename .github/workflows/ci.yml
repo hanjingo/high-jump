@@ -560,10 +560,17 @@ jobs:
         mkdir -p packages
         
         # Create exclusion list for files we don't want in source package
+        # Exclude packaging output directories to avoid including the archive
+        # in itself which causes `tar: file changed as we read it`.
         cat > .exclude_list << 'EOF'
         .git
         .github/workflows/cache
         build
+        # packaging outputs
+        dist
+        dist/*
+        packages
+        packages/*
         tools/vcpkg/buildtrees
         tools/vcpkg/packages
         tools/vcpkg/downloads

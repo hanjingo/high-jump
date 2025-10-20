@@ -93,9 +93,11 @@ class db_conn_pool
 
         if(timeout_ms > 0)
         {
-            if(!_cond.wait_for(lock,
-                               std::chrono::milliseconds(timeout_ms),
-                               [this] { return !this->_pool.empty(); }))
+            // wait until pool is non-empty or pool is closed
+            if(!_cond.wait_for(
+                   lock,
+                   std::chrono::milliseconds(timeout_ms),
+                   [this] { return !this->_pool.empty() || this->_closed; }))
                 return nullptr;
 
             if(_closed)
@@ -108,11 +110,21 @@ class db_conn_pool
 
         while(!_pool.empty())
         {
+            if(_closed)
+                return nullptr;
+
             conn_ptr_t conn_ptr = _pool.front();
             _pool.pop();
+
+            if(_closed)
+                return nullptr;
+
             if(!_check(conn_ptr))
             {
-                _pool.push(_make());
+                // replace bad connection with a new one (only if not closed)
+                if(!_closed)
+                    _pool.push(_make());
+
                 continue;
             }
 

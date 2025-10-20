@@ -308,3 +308,44 @@ int main() {
 - **Cross-Platform**: Windows, Linux, macOS support
 - **Compiler Support**: GCC 11+, Clang 16+, MSVC 2019+
 - **Architecture**: x86_64, ARM64 support
+
+---
+
+## Third-party libraries
+
+This project integrates or works with the following third-party libraries (managed via vcpkg or provided as options):
+
+- Boost: https://www.boost.org
+- nlohmann/json: https://github.com/nlohmann/json
+- pugixml: https://github.com/zeux/pugixml
+- libzmq (ZeroMQ): https://github.com/zeromq/libzmq
+- concurrentqueue: https://github.com/cameron314/concurrentqueue
+- spdlog: https://github.com/gabime/spdlog
+- googletest: https://github.com/google/googletest
+- flatbuffers: https://github.com/google/flatbuffers
+- sqlite3: https://github.com/sqlite/sqlite
+- BehaviorTree.CPP: https://github.com/BehaviorTree/BehaviorTree.CPP
+- cpp-httplib: https://github.com/yhirose/cpp-httplib
+- hiredis: https://github.com/redis/hiredis
+- hidapi: https://github.com/signal11/hidapi
+- breakpad: https://github.com/google/breakpad
+- eigen: https://github.com/eigenteam/eigen-git-mirror
+- oneTBB: https://github.com/oneapi-src/oneTBB
+- fmt: https://github.com/fmtlib/fmt
+- pcm: https://github.com/intel/pcm
+- benchmark: https://github.com/google/benchmark
+- clickhouse-cpp: https://github.com/ClickHouse/clickhouse-cpp
+- CUDA Toolkit: https://developer.nvidia.com/cuda-toolkit
+- libharu: https://github.com/libharu/libharu
+- OpenCL SDK: https://github.com/KhronosGroup/OpenCL-SDK
+- zlib: https://github.com/madler/zlib
+- yaml-cpp: https://github.com/jbeder/yaml-cpp
+- OpenCV: https://github.com/opencv/opencv
+- gRPC: https://github.com/grpc/grpc
+- hffix: https://jamesdbrock.github.io/hffix
+- libpqxx: https://pqxx.org/libpqxx/
+- libnice: https://nice.freedesktop.org
+- libiconv: https://www.gnu.org/software/libiconv/
+- ICU: https://icu.unicode.org/home
+- libqrencode: https://github.com/fukuchi/libqrencode
+- quirc: https://github.com/dlbeer/quirc

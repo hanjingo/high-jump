@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <hj/util/string_util.hpp>
+#include <regex>
+#include <vector>
 
 TEST(string_util, contains)
 {
@@ -51,9 +53,14 @@ TEST(string_util, ends_with)
 
 TEST(string_util, search)
 {
-    ASSERT_EQ(hj::string_util::search("hello w123orld", R"(\d+)")
-                  == std::string("123"),
-              true);
+    // Compare against std::regex_search for consistency
+    std::string s = "hello w123orld";
+    std::regex  re(R"(\d+)");
+    std::smatch m;
+    bool        found = std::regex_search(s, m, re);
+    ASSERT_TRUE(found);
+    auto mine = hj::string_util::search(s, R"(\d+)");
+    ASSERT_EQ(mine, m.str(0));
 }
 
 TEST(string_util, search_n)
@@ -153,6 +160,40 @@ TEST(string_util, trim_functions)
     ASSERT_EQ(inplace_str, "hello world");
 }
 
+// New tests: verify trim functions with custom 'target' parameter
+TEST(string_util, trim_functions_with_target)
+{
+    // Single-character target
+    std::string s1    = "---hel--lo---";
+    auto        left  = hj::string_util::trim_left(s1, "-");
+    auto        right = hj::string_util::trim_right(s1, "-");
+    auto        both  = hj::string_util::trim(s1, "-");
+
+    ASSERT_EQ(left, "hel--lo---");
+    ASSERT_EQ(right, "---hel--lo");
+    ASSERT_EQ(both, "hel--lo");
+
+    // Multi-character target
+    std::string s2 = "xyzxyhelloxyzxy";
+    // trim by the exact sequence "xyz"
+    auto left2  = hj::string_util::trim_left(s2, "xyz");
+    auto right2 = hj::string_util::trim_right(s2, "xyz");
+    auto both2  = hj::string_util::trim(s2, "xyz");
+
+    // Note: trim functions treat 'target' as a set of characters to trim,
+    // so trimming with "xyz" removes any leading/trailing 'x' or 'y' or 'z'.
+    // For the string above, leading "xyzxy" will be trimmed to "helloxyzxy" on left trim,
+    // and trailing will be trimmed similarly.
+    ASSERT_EQ(left2, "helloxyzxy");
+    ASSERT_EQ(right2, "xyzxyhello");
+    ASSERT_EQ(both2, "hello");
+
+    // Test trim_inplace with custom target
+    std::string inplace = "--==good==--";
+    hj::string_util::trim_inplace(inplace, "=-");
+    ASSERT_EQ(inplace, "good");
+}
+
 // Test case conversion functions
 TEST(string_util, case_conversion)
 {
@@ -168,18 +209,31 @@ TEST(string_util, case_conversion)
 // Test regex search functions
 TEST(string_util, regex_search_functions)
 {
-    // Test basic regex functionality using legacy search function
-    std::string result = hj::string_util::search("hello w123orld", R"(\d+)");
-    ASSERT_EQ(result, "123");
-
-    // Test search_n (multiple matches)
-    auto results =
-        hj::string_util::search_n("hello w123orld ni456hao", R"(\d+)");
-    ASSERT_EQ(results.size(), 2);
-    if(results.size() >= 2)
+    // Test basic regex functionality using std::regex as ground truth
     {
-        ASSERT_EQ(results[0], "123");
-        ASSERT_EQ(results[1], "456");
+        const std::string text = "hello w123orld";
+        const std::regex  re(R"(\d+)");
+        std::smatch       m;
+        bool              found = std::regex_search(text, m, re);
+        ASSERT_TRUE(found);
+        auto mine = hj::string_util::search(text, R"(\d+)");
+        ASSERT_TRUE(mine == m.str(0));
+    }
+
+    // Test search_n (multiple matches) against std::sregex_iterator
+    {
+        const std::string        text = "hello w123orld ni456hao";
+        const std::regex         re(R"(\d+)");
+        std::sregex_iterator     it(text.begin(), text.end(), re), end;
+        std::vector<std::string> expected;
+        for(; it != end; ++it)
+            expected.emplace_back(it->str(0));
+
+        auto results = hj::string_util::search_n(text, R"(\d+)");
+
+        ASSERT_EQ(results.size(), expected.size());
+        for(size_t i = 0; i < expected.size(); ++i)
+            ASSERT_EQ(results[i], expected[i]);
     }
 }
 
@@ -234,4 +288,59 @@ TEST(string_util, from_ptr_addr)
               reinterpret_cast<uintptr_t>(ptr));
 
     delete ptr;
+}
+
+// Test regex_search which returns optional<std::string>
+TEST(string_util, regex_search_first_optional)
+{
+    using std::regex;
+    using std::smatch;
+    using std::string;
+
+    // Helper lambda: compare hj::string_util::regex_search with std::regex_search
+    auto compare_with_std = [](const string &s, const string &pattern) {
+        auto mine = hj::string_util::regex_search_first(s, pattern);
+        try
+        {
+            regex  re(pattern);
+            smatch m;
+            bool   found = std::regex_search(s, m, re);
+            if(found)
+            {
+                ASSERT_TRUE(mine.has_value());
+                ASSERT_EQ(*mine, m.str(0));
+            } else
+            {
+                ASSERT_FALSE(mine.has_value());
+            }
+        }
+        catch(const std::regex_error &)
+        {
+            // std::regex throws for invalid patterns; our function should return nullopt
+            ASSERT_FALSE(mine.has_value());
+        }
+    };
+
+    // Basic numeric match
+    compare_with_std("hello w123orld", "\\d+");
+
+    // Capture group: should still return full match (group 0)
+    compare_with_std("abcXYZdef", "XYZ");
+
+    // No match
+    compare_with_std("abcdef", "\"notfound\"");
+
+    // Empty pattern (std::regex allows empty pattern and matches at pos 0)
+    compare_with_std("anything", "");
+
+    // Special characters and escaped sequences
+    compare_with_std("a+b(c)*d?", "a\+b\\(c\\)\*d\?");
+
+    // Long complex pattern
+    compare_with_std("user: alice@example.com",
+                     R"([\w.-]+@[\w.-]+\.[A-Za-z]{2,6})");
+
+    // Invalid pattern must return nullopt (do not throw)
+    auto bad = hj::string_util::regex_search_first("abc", "(");
+    ASSERT_FALSE(bad.has_value());
 }

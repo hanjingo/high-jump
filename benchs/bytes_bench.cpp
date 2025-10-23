@@ -12,7 +12,7 @@ static void bm_bool_to_from(benchmark::State &st)
     std::array<unsigned char, 1> buf = {0};
     for(auto _ : st)
     {
-        hj::bool_to_bytes(true, buf);
+        hj::bool_to_bytes(buf, true);
         bool v = hj::bytes_to_bool(buf);
         benchmark::DoNotOptimize(v);
     }
@@ -25,7 +25,7 @@ static void bm_int32_to_from_big(benchmark::State &st)
     int32_t                      n   = 0x12345678;
     for(auto _ : st)
     {
-        hj::int32_to_bytes(n, buf, true);
+        hj::int32_to_bytes(buf, n, true);
         int32_t m = hj::bytes_to_int32(buf, true);
         benchmark::DoNotOptimize(m);
     }
@@ -38,7 +38,7 @@ static void bm_int32_to_from_little(benchmark::State &st)
     int32_t                      n   = 0x12345678;
     for(auto _ : st)
     {
-        hj::int32_to_bytes(n, buf, false);
+        hj::int32_to_bytes(buf, n, false);
         int32_t m = hj::bytes_to_int32(buf, false);
         benchmark::DoNotOptimize(m);
     }
@@ -51,7 +51,7 @@ static void bm_int64_to_from(benchmark::State &st)
     int64_t                      n   = 0x123456789ABCDEF0LL;
     for(auto _ : st)
     {
-        hj::int64_to_bytes(n, buf, true);
+        hj::int64_to_bytes(buf, n, true);
         int64_t m = hj::bytes_to_int64(buf, true);
         benchmark::DoNotOptimize(m);
     }
@@ -64,7 +64,7 @@ static void bm_float_to_from(benchmark::State &st)
     float                        f   = 3.1415926f;
     for(auto _ : st)
     {
-        hj::float_to_bytes(f, buf);
+        hj::float_to_bytes(buf, f);
         float r = hj::bytes_to_float(buf);
         benchmark::DoNotOptimize(r);
     }
@@ -77,7 +77,7 @@ static void bm_double_to_from(benchmark::State &st)
     double                       d   = 3.141592653589793;
     for(auto _ : st)
     {
-        hj::double_to_bytes(d, buf);
+        hj::double_to_bytes(buf, d);
         double r = hj::bytes_to_double(buf);
         benchmark::DoNotOptimize(r);
     }
@@ -90,7 +90,7 @@ static void bm_string_to_bytes_small(benchmark::State &st)
     std::string                   s   = "hello world";
     for(auto _ : st)
     {
-        hj::string_to_bytes(s, buf);
+        hj::string_to_bytes(buf, s);
         std::string r = hj::bytes_to_string(buf, s.size());
         benchmark::DoNotOptimize(r);
     }

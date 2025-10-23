@@ -337,8 +337,10 @@ class string_util
         return str;
     }
 
+    // NOTE: this function returns the first match (match[0]).
     static std::optional<std::string>
-    regex_search(std::string_view src, const std::string &pattern) noexcept
+    regex_search_first(std::string_view   src,
+                       const std::string &pattern) noexcept
     {
         try
         {
@@ -499,31 +501,37 @@ class string_util
         return std::string{buffer};
     }
 
-    static inline std::string_view trim_left(std::string_view str) noexcept
+    static inline std::string_view
+    trim_left(std::string_view str,
+              std::string_view target = " \t\n\r\f\v") noexcept
     {
-        const auto first_non_space = str.find_first_not_of(" \t\n\r\f\v");
+        const auto first_non_space = str.find_first_not_of(target);
         return (first_non_space == std::string_view::npos)
                    ? std::string_view{}
                    : str.substr(first_non_space);
     }
 
-    static inline std::string_view trim_right(std::string_view str) noexcept
+    static inline std::string_view
+    trim_right(std::string_view str,
+               std::string_view target = " \t\n\r\f\v") noexcept
     {
-        const auto last_non_space = str.find_last_not_of(" \t\n\r\f\v");
+        const auto last_non_space = str.find_last_not_of(target);
         return (last_non_space == std::string_view::npos)
                    ? std::string_view{}
                    : str.substr(0, last_non_space + 1);
     }
 
-    static inline std::string_view trim(std::string_view str) noexcept
+    static inline std::string_view
+    trim(std::string_view str, std::string_view target = " \t\n\r\f\v") noexcept
     {
-        return trim_left(trim_right(str));
+        return trim_left(trim_right(str, target), target);
     }
 
-    static inline std::string &trim_inplace(std::string &str)
+    static inline std::string &
+    trim_inplace(std::string &str, std::string_view target = " \t\n\r\f\v")
     {
-        str.erase(str.find_last_not_of(" \t\n\r\f\v") + 1);
-        str.erase(0, str.find_first_not_of(" \t\n\r\f\v"));
+        str.erase(str.find_last_not_of(target) + 1);
+        str.erase(0, str.find_first_not_of(target));
         return str;
     }
 
@@ -548,7 +556,7 @@ class string_util
     static inline std::string search(const std::string &src,
                                      const std::string &pattern)
     {
-        auto result = regex_search(src, pattern);
+        auto result = regex_search_first(src, pattern);
         return result ? *result : std::string{};
     }
 

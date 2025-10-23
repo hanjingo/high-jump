@@ -1,7 +1,6 @@
 #include <thread>
 #include <atomic>
 #include <thread>
-#include <optional>
 #include <gtest/gtest.h>
 #include <hj/sync/safe_map.hpp>
 

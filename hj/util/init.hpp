@@ -20,6 +20,7 @@
 #define INIT_HPP
 
 #include <list>
+#include <mutex>
 #include <functional>
 
 namespace hj
@@ -46,6 +47,27 @@ class init final
     std::function<void()> _cb;
 };
 
+class init_once final
+{
+  public:
+    explicit init_once(std::function<void()> &&cb) noexcept
+    {
+        _cb = std::move(cb);
+
+        static std::once_flag flag;
+        std::call_once(flag, _cb);
+    }
+    ~init_once() noexcept {}
+
+    init_once(const init_once &other)       = delete;
+    init_once &operator=(const init_once &) = delete;
+    init_once(init_once &&other)            = delete;
+    init_once &operator=(init_once &&other) = delete;
+
+  private:
+    std::function<void()> _cb;
+};
+
 }
 
 #define __init_cat(a, b) a##b
@@ -55,6 +77,21 @@ class init final
     namespace                                                                  \
     {                                                                          \
     ::hj::init _init_cat(__simulate_go_init__, __COUNTER__)([]() noexcept {    \
+        try                                                                    \
+        {                                                                      \
+            cmd;                                                               \
+        }                                                                      \
+        catch(...)                                                             \
+        {                                                                      \
+        }                                                                      \
+    });                                                                        \
+    }
+
+#define INIT_ONCE(cmd)                                                         \
+    namespace                                                                  \
+    {                                                                          \
+    ::hj::init_once _init_cat(__simulate_go_init_once__,                       \
+                              __COUNTER__)([]() noexcept {                     \
         try                                                                    \
         {                                                                      \
             cmd;                                                               \

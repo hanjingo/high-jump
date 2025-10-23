@@ -137,17 +137,17 @@ static void bm_replace_all_inplace(benchmark::State &state)
 BENCHMARK(bm_replace_all_inplace);
 
 // Benchmark: regex functions
-static void bm_regex_search(benchmark::State &state)
+static void bm_regex_search_first(benchmark::State &state)
 {
     for(auto _ : state)
     {
         benchmark::DoNotOptimize(
-            hj::string_util::regex_search(number_text, number_pattern));
+            hj::string_util::regex_search_first(number_text, number_pattern));
     }
 }
-BENCHMARK(bm_regex_search);
+BENCHMARK(bm_regex_search_first);
 
-static void bm_regex_searchAll(benchmark::State &state)
+static void bm_regex_search_all(benchmark::State &state)
 {
     for(auto _ : state)
     {
@@ -155,7 +155,7 @@ static void bm_regex_searchAll(benchmark::State &state)
             hj::string_util::regex_search_all(email_text, email_pattern));
     }
 }
-BENCHMARK(bm_regex_searchAll);
+BENCHMARK(bm_regex_search_all);
 
 static void bm_regex_split(benchmark::State &state)
 {
@@ -389,13 +389,13 @@ BENCHMARK(bm_from_ptr_addr_decimal);
 static void bm_regex_cache_hit(benchmark::State &state)
 {
     // Warm up the cache
-    hj::string_util::regex_search(number_text, number_pattern);
+    hj::string_util::regex_search_first(number_text, number_pattern);
 
     for(auto _ : state)
     {
         // This should hit the cache
         benchmark::DoNotOptimize(
-            hj::string_util::regex_search(number_text, number_pattern));
+            hj::string_util::regex_search_first(number_text, number_pattern));
     }
 }
 BENCHMARK(bm_regex_cache_hit);
@@ -408,7 +408,7 @@ static void bm_regex_cache_miss(benchmark::State &state)
         // Generate unique patterns to force cache misses
         std::string pattern = R"(\d{)" + std::to_string(counter % 50) + R"(})";
         benchmark::DoNotOptimize(
-            hj::string_util::regex_search(number_text, pattern));
+            hj::string_util::regex_search_first(number_text, pattern));
         ++counter;
     }
 }

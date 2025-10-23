@@ -21,6 +21,7 @@
 #include <oneapi/tbb/concurrent_hash_map.h>
 #include <vector>
 #include <functional>
+#include <optional>
 
 namespace hj
 {

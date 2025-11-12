@@ -207,7 +207,7 @@ class error_handler
     error_handler(error_handler &&) noexcept            = default;
     error_handler &operator=(error_handler &&) noexcept = default;
 
-    inline error_handler<T> &match(T &err, match_fn &&cb = nullptr) noexcept
+    inline error_handler<T> &match(const T &err, match_fn &&cb = nullptr) noexcept
     {
         if(_is_ok(err))
         {

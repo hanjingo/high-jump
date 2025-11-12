@@ -27,12 +27,12 @@ err_t lic_core::load()
     if(_dll == nullptr)
         return error(ERR_LIC_CORE_LOAD_FAIL);
 
-    _version    = static_cast<sdk_api>(dll_get(_dll, "lic_version"));
-    _init       = static_cast<sdk_api>(dll_get(_dll, "lic_init"));
-    _quit       = static_cast<sdk_api>(dll_get(_dll, "lic_quit"));
-    _add_issuer = static_cast<sdk_api>(dll_get(_dll, "lic_add_issuer"));
-    _issue      = static_cast<sdk_api>(dll_get(_dll, "lic_issue"));
-    _keygen     = static_cast<sdk_api>(dll_get(_dll, "lic_keygen"));
+    _version    = reinterpret_cast<sdk_api>(dll_get(_dll, "lic_version"));
+    _init       = reinterpret_cast<sdk_api>(dll_get(_dll, "lic_init"));
+    _quit       = reinterpret_cast<sdk_api>(dll_get(_dll, "lic_quit"));
+    _add_issuer = reinterpret_cast<sdk_api>(dll_get(_dll, "lic_add_issuer"));
+    _issue      = reinterpret_cast<sdk_api>(dll_get(_dll, "lic_issue"));
+    _keygen     = reinterpret_cast<sdk_api>(dll_get(_dll, "lic_keygen"));
     return err_t();
 }
 

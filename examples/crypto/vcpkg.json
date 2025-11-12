@@ -7,7 +7,6 @@
     "breakpad",
     "fmt",
     "gtest",
-    "icu",
     "jwt-cpp",
     {
       "name": "opentelemetry-cpp",
@@ -47,10 +46,6 @@
     {
       "name": "gtest",
       "version": "1.17.0"
-    },
-    {
-      "name": "icu",
-      "version": "74.2#6"
     },
     {
       "name": "jwt-cpp",

@@ -126,7 +126,6 @@ endif()
 
 # add vcpkg library
 find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
-find_package(ICU REQUIRED COMPONENTS uc i18n io)
 find_package(jwt-cpp CONFIG REQUIRED)
 find_package(fmt REQUIRED)
 find_package(unofficial-breakpad REQUIRED)
@@ -148,9 +147,6 @@ set(LINK_LIBS
 
     # boost
     ${Boost_LIBRARIES}
-
-    # ICU
-    ${ICU_LIBRARIES}
 
     # telemetry
     ${OPENTELEMETRY_CPP_LIBRARIES}

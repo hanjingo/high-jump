@@ -2,6 +2,7 @@
 #include "comm.h"
 
 #include <hj/util/defer.hpp>
+#include <hj/util/string_util.hpp>
 
 // ------------------------------ crypto core ------------------------------
 crypto_core::crypto_core()
@@ -27,14 +28,14 @@ err_t crypto_core::load()
     if(_dll == nullptr)
         return error(CRYPTO_ERR_CORE_LOAD_FAIL);
 
-    _require = static_cast<sdk_api>(dll_get(_dll, "crypto_require"));
-    _release = static_cast<sdk_api>(dll_get(_dll, "crypto_release"));
-    _version = static_cast<sdk_api>(dll_get(_dll, "crypto_version"));
-    _init    = static_cast<sdk_api>(dll_get(_dll, "crypto_init"));
-    _quit    = static_cast<sdk_api>(dll_get(_dll, "crypto_quit"));
-    _encrypt = static_cast<sdk_api>(dll_get(_dll, "crypto_encrypt"));
-    _decrypt = static_cast<sdk_api>(dll_get(_dll, "crypto_decrypt"));
-    _keygen  = static_cast<sdk_api>(dll_get(_dll, "crypto_keygen"));
+    _require = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_require"));
+    _release = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_release"));
+    _version = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_version"));
+    _init    = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_init"));
+    _quit    = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_quit"));
+    _encrypt = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_encrypt"));
+    _decrypt = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_decrypt"));
+    _keygen  = reinterpret_cast<sdk_api>(dll_get(_dll, "crypto_keygen"));
     return err_t();
 }
 
@@ -278,13 +279,13 @@ err_t db_core::load()
     if(_dll == nullptr)
         return error(DB_ERR_CORE_LOAD_FAIL);
 
-    _require = static_cast<sdk_api>(dll_get(_dll, "db_require"));
-    _release = static_cast<sdk_api>(dll_get(_dll, "db_release"));
-    _version = static_cast<sdk_api>(dll_get(_dll, "db_version"));
-    _init    = static_cast<sdk_api>(dll_get(_dll, "db_init"));
-    _quit    = static_cast<sdk_api>(dll_get(_dll, "db_quit"));
-    _exec    = static_cast<sdk_api>(dll_get(_dll, "db_exec"));
-    _query   = static_cast<sdk_api>(dll_get(_dll, "db_query"));
+    _require = reinterpret_cast<sdk_api>(dll_get(_dll, "db_require"));
+    _release = reinterpret_cast<sdk_api>(dll_get(_dll, "db_release"));
+    _version = reinterpret_cast<sdk_api>(dll_get(_dll, "db_version"));
+    _init    = reinterpret_cast<sdk_api>(dll_get(_dll, "db_init"));
+    _quit    = reinterpret_cast<sdk_api>(dll_get(_dll, "db_quit"));
+    _exec    = reinterpret_cast<sdk_api>(dll_get(_dll, "db_exec"));
+    _query   = reinterpret_cast<sdk_api>(dll_get(_dll, "db_query"));
     return err_t();
 }
 

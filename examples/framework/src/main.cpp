@@ -3,13 +3,8 @@
 #include <hj/os/options.hpp>
 #include <hj/os/signal.hpp>
 #include <hj/util/license.hpp>
-#include <hj/encoding/i18n.hpp>
 #include <hj/testing/crash.hpp>
 #include <hj/testing/telemetry.hpp>
-
-#ifndef I18N_LOCALE
-#define I18N_LOCALE "en_US"
-#endif
 
 // add your code here...
 
@@ -28,10 +23,6 @@ int main(int argc, char *argv[])
 #else
     hj::log::logger::instance()->set_level(hj::log::level::info);
 #endif
-
-    // add i18n support
-    hj::i18n::instance().set_locale(I18N_LOCALE);
-    hj::i18n::instance().load_translation_auto("./", PACKAGE);
 
     // add telemetry support
     auto tracer =

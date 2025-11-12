@@ -4,8 +4,6 @@
 #include <vector>
 #include <string>
 
-#include <hj/encoding/i18n.hpp>
-
 #include "err.h"
 
 static const std::vector<std::string> all_subcmds{
@@ -16,18 +14,6 @@ enum class output_type
     console,
     file
 };
-
-static inline std::string tr(const std::string &key,
-                             const std::string &default_text = "")
-{
-    return hj::tr(key, default_text);
-}
-
-template <typename... Args>
-static inline std::string tr(const std::string &key, Args... args)
-{
-    return hj::tr(key, args...);
-}
 
 static inline err_t error(const int e, const char *category = "app")
 {

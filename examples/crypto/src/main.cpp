@@ -3,7 +3,6 @@
 #include <hj/os/options.hpp>
 #include <hj/os/signal.hpp>
 #include <hj/util/license.hpp>
-#include <hj/encoding/i18n.hpp>
 #include <hj/testing/crash.hpp>
 #include <hj/testing/telemetry.hpp>
 
@@ -33,10 +32,6 @@ int main(int argc, char *argv[])
     hj::log::logger::instance()->set_level(hj::log::level::info);
 #endif
 
-    // add i18n support
-    hj::i18n::instance().set_locale("en_US");
-    hj::i18n::instance().load_translation_auto("./", PACKAGE);
-
     // add telemetry support
     auto tracer =
         hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
@@ -63,7 +58,7 @@ int main(int argc, char *argv[])
     if(argc < 2)
     {
         h.match(error(ERR_ARGC_TOO_LESS), [&](const err_t &e) {
-            LOG_ERROR(tr("app.err_argc_too_less").c_str(), argc);
+            LOG_ERROR("Error: too few arguments", argc);
         });
         return 1;
     }
@@ -84,11 +79,11 @@ int main(int argc, char *argv[])
             switch(e.value())
             {
                 case CRYPTO_ERR_CORE_NOT_LOAD: {
-                    LOG_ERROR(tr("log.crypto_err_core_not_load").c_str());
+                    LOG_ERROR("Error: core not load");
                     break;
                 }
                 case CRYPTO_ERR_VERSION_MISMATCH: {
-                    LOG_ERROR(tr("log.crypto_err_version_mismatch").c_str(),
+                    LOG_ERROR("Error: version {}.{}.{}, the minimum required version is {}.{}.{}",
                               major,
                               minor,
                               patch,
@@ -98,7 +93,7 @@ int main(int argc, char *argv[])
                     break;
                 }
                 default: {
-                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    LOG_ERROR("Error: unknown error code:{}", e.value());
                     break;
                 }
             }
@@ -121,11 +116,11 @@ int main(int argc, char *argv[])
             switch(e.value())
             {
                 case DB_ERR_CORE_NOT_LOAD: {
-                    LOG_ERROR(tr("log.db_err_core_not_load").c_str());
+                    LOG_ERROR("Error: core not load");
                     break;
                 }
                 case DB_ERR_VERSION_MISMATCH: {
-                    LOG_ERROR(tr("log.db_err_version_mismatch").c_str(),
+                    LOG_ERROR("Error: version {}.{}.{}, the minimum required version is {}.{}.{}",
                               major,
                               minor,
                               patch,
@@ -135,7 +130,7 @@ int main(int argc, char *argv[])
                     break;
                 }
                 default: {
-                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    LOG_ERROR("Error: unknown error code:{}", e.value());
                     break;
                 }
             }
@@ -154,15 +149,15 @@ int main(int argc, char *argv[])
             switch(e.value())
             {
                 case CRYPTO_ERR_INIT_FAIL: {
-                    LOG_ERROR(tr("log.crypto_err_init_fail").c_str());
+                    LOG_ERROR("Error: init crypto failed");
                     break;
                 }
                 case DB_ERR_INIT_FAIL: {
-                    LOG_ERROR(tr("log.db_err_init_fail").c_str());
+                    LOG_ERROR("Error: init db failed");
                     break;
                 }
                 default: {
-                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    LOG_ERROR("Error: unknown error code:{}", e.value());
                     break;
                 }
             }
@@ -237,7 +232,7 @@ int main(int argc, char *argv[])
                 switch(e.value())
                 {
                     case CRYPTO_ERR_INVALID_FMT: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_fmt").c_str(),
+                        LOG_ERROR("Error: not support this format:{}, we expected one of these formats: [{}]",
                                   ofmt,
                                   fmt_strs(std::vector<std::string>{"hex",
                                                                     "base64",
@@ -245,43 +240,43 @@ int main(int argc, char *argv[])
                         break;
                     }
                     case CRYPTO_ERR_INVALID_INPUT: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_input").c_str(),
+                        LOG_ERROR("Error: invalid input: in:{}",
                                   input);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_OUTPUT: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_output").c_str(),
+                        LOG_ERROR("Error: invalid output: out:{}",
                                   output);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_ALGO: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_algo").c_str(),
+                        LOG_ERROR("Error: invalid algorithm: {}, we expected one of these algos: [{}]",
                                   algo,
                                   fmt_strs(all_encrypt_algos));
                         break;
                     }
                     case CRYPTO_ERR_INVALID_KEY: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_key").c_str(),
+                        LOG_ERROR("Error: invalid key: key:{}",
                                   key);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_PADDING: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_padding").c_str(),
+                        LOG_ERROR("Error: invalid padding: {}",
                                   padding);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_IV: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_iv").c_str(), iv);
+                        LOG_ERROR("Error: invalid IV: {}", iv);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_MODE: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_mode").c_str(),
+                        LOG_ERROR("Error: invalid mode: {}",
                                   mode);
                         break;
                     }
                     case CRYPTO_ERR_ENCRYPT_AES_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_encrypt_aes_failed").c_str(),
+                            "Error: AES encrypt failed with out:{}, in:{}, content:{}, algo:{}, mode:{}, key:{}, padding:{}, iv:{}",
                             output,
                             input,
                             content,
@@ -294,7 +289,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_ENCRYPT_BASE64_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_encrypt_base64_failed").c_str(),
+                            "Error: Base64 encrypt failed with out:{}, in:{}, content:{}",
                             output,
                             input,
                             content);
@@ -302,7 +297,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_ENCRYPT_DES_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_encrypt_des_failed").c_str(),
+                            "Error: DES encrypt failed with out:{}, in:{}, content:{}, algo:{}, mode:{}, key:{}, padding:{}, iv:{}",
                             output,
                             input,
                             content,
@@ -315,7 +310,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_ENCRYPT_MD5_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_encrypt_md5_failed").c_str(),
+                            "Error: MD5 encrypt failed with out:{}, in:{}, content:{}",
                             output,
                             input,
                             content);
@@ -323,7 +318,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_ENCRYPT_SHA256_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_encrypt_sha256_failed").c_str(),
+                            "Error: SHA256 encrypt failed with out:{}, in:{}, content:{}",
                             output,
                             input,
                             content);
@@ -331,7 +326,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_ENCRYPT_RSA_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_encrypt_rsa_failed").c_str(),
+                            "Error: RSA encrypt failed with out:{}, in:{}, content:{}, algo:{}, mode:{}, key:{}, padding:{}, iv:{}",
                             output,
                             input,
                             content,
@@ -343,7 +338,7 @@ int main(int argc, char *argv[])
                         break;
                     }
                     default: {
-                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        LOG_ERROR("Error: unknown error code:{}", e.value());
                         break;
                     }
                 }
@@ -382,49 +377,49 @@ int main(int argc, char *argv[])
                 switch(e.value())
                 {
                     case CRYPTO_ERR_INVALID_FMT: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_fmt").c_str(),
+                        LOG_ERROR("Error: not support this format:{}, we expected one of these formats: [{}]",
                                   fmt,
                                   fmt_strs(all_encrypt_fmts));
                         break;
                     }
                     case CRYPTO_ERR_INVALID_INPUT: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_input").c_str(),
+                        LOG_ERROR("Error: invalid input: in:{}",
                                   input);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_OUTPUT: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_output").c_str(),
+                        LOG_ERROR("Error: invalid output: out:{}",
                                   output);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_ALGO: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_algo").c_str(),
+                        LOG_ERROR("Error: invalid algorithm: {}, we expected one of these algos: [{}]",
                                   algo,
                                   fmt_strs(all_decrypt_algos));
                         break;
                     }
                     case CRYPTO_ERR_INVALID_KEY: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_key").c_str(),
+                        LOG_ERROR("Error: invalid key: key:{}",
                                   key);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_PADDING: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_padding").c_str(),
+                        LOG_ERROR("Error: invalid padding: {}",
                                   padding);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_IV: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_iv").c_str(), iv);
+                        LOG_ERROR("Error: invalid IV: {}", iv);
                         break;
                     }
                     case CRYPTO_ERR_INVALID_MODE: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_mode").c_str(),
+                        LOG_ERROR("Error: invalid mode: {}",
                                   mode);
                         break;
                     }
                     case CRYPTO_ERR_DECRYPT_AES_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_decrypt_aes_failed").c_str(),
+                            "Error: AES decrypt failed: out:{}, in:{}, content:{}, algo:{}, mode:{}, key:{}, padding:{}, iv:{}",
                             output,
                             input,
                             content,
@@ -437,7 +432,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_DECRYPT_BASE64_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_decrypt_base64_failed").c_str(),
+                            "Error: Base64 decrypt failed: out:{}, in:{}, content:{}",
                             output,
                             input,
                             content);
@@ -445,7 +440,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_DECRYPT_DES_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_decrypt_des_failed").c_str(),
+                            "Error: DES decrypt failed with out:{}, in:{}, content:{}, algo:{}, mode:{}, key:{}, padding:{}, iv:{}",
                             output,
                             input,
                             content,
@@ -458,7 +453,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_DECRYPT_MD5_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_decrypt_md5_failed").c_str(),
+                            "Error: MD5 decrypt failed: out:{}, in:{}, content:{}",
                             output,
                             input,
                             content);
@@ -466,7 +461,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_DECRYPT_SHA256_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_decrypt_sha256_failed").c_str(),
+                            "rror: SHA256 decrypt failed with out:{}, in:{}, content:{}",
                             output,
                             input,
                             content);
@@ -474,7 +469,7 @@ int main(int argc, char *argv[])
                     }
                     case CRYPTO_ERR_DECRYPT_RSA_FAILED: {
                         LOG_ERROR(
-                            tr("log.crypto_err_decrypt_rsa_failed").c_str(),
+                            "Error: RSA decrypt failed with out:{}, in:{}, content:{}, algo:{}, mode:{}, key:{}, padding:{}, iv:{}",
                             output,
                             input,
                             content,
@@ -486,7 +481,7 @@ int main(int argc, char *argv[])
                         break;
                     }
                     default: {
-                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        LOG_ERROR("Error: unknown error code:{}", e.value());
                         break;
                     }
                 }
@@ -514,13 +509,13 @@ int main(int argc, char *argv[])
                 switch(e.value())
                 {
                     case CRYPTO_ERR_INVALID_ALGO: {
-                        LOG_ERROR(tr("log.crypto_err_invalid_algo").c_str(),
+                        LOG_ERROR("Error: invalid algorithm: {}, we expected one of these algos: [{}]",
                                   algo,
                                   fmt_strs(all_keygen_algos));
                         break;
                     }
                     case CRYPTO_ERR_KEYGEN_FAIL: {
-                        LOG_ERROR(tr("log.crypto_err_keygen_fail").c_str(),
+                        LOG_ERROR("Error: keygen failed: algo:{}, fmt:{}, mode:{}, bits:{}",
                                   algo,
                                   fmt,
                                   mode,
@@ -528,7 +523,7 @@ int main(int argc, char *argv[])
                         break;
                     }
                     default: {
-                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        LOG_ERROR("Error: unknown error code:{}", e.value());
                         break;
                     }
                 }
@@ -578,17 +573,17 @@ int main(int argc, char *argv[])
                 switch(e.value())
                 {
                     case DB_ERR_DB_NOT_EXIST: {
-                        LOG_ERROR(tr("log.db_err_db_not_exist").c_str(),
+                        LOG_ERROR("Error: db not exist: {}",
                                   "dict");
                         break;
                     }
                     case DB_ERR_SQLITE_GET_CONN_FAIL: {
                         LOG_ERROR(
-                            tr("log.db_err_sqlite_get_conn_fail").c_str());
+                            "Error: get sqlite connection failed");
                         break;
                     }
                     default: {
-                        LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                        LOG_ERROR("Error: unknown error code:{}", e.value());
                         break;
                     }
                 }
@@ -605,7 +600,7 @@ int main(int argc, char *argv[])
     } else
     {
         h.match(error(ERR_INVALID_SUBCMD), [&](const err_t &e) {
-            LOG_ERROR(tr("app.err_invalid_subcmd").c_str(),
+            LOG_ERROR("Error: unknown subcommand: {}, we expected one of these subcommands: [{}]",
                       subcmd,
                       fmt_strs(all_subcmds));
         });

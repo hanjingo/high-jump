@@ -7,7 +7,9 @@ TEST(asm, asm_macro_basic)
 #if defined(_MSC_VER) && defined(_M_IX86)
     ASM_BEGIN
     mov eax, a add eax, b mov c, eax ASM_END ASSERT_EQ(c, 3);
-#elif defined(__GNUC__) || defined(__clang__)
+// Only use the x86 inline-asm variant when compiling for x86 (32/64-bit)
+// Avoid trying to compile x86 registers (like eax) on non-x86 platforms
+#elif (defined(__GNUC__) || defined(__clang__)) && (defined(__i386__) || defined(__x86_64__))
     int result = 0;
     ASM_VOLATILE(
         "movl %[a], %%eax; addl %[b], %%eax; movl %%eax, %[c]" : [c] "=r"(

@@ -313,17 +313,11 @@ double_to_bytes(unsigned char *bytes, size_t &sz, const double d)
 template <typename T>
 inline std::string bytes_to_string(const T &bytes, const size_t sz)
 {
-    return std::string(reinterpret_cast<const char *>(bytes.data()), sz);
-}
-
-inline std::string bytes_to_string(const unsigned char *bytes, const size_t sz)
-{
-    return std::string(reinterpret_cast<const char *>(bytes), sz);
-}
-
-inline std::string bytes_to_string(const char *bytes, const size_t sz)
-{
-    return std::string(bytes, sz);
+    // Handle both containers with .data() and raw C arrays
+    if constexpr (std::is_array_v<T>)
+        return std::string(reinterpret_cast<const char *>(bytes), sz);
+    else
+        return std::string(reinterpret_cast<const char *>(bytes.data()), sz);
 }
 
 template <typename T>

@@ -42,6 +42,17 @@ TEST_F(cpu, cpu_vendor)
     unsigned char vendor[64] = {0};
     auto          ec         = cpu_vendor(vendor, sizeof(vendor));
     std::string   vendor_str(reinterpret_cast<char *>(vendor));
+    
+#if defined(__APPLE__) && defined(__aarch64__)
+    // On Apple Silicon (ARM), machdep.cpu.vendor is not available
+    // The sysctlbyname call will fail with CPU_ERR_SYSCTL_FAILED (-8)
+    if(ec == CPU_ERR_SYSCTL_FAILED)
+    {
+        GTEST_SKIP() << "cpu_vendor not supported on Apple Silicon (ARM64)";
+        return;
+    }
+#endif
+    
     EXPECT_EQ(ec, CPU_OK) << "cpu_vendor should return CPU_OK";
     EXPECT_FALSE(vendor_str.empty()) << "CPU vendor string should not be empty";
     EXPECT_GT(vendor_str.length(), 2u)
@@ -577,6 +588,16 @@ TEST_F(cpu, cpu_pmu_cycle_counter_functionality)
     if(wall_time.count() > 0)
     {
         double cycles_per_microsecond = (double) pmu_cycles / wall_time.count();
+        
+#if defined(__APPLE__)
+        // On macOS, mach_absolute_time returns time in nanoseconds (scaled by timebase),
+        // not actual CPU cycles. The frequency is much lower than CPU clock speed.
+        // Typical values are around 1-100 counts per microsecond (1 GHz = 1 count/ns = 1000 counts/μs timebase dependent)
+        EXPECT_GT(cycles_per_microsecond, 1.0)
+            << "mach_absolute_time should have reasonable frequency (> 1 MHz)";
+        EXPECT_LT(cycles_per_microsecond, 10000)
+            << "mach_absolute_time frequency should not be excessive";
+#else
         if(is_true_cycle_counter)
         {
             EXPECT_GT(cycles_per_microsecond, 100)
@@ -602,6 +623,7 @@ TEST_F(cpu, cpu_pmu_cycle_counter_functionality)
                     << "QPC frequency should be moderate";
             }
         }
+#endif
     }
 }
 

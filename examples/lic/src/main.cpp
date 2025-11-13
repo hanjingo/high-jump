@@ -3,13 +3,8 @@
 #include <hj/os/options.hpp>
 #include <hj/os/signal.hpp>
 #include <hj/util/license.hpp>
-#include <hj/encoding/i18n.hpp>
 #include <hj/testing/crash.hpp>
 #include <hj/testing/telemetry.hpp>
-
-#ifndef I18N_LOCALE
-#define I18N_LOCALE "en_US"
-#endif
 
 // add your code here...
 #include <hj/testing/error.hpp>
@@ -35,10 +30,6 @@ int main(int argc, char *argv[])
     hj::log::logger::instance()->set_level(hj::log::level::info);
 #endif
 
-    // add i18n support
-    hj::i18n::instance().set_locale(I18N_LOCALE);
-    hj::i18n::instance().load_translation_auto("./", PACKAGE);
-
     // add telemetry support
     auto tracer =
         hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
@@ -62,7 +53,7 @@ int main(int argc, char *argv[])
     if(argc < 2)
     {
         h.match(error(ERR_ARGC_TOO_LESS), [&](const err_t &e) {
-            LOG_ERROR(tr("app.err_argc_too_less").c_str(), argc);
+            LOG_ERROR("Error: too few arguments: {}", argc);
         });
         return 1;
     }
@@ -82,11 +73,11 @@ int main(int argc, char *argv[])
             switch(e.value())
             {
                 case ERR_LIC_CORE_LOAD_FAIL: {
-                    LOG_ERROR(tr("app.err_lic_core_load_fail").c_str());
+                    LOG_ERROR("Error: lic_core load fail");
                     break;
                 }
                 case ERR_LIC_CORE_VERSION_MISMATCH: {
-                    LOG_ERROR(tr("app.err_lic_core_version_mismatch").c_str(),
+                    LOG_ERROR("Error: lic_core version {}.{}.{}, the minimum required version is {}.{}.{}",
                               major,
                               minor,
                               patch,
@@ -96,7 +87,7 @@ int main(int argc, char *argv[])
                     break;
                 }
                 default: {
-                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    LOG_ERROR("Error: unknown error code:{}", e.value());
                     break;
                 }
             }
@@ -112,15 +103,15 @@ int main(int argc, char *argv[])
             switch(e.value())
             {
                 case ERR_LIC_CORE_LOAD_FAIL: {
-                    LOG_ERROR(tr("app.err_lic_core_load_fail").c_str());
+                    LOG_ERROR("Error: lic_core load fail");
                     break;
                 }
                 case LIC_ERR_INIT_FAIL: {
-                    LOG_ERROR(tr("lic_core.err_init_fail").c_str());
+                    LOG_ERROR("Error: lic_core init fail");
                     break;
                 }
                 default: {
-                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    LOG_ERROR("Error: unknown error code:{}", e.value());
                     break;
                 }
             }
@@ -169,29 +160,29 @@ int main(int argc, char *argv[])
             switch(e.value())
             {
                 case ERR_LIC_CORE_LOAD_FAIL: {
-                    LOG_ERROR(tr("app.err_lic_core_load_fail").c_str());
+                    LOG_ERROR("Error: lic_core load fail");
                     break;
                 }
                 case LIC_ERR_INVALID_PARAM: {
-                    LOG_ERROR(tr("lic_core.err_invalid_param").c_str());
+                    LOG_ERROR("Error: lic_core invalid param");
                     break;
                 }
                 case LIC_ERR_INVALID_TIMES: {
-                    LOG_ERROR(tr("lic_core.err_invalid_times").c_str(), count);
+                    LOG_ERROR("Error: lic_core invalid times, count: {}", count);
                     break;
                 }
                 case LIC_ERR_KEYS_NOT_ENOUGH: {
-                    LOG_ERROR(tr("lic_core.err_keys_not_enough").c_str(),
+                    LOG_ERROR("Error: lic_core keys not enough, content: {}",
                               content);
                     break;
                 }
                 case LIC_ERR_ISSUER_EXISTED: {
-                    LOG_ERROR(tr("lic_core.err_issuer_existed").c_str(),
+                    LOG_ERROR("Error: lic_core issuer exist, issuer_id: {}",
                               issuer);
                     break;
                 }
                 default: {
-                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    LOG_ERROR("Error: unknown error code:{}", e.value());
                     break;
                 }
             }
@@ -221,25 +212,25 @@ int main(int argc, char *argv[])
             switch(e.value())
             {
                 case ERR_LIC_CORE_LOAD_FAIL: {
-                    LOG_ERROR(tr("app.err_lic_core_load_fail").c_str());
+                    LOG_ERROR("Error: lic_core load fail");
                     break;
                 }
                 case LIC_ERR_INVALID_PARAM: {
-                    LOG_ERROR(tr("lic_core.err_invalid_param").c_str());
+                    LOG_ERROR("Error: lic_core invalid param");
                     break;
                 }
                 case LIC_ERR_ISSUER_NOT_EXIST: {
-                    LOG_ERROR(tr("lic_core.err_issuer_not_exist").c_str(),
+                    LOG_ERROR("Error: lic_core issuer exist, issuer_id: {}",
                               issuer);
                     break;
                 }
                 case LIC_ERR_CLAIM_MISMATCH: {
-                    LOG_ERROR(tr("lic_core.err_claim_mismatch").c_str(),
+                    LOG_ERROR("Error: lic_core claim mismatch, content: {}",
                               content);
                     break;
                 }
                 default: {
-                    LOG_ERROR(tr("app.err_unknow").c_str(), e.value());
+                    LOG_ERROR("Error: unknown error code:{}", e.value());
                     break;
                 }
             }
@@ -252,11 +243,11 @@ int main(int argc, char *argv[])
     } else if(subcmd == "help")
     {
         // lic help
-        print(tr("app.help").c_str(), output_type::console);
+        print("Usage: lic <subcommand> [options] [Content]\n\nSubcommands:\n  add       Add the lic issuer\n  issue     Issue a license file\n  verify    Verify a license file\n  help      Show this help message\n\nOptions:\n  -a, --algo      Signature algorithm, one of [none, rsa256], default: none\n  -c, --count     Valid times, default: 1\n  -l, --licensee  Licensee name, default: tourist\n  -o, --output    Output license file path\n  -t, --time      Not less than this days, default: 30\n\nContent:\n  for subcmd add: key-value pairs for keys, e.g. xxx,xxx\n  for subcmd issue: key-value pairs for claims, e.g. xxx:xxx,xxx:xxx\n  for subcmd verify: key-value pairs for claims, e.g. xxx:xxx,xxx:xxx\n\nExamples:\n  lic add -a none -i hehehunanchina@live.com -c 10 -i\n  lic issue -a none -l tourist -i hehehunanchina@live.com -t 30\n  lic verify -a none -i hehehunanchina@live.com\n", output_type::console);
     } else
     {
         h.match(error(ERR_INVALID_SUBCMD), [&](const err_t &e) {
-            LOG_ERROR(tr("app.err_invalid_subcmd").c_str(),
+            LOG_ERROR("Error: unknown subcommand: {}, we expected one of these subcommands: [{}]",
                       subcmd,
                       fmt_strs(all_subcmds));
         });

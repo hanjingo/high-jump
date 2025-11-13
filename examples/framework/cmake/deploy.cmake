@@ -36,8 +36,24 @@ function(mac_deploy target)
 			)
 		endif()
 	endforeach()
+
+	file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/mac_deploy.sh"
+"#!/bin/bash
+set -e
+exe=\"\$1\"
+dir=\"\$2\"
+otool -L \"\$exe\" | grep ' /' | awk '{print \$1}' | while read dep; do
+    fname=\$(basename \"\$dep\")
+    dst=\"\$dir/\$fname\"
+    echo \"copy file: \$dep -> \$dst\"
+    cp -u \"\$dep\" \"\$dst\" 2>/dev/null || true
+done
+")
+
+	file(CHMOD "${CMAKE_CURRENT_BINARY_DIR}/mac_deploy.sh" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+
 	add_custom_command(TARGET ${target} POST_BUILD
-		COMMAND bash -c 'otool -L $<TARGET_FILE:${target}> | grep " /" | awk "{print \$1}" | while read dep; do fname=$(basename "$dep"); dst="$<TARGET_FILE_DIR:${target}>/$fname"; echo "copy file: $dep -> $dst"; cp -u "$dep" "$dst" 2>/dev/null || true; done'
+		COMMAND bash "${CMAKE_CURRENT_BINARY_DIR}/mac_deploy.sh" "$<TARGET_FILE:${target}>" "$<TARGET_FILE_DIR:${target}>"
 		COMMENT "Copying shared library dependencies (otool -L)..."
 	)
 endfunction()

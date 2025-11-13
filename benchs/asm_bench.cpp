@@ -9,7 +9,7 @@ static inline int asm_add(int a, int b)
     asm volatile("addl %1, %0" : "+r"(a) : "r"(b));
     return a;
 #elif defined(__aarch64__)
-    register int res;
+    int res;
     asm volatile("add %w0, %w1, %w2" : "=r"(res) : "r"(a), "r"(b));
     return res;
 #else

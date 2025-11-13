@@ -61,7 +61,6 @@ find_package(ZLIB REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(cityhash REQUIRED)
 find_package(unofficial-libharu REQUIRED)
-find_package(ICU REQUIRED COMPONENTS uc i18n io)
 find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
 find_package(clickhouse-cpp QUIET) # depend: lz4, zstd, cityhash
 find_package(libpqxx REQUIRED)
@@ -154,7 +153,6 @@ target_link_libraries(${PROJECT_NAME}
     ${SQLite3_LIBRARIES} 
     ${Eigen_LIBRARIES} 
     ${ODBC_LIBRARIES}
-    ${ICU_LIBRARIES}
     ${OPENTELEMETRY_CPP_LIBRARIES}
      ${QRENCODE_LIBRARIES}
     quirc::quirc

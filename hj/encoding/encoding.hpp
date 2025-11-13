@@ -11,8 +11,6 @@
 
 #include <hj/encoding/hex.hpp>
 
-#include <hj/encoding/i18n.hpp>
-
 #include <hj/encoding/ini.hpp>
 
 #include <hj/encoding/json.hpp>

@@ -44,6 +44,34 @@
 
 #endif
 
+#if !defined(_MSC_VER)
+#include <cerrno>
+// Provide a minimal, portable implementation of strncpy_s for non-MSVC
+// environments. Many files in this project call strncpy_s(dest, destsz, src, count).
+// This implementation copies at most `count` bytes from `src` into `dest`,
+// ensures null-termination and never writes past `destsz` bytes.
+static inline int strncpy_s(char *dest, size_t destsz, const char *src, size_t count)
+{
+    if(dest == nullptr || src == nullptr || destsz == 0)
+        return EINVAL;
+
+    // compute how many bytes are actually available to copy (reserve one for '\0')
+    size_t max_copy = (destsz > 0) ? destsz - 1 : 0;
+
+    // don't read beyond the actual src content
+    size_t src_len = std::strlen(src);
+    size_t to_copy = (count < src_len) ? count : src_len;
+    if(to_copy > max_copy)
+        to_copy = max_copy;
+
+    if(to_copy > 0)
+        std::memcpy(dest, src, to_copy);
+    dest[to_copy] = '\0';
+
+    return 0; // success
+}
+#endif
+
 namespace hj
 {
 namespace detail

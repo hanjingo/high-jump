@@ -14,14 +14,14 @@ void data_mgr::init(size_t pool_size)
             {
                 auto* param = _exec_pool.allocate();
                 _init(param);
-                _exec_pool.push(param);
+                _exec_pool.release(param);
 }
 
 // param_query
 {
     auto *param = _query_pool.allocate();
     _init(param);
-    _query_pool.push(param);
+    _query_pool.release(param);
 }
 }
     );
@@ -47,10 +47,10 @@ void data_mgr::init(size_t pool_size)
         switch(typ)
         {
             case DB_PARAM_EXEC: {
-                return _exec_pool.pop();
+                return _exec_pool.acquire();
             }
             case DB_PARAM_QUERY: {
-                return _query_pool.pop();
+                return _query_pool.acquire();
             }
             default: {
                 return nullptr;
@@ -68,13 +68,13 @@ void data_mgr::init(size_t pool_size)
             case DB_PARAM_EXEC: {
                 auto param = static_cast<db_param_exec *>(value);
                 _reset(param);
-                _exec_pool.push(param);
+                _exec_pool.release(param);
                 break;
             }
             case DB_PARAM_QUERY: {
                 auto param = static_cast<db_param_query *>(value);
                 _reset(param);
-                _query_pool.push(param);
+                _query_pool.release(param);
                 break;
             }
             default:
@@ -110,15 +110,15 @@ void data_mgr::init(size_t pool_size)
         // [["xx", "xxx", ...], ...]
         // [[1, 2, ...], ...]
         param->out     = new char **[DB_MAX_QUERY_OUTPUT_NUM_LVL1];
-        param->out_len = new size_t **[DB_MAX_QUERY_OUTPUT_NUM_LVL1];
-        for(size_t i = 0; i < DB_MAX_QUERY_OUTPUT_NUM_LVL1; i++)
+        param->out_len = new int **[DB_MAX_QUERY_OUTPUT_NUM_LVL1];
+        for(int i = 0; i < DB_MAX_QUERY_OUTPUT_NUM_LVL1; i++)
         {
             param->out[i]     = new char *[DB_MAX_QUERY_OUTPUT_NUM_LVL2];
-            param->out_len[i] = new size_t *[DB_MAX_QUERY_OUTPUT_NUM_LVL2];
-            for(size_t j = 0; j < DB_MAX_QUERY_OUTPUT_NUM_LVL2; j++)
+            param->out_len[i] = new int *[DB_MAX_QUERY_OUTPUT_NUM_LVL2];
+            for(int j = 0; j < DB_MAX_QUERY_OUTPUT_NUM_LVL2; j++)
             {
                 param->out[i][j]     = new char[DB_MAX_QUERY_OUTPUT_SIZE];
-                param->out_len[i][j] = new size_t(0);
+                param->out_len[i][j] = new int(0);
                 memset(param->out[i][j], 0, DB_MAX_QUERY_OUTPUT_SIZE);
             }
         }

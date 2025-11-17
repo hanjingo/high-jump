@@ -20,11 +20,13 @@ crypto_core::~crypto_core()
 
 err_t crypto_core::load()
 {
+    std::string dll_name;
 #if defined(_WIN32)
-    _dll = dll_open("crypto_core.dll", DLL_RTLD_NOW);
+    dll_name = std::string("crypto_core") + DLL_EXT;
 #else
-    _dll = dll_open("libcrypto_core.so", DLL_RTLD_NOW);
+    dll_name = std::string("libcrypto_core") + DLL_EXT;
 #endif
+    _dll = dll_open(dll_name.c_str(), DLL_RTLD_NOW);
     if(_dll == nullptr)
         return error(CRYPTO_ERR_CORE_LOAD_FAIL);
 
@@ -83,7 +85,7 @@ err_t crypto_core::version(int &major, int &minor, int &patch)
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _version(ctx);
+    _version(&ctx);
     major = param->major;
     minor = param->minor;
     patch = param->patch;
@@ -104,7 +106,7 @@ err_t crypto_core::init(const size_t data_pool_size)
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _init(ctx);
+    _init(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -123,7 +125,7 @@ err_t crypto_core::quit()
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _quit(ctx);
+    _quit(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -164,7 +166,7 @@ err_t crypto_core::encrypt(std::string       &out,
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _encrypt(ctx);
+    _encrypt(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -208,7 +210,7 @@ err_t crypto_core::decrypt(std::string       &out,
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _decrypt(ctx);
+    _decrypt(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -237,7 +239,7 @@ err_t crypto_core::keygen(std::vector<std::string> &outs,
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _keygen(ctx);
+    _keygen(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -271,11 +273,13 @@ db_core::~db_core()
 
 err_t db_core::load()
 {
+    std::string dll_name;
 #if defined(_WIN32)
-    _dll = dll_open("db_core.dll", DLL_RTLD_NOW);
+    dll_name = std::string("db_core") + DLL_EXT;
 #else
-    _dll = dll_open("libdb_core.so", DLL_RTLD_NOW);
+    dll_name = std::string("libdb_core") + DLL_EXT;
 #endif
+    _dll = dll_open(dll_name.c_str(), DLL_RTLD_NOW);
     if(_dll == nullptr)
         return error(DB_ERR_CORE_LOAD_FAIL);
 
@@ -332,7 +336,7 @@ err_t db_core::version(int &major, int &minor, int &patch)
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _version(ctx);
+    _version(&ctx);
     major = param->major;
     minor = param->minor;
     patch = param->patch;
@@ -365,7 +369,7 @@ db_conn_capa=1)"; // ini style
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _init(ctx);
+    _init(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -384,7 +388,7 @@ err_t db_core::quit()
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _quit(ctx);
+    _quit(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -409,7 +413,7 @@ err_t db_core::exec(const std::string &db_id, const std::string &sql)
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _exec(ctx);
+    _exec(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -431,9 +435,9 @@ err_t db_core::add(const std::string &db_id, const std::string &key)
     return err_t();
 }
 
-err_t db_core::query(std::vector<std::vector<std::string> > &outs,
-                     const std::string                      &db_id,
-                     const std::string                      &sql)
+err_t db_core::query(std::vector<std::vector<std::string>> &outs,
+                     const std::string                     &db_id,
+                     const std::string                     &sql)
 {
     if(_query == nullptr)
         return error(DB_ERR_CORE_NOT_LOAD);
@@ -452,7 +456,7 @@ err_t db_core::query(std::vector<std::vector<std::string> > &outs,
     ctx.user_data = param;
     ctx.cb        = nullptr;
     ctx.sz        = sizeof(sdk_context);
-    _query(ctx);
+    _query(&ctx);
     if(param->result != OK)
         return error(param->result);
 
@@ -481,11 +485,11 @@ err_t db_core::query(std::vector<std::vector<std::string> > &outs,
     return err_t();
 }
 
-err_t db_core::query(std::vector<std::vector<std::string> > &outs,
-                     const std::string                      &db_id,
-                     const std::string                      &tbl,
-                     const std::vector<std::string>         &contents,
-                     const int                               count)
+err_t db_core::query(std::vector<std::vector<std::string>> &outs,
+                     const std::string                     &db_id,
+                     const std::string                     &tbl,
+                     const std::vector<std::string>        &contents,
+                     const int                              count)
 {
     std::string sql;
     std::string limit_sql;

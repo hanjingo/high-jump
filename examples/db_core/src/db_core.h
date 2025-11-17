@@ -84,7 +84,7 @@ typedef struct db_param_exec
 typedef struct db_param_query
 {
     char     ***out;
-    size_t   ***out_len;
+    int      ***out_len;
     const char *db_id;
     const char *sql;
 
@@ -92,18 +92,18 @@ typedef struct db_param_query
 } db_param_query;
 
 // --------------- API --------------------
-C_STYLE_EXPORT void db_version(sdk_context ctx);
+C_STYLE_EXPORT void db_version(sdk_context *ctx);
 
-C_STYLE_EXPORT void db_init(sdk_context ctx);
+C_STYLE_EXPORT void db_init(sdk_context *ctx);
 
-C_STYLE_EXPORT void db_quit(sdk_context ctx);
+C_STYLE_EXPORT void db_quit(sdk_context *ctx);
 
-C_STYLE_EXPORT void db_require(sdk_context ctx);
+C_STYLE_EXPORT void db_require(sdk_context *ctx);
 
-C_STYLE_EXPORT void db_release(sdk_context ctx);
+C_STYLE_EXPORT void db_release(sdk_context *ctx);
 
-C_STYLE_EXPORT void db_exec(sdk_context ctx);
+C_STYLE_EXPORT void db_exec(sdk_context *ctx);
 
-C_STYLE_EXPORT void db_query(sdk_context ctx);
+C_STYLE_EXPORT void db_query(sdk_context *ctx);
 
 #endif

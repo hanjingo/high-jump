@@ -2,6 +2,7 @@
 
 #include <hj/util/defer.hpp>
 #include <hj/util/string_util.hpp>
+#include <hj/util/defer.hpp>
 
 // ------------------------------ lic core ------------------------------
 lic_core::lic_core()
@@ -19,11 +20,13 @@ lic_core::~lic_core()
 
 err_t lic_core::load()
 {
+    std::string dll_name;
 #if defined(_WIN32)
-    _dll = dll_open("lic_core.dll", DLL_RTLD_NOW);
+    dll_name = std::string("lic_core") + DLL_EXT;
 #else
-    _dll = dll_open("liblic_core.so", DLL_RTLD_NOW);
+    dll_name = std::string("liblic_core") + DLL_EXT;
 #endif
+    _dll = dll_open(dll_name.c_str(), DLL_RTLD_NOW);
     if(_dll == nullptr)
         return error(ERR_LIC_CORE_LOAD_FAIL);
 
@@ -75,10 +78,11 @@ err_t lic_core::version(int &major, int &minor, int &patch)
     auto param = new lic_param_version{};
     DEFER(delete param; param = nullptr;);
 
-    sdk_context ctx;
-    ctx.user_data = param;
-    ctx.cb        = nullptr;
-    ctx.sz        = sizeof(sdk_context);
+    sdk_context *ctx = new sdk_context{};
+    DEFER(delete ctx; ctx = nullptr;);
+    ctx->user_data = param;
+    ctx->cb        = nullptr;
+    ctx->sz        = sizeof(sdk_context);
     _version(ctx);
     major = param->major;
     minor = param->minor;
@@ -96,10 +100,11 @@ err_t lic_core::init()
 
     param->result = ERR_FAIL;
 
-    sdk_context ctx;
-    ctx.user_data = param;
-    ctx.cb        = nullptr;
-    ctx.sz        = sizeof(sdk_context);
+    sdk_context *ctx = new sdk_context{};
+    DEFER(delete ctx; ctx = nullptr;);
+    ctx->user_data = param;
+    ctx->cb        = nullptr;
+    ctx->sz        = sizeof(sdk_context);
     _init(ctx);
     if(param->result != OK)
         return error(param->result, "lic");
@@ -117,10 +122,11 @@ err_t lic_core::quit()
     auto param = new lic_param_quit{};
     DEFER(delete param; param = nullptr;);
 
-    sdk_context ctx;
-    ctx.user_data = param;
-    ctx.cb        = nullptr;
-    ctx.sz        = sizeof(sdk_context);
+    sdk_context *ctx = new sdk_context{};
+    DEFER(delete ctx; ctx = nullptr;);
+    ctx->user_data = param;
+    ctx->cb        = nullptr;
+    ctx->sz        = sizeof(sdk_context);
     _quit(ctx);
     if(param->result != OK)
         return error(param->result, "lic");
@@ -145,7 +151,7 @@ err_t lic_core::add_issuer(const std::string &issuer,
     param->issuer_id = issuer.c_str();
     param->algo      = algo.c_str();
     param->times     = times;
-    param->keys      = new const char *[LIC_MAX_KEY_NUM] { nullptr };
+    param->keys      = new const char *[LIC_MAX_KEY_NUM]{nullptr};
     param->keys_num  = 0;
     for(auto e : keys)
     {
@@ -165,10 +171,11 @@ err_t lic_core::add_issuer(const std::string &issuer,
           delete param;
           param = nullptr;);
 
-    sdk_context ctx;
-    ctx.user_data = param;
-    ctx.cb        = nullptr;
-    ctx.sz        = sizeof(sdk_context);
+    sdk_context *ctx = new sdk_context{};
+    DEFER(delete ctx; ctx = nullptr;);
+    ctx->user_data = param;
+    ctx->cb        = nullptr;
+    ctx->sz        = sizeof(sdk_context);
     _add_issuer(ctx);
     if(param->result != OK)
         return error(param->result, "lic");
@@ -192,7 +199,7 @@ err_t lic_core::issue(std::string       &out,
 
     auto param        = new lic_param_issue{};
     param->out        = new char[LIC_MAX_OUTPUT_SIZE]{0};
-    param->out_len    = new size_t{0};
+    param->out_len    = new int();
     param->algo       = algo.c_str();
     param->licensee   = licensee.c_str();
     param->issuer_id  = issuer.c_str();
@@ -208,7 +215,7 @@ err_t lic_core::issue(std::string       &out,
     }
 
     // parse claims
-    param->claims = new const char *[claims.size() * 2] { nullptr };
+    param->claims = new const char *[claims.size() * 2]{nullptr};
     for(auto e : claims)
     {
         param->claims[param->claims_num] = e.first.c_str();
@@ -228,10 +235,11 @@ err_t lic_core::issue(std::string       &out,
           } delete param;
           param = nullptr;);
 
-    sdk_context ctx;
-    ctx.user_data = param;
-    ctx.cb        = nullptr;
-    ctx.sz        = sizeof(sdk_context);
+    sdk_context *ctx = new sdk_context{};
+    DEFER(delete ctx; ctx = nullptr;);
+    ctx->user_data = param;
+    ctx->cb        = nullptr;
+    ctx->sz        = sizeof(sdk_context);
     _issue(ctx);
     if(param->result != OK)
         return error(param->result, "lic");

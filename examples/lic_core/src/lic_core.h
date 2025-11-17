@@ -62,8 +62,8 @@ typedef struct lic_param_add_issuer
     const char  *issuer_id;
     const char  *algo;
     const char **keys;
-    size_t       keys_num;
-    size_t       times;
+    int          keys_num;
+    int          times;
 
     int result;
 } lic_param_add_issuer;
@@ -72,13 +72,13 @@ typedef struct lic_param_add_issuer
 typedef struct lic_param_issue
 {
     char        *out;
-    size_t      *out_len;
+    int         *out_len;
     const char  *algo;
     const char  *licensee;
     const char  *issuer_id;
-    size_t       time;   // days
+    int          time;   // days
     const char **claims; // [[xxx,xxx], [xxx,xxx], ...]
-    size_t       claims_num;
+    int          claims_num;
 
     int result;
 } lic_param_issue;
@@ -93,16 +93,16 @@ typedef struct lic_param_verify
 
 
 // --------------- API --------------------
-C_STYLE_EXPORT void lic_version(sdk_context ctx);
+C_STYLE_EXPORT void lic_version(sdk_context *ctx);
 
-C_STYLE_EXPORT void lic_init(sdk_context ctx);
+C_STYLE_EXPORT void lic_init(sdk_context *ctx);
 
-C_STYLE_EXPORT void lic_quit(sdk_context ctx);
+C_STYLE_EXPORT void lic_quit(sdk_context *ctx);
 
-C_STYLE_EXPORT void lic_add_issuer(sdk_context ctx);
+C_STYLE_EXPORT void lic_add_issuer(sdk_context *ctx);
 
-C_STYLE_EXPORT void lic_issue(sdk_context ctx);
+C_STYLE_EXPORT void lic_issue(sdk_context *ctx);
 
-C_STYLE_EXPORT void lic_verify(sdk_context ctx);
+C_STYLE_EXPORT void lic_verify(sdk_context *ctx);
 
 #endif // LIC_CORE_API_H

@@ -2,23 +2,23 @@
 
 int hj_err_to_int(hj::license::err_t e)
 {
-    switch(static_cast<hj::license::err>(e.value()))
+    switch(static_cast<hj::license::error_code>(e.value()))
     {
-        case 0:
+        case hj::license::error_code::ok:
             return OK;
-        case hj::license::err::invalid_times:
+        case hj::license::error_code::invalid_times:
             return LIC_ERR_INVALID_TIMES;
-        case hj::license::err::claim_mismatch:
+        case hj::license::error_code::claim_mismatch:
             return LIC_ERR_CLAIM_MISMATCH;
-        case hj::license::err::keys_not_changed:
+        case hj::license::error_code::keys_not_changed:
             return LIC_ERR_KEYS_NOT_CHANGED;
-        case hj::license::err::keys_not_enough:
+        case hj::license::error_code::keys_not_enough:
             return LIC_ERR_KEYS_NOT_ENOUGH;
-        case hj::license::err::file_not_exist:
+        case hj::license::error_code::file_not_exist:
             return LIC_ERR_FILE_NOT_EXIST;
-        case hj::license::err::input_stream_invalid:
+        case hj::license::error_code::input_stream_invalid:
             return LIC_ERR_INPUT_STREAM_INVALID;
-        case hj::license::err::output_stream_invalid:
+        case hj::license::error_code::output_stream_invalid:
             return LIC_ERR_OUTPUT_STREAM_INVALID;
         default:
             return LIC_ERR_FAIL;

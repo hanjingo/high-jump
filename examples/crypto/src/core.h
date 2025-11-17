@@ -74,7 +74,7 @@ class crypto_core
         ctx.user_data = param;
         ctx.cb        = nullptr;
         ctx.sz        = sizeof(sdk_context);
-        _require(ctx);
+        _require(&ctx);
         return param->value;
     }
 
@@ -92,7 +92,7 @@ class crypto_core
         ctx.user_data = param;
         ctx.cb        = nullptr;
         ctx.sz        = sizeof(sdk_context);
-        _release(ctx);
+        _release(&ctx);
     }
 
   private:
@@ -125,14 +125,14 @@ class db_core
 
     err_t exec(const std::string &db_id, const std::string &sql);
     err_t add(const std::string &db_id, const std::string &key);
-    err_t query(std::vector<std::vector<std::string> > &outs,
-                const std::string                      &db_id,
-                const std::string                      &sql);
-    err_t query(std::vector<std::vector<std::string> > &outs,
-                const std::string                      &db_id,
-                const std::string                      &tbl,
-                const std::vector<std::string>         &contents,
-                const int                               count);
+    err_t query(std::vector<std::vector<std::string>> &outs,
+                const std::string                     &db_id,
+                const std::string                     &sql);
+    err_t query(std::vector<std::vector<std::string>> &outs,
+                const std::string                     &db_id,
+                const std::string                     &tbl,
+                const std::vector<std::string>        &contents,
+                const int                              count);
 
   protected:
     void *require(int typ)
@@ -149,7 +149,7 @@ class db_core
         ctx.user_data = param;
         ctx.cb        = nullptr;
         ctx.sz        = sizeof(sdk_context);
-        _require(ctx);
+        _require(&ctx);
         return param->value;
     }
 
@@ -167,7 +167,7 @@ class db_core
         ctx.user_data = param;
         ctx.cb        = nullptr;
         ctx.sz        = sizeof(sdk_context);
-        _release(ctx);
+        _release(&ctx);
     }
 
   private:

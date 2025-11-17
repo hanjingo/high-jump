@@ -4,6 +4,7 @@
 
 #include <hj/util/init.hpp>
 #include <hj/util/once.hpp>
+#include <hj/util/string_util.hpp>
 #include <hj/os/env.h>
 #include <hj/testing/crash.hpp>
 
@@ -13,27 +14,27 @@
 #include "keygen.h"
 #include "data.h"
 
-C_STYLE_EXPORT void crypto_version(sdk_context ctx)
+C_STYLE_EXPORT void crypto_version(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
     // add your code here ...
-    if(ctx.user_data == NULL)
+    if(ctx->user_data == NULL)
         return;
 
-    auto ret   = static_cast<crypto_param_version *>(ctx.user_data);
+    auto ret   = static_cast<crypto_param_version *>(ctx->user_data);
     ret->major = MAJOR_VERSION;
     ret->minor = MINOR_VERSION;
     ret->patch = PATCH_VERSION;
 
-    if(ctx.cb != NULL)
-        ctx.cb(static_cast<void *>(ret));
+    if(ctx->cb != NULL)
+        ctx->cb(static_cast<void *>(ret));
 }
 
-C_STYLE_EXPORT void crypto_init(sdk_context ctx)
+C_STYLE_EXPORT void crypto_init(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
     ONCE(
@@ -45,9 +46,9 @@ C_STYLE_EXPORT void crypto_init(sdk_context ctx)
         hj::log::logger::instance()->set_level(hj::log::level::debug);
 
         // add your code here ...
-        if(ctx.user_data == NULL) return;
+        if(ctx->user_data == NULL) return;
 
-        auto ret    = static_cast<crypto_param_init *>(ctx.user_data);
+        auto ret    = static_cast<crypto_param_init *>(ctx->user_data);
         ret->result = OK;
 
         encryptor_mgr::instance().add(std::make_unique<aes_encryptor>());
@@ -66,62 +67,62 @@ C_STYLE_EXPORT void crypto_init(sdk_context ctx)
 
         data_mgr::instance().init(ret->data_pool_size);
 
-        if(ctx.cb != NULL) ctx.cb(static_cast<void *>(ret));)
+        if(ctx->cb != NULL) ctx->cb(static_cast<void *>(ret));)
 }
 
-C_STYLE_EXPORT void crypto_quit(sdk_context ctx)
+C_STYLE_EXPORT void crypto_quit(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
     // add your code here ...
-    ONCE(if(ctx.user_data == NULL) return;
+    ONCE(if(ctx->user_data == NULL) return;
 
-         auto ret    = static_cast<crypto_param_quit *>(ctx.user_data);
+         auto ret    = static_cast<crypto_param_quit *>(ctx->user_data);
          ret->result = OK;
 
-         if(ctx.cb != NULL) ctx.cb(static_cast<void *>(ret));)
+         if(ctx->cb != NULL) ctx->cb(static_cast<void *>(ret));)
 }
 
 // add your code here...
-C_STYLE_EXPORT void crypto_require(sdk_context ctx)
+C_STYLE_EXPORT void crypto_require(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
-    if(ctx.user_data == NULL)
+    if(ctx->user_data == NULL)
         return;
 
-    auto ret   = static_cast<crypto_param_require *>(ctx.user_data);
+    auto ret   = static_cast<crypto_param_require *>(ctx->user_data);
     ret->value = data_mgr::instance().require(ret->type);
 
-    if(ctx.cb != NULL)
-        ctx.cb(static_cast<void *>(ret));
+    if(ctx->cb != NULL)
+        ctx->cb(static_cast<void *>(ret));
 }
 
-C_STYLE_EXPORT void crypto_release(sdk_context ctx)
+C_STYLE_EXPORT void crypto_release(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
-    if(ctx.user_data == NULL)
+    if(ctx->user_data == NULL)
         return;
 
-    auto ret = static_cast<crypto_param_release *>(ctx.user_data);
+    auto ret = static_cast<crypto_param_release *>(ctx->user_data);
     data_mgr::instance().release(ret->type, ret->value);
-    if(ctx.cb != NULL)
-        ctx.cb(static_cast<void *>(ret));
+    if(ctx->cb != NULL)
+        ctx->cb(static_cast<void *>(ret));
 }
 
-C_STYLE_EXPORT void crypto_encrypt(sdk_context ctx)
+C_STYLE_EXPORT void crypto_encrypt(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
-    if(ctx.user_data == NULL)
+    if(ctx->user_data == NULL)
         return;
 
-    auto ret = static_cast<crypto_param_encrypt *>(ctx.user_data);
+    auto ret = static_cast<crypto_param_encrypt *>(ctx->user_data);
     int  len = (ret->out_len == NULL) ? 0 : *ret->out_len;
     auto out = (ret->out == NULL) ? std::string() : std::string(ret->out, len);
     auto in  = (ret->in == NULL) ? std::string() : std::string(ret->in);
@@ -144,19 +145,19 @@ C_STYLE_EXPORT void crypto_encrypt(sdk_context ctx)
 
         strncpy_s(ret->out, CRYPTO_MAX_OUTPUT_SIZE, out.c_str(), out.size());
     }
-    if(ctx.cb != NULL)
-        ctx.cb(static_cast<void *>(ret));
+    if(ctx->cb != NULL)
+        ctx->cb(static_cast<void *>(ret));
 }
 
-C_STYLE_EXPORT void crypto_decrypt(sdk_context ctx)
+C_STYLE_EXPORT void crypto_decrypt(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
-    if(ctx.user_data == NULL)
+    if(ctx->user_data == NULL)
         return;
 
-    auto ret = static_cast<crypto_param_decrypt *>(ctx.user_data);
+    auto ret = static_cast<crypto_param_decrypt *>(ctx->user_data);
     int  len = (ret->out_len == NULL) ? 0 : *ret->out_len;
     auto out = (ret->out == NULL) ? std::string() : std::string(ret->out, len);
     auto in  = (ret->in == NULL) ? std::string() : std::string(ret->in);
@@ -188,19 +189,19 @@ C_STYLE_EXPORT void crypto_decrypt(sdk_context ctx)
 
         strncpy_s(ret->out, CRYPTO_MAX_OUTPUT_SIZE, out.c_str(), out.size());
     }
-    if(ctx.cb != NULL)
-        ctx.cb(static_cast<void *>(ret));
+    if(ctx->cb != NULL)
+        ctx->cb(static_cast<void *>(ret));
 }
 
-C_STYLE_EXPORT void crypto_keygen(sdk_context ctx)
+C_STYLE_EXPORT void crypto_keygen(sdk_context *ctx)
 {
-    if(sizeof(ctx) != ctx.sz)
+    if(ctx == nullptr || ctx->sz < sizeof(sdk_context))
         return;
 
-    if(ctx.user_data == NULL)
+    if(ctx->user_data == NULL)
         return;
 
-    auto ret  = static_cast<crypto_param_keygen *>(ctx.user_data);
+    auto ret  = static_cast<crypto_param_keygen *>(ctx->user_data);
     auto algo = (ret->algo == NULL) ? std::string() : std::string(ret->algo);
     auto fmt  = (ret->fmt == NULL) ? std::string() : std::string(ret->fmt);
     auto mode = (ret->mode == NULL) ? std::string() : std::string(ret->mode);
@@ -213,7 +214,7 @@ C_STYLE_EXPORT void crypto_keygen(sdk_context ctx)
 
     if(ret->result == OK)
     {
-        for(size_t i = 0; i < keys.size() && i < CRYPTO_MAX_KEY_NUM; i++)
+        for(int i = 0; i < keys.size() && i < CRYPTO_MAX_KEY_NUM; i++)
         {
             if(ret->out == NULL || ret->out_len == NULL)
                 break;
@@ -229,6 +230,6 @@ C_STYLE_EXPORT void crypto_keygen(sdk_context ctx)
         }
     }
 
-    if(ctx.cb != NULL)
-        ctx.cb(static_cast<void *>(ret));
+    if(ctx->cb != NULL)
+        ctx->cb(static_cast<void *>(ret));
 }

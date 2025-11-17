@@ -91,7 +91,7 @@ typedef struct sdk_context
 } sdk_context;
 
 typedef void (*sdk_callback)(void *);
-typedef void (*sdk_api)(sdk_context);
+typedef void (*sdk_api)(sdk_context *);
 
 // dll operations
 inline void *dll_open(const char *filename, int flag)

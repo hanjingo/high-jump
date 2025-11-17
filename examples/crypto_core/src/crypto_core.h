@@ -97,7 +97,7 @@ typedef struct crypto_param_version
 
 typedef struct crypto_param_init
 {
-    size_t data_pool_size;
+    int data_pool_size;
 
     int result;
 } crypto_param_init;
@@ -110,7 +110,7 @@ typedef struct crypto_param_quit
 typedef struct crypto_param_encrypt
 {
     char       *out;
-    size_t     *out_len;
+    int        *out_len;
     const char *in;
     const char *content;
     const char *algo;
@@ -126,7 +126,7 @@ typedef struct crypto_param_encrypt
 typedef struct crypto_param_decrypt
 {
     char       *out;
-    size_t     *out_len;
+    int        *out_len;
     const char *in;
     const char *content;
     const char *algo;
@@ -143,11 +143,11 @@ typedef struct crypto_param_decrypt
 typedef struct crypto_param_keygen
 {
     char      **out;
-    size_t    **out_len;
+    int       **out_len;
     const char *algo;
     const char *fmt;
     const char *mode;
-    size_t      bits;
+    int         bits;
 
     int result;
 } crypto_param_keygen;
@@ -155,7 +155,7 @@ typedef struct crypto_param_keygen
 typedef struct crypto_param_guess
 {
     char       *out;
-    size_t     *out_len;
+    int        *out_len;
     const char *in;
     const char *content;
     const char *algo;
@@ -170,20 +170,20 @@ typedef struct crypto_param_guess
 } crypto_param_guess;
 
 // --------------- API --------------------
-C_STYLE_EXPORT void crypto_version(sdk_context ctx);
+C_STYLE_EXPORT void crypto_version(sdk_context *ctx);
 
-C_STYLE_EXPORT void crypto_init(sdk_context ctx);
+C_STYLE_EXPORT void crypto_init(sdk_context *ctx);
 
-C_STYLE_EXPORT void crypto_quit(sdk_context ctx);
+C_STYLE_EXPORT void crypto_quit(sdk_context *ctx);
 
-C_STYLE_EXPORT void crypto_require(sdk_context ctx);
+C_STYLE_EXPORT void crypto_require(sdk_context *ctx);
 
-C_STYLE_EXPORT void crypto_release(sdk_context ctx);
+C_STYLE_EXPORT void crypto_release(sdk_context *ctx);
 
-C_STYLE_EXPORT void crypto_encrypt(sdk_context ctx);
+C_STYLE_EXPORT void crypto_encrypt(sdk_context *ctx);
 
-C_STYLE_EXPORT void crypto_decrypt(sdk_context ctx);
+C_STYLE_EXPORT void crypto_decrypt(sdk_context *ctx);
 
-C_STYLE_EXPORT void crypto_keygen(sdk_context ctx);
+C_STYLE_EXPORT void crypto_keygen(sdk_context *ctx);
 
 #endif

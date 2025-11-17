@@ -47,7 +47,8 @@ int rsa_keymaker::make(std::vector<std::string> &keys,
     auto        key_fmt  = _to_key_format(fmt);
     auto        key_mode = _to_mode(mode);
     std::string pubkey, prikey;
-    if(!hj::rsa::make_key_pair(pubkey, prikey, bits, key_fmt, key_mode))
+    if(hj::rsa::keygen(pubkey, prikey, bits, key_fmt, key_mode)
+       != hj::rsa::error_code::ok)
         return CRYPTO_ERR_KEYGEN_FAIL;
 
     keys.push_back(pubkey);

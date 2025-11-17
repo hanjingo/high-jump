@@ -82,6 +82,7 @@ int aes_decryptor::decrypt(std::string       &out,
         err = formator::unformat(tmp, content, fmt, fmt_target::memory);
         if(err == OK)
             err = hj::aes::decrypt(out, tmp, key, mod, pad, iv)
+                          == hj::aes::error_code::ok
                       ? OK
                       : CRYPTO_ERR_DECRYPT_AES_FAILED;
     } else if(out != "" && in != "") // decrypt: file -> file
@@ -90,6 +91,7 @@ int aes_decryptor::decrypt(std::string       &out,
         err             = formator::unformat(tmp, in, fmt, fmt_target::file);
         if(err == OK)
             err = hj::aes::decrypt_file(out, tmp, key, mod, pad, iv)
+                          == hj::aes::error_code::ok
                       ? OK
                       : CRYPTO_ERR_DECRYPT_AES_FAILED;
         hj::filepath::remove(tmp);
@@ -110,6 +112,7 @@ int aes_decryptor::decrypt(std::string       &out,
                       pad,
                       reinterpret_cast<const unsigned char *>(iv.c_str()),
                       iv.size())
+                          == hj::aes::error_code::ok
                       ? OK
                       : CRYPTO_ERR_DECRYPT_AES_FAILED;
         }
@@ -130,6 +133,7 @@ int aes_decryptor::decrypt(std::string       &out,
                       pad,
                       reinterpret_cast<const unsigned char *>(iv.c_str()),
                       iv.size())
+                          == hj::aes::error_code::ok
                       ? OK
                       : CRYPTO_ERR_DECRYPT_AES_FAILED;
             out = sout.str();
@@ -192,25 +196,26 @@ int base64_decryptor::decrypt(std::string       &out,
     int err = CRYPTO_ERR_FAIL;
     if(out == "" && in == "") // decrypt: mem -> mem
     {
-        err = hj::base64::decode(out, content)
+        err = hj::base64::decode(out, content) == hj::base64::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
     } else if(out != "" && in != "") // decrypt: file -> file
     {
-        err = hj::base64::decode_file(out, in)
+        err = hj::base64::decode_file(out, in) == hj::base64::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
     } else if(out != "" && in == "") // decrypt: mem -> file
     {
         std::ofstream      fout(out, std::ios::binary);
         std::istringstream sin(content);
-        err = hj::base64::decode(fout, sin);
+        err = static_cast<int>(hj::base64::decode(fout, sin));
     } else // decrypt: file -> mem
     {
         std::ifstream      fin(in, std::ios::binary);
         std::ostringstream sout(out);
-        err = hj::base64::decode(sout, fin) ? OK
-                                            : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
+        err = hj::base64::decode(sout, fin) == hj::base64::error_code::ok
+                  ? OK
+                  : CRYPTO_ERR_DECRYPT_BASE64_FAILED;
         out = sout.str();
     }
 
@@ -249,11 +254,13 @@ int des_decryptor::decrypt(std::string       &out,
     if(out == "" && in == "") // decrypt: mem -> mem
     {
         err = hj::des::decrypt(out, content, key, mod, pad, iv)
+                      == hj::des::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_DES_FAILED;
     } else if(out != "" && in != "") // decrypt: file -> file
     {
         err = hj::des::decrypt_file(out, in, key, mod, pad, iv)
+                      == hj::des::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_DES_FAILED;
     } else if(out != "" && in == "") // decrypt: mem -> file
@@ -269,6 +276,7 @@ int des_decryptor::decrypt(std::string       &out,
                   pad,
                   reinterpret_cast<const unsigned char *>(iv.c_str()),
                   iv.size())
+                      == hj::des::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_DES_FAILED;
     } else // decrypt: file -> mem
@@ -284,6 +292,7 @@ int des_decryptor::decrypt(std::string       &out,
                   pad,
                   reinterpret_cast<const unsigned char *>(iv.c_str()),
                   iv.size())
+                      == hj::des::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_DES_FAILED;
         out = sout.str();
@@ -356,11 +365,13 @@ int rsa_decryptor::decrypt(std::string       &out,
     if(out == "" && in == "") // decrypt: mem -> mem
     {
         err = hj::rsa::decrypt(out, content, key, pad, "")
+                      == hj::rsa::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     } else if(out != "" && in != "") // decrypt: file -> file
     {
         err = hj::rsa::decrypt_file(out, in, key, pad, "")
+                      == hj::rsa::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     } else if(out != "" && in == "") // decrypt: mem -> file
@@ -374,7 +385,7 @@ int rsa_decryptor::decrypt(std::string       &out,
                   key.size(),
                   pad,
                   nullptr,
-                  0)
+                  0) == hj::rsa::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_RSA_FAILED;
     } else // decrypt: file -> mem
@@ -388,7 +399,7 @@ int rsa_decryptor::decrypt(std::string       &out,
                   key.size(),
                   pad,
                   nullptr,
-                  0)
+                  0) == hj::rsa::error_code::ok
                   ? OK
                   : CRYPTO_ERR_DECRYPT_RSA_FAILED;
         out = sout.str();

@@ -51,8 +51,9 @@ int formator::_format_memory(std::string       &out,
         err = (!tmp.empty()) ? OK : CRYPTO_ERR_FORMAT_HEX_FAILED;
     } else if(fmt == "base64")
     {
-        err =
-            hj::base64::encode(tmp, in) ? OK : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+        err = hj::base64::encode(tmp, in) == hj::base64::error_code::ok
+                  ? OK
+                  : CRYPTO_ERR_FORMAT_BASE64_FAILED;
     } else if(fmt == "none" || fmt == "")
     {
         err = OK;
@@ -79,8 +80,9 @@ int formator::_unformat_memory(std::string       &out,
         err = (!tmp.empty()) ? OK : CRYPTO_ERR_UNFORMAT_HEX_FAILED;
     } else if(fmt == "base64")
     {
-        err = hj::base64::decode(out, in) ? OK
-                                          : CRYPTO_ERR_UNFORMAT_BASE64_FAILED;
+        err = hj::base64::decode(out, in) == hj::base64::error_code::ok
+                  ? OK
+                  : CRYPTO_ERR_UNFORMAT_BASE64_FAILED;
     } else if(fmt == "none" || fmt == "")
     {
         err = OK;
@@ -133,16 +135,17 @@ int formator::_format_file(const std::string &out,
         if(tmp == "")
         {
             // not same file
-            err = hj::base64::encode_file(out, in)
+            err = hj::base64::encode_file(out, in) == hj::base64::error_code::ok
                       ? OK
                       : CRYPTO_ERR_FORMAT_BASE64_FAILED;
         } else
         {
             // same file
             hj::filepath::copy_file(in, tmp);
-            err = hj::base64::encode_file(out, tmp)
-                      ? OK
-                      : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+            err =
+                hj::base64::encode_file(out, tmp) == hj::base64::error_code::ok
+                    ? OK
+                    : CRYPTO_ERR_FORMAT_BASE64_FAILED;
             hj::filepath::remove(tmp);
         }
     } else if(fmt == "none" || fmt == "")
@@ -196,16 +199,17 @@ int formator::_unformat_file(const std::string &out,
         if(tmp == "")
         {
             // not same file
-            err = hj::base64::decode_file(out, in)
+            err = hj::base64::decode_file(out, in) == hj::base64::error_code::ok
                       ? OK
                       : CRYPTO_ERR_FORMAT_BASE64_FAILED;
         } else
         {
             // same file
             hj::filepath::copy_file(in, tmp);
-            err = hj::base64::decode_file(out, tmp)
-                      ? OK
-                      : CRYPTO_ERR_FORMAT_BASE64_FAILED;
+            err =
+                hj::base64::decode_file(out, tmp) == hj::base64::error_code::ok
+                    ? OK
+                    : CRYPTO_ERR_FORMAT_BASE64_FAILED;
             hj::filepath::remove(tmp);
         }
     } else if(fmt == "none" || fmt == "")

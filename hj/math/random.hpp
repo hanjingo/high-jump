@@ -24,21 +24,29 @@
 
 namespace hj
 {
+namespace random
+{
 
-class random
+class engine
 {
   public:
-    random()
+    engine()
         : _engine{std::random_device{}()}
     {
     }
 
-    explicit random(unsigned int seed)
+    explicit engine(unsigned int seed)
         : _engine{seed}
     {
     }
 
-    ~random() = default;
+    ~engine() = default;
+
+    static engine &instance()
+    {
+        static engine _inst;
+        return _inst;
+    }
 
     template <typename T>
     T range(T min, T max)
@@ -82,6 +90,37 @@ class random
     std::mutex                 _mu;
 };
 
+template <typename T>
+T range(T min, T max)
+{
+    return engine::instance().range<T>(min, max);
 }
+
+template <int Min, int Max>
+int range()
+{
+    return engine::instance().range<int>(Min, Max);
+}
+
+template <typename T>
+T range_real(T min, T max)
+{
+    return engine::instance().range_real<T>(min, max);
+}
+
+template <typename T>
+std::vector<T> range_bulk(T min, T max, size_t n)
+{
+    return engine::instance().range_bulk<T>(min, max, n);
+}
+
+template <typename T>
+T normal(T mean, T stddev)
+{
+    return engine::instance().normal<T>(mean, stddev);
+}
+
+} // namespace random
+} // namespace hj
 
 #endif

@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <cstring>
 
 namespace hj
 {

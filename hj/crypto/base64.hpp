@@ -33,6 +33,7 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <cstring>
 
 #include <openssl/bio.h>
 #include <openssl/evp.h>

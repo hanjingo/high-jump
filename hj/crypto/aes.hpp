@@ -33,6 +33,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cstring>
 
 #include <openssl/aes.h>
 #include <openssl/evp.h>

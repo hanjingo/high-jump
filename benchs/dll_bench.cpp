@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h>
 #include <hj/os/dll.h>
 #include <string>
+#include <cstring>
 
 static void bm_build_lib_filename(benchmark::State &st)
 {

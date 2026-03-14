@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <cstdlib>
+#include <cstring>
 
 // This benchmark file avoids calling hid_enumerate() directly to remain
 // hermetic when hidapi isn't available at runtime. Instead we exercise the
@@ -17,7 +18,7 @@ static bluetooth_info_t *make_dummy_device(unsigned short vendor_id,
 {
     bluetooth_info_t *d = new bluetooth_info_t();
     // zero-initialize commonly used fields to be safe
-    std::memset(d, 0, sizeof(bluetooth_info_t));
+    memset(d, 0, sizeof(bluetooth_info_t));
     d->vendor_id = vendor_id;
     // Some builds expose bus_type; set if available.
 #ifdef HID_API_BUS_BLUETOOTH

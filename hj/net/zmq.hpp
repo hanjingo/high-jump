@@ -26,6 +26,7 @@
 #include <vector>
 #include <functional>
 #include <unordered_map>
+#include <cstring>
 
 #include <zmq.h>
 

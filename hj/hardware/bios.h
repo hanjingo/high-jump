@@ -25,6 +25,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 #define SMBIOS_TYPE_BIOS 0
 #define SMBIOS_TYPE_SYSTEM 1

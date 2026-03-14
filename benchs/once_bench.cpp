@@ -431,7 +431,6 @@ static void bm_once_function_pointer(benchmark::State &state)
     for(auto _ : state)
     {
         once_function_pointer_test();
-        benchmark::DoNotOptimize(once_function_pointer_test);
     }
 }
 BENCHMARK(bm_once_function_pointer);
@@ -451,7 +450,6 @@ static void bm_once_template_function(benchmark::State &state)
         template_once_function<int>(42);
         template_once_function<double>(3.14);
         template_once_function<std::string>("hello");
-        benchmark::DoNotOptimize(template_once_function<int>);
     }
 }
 BENCHMARK(bm_once_template_function);

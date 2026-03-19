@@ -351,9 +351,9 @@ jobs:
         set(VCPKG_CMAKE_SYSTEM_NAME Darwin)
         set(VCPKG_OSX_DEPLOYMENT_TARGET "11.0")
         
-        # Relax compiler warnings for boost
-        set(VCPKG_CXX_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
-        set(VCPKG_C_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
+        # Relax compiler warnings for boost and breakpad (macOS SDK headers trigger -Welaborated-enum-base with Homebrew clang)
+        set(VCPKG_CXX_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-elaborated-enum-base -Wno-unknown-warning-option")
+        set(VCPKG_C_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-elaborated-enum-base -Wno-unknown-warning-option")
         EOF
         
         echo "Custom triplet created:"
@@ -396,8 +396,8 @@ jobs:
           -DCMAKE_CXX_COMPILER=$CXX \
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
           -DVCPKG_TARGET_TRIPLET=arm64-osx-relaxed \
-          -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option" \
-          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option"
+          -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-elaborated-enum-base -Wno-unknown-warning-option" \
+          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-elaborated-enum-base -Wno-unknown-warning-option"
         
         echo "=== Post-configure disk usage ==="
         df -h

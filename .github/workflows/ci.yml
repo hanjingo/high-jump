@@ -176,11 +176,11 @@ jobs:
         echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
         export MACOSX_DEPLOYMENT_TARGET=11.0
         
-        # Install required packages including autoconf-archive
+        # Install required packages including autoconf-archive and libtool (for glibtoolize)
         echo "=== Installing required packages ==="
-        brew install automake autoconf-archive || true
-        brew unlink automake autoconf 2>/dev/null || true
-        brew link --force --overwrite automake autoconf autoconf-archive || true
+        brew install automake autoconf-archive libtool || true
+        brew unlink automake autoconf libtool 2>/dev/null || true
+        brew link --force --overwrite automake autoconf autoconf-archive libtool || true
         
         # Find and fix aclocal - multiple strategies
         echo "=== Finding and fixing aclocal ==="
@@ -240,7 +240,7 @@ jobs:
         
         # Also fix other autotools
         echo "=== Fixing other autotools ==="
-        for tool in autoconf autoheader autom4te autoreconf libtool libtoolize m4; do
+        for tool in autoconf autoheader autom4te autoreconf libtool libtoolize glibtool glibtoolize m4; do
           if [ ! -f "$BREW_PREFIX/bin/$tool" ]; then
             # Try to find in opt
             if [ -f "$BREW_PREFIX/opt/autoconf/bin/$tool" ]; then
@@ -252,6 +252,12 @@ jobs:
             fi
           fi
         done
+        
+        # Ensure glibtoolize is available (required by some vcpkg ports)
+        if [ ! -f "$BREW_PREFIX/bin/glibtoolize" ] && [ -f "$BREW_PREFIX/opt/libtool/bin/glibtoolize" ]; then
+          sudo ln -sf "$BREW_PREFIX/opt/libtool/bin/glibtoolize" "$BREW_PREFIX/bin/glibtoolize"
+          echo "✓ Created symlink for glibtoolize"
+        fi
         
         # Verify autoconf-archive is available
         echo "=== Verifying autoconf-archive ==="

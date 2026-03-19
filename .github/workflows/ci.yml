@@ -176,9 +176,9 @@ jobs:
         echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
         export MACOSX_DEPLOYMENT_TARGET=11.0
         
-        # Install required packages including autoconf-archive and libtool (for glibtoolize)
+        # Install required packages including autoconf-archive, libtool (for glibtoolize), and unixodbc
         echo "=== Installing required packages ==="
-        brew install automake autoconf-archive libtool || true
+        brew install automake autoconf-archive libtool unixodbc || true
         brew unlink automake autoconf libtool 2>/dev/null || true
         brew link --force --overwrite automake autoconf autoconf-archive libtool || true
         
@@ -320,6 +320,13 @@ jobs:
         echo "CC=$(which clang)" >> $GITHUB_ENV
         echo "CXX=$(which clang++)" >> $GITHUB_ENV
         
+        # Set ODBC paths for CMake to find unixodbc installed via Homebrew
+        if [ -d "$BREW_PREFIX/opt/unixodbc" ]; then
+          echo "ODBC_INCLUDE_DIR=$BREW_PREFIX/opt/unixodbc/include" >> $GITHUB_ENV
+          echo "ODBC_LIBRARY=$BREW_PREFIX/opt/unixodbc/lib/libodbc.dylib" >> $GITHUB_ENV
+          echo "✓ ODBC paths configured: $BREW_PREFIX/opt/unixodbc"
+        fi
+        
         # Verify tools are available
         echo "Tool verification:"
         echo "  CMake: $(cmake --version | head -1)"
@@ -381,6 +388,9 @@ jobs:
         which aclocal || echo "aclocal not in PATH"
         which autoreconf || echo "autoreconf not in PATH"
         
+        # Get Homebrew prefix for ODBC paths
+        BREW_PREFIX=$(brew --prefix)
+        
         echo "=== Running CMake configuration ==="
         
         cmake -B build \
@@ -397,7 +407,9 @@ jobs:
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
           -DVCPKG_TARGET_TRIPLET=arm64-osx-relaxed \
           -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-elaborated-enum-base -Wno-unknown-warning-option" \
-          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-elaborated-enum-base -Wno-unknown-warning-option"
+          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-elaborated-enum-base -Wno-unknown-warning-option" \
+          -DODBC_INCLUDE_DIR="$BREW_PREFIX/opt/unixodbc/include" \
+          -DODBC_LIBRARY="$BREW_PREFIX/opt/unixodbc/lib/libodbc.dylib"
         
         echo "=== Post-configure disk usage ==="
         df -h

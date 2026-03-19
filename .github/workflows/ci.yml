@@ -346,8 +346,8 @@ jobs:
         set(VCPKG_OSX_DEPLOYMENT_TARGET "11.0")
         
         # Relax compiler warnings for boost
-        set(VCPKG_CXX_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-enum-constexpr-conversion -Wno-deprecated-builtins")
-        set(VCPKG_C_FLAGS "-Wno-deprecated -Wno-deprecated-declarations")
+        set(VCPKG_CXX_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
+        set(VCPKG_C_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
         EOF
         
         echo "Custom triplet created:"
@@ -390,8 +390,8 @@ jobs:
           -DCMAKE_CXX_COMPILER=$CXX \
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
           -DVCPKG_TARGET_TRIPLET=arm64-osx-relaxed \
-          -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-enum-constexpr-conversion -Wno-deprecated-builtins" \
-          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations"
+          -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option" \
+          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option"
         
         echo "=== Post-configure disk usage ==="
         df -h

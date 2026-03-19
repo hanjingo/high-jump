@@ -351,7 +351,7 @@ jobs:
         echo "=== Creating custom vcpkg triplet ==="
         mkdir -p tools/vcpkg/triplets/community
         
-        # Create a custom triplet with relaxed compiler settings and Apple system clang
+        # Create a custom triplet for ARM64 macOS with explicit architecture flags
         cat > tools/vcpkg/triplets/community/arm64-osx-relaxed.cmake << 'EOF'
         set(VCPKG_TARGET_ARCHITECTURE arm64)
         set(VCPKG_CRT_LINKAGE dynamic)
@@ -359,14 +359,12 @@ jobs:
         set(VCPKG_CMAKE_SYSTEM_NAME Darwin)
         set(VCPKG_OSX_DEPLOYMENT_TARGET "11.0")
         
-        # Force use of Apple's system clang - Homebrew clang doesn't handle macOS framework headers properly
-        set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "")
-        set(CMAKE_C_COMPILER "/usr/bin/clang")
-        set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
+        # Explicitly set ARM64 architecture - required for boost-context assembly file selection
+        set(VCPKG_OSX_ARCHITECTURES arm64)
         
-        # Relax compiler warnings for boost and breakpad
-        set(VCPKG_CXX_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
-        set(VCPKG_C_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
+        # Add -arch arm64 to ensure correct code generation and assembly file selection
+        set(VCPKG_CXX_FLAGS "-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
+        set(VCPKG_C_FLAGS "-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
         EOF
         
         echo "Custom triplet created:"
@@ -408,12 +406,13 @@ jobs:
           -DASAN=OFF \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
           -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+          -DCMAKE_OSX_ARCHITECTURES=arm64 \
           -DCMAKE_C_COMPILER=/usr/bin/clang \
           -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
           -DVCPKG_TARGET_TRIPLET=arm64-osx-relaxed \
-          -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option" \
-          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option" \
+          -DCMAKE_CXX_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option" \
+          -DCMAKE_C_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option" \
           -DODBC_INCLUDE_DIR="$BREW_PREFIX/opt/unixodbc/include" \
           -DODBC_LIBRARY="$BREW_PREFIX/opt/unixodbc/lib/libodbc.dylib"
         

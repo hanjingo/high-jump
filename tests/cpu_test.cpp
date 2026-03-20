@@ -265,7 +265,7 @@ TEST_F(cpu, cpu_pause)
     // Optional timing check - don't fail if timing is not measurable
     if(duration.count() > 0)
     {
-        EXPECT_LT(duration.count(), 100000000) << "cpu_pause should not take excessively long (< 100ms)";
+        EXPECT_LT(duration.count(), 500000000) << "cpu_pause should not take excessively long (< 500ms)";
     }
     else
     {

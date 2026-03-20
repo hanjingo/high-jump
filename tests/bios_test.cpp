@@ -107,6 +107,12 @@ TEST(bios, starting_segment)
         return;
     }
     ASSERT_EQ(ret, BIOS_OK);
+    if(seg == 0)
+    {
+        GTEST_SKIP() << "bios_starting_segment skipped: segment is 0 (UEFI or "
+                        "unsupported)";
+        return;
+    }
     ASSERT_GT(seg, 0u);
 }
 

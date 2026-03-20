@@ -230,11 +230,14 @@ TEST_F(gzip, max_output_size_limit)
 
 TEST_F(gzip, stream_compression)
 {
-    std::ofstream input_file("test_input.txt", std::ios::binary);
-    ASSERT_TRUE(input_file.is_open());
-    input_file.write(reinterpret_cast<const char *>(test_data.data()),
-                     test_data.size());
-    input_file.close();
+    {
+        std::ofstream input_file("test_input.txt", std::ios::binary);
+        ASSERT_TRUE(input_file.is_open());
+        input_file.write(reinterpret_cast<const char *>(test_data.data()),
+                         test_data.size());
+        ASSERT_TRUE(input_file.good()) << "Failed to write test_input.txt";
+        input_file.flush();
+    }
 
     std::ifstream in_stream("test_input.txt", std::ios::binary);
     std::ofstream out_stream("test_output.gz", std::ios::binary);

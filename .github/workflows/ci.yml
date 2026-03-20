@@ -141,7 +141,7 @@ jobs:
   # ================================ Build (macOS) ================================
   build-macos:
     name: Build and Test (macOS)
-    runs-on: macos-13
+    runs-on: macos-14
     strategy:
       matrix:
         build_type: [Release]
@@ -173,53 +173,57 @@ jobs:
         
         # Set environment variables for macOS
         echo "Setting macOS deployment target..."
-        echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
-        export MACOSX_DEPLOYMENT_TARGET=10.15
+        echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+        export MACOSX_DEPLOYMENT_TARGET=11.0
         
-        # Install required packages including autoconf-archive
+        # Install required packages including autoconf-archive, libtool (for glibtoolize), and unixodbc
         echo "=== Installing required packages ==="
-        brew install automake autoconf-archive || true
-        brew unlink automake autoconf 2>/dev/null || true
-        brew link --force --overwrite automake autoconf autoconf-archive || true
+        brew install automake autoconf-archive libtool unixodbc || true
+        brew unlink automake autoconf libtool 2>/dev/null || true
+        brew link --force --overwrite automake autoconf autoconf-archive libtool || true
         
         # Find and fix aclocal - multiple strategies
         echo "=== Finding and fixing aclocal ==="
         
+        # Get Homebrew prefix (different on ARM vs Intel Macs)
+        BREW_PREFIX=$(brew --prefix)
+        echo "Homebrew prefix: $BREW_PREFIX"
+        
         # Strategy 1: Direct symlink from opt to bin
-        if [ -f "/usr/local/opt/automake/bin/aclocal" ] && [ ! -f "/usr/local/bin/aclocal" ]; then
-          sudo ln -sf /usr/local/opt/automake/bin/aclocal /usr/local/bin/aclocal
-          echo "✓ Created symlink: /usr/local/bin/aclocal -> /usr/local/opt/automake/bin/aclocal"
+        if [ -f "$BREW_PREFIX/opt/automake/bin/aclocal" ] && [ ! -f "$BREW_PREFIX/bin/aclocal" ]; then
+          sudo ln -sf $BREW_PREFIX/opt/automake/bin/aclocal $BREW_PREFIX/bin/aclocal
+          echo "✓ Created symlink: $BREW_PREFIX/bin/aclocal -> $BREW_PREFIX/opt/automake/bin/aclocal"
         fi
         
         # Strategy 2: Find in Cellar and link
-        if [ ! -f "/usr/local/bin/aclocal" ]; then
-          ACLOCAL_PATH=$(find /usr/local/Cellar/automake*/bin -name aclocal 2>/dev/null | head -1)
+        if [ ! -f "$BREW_PREFIX/bin/aclocal" ]; then
+          ACLOCAL_PATH=$(find $BREW_PREFIX/Cellar/automake*/bin -name aclocal 2>/dev/null | head -1)
           if [ -n "$ACLOCAL_PATH" ] && [ -f "$ACLOCAL_PATH" ]; then
-            sudo ln -sf "$ACLOCAL_PATH" /usr/local/bin/aclocal
-            echo "✓ Created symlink from Cellar: /usr/local/bin/aclocal -> $ACLOCAL_PATH"
+            sudo ln -sf "$ACLOCAL_PATH" $BREW_PREFIX/bin/aclocal
+            echo "✓ Created symlink from Cellar: $BREW_PREFIX/bin/aclocal -> $ACLOCAL_PATH"
           fi
         fi
         
         # Strategy 3: Copy instead of symlink if symlink fails
-        if [ ! -f "/usr/local/bin/aclocal" ]; then
-          for ACLOCAL_SOURCE in "/usr/local/opt/automake/bin/aclocal" $(find /usr/local/Cellar/automake*/bin -name aclocal 2>/dev/null); do
+        if [ ! -f "$BREW_PREFIX/bin/aclocal" ]; then
+          for ACLOCAL_SOURCE in "$BREW_PREFIX/opt/automake/bin/aclocal" $(find $BREW_PREFIX/Cellar/automake*/bin -name aclocal 2>/dev/null); do
             if [ -f "$ACLOCAL_SOURCE" ]; then
-              sudo cp "$ACLOCAL_SOURCE" /usr/local/bin/aclocal
-              sudo chmod +x /usr/local/bin/aclocal
-              echo "✓ Copied aclocal: $ACLOCAL_SOURCE -> /usr/local/bin/aclocal"
+              sudo cp "$ACLOCAL_SOURCE" $BREW_PREFIX/bin/aclocal
+              sudo chmod +x $BREW_PREFIX/bin/aclocal
+              echo "✓ Copied aclocal: $ACLOCAL_SOURCE -> $BREW_PREFIX/bin/aclocal"
               break
             fi
           done
         fi
         
         # Strategy 4: Add automake bin directory to PATH
-        export PATH="/usr/local/opt/automake/bin:$PATH"
-        echo "PATH=/usr/local/opt/automake/bin:$PATH" >> $GITHUB_ENV
+        export PATH="$BREW_PREFIX/opt/automake/bin:$PATH"
+        echo "PATH=$BREW_PREFIX/opt/automake/bin:$PATH" >> $GITHUB_ENV
         
         # Strategy 5: Set ACLOCAL environment variable directly
-        if [ -f "/usr/local/opt/automake/bin/aclocal" ]; then
-          echo "ACLOCAL=/usr/local/opt/automake/bin/aclocal" >> $GITHUB_ENV
-          export ACLOCAL="/usr/local/opt/automake/bin/aclocal"
+        if [ -f "$BREW_PREFIX/opt/automake/bin/aclocal" ]; then
+          echo "ACLOCAL=$BREW_PREFIX/opt/automake/bin/aclocal" >> $GITHUB_ENV
+          export ACLOCAL="$BREW_PREFIX/opt/automake/bin/aclocal"
         fi
         
         # Verify aclocal is now accessible
@@ -230,24 +234,30 @@ jobs:
         else
           echo "✗ aclocal still not found in PATH"
           echo "Listing automake installation:"
-          ls -la /usr/local/opt/automake/bin/ 2>/dev/null || echo "automake opt dir not found"
-          ls -la /usr/local/Cellar/automake*/bin/ 2>/dev/null || echo "automake cellar dir not found"
+          ls -la $BREW_PREFIX/opt/automake/bin/ 2>/dev/null || echo "automake opt dir not found"
+          ls -la $BREW_PREFIX/Cellar/automake*/bin/ 2>/dev/null || echo "automake cellar dir not found"
         fi
         
         # Also fix other autotools
         echo "=== Fixing other autotools ==="
-        for tool in autoconf autoheader autom4te autoreconf libtool libtoolize m4; do
-          if [ ! -f "/usr/local/bin/$tool" ]; then
+        for tool in autoconf autoheader autom4te autoreconf libtool libtoolize glibtool glibtoolize m4; do
+          if [ ! -f "$BREW_PREFIX/bin/$tool" ]; then
             # Try to find in opt
-            if [ -f "/usr/local/opt/autoconf/bin/$tool" ]; then
-              sudo ln -sf "/usr/local/opt/autoconf/bin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
-            elif [ -f "/usr/local/opt/libtool/bin/$tool" ]; then
-              sudo ln -sf "/usr/local/opt/libtool/bin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
-            elif [ -f "/usr/local/opt/m4/bin/$tool" ]; then
-              sudo ln -sf "/usr/local/opt/m4/bin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
+            if [ -f "$BREW_PREFIX/opt/autoconf/bin/$tool" ]; then
+              sudo ln -sf "$BREW_PREFIX/opt/autoconf/bin/$tool" "$BREW_PREFIX/bin/$tool" 2>/dev/null || true
+            elif [ -f "$BREW_PREFIX/opt/libtool/bin/$tool" ]; then
+              sudo ln -sf "$BREW_PREFIX/opt/libtool/bin/$tool" "$BREW_PREFIX/bin/$tool" 2>/dev/null || true
+            elif [ -f "$BREW_PREFIX/opt/m4/bin/$tool" ]; then
+              sudo ln -sf "$BREW_PREFIX/opt/m4/bin/$tool" "$BREW_PREFIX/bin/$tool" 2>/dev/null || true
             fi
           fi
         done
+        
+        # Ensure glibtoolize is available (required by some vcpkg ports)
+        if [ ! -f "$BREW_PREFIX/bin/glibtoolize" ] && [ -f "$BREW_PREFIX/opt/libtool/bin/glibtoolize" ]; then
+          sudo ln -sf "$BREW_PREFIX/opt/libtool/bin/glibtoolize" "$BREW_PREFIX/bin/glibtoolize"
+          echo "✓ Created symlink for glibtoolize"
+        fi
         
         # Verify autoconf-archive is available
         echo "=== Verifying autoconf-archive ==="
@@ -255,7 +265,7 @@ jobs:
           echo "✓ autoconf-archive is installed"
           
           # Make sure autoconf-archive macros are available to aclocal
-          AUTOCONF_ARCHIVE_DIR="/usr/local/share/aclocal"
+          AUTOCONF_ARCHIVE_DIR="$BREW_PREFIX/share/aclocal"
           if [ -d "$AUTOCONF_ARCHIVE_DIR" ]; then
             echo "✓ autoconf-archive macros found at: $AUTOCONF_ARCHIVE_DIR"
           else
@@ -273,8 +283,8 @@ jobs:
         
         echo "=== Verifying environment setup ==="
         # Set up critical autotools paths explicitly
-        export PATH="/usr/local/bin:/usr/local/opt/autoconf/bin:/usr/local/opt/automake/bin:/usr/local/opt/libtool/bin:/usr/local/opt/m4/bin:/usr/local/opt/gettext/bin:$PATH"
-        export ACLOCAL_PATH="/usr/local/share/aclocal:/usr/local/opt/autoconf/share/aclocal:/usr/local/opt/automake/share/aclocal:/usr/local/opt/libtool/share/aclocal:/usr/local/opt/gettext/share/aclocal"
+        export PATH="$BREW_PREFIX/bin:$BREW_PREFIX/opt/autoconf/bin:$BREW_PREFIX/opt/automake/bin:$BREW_PREFIX/opt/libtool/bin:$BREW_PREFIX/opt/m4/bin:$BREW_PREFIX/opt/gettext/bin:$PATH"
+        export ACLOCAL_PATH="$BREW_PREFIX/share/aclocal:$BREW_PREFIX/opt/autoconf/share/aclocal:$BREW_PREFIX/opt/automake/share/aclocal:$BREW_PREFIX/opt/libtool/share/aclocal:$BREW_PREFIX/opt/gettext/share/aclocal"
         
         # Add to GitHub ENV for later steps
         echo "PATH=$PATH" >> $GITHUB_ENV
@@ -306,9 +316,17 @@ jobs:
           echo "✗ autoreconf not found"
         fi
         
-        # Set compiler environment variables
-        echo "CC=$(which clang)" >> $GITHUB_ENV
-        echo "CXX=$(which clang++)" >> $GITHUB_ENV
+        # Set compiler environment variables - use Apple's system clang, NOT Homebrew clang
+        # Homebrew clang doesn't properly handle macOS framework headers (IOKit, CoreFoundation)
+        echo "CC=/usr/bin/clang" >> $GITHUB_ENV
+        echo "CXX=/usr/bin/clang++" >> $GITHUB_ENV
+        
+        # Set ODBC paths for CMake to find unixodbc installed via Homebrew
+        if [ -d "$BREW_PREFIX/opt/unixodbc" ]; then
+          echo "ODBC_INCLUDE_DIR=$BREW_PREFIX/opt/unixodbc/include" >> $GITHUB_ENV
+          echo "ODBC_LIBRARY=$BREW_PREFIX/opt/unixodbc/lib/libodbc.dylib" >> $GITHUB_ENV
+          echo "✓ ODBC paths configured: $BREW_PREFIX/opt/unixodbc"
+        fi
         
         # Verify tools are available
         echo "Tool verification:"
@@ -333,31 +351,29 @@ jobs:
         echo "=== Creating custom vcpkg triplet ==="
         mkdir -p tools/vcpkg/triplets/community
         
-        # Create a custom triplet with relaxed compiler settings
-        cat > tools/vcpkg/triplets/community/x64-osx-relaxed.cmake << 'EOF'
-        set(VCPKG_TARGET_ARCHITECTURE x64)
+        # Create a custom triplet for ARM64 macOS with explicit architecture flags
+        cat > tools/vcpkg/triplets/community/arm64-osx-relaxed.cmake << 'EOF'
+        set(VCPKG_TARGET_ARCHITECTURE arm64)
         set(VCPKG_CRT_LINKAGE dynamic)
         set(VCPKG_LIBRARY_LINKAGE static)
         set(VCPKG_CMAKE_SYSTEM_NAME Darwin)
-        set(VCPKG_OSX_DEPLOYMENT_TARGET "10.15")
+        set(VCPKG_OSX_DEPLOYMENT_TARGET "11.0")
         
-        # Relax compiler warnings for boost
-        set(VCPKG_CXX_FLAGS "-Wno-deprecated -Wno-deprecated-declarations -Wno-enum-constexpr-conversion -Wno-deprecated-builtins")
-        set(VCPKG_C_FLAGS "-Wno-deprecated -Wno-deprecated-declarations")
+        # Explicitly set ARM64 architecture - required for boost-context assembly file selection
+        set(VCPKG_OSX_ARCHITECTURES arm64)
+        
+        # Add -arch arm64 to ensure correct code generation and assembly file selection
+        set(VCPKG_CXX_FLAGS "-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
+        set(VCPKG_C_FLAGS "-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
         EOF
         
         echo "Custom triplet created:"
-        cat tools/vcpkg/triplets/community/x64-osx-relaxed.cmake
+        cat tools/vcpkg/triplets/community/arm64-osx-relaxed.cmake
 
     - name: Configure CMake (macOS)
       env:
         VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-        MACOSX_DEPLOYMENT_TARGET: "10.15"
-        ACLOCAL: "/usr/local/bin/aclocal"
-        AUTOMAKE: "/usr/local/bin/automake"
-        AUTORECONF: "/usr/local/bin/autoreconf"
-        LIBTOOL: "/usr/local/bin/libtool"
-        M4: "/usr/local/bin/m4"
+        MACOSX_DEPLOYMENT_TARGET: "11.0"
       run: |
         echo "=== Pre-configure disk usage ==="
         df -h
@@ -368,16 +384,16 @@ jobs:
         echo "CXX: $CXX"
         echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
         echo "VCPKG_ROOT: $VCPKG_ROOT"
-        echo "ACLOCAL: $ACLOCAL"
         echo "PATH: $PATH"
-        echo "ACLOCAL_PATH: $ACLOCAL_PATH"
         echo "=============================="
         
         # check autotools
         echo "=== Final autotools check before CMake ==="
         which aclocal || echo "aclocal not in PATH"
         which autoreconf || echo "autoreconf not in PATH"
-        ls -la /usr/local/bin/aclocal 2>/dev/null || echo "aclocal not in /usr/local/bin"
+        
+        # Get Homebrew prefix for ODBC paths
+        BREW_PREFIX=$(brew --prefix)
         
         echo "=== Running CMake configuration ==="
         
@@ -389,13 +405,16 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
           -DASAN=OFF \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
-          -DCMAKE_C_COMPILER=$CC \
-          -DCMAKE_CXX_COMPILER=$CXX \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+          -DCMAKE_OSX_ARCHITECTURES=arm64 \
+          -DCMAKE_C_COMPILER=/usr/bin/clang \
+          -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
-          -DVCPKG_TARGET_TRIPLET=x64-osx-relaxed \
-          -DCMAKE_CXX_FLAGS="-Wno-deprecated -Wno-deprecated-declarations -Wno-enum-constexpr-conversion -Wno-deprecated-builtins" \
-          -DCMAKE_C_FLAGS="-Wno-deprecated -Wno-deprecated-declarations"
+          -DVCPKG_TARGET_TRIPLET=arm64-osx-relaxed \
+          -DCMAKE_CXX_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option" \
+          -DCMAKE_C_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option" \
+          -DODBC_INCLUDE_DIR="$BREW_PREFIX/opt/unixodbc/include" \
+          -DODBC_LIBRARY="$BREW_PREFIX/opt/unixodbc/lib/libodbc.dylib"
         
         echo "=== Post-configure disk usage ==="
         df -h
@@ -441,7 +460,7 @@ jobs:
           build/compile_commands.json
           build/vcpkg-manifest-install.log
           tools/vcpkg/buildtrees/boost-thread/install-*-out.log
-          tools/vcpkg/triplets/community/x64-osx-relaxed.cmake
+          tools/vcpkg/triplets/community/arm64-osx-relaxed.cmake
         retention-days: 7
 
   # ================================ Build (Windows) ================================

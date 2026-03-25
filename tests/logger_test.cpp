@@ -297,19 +297,23 @@ TEST_F(logger, custom_logger_construction)
 
 TEST_F(logger, file_logging)
 {
-    if(!std::filesystem::exists("test_logs"))
+    auto test_logs_dir = std::filesystem::absolute("test_logs");
+    if(!std::filesystem::exists(test_logs_dir))
     {
         GTEST_SKIP() << "skip test file_logging create dir failed";
     }
+
+    const auto log_path = test_logs_dir / "file_test.log";
 
     {
         hj::log::logger file_logger("file_test", false);
 
         auto file_sink =
-            hj::log::logger::create_rotate_file_sink("test_logs/file_test.log",
+            hj::log::logger::create_rotate_file_sink(log_path.string(),
                                                      1024,
                                                      3,
-                                                     false);
+                                                     true);
+        ASSERT_NE(file_sink, nullptr) << "Failed to create rotating file sink";
         file_logger.add_sink(std::move(file_sink));
 
         file_logger.info("This is a file log message");
@@ -317,7 +321,11 @@ TEST_F(logger, file_logging)
         file_logger.flush();
     }
 
-    ASSERT_TRUE(std::filesystem::exists("test_logs/file_test.log"));
+    // Force filesystem sync on some platforms
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    ASSERT_TRUE(std::filesystem::exists(log_path))
+        << "Log file not found at: " << log_path.string();
 }
 
 TEST_F(logger, thread_safety)

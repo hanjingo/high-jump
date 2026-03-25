@@ -16,7 +16,7 @@ TEST(unicode, from_utf8_to_utf8_basic)
     std::wstring w_en    = hj::unicode::from_utf8(utf8_en);
     EXPECT_EQ(hj::unicode::to_utf8(w_en), utf8_en);
 
-    std::string  utf8_cn = u8"你好，世界";
+    std::string  utf8_cn = reinterpret_cast<const char*>(u8"你好，世界");
     std::wstring w_cn    = hj::unicode::from_utf8(utf8_cn);
     EXPECT_EQ(hj::unicode::to_utf8(w_cn), utf8_cn);
 

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-static std::string  utf8_str = u8"你好，世界！Hello, world! 🌍";
+static std::string  utf8_str = reinterpret_cast<const char*>(u8"你好，世界！Hello, world! 🌍");
 static std::wstring wide_str = hj::utf8::encode(utf8_str);
 
 static void bm_utf8_is_valid(benchmark::State &state)

@@ -33,7 +33,7 @@ TEST(qrcode, encode_decode_pgm_file)
 
     // write to temp file
     fs::path    tmp  = fs::temp_directory_path() / "hj_qrcode_test.pgm";
-    std::string path = tmp.u8string();
+    std::string path = tmp.string();
 
     ec = qrcode::builder::encode(path, payload);
     ASSERT_EQ(ec.value(), 0) << "pgm write failed: " << ec.message();
@@ -70,7 +70,7 @@ TEST(qrcode, decode_malformed_magic_pgm)
 {
     // create a temporary file with wrong magic
     fs::path    tmp  = fs::temp_directory_path() / "hj_qrcode_bad_magic.pgm";
-    std::string path = tmp.u8string();
+    std::string path = tmp.string();
     {
         std::ofstream ofs(path, std::ios::binary);
         ofs << "P2\n# not a P5 file\n1 1\n255\n";

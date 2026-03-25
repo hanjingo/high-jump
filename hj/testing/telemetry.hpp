@@ -235,25 +235,23 @@ make_meter_selector(const std::string &name,
 static std::unique_ptr<opentelemetry::sdk::metrics::View>
 make_view(const std::string &name,
           const std::string &desc,
-          const std::string &unit,
+          const std::string & /*unit*/,
           aggregation_type   type) noexcept
 {
     return opentelemetry::sdk::metrics::ViewFactory::Create(name,
                                                             desc,
-                                                            unit,
                                                             type);
 }
 
 static std::unique_ptr<opentelemetry::sdk::metrics::View> make_view(
     const std::string                           &name,
     const std::string                           &desc,
-    const std::string                           &unit,
+    const std::string                           & /*unit*/,
     aggregation_type                             type,
     std::shared_ptr<metric_aggregation_config_t> aggregation_config) noexcept
 {
     return opentelemetry::sdk::metrics::ViewFactory::Create(name,
                                                             desc,
-                                                            unit,
                                                             type,
                                                             aggregation_config);
 }

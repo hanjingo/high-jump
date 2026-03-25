@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <hj/math/matrix_iterator.hpp>
 #include <vector>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 using hj::matrix_iterator;
 

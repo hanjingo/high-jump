@@ -33,8 +33,8 @@ using http_content_reader = httplib::ContentReader;
 
 using http_params = httplib::Params;
 
-using http_multipart_form_data_items = httplib::MultipartFormDataItems;
-using http_multipart_form_data       = httplib::MultipartFormData;
+using http_multipart_form_data_items = httplib::UploadFormDataItems;
+using http_multipart_form_data       = httplib::UploadFormData;
 
 }
 

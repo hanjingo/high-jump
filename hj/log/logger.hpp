@@ -301,37 +301,37 @@ class logger
     template <typename... Args>
     inline void trace(const char *fmt, Args &&...args)
     {
-        _base->trace(fmt, std::forward<Args>(args)...);
+        _base->trace(::fmt::runtime(fmt), std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     inline void debug(const char *fmt, Args &&...args)
     {
-        _base->debug(fmt, std::forward<Args>(args)...);
+        _base->debug(::fmt::runtime(fmt), std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     inline void info(const char *fmt, Args &&...args)
     {
-        _base->info(fmt, std::forward<Args>(args)...);
+        _base->info(::fmt::runtime(fmt), std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     inline void warn(const char *fmt, Args &&...args)
     {
-        _base->warn(fmt, std::forward<Args>(args)...);
+        _base->warn(::fmt::runtime(fmt), std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     inline void error(const char *fmt, Args &&...args)
     {
-        _base->error(fmt, std::forward<Args>(args)...);
+        _base->error(::fmt::runtime(fmt), std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     void critical(const char *fmt, Args &&...args)
     {
-        _base->critical(fmt, std::forward<Args>(args)...);
+        _base->critical(::fmt::runtime(fmt), std::forward<Args>(args)...);
     }
 
   private:

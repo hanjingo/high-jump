@@ -64,7 +64,7 @@ find_package(cityhash REQUIRED)
 find_package(unofficial-libharu REQUIRED)
 find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
 find_package(clickhouse-cpp QUIET) # depend: lz4, zstd, cityhash
-find_package(libpqxx REQUIRED)
+# find_package(libpqxx REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(gRPC CONFIG QUIET)
 find_package(hffix REQUIRED)
@@ -168,7 +168,7 @@ target_link_libraries(${PROJECT_NAME}
     yaml-cpp::yaml-cpp
     nlohmann_json::nlohmann_json
     jwt-cpp::jwt-cpp
-    libpqxx::pqxx
+    # libpqxx::pqxx
     hiredis::hiredis
 
     # breakpad_client

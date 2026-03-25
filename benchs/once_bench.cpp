@@ -7,6 +7,7 @@
 #include <thread>
 #include <chrono>
 #include <numeric>
+#include <stdexcept>
 #include <unordered_map>
 #include <functional>
 

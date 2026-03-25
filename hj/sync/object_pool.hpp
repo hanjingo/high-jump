@@ -20,7 +20,7 @@
 
 #include <cassert>
 #include <boost/pool/object_pool.hpp>
-#include <concurrentqueue/blockingconcurrentqueue.h>
+#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 
 namespace hj
 {

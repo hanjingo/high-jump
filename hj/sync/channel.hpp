@@ -18,7 +18,7 @@
 #ifndef CHANNEL_HPP
 #define CHANNEL_HPP
 
-#include <concurrentqueue/blockingconcurrentqueue.h>
+#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 
 namespace hj
 {

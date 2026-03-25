@@ -88,7 +88,7 @@ class debugger
             if(i > 0)
                 oss << ' ';
 
-            oss << fmt::format(style, data[i]);
+            oss << fmt::format(fmt::runtime(style), data[i]);
             if(++count >= DEBUG_BUF_SIZE)
             {
                 oss << " ...";

@@ -27,7 +27,7 @@
 
 #include <hj/net/tcp/tcp_socket.hpp>
 
-#include <concurrentqueue/blockingconcurrentqueue.h>
+#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 #include <boost/version.hpp>
 #include <boost/asio.hpp>
 #if BOOST_VERSION >= 108700

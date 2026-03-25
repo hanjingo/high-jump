@@ -31,7 +31,7 @@ static void bm_unicode_from_utf8_to_utf8_english(benchmark::State &state)
 
 static void bm_unicode_from_utf8_to_utf8_chinese(benchmark::State &state)
 {
-    std::string utf8_cn = u8"你好，世界";
+    std::string utf8_cn = reinterpret_cast<const char*>(u8"你好，世界");
 
     for(auto _ : state)
     {

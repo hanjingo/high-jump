@@ -265,11 +265,14 @@ TEST_F(gzip, stream_decompression)
         hj::gzip::compress(compressed, test_data.data(), test_data.size());
     ASSERT_EQ(compress_result, hj::gzip::err::ok);
 
-    std::ofstream compressed_file("test_output.gz", std::ios::binary);
-    ASSERT_TRUE(compressed_file.is_open());
-    compressed_file.write(reinterpret_cast<const char *>(compressed.data()),
-                          compressed.size());
-    compressed_file.close();
+    {
+        std::ofstream compressed_file("test_output.gz", std::ios::binary);
+        ASSERT_TRUE(compressed_file.is_open());
+        compressed_file.write(reinterpret_cast<const char *>(compressed.data()),
+                              compressed.size());
+        ASSERT_TRUE(compressed_file.good()) << "Failed to write test_output.gz";
+        compressed_file.flush();
+    }
 
     std::ifstream in_stream("test_output.gz", std::ios::binary);
     std::ofstream out_stream("test_decompressed.txt", std::ios::binary);
@@ -280,6 +283,7 @@ TEST_F(gzip, stream_decompression)
     EXPECT_EQ(decompress_result, hj::gzip::err::ok);
 
     in_stream.close();
+    out_stream.flush();
     out_stream.close();
 
     std::ifstream decompressed_file("test_decompressed.txt", std::ios::binary);

@@ -302,18 +302,20 @@ TEST_F(logger, file_logging)
         GTEST_SKIP() << "skip test file_logging create dir failed";
     }
 
-    hj::log::logger file_logger("file_test", false);
+    {
+        hj::log::logger file_logger("file_test", false);
 
-    auto file_sink =
-        hj::log::logger::create_rotate_file_sink("test_logs/file_test.log",
-                                                 1024,
-                                                 3,
-                                                 false);
-    file_logger.add_sink(std::move(file_sink));
+        auto file_sink =
+            hj::log::logger::create_rotate_file_sink("test_logs/file_test.log",
+                                                     1024,
+                                                     3,
+                                                     false);
+        file_logger.add_sink(std::move(file_sink));
 
-    file_logger.info("This is a file log message");
-    file_logger.error("This is an error in file");
-    file_logger.flush();
+        file_logger.info("This is a file log message");
+        file_logger.error("This is an error in file");
+        file_logger.flush();
+    }
 
     ASSERT_TRUE(std::filesystem::exists("test_logs/file_test.log"));
 }

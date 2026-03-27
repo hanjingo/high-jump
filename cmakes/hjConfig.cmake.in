@@ -4,16 +4,16 @@ set(hj_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_FULL_INCLUDEDIR@")
 check_required_components(hj)
 
 # ==============================================================================
-# Auto find high-jump dependencies and set HJ_LIBRARIES
+# Auto find high-jump dependencies and set hj_LIBRARIES
 # ==============================================================================
 
-set(HJ_LIBRARIES "")
+set(hj_LIBRARIES "")
 
-# Helper macro to find package and append to HJ_LIBRARIES
+# Helper macro to find package and append to hj_LIBRARIES
 macro(hj_find_and_append pkg_name)
     find_package(${pkg_name} CONFIG QUIET)
     if(${pkg_name}_FOUND OR ${ARGV1})
-        list(APPEND HJ_LIBRARIES ${ARGN})
+        list(APPEND hj_LIBRARIES ${ARGN})
     endif()
 endmacro()
 
@@ -22,21 +22,21 @@ find_package(Boost REQUIRED COMPONENTS
     filesystem 
     stacktrace_basic
 )
-list(APPEND HJ_LIBRARIES ${Boost_LIBRARIES})
+list(APPEND hj_LIBRARIES ${Boost_LIBRARIES})
 
 find_package(fmt CONFIG QUIET)
 if(fmt_FOUND)
-    list(APPEND HJ_LIBRARIES fmt::fmt)
+    list(APPEND hj_LIBRARIES fmt::fmt)
 endif()
 
 find_package(nlohmann_json CONFIG QUIET)
 if(nlohmann_json_FOUND)
-    list(APPEND HJ_LIBRARIES nlohmann_json::nlohmann_json)
+    list(APPEND hj_LIBRARIES nlohmann_json::nlohmann_json)
 endif()
 
 find_package(absl CONFIG QUIET)
 if(absl_FOUND)
-    list(APPEND HJ_LIBRARIES 
+    list(APPEND hj_LIBRARIES 
         absl::base
         absl::strings
         absl::synchronization
@@ -54,12 +54,12 @@ if(@HJ_ENABLE_AI@)
     find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
     find_library(QRENCODE_LIBRARY qrencode)
     if(QRENCODE_LIBRARY)
-        list(APPEND HJ_LIBRARIES ${QRENCODE_LIBRARY})
+        list(APPEND hj_LIBRARIES ${QRENCODE_LIBRARY})
     endif()
     
     find_package(quirc CONFIG QUIET)
     if(quirc_FOUND)
-        list(APPEND HJ_LIBRARIES quirc::quirc)
+        list(APPEND hj_LIBRARIES quirc::quirc)
     endif()
 endif()
 
@@ -68,7 +68,7 @@ if(@HJ_ENABLE_ALGO@)
     find_package(Boost QUIET COMPONENTS algorithm)
     find_package(behaviortree_cpp CONFIG QUIET)
     if(behaviortree_cpp_FOUND)
-        list(APPEND HJ_LIBRARIES BT::behaviortree_cpp)
+        list(APPEND hj_LIBRARIES BT::behaviortree_cpp)
     endif()
 endif()
 
@@ -76,12 +76,12 @@ endif()
 if(@HJ_ENABLE_COMPRESS@)
     find_package(ZLIB QUIET)
     if(ZLIB_FOUND)
-        list(APPEND HJ_LIBRARIES ZLIB::ZLIB)
+        list(APPEND hj_LIBRARIES ZLIB::ZLIB)
     endif()
     
     find_package(zstd CONFIG QUIET)
     if(zstd_FOUND)
-        list(APPEND HJ_LIBRARIES zstd::libzstd)
+        list(APPEND hj_LIBRARIES zstd::libzstd)
     endif()
 endif()
 
@@ -89,7 +89,7 @@ endif()
 if(@HJ_ENABLE_CRYPTO@)
     find_package(OpenSSL QUIET)
     if(OpenSSL_FOUND)
-        list(APPEND HJ_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
+        list(APPEND hj_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
     endif()
 endif()
 
@@ -97,22 +97,22 @@ endif()
 if(@HJ_ENABLE_DB@)
     find_package(SQLite3 QUIET)
     if(SQLite3_FOUND)
-        list(APPEND HJ_LIBRARIES ${SQLite3_LIBRARIES})
+        list(APPEND hj_LIBRARIES ${SQLite3_LIBRARIES})
     endif()
     
     find_package(hiredis CONFIG QUIET)
     if(hiredis_FOUND)
-        list(APPEND HJ_LIBRARIES hiredis::hiredis)
+        list(APPEND hj_LIBRARIES hiredis::hiredis)
     endif()
     
     find_package(clickhouse-cpp CONFIG QUIET)
     if(TARGET clickhouse-cpp-lib)
-        list(APPEND HJ_LIBRARIES clickhouse-cpp-lib::clickhouse-cpp-lib)
+        list(APPEND hj_LIBRARIES clickhouse-cpp-lib::clickhouse-cpp-lib)
     endif()
     
     find_package(libpqxx CONFIG QUIET)
     if(libpqxx_FOUND)
-        list(APPEND HJ_LIBRARIES libpqxx::pqxx)
+        list(APPEND hj_LIBRARIES libpqxx::pqxx)
     endif()
 endif()
 
@@ -120,22 +120,22 @@ endif()
 if(@HJ_ENABLE_ENCODING@)
     find_package(pugixml CONFIG QUIET)
     if(pugixml_FOUND)
-        list(APPEND HJ_LIBRARIES pugixml)
+        list(APPEND hj_LIBRARIES pugixml)
     endif()
     
     find_package(Protobuf CONFIG QUIET)
     if(Protobuf_FOUND)
-        list(APPEND HJ_LIBRARIES protobuf::libprotobuf)
+        list(APPEND hj_LIBRARIES protobuf::libprotobuf)
     endif()
     
     find_package(yaml-cpp CONFIG QUIET)
     if(yaml-cpp_FOUND)
-        list(APPEND HJ_LIBRARIES yaml-cpp::yaml-cpp)
+        list(APPEND hj_LIBRARIES yaml-cpp::yaml-cpp)
     endif()
     
     find_package(flatbuffers CONFIG QUIET)
     if(flatbuffers_FOUND)
-        list(APPEND HJ_LIBRARIES flatbuffers::flatbuffers)
+        list(APPEND hj_LIBRARIES flatbuffers::flatbuffers)
     endif()
 endif()
 
@@ -143,12 +143,12 @@ endif()
 if(@HJ_ENABLE_HARDWARE@)
     find_package(hidapi CONFIG QUIET)
     if(hidapi_FOUND)
-        list(APPEND HJ_LIBRARIES hidapi::hidapi)
+        list(APPEND hj_LIBRARIES hidapi::hidapi)
     endif()
     
     find_package(OpenCL QUIET)
     if(OpenCL_FOUND)
-        list(APPEND HJ_LIBRARIES OpenCL::OpenCL)
+        list(APPEND hj_LIBRARIES OpenCL::OpenCL)
     endif()
 endif()
 
@@ -161,7 +161,7 @@ endif()
 if(@HJ_ENABLE_LOG@)
     find_package(spdlog CONFIG QUIET)
     if(spdlog_FOUND)
-        list(APPEND HJ_LIBRARIES spdlog::spdlog)
+        list(APPEND hj_LIBRARIES spdlog::spdlog)
     endif()
 endif()
 
@@ -169,7 +169,7 @@ endif()
 if(@HJ_ENABLE_MATH@)
     find_package(Eigen3 CONFIG QUIET)
     if(Eigen3_FOUND)
-        list(APPEND HJ_LIBRARIES Eigen3::Eigen)
+        list(APPEND hj_LIBRARIES Eigen3::Eigen)
     endif()
 endif()
 
@@ -180,7 +180,7 @@ if(@HJ_ENABLE_MISC@)
     
     find_package(unofficial-libharu CONFIG QUIET)
     if(unofficial-libharu_FOUND)
-        list(APPEND HJ_LIBRARIES unofficial::libharu::hpdf)
+        list(APPEND hj_LIBRARIES unofficial::libharu::hpdf)
     endif()
 endif()
 
@@ -188,12 +188,12 @@ endif()
 if(@HJ_ENABLE_NET@)
     find_package(Boost QUIET COMPONENTS system)
     if(Boost_SYSTEM_FOUND)
-        list(APPEND HJ_LIBRARIES Boost::system)
+        list(APPEND hj_LIBRARIES Boost::system)
     endif()
     
     find_package(ZeroMQ CONFIG QUIET)
     if(ZeroMQ_FOUND)
-        list(APPEND HJ_LIBRARIES libzmq)
+        list(APPEND hj_LIBRARIES libzmq)
     endif()
     
     find_package(httplib CONFIG QUIET)
@@ -204,7 +204,7 @@ endif()
 if(@HJ_ENABLE_OS@)
     find_package(Boost QUIET COMPONENTS program_options)
     if(Boost_PROGRAM_OPTIONS_FOUND)
-        list(APPEND HJ_LIBRARIES Boost::program_options)
+        list(APPEND hj_LIBRARIES Boost::program_options)
     endif()
 endif()
 
@@ -212,12 +212,12 @@ endif()
 if(@HJ_ENABLE_SYNC@)
     find_package(Boost QUIET COMPONENTS thread)
     if(Boost_THREAD_FOUND)
-        list(APPEND HJ_LIBRARIES Boost::thread)
+        list(APPEND hj_LIBRARIES Boost::thread)
     endif()
     
     find_package(TBB CONFIG QUIET)
     if(TBB_FOUND)
-        list(APPEND HJ_LIBRARIES TBB::tbb)
+        list(APPEND hj_LIBRARIES TBB::tbb)
     endif()
 endif()
 
@@ -225,17 +225,17 @@ endif()
 if(@HJ_ENABLE_TESTING@)
     find_package(GTest CONFIG QUIET)
     if(GTest_FOUND)
-        list(APPEND HJ_LIBRARIES GTest::gtest GTest::gtest_main)
+        list(APPEND hj_LIBRARIES GTest::gtest GTest::gtest_main)
     endif()
     
     find_package(benchmark CONFIG QUIET)
     if(benchmark_FOUND)
-        list(APPEND HJ_LIBRARIES benchmark::benchmark)
+        list(APPEND hj_LIBRARIES benchmark::benchmark)
     endif()
     
     find_package(unofficial-breakpad CONFIG QUIET)
     if(unofficial-breakpad_FOUND)
-        list(APPEND HJ_LIBRARIES 
+        list(APPEND hj_LIBRARIES 
             unofficial::breakpad::libbreakpad 
             unofficial::breakpad::libbreakpad_client
         )
@@ -243,7 +243,7 @@ if(@HJ_ENABLE_TESTING@)
     
     find_package(opentelemetry-cpp CONFIG QUIET)
     if(opentelemetry-cpp_FOUND)
-        list(APPEND HJ_LIBRARIES ${OPENTELEMETRY_CPP_LIBRARIES})
+        list(APPEND hj_LIBRARIES ${OPENTELEMETRY_CPP_LIBRARIES})
     endif()
 endif()
 
@@ -251,7 +251,7 @@ endif()
 if(@HJ_ENABLE_TIME@)
     find_package(Boost QUIET COMPONENTS timer)
     if(Boost_TIMER_FOUND)
-        list(APPEND HJ_LIBRARIES Boost::timer)
+        list(APPEND hj_LIBRARIES Boost::timer)
     endif()
 endif()
 
@@ -259,7 +259,7 @@ endif()
 if(@HJ_ENABLE_TYPES@)
     find_package(Boost QUIET COMPONENTS serialization)
     if(Boost_SERIALIZATION_FOUND)
-        list(APPEND HJ_LIBRARIES Boost::serialization)
+        list(APPEND hj_LIBRARIES Boost::serialization)
     endif()
 endif()
 
@@ -267,12 +267,12 @@ endif()
 if(@HJ_ENABLE_UTIL@)
     find_package(jwt-cpp CONFIG QUIET)
     if(jwt-cpp_FOUND)
-        list(APPEND HJ_LIBRARIES jwt-cpp::jwt-cpp)
+        list(APPEND hj_LIBRARIES jwt-cpp::jwt-cpp)
     endif()
 endif()
 
 # Remove duplicates
-list(REMOVE_DUPLICATES HJ_LIBRARIES)
+list(REMOVE_DUPLICATES hj_LIBRARIES)
 
 # Export the libraries variable
-set(HJ_LIBRARIES ${HJ_LIBRARIES} CACHE INTERNAL "High-jump libraries")
+set(hj_LIBRARIES ${hj_LIBRARIES} CACHE INTERNAL "High-jump libraries")

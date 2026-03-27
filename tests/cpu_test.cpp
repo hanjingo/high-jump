@@ -8,18 +8,7 @@
 #include <thread>
 #include <vector>
 
-class cpu : public ::testing::Test
-{
-  protected:
-    void SetUp() override {}
-
-    void TearDown() override
-    {
-        // std::cout << "=== CPU Hardware Tests Teardown ===" << std::endl;
-    }
-};
-
-TEST_F(cpu, cpu_brand)
+TEST(cpu, cpu_brand)
 {
     SCOPED_TRACE("Testing cpu_brand functionality");
     unsigned char brand[128] = {0};
@@ -36,7 +25,7 @@ TEST_F(cpu, cpu_brand)
     }
 }
 
-TEST_F(cpu, cpu_vendor)
+TEST(cpu, cpu_vendor)
 {
     SCOPED_TRACE("Testing cpu_vendor functionality");
     unsigned char vendor[64] = {0};
@@ -64,7 +53,7 @@ TEST_F(cpu, cpu_vendor)
     }
 }
 
-TEST_F(cpu, cpu_core_num)
+TEST(cpu, cpu_core_num)
 {
     SCOPED_TRACE("Testing cpu_core_num functionality");
 
@@ -82,7 +71,7 @@ TEST_F(cpu, cpu_core_num)
     }
 }
 
-TEST_F(cpu, cpu_core_list)
+TEST(cpu, cpu_core_list)
 {
     SCOPED_TRACE("Testing cpu_core_list");
 
@@ -127,7 +116,7 @@ TEST_F(cpu, cpu_core_list)
     }
 }
 
-TEST_F(cpu, cpu_core_bind)
+TEST(cpu, cpu_core_bind)
 {
     SCOPED_TRACE("Testing cpu_core_bind");
 
@@ -178,7 +167,7 @@ TEST_F(cpu, cpu_core_bind)
 #endif
 }
 
-TEST_F(cpu, cpu_id)
+TEST(cpu, cpu_id)
 {
     SCOPED_TRACE("Testing cpu_id");
 
@@ -239,7 +228,7 @@ TEST_F(cpu, cpu_id)
     }
 }
 
-TEST_F(cpu, cpu_pause)
+TEST(cpu, cpu_pause)
 {
     SCOPED_TRACE("Testing cpu_pause");
     
@@ -273,7 +262,7 @@ TEST_F(cpu, cpu_pause)
     }
 }
 
-TEST_F(cpu, cpu_nop)
+TEST(cpu, cpu_nop)
 {
     SCOPED_TRACE("Testing cpu_nop");
     auto start = std::chrono::high_resolution_clock::now();
@@ -290,7 +279,7 @@ TEST_F(cpu, cpu_nop)
     EXPECT_LT(duration.count(), 50000) << "cpu_nop should be very fast";
 }
 
-TEST_F(cpu, cpu_delay)
+TEST(cpu, cpu_delay)
 {
     SCOPED_TRACE("Testing cpu_delay");
     
@@ -334,7 +323,7 @@ TEST_F(cpu, cpu_delay)
     SUCCEED() << "cpu_delay executed successfully for all test cases";
 }
 
-TEST_F(cpu, cpu_boundary_conditions)
+TEST(cpu, cpu_boundary_conditions)
 {
     SCOPED_TRACE("Testing boundary conditions and error handling");
 
@@ -360,7 +349,7 @@ TEST_F(cpu, cpu_boundary_conditions)
     EXPECT_FALSE(ec == CPU_OK) << "Binding to invalid core should fail";
 }
 
-TEST_F(cpu, cpu_cache_flush)
+TEST(cpu, cpu_cache_flush)
 {
     SCOPED_TRACE("Testing cpu_cache_flush");
 
@@ -384,7 +373,7 @@ TEST_F(cpu, cpu_cache_flush)
         << "Cache flush should not take too long";
 }
 
-TEST_F(cpu, cpu_prefetch)
+TEST(cpu, cpu_prefetch)
 {
     SCOPED_TRACE("Testing cpu_prefetch");
 
@@ -439,7 +428,7 @@ TEST_F(cpu, cpu_prefetch)
     cpu_prefetch_write(nullptr);
 }
 
-TEST_F(cpu, cpu_tsc_functionality)
+TEST(cpu, cpu_tsc_functionality)
 {
     SCOPED_TRACE("Testing cpu_tsc_read functionality");
 
@@ -492,7 +481,7 @@ TEST_F(cpu, cpu_tsc_functionality)
     EXPECT_LT(duration.count(), 10000) << "TSC reads should be fast";
 }
 
-TEST_F(cpu, cpu_tscp_functionality)
+TEST(cpu, cpu_tscp_functionality)
 {
     SCOPED_TRACE("Testing cpu_tscp_read functionality");
 
@@ -524,7 +513,7 @@ TEST_F(cpu, cpu_tscp_functionality)
     }
 }
 
-TEST_F(cpu, cpu_pmu_cycle_counter_functionality)
+TEST(cpu, cpu_pmu_cycle_counter_functionality)
 {
     SCOPED_TRACE("Testing cpu_pmu_cycle_counter_read functionality");
 
@@ -627,7 +616,7 @@ TEST_F(cpu, cpu_pmu_cycle_counter_functionality)
     }
 }
 
-TEST_F(cpu, cpu_counter_frequency_detection)
+TEST(cpu, cpu_counter_frequency_detection)
 {
     SCOPED_TRACE("Detecting counter frequencies and characteristics");
 

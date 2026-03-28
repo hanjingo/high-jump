@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    {
+      "name": "hanjingo-high-jump",
+      "features": ["os", "log", "util", "testing"]
+    }
+  ]
+}

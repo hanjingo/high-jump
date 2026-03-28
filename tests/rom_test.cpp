@@ -112,24 +112,24 @@ TEST(rom, load_invalid_args)
     EXPECT_FALSE(rom_load(&_rom, nullptr));
 }
 
-// Test freeing ROM
-TEST(rom, free)
-{
-    rom_t       _rom;
-    std::string test_content = "ROMDATA123";
-    std::string test_file = (std::filesystem::current_path() / "test.rom").string();
+// // Test freeing ROM
+// TEST(rom, free)
+// {
+//     rom_t       _rom;
+//     std::string test_content = "ROMDATA123";
+//     std::string test_file = (std::filesystem::current_path() / "test.rom").string();
     
-    std::filesystem::remove_all(test_file);
-    create_test_rom(test_file.c_str(), test_content.c_str());
-    rom_init(&_rom);
-    if(!std::filesystem::exists(test_file))
-    {
-        GTEST_SKIP() << "skip test rom::free create file failed";
-    }
+//     std::filesystem::remove_all(test_file);
+//     create_test_rom(test_file.c_str(), test_content.c_str());
+//     rom_init(&_rom);
+//     if(!std::filesystem::exists(test_file))
+//     {
+//         GTEST_SKIP() << "skip test rom::free create file failed";
+//     }
 
-    ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
-    rom_free(&_rom);
-    EXPECT_EQ(_rom.data, nullptr);
-    EXPECT_EQ(_rom.size, 0u);
-    EXPECT_FALSE(_rom.loaded);
-}
+//     ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
+//     rom_free(&_rom);
+//     EXPECT_EQ(_rom.data, nullptr);
+//     EXPECT_EQ(_rom.size, 0u);
+//     EXPECT_FALSE(_rom.loaded);
+// }

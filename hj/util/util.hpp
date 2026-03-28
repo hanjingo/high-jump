@@ -11,6 +11,4 @@
 
 #include <hj/util/string_util.hpp>
 
-#include <hj/util/version.hpp>
-
 #endif

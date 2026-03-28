@@ -37,4 +37,6 @@
 
 #include <hj/util/util.hpp>
 
+#include <hj/version.hpp>
+
 #endif

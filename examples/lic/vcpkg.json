@@ -3,13 +3,6 @@
     {
       "name": "hanjingo-high-jump",
       "features": ["os", "log", "db", "util", "testing", "crypto"]
-    },
-    "libpqxx"
-  ],
-  "overrides": [
-    {
-      "name": "libpqxx",
-      "version": "7.10.1"
     }
   ]
 }

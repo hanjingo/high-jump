@@ -3,13 +3,6 @@
     {
       "name": "hanjingo-high-jump",
       "features": ["testing"]
-    },
-    "libpqxx"
-  ],
-  "overrides": [
-    {
-      "name": "libpqxx",
-      "version": "7.10.1"
     }
   ]
 }

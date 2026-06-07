@@ -6,7 +6,6 @@
 #include <hj/util/once.hpp>
 #include <hj/util/string_util.hpp>
 #include <hj/os/env.h>
-#include <hj/testing/crash.hpp>
 
 #include "comm.h"
 #include "encrypt.h"
@@ -38,10 +37,6 @@ C_STYLE_EXPORT void crypto_init(sdk_context *ctx)
         return;
 
     ONCE(
-        // add crash handle support
-        hj::crash_handler::instance()->prevent_set_unhandled_exception_filter();
-        hj::crash_handler::instance()->set_local_path("./");
-
         // add log support
         hj::log::logger::instance()->set_level(hj::log::level::debug);
 

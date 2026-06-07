@@ -1,52 +1,15 @@
 {
   "dependencies": [
-    "benchmark",
-    "boost-program-options",
-    "breakpad",
-    "fmt",
-    "gtest",
-    "jwt-cpp",
     {
-      "name": "opentelemetry-cpp",
-      "features": [
-        "otlp-http",
-        "otlp-file"
-      ]
+      "name": "hanjingo-high-jump",
+      "features": ["os", "log", "db", "util", "testing", "crypto"]
     },
-    "spdlog"
+    "libpqxx"
   ],
   "overrides": [
     {
-      "name": "benchmark",
-      "version": "1.9.4"
-    },
-    {
-      "name": "boost-program-options",
-      "version": "1.76.0"
-    },
-    {
-      "name": "breakpad",
-      "version": "2024-02-16"
-    },
-    {
-      "name": "fmt",
-      "version": "11.0.2"
-    },
-    {
-      "name": "gtest",
-      "version": "1.17.0"
-    },
-    {
-      "name": "jwt-cpp",
-      "version": "0.7.1"
-    },
-    {
-      "name": "opentelemetry-cpp",
-      "version": "1.22.0#1"
-    },
-    {
-      "name": "spdlog",
-      "version": "1.15.3"
+      "name": "libpqxx",
+      "version": "7.10.1"
     }
   ]
 }

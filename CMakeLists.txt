@@ -80,11 +80,6 @@ if (BUILD_LIB)
     # DODO
 endif()
 
-# build example
-if(BUILD_EXAMPLE)
-    add_subdirectory(examples)
-endif()
-
 # build test
 if (BUILD_TEST)
     enable_testing()

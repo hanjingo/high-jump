@@ -32,6 +32,7 @@
     },
     "flatbuffers",
     "fmt",
+    "grpc",
     "gtest",
     "hffix",
     "hidapi",
@@ -40,6 +41,7 @@
     "libharu",
     "libiconv",
     "libnice",
+    "libpqxx",
     "libqrencode",
     "nlohmann-json",
     "opencl",
@@ -73,5 +75,15 @@
     },
     "zlib",
     "zstd"
+  ],
+  "overrides": [
+    {
+      "name": "libpqxx",
+      "version": "7.10.1"
+    },
+    {
+      "name": "grpc",
+      "version": "1.76.0#1"
+    }
   ]
 }

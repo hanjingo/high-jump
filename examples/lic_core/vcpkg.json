@@ -1,21 +1,15 @@
 {
   "dependencies": [
-    "benchmark",
-    "gtest",
-    "jwt-cpp"
+    {
+      "name": "hanjingo-high-jump",
+      "features": ["util", "testing"]
+    },
+    "libpqxx"
   ],
   "overrides": [
     {
-      "name": "benchmark",
-      "version": "1.9.4"
-    },
-    {
-      "name": "gtest",
-      "version": "1.17.0"
-    },
-    {
-      "name": "jwt-cpp",
-      "version": "0.7.1"
+      "name": "libpqxx",
+      "version": "7.10.1"
     }
   ]
 }

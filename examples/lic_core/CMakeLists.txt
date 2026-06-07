@@ -118,7 +118,7 @@ if (BUILD_BENCHMARK)
 endif()
 
 # add vcpkg library
-find_package(jwt-cpp CONFIG REQUIRED)
+find_package(hj REQUIRED)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)

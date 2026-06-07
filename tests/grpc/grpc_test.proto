@@ -1,3 +1,7 @@
+// vcpkg install grpc
+// ${VCPKG_ROOT}/installed/x64-linux/tools/protobuf/protoc --cpp_out=./ ./tests/grpc/grpc_test.proto
+// ${VCPKG_ROOT}/installed/x64-linux/tools/protobuf/protoc -I=./tests/grpc/ --grpc_out=./tests/grpc/ --plugin=protoc-gen-grpc=${VCPKG_ROOT}/installed/x64-linux/tools/grpc/grpc_cpp_plugin ./tests/grpc/grpc_test.proto
+
 syntax = "proto3";
 package GrpcLibrary;
 

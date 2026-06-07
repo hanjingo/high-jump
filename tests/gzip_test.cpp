@@ -264,42 +264,25 @@ TEST_F(gzip, stream_decompression)
     auto                       compress_result =
         hj::gzip::compress(compressed, test_data.data(), test_data.size());
     ASSERT_EQ(compress_result, hj::gzip::err::ok);
+    ASSERT_FALSE(compressed.empty());
 
-    {
-        std::ofstream compressed_file("test_output.gz", std::ios::binary);
-        ASSERT_TRUE(compressed_file.is_open());
-        compressed_file.write(reinterpret_cast<const char *>(compressed.data()),
-                              compressed.size());
-        ASSERT_TRUE(compressed_file.good()) << "Failed to write test_output.gz";
-        compressed_file.flush();
-    }
-
-    std::ifstream in_stream("test_output.gz", std::ios::binary);
-    std::ofstream out_stream("test_decompressed.txt", std::ios::binary);
-    ASSERT_TRUE(in_stream.is_open());
-    ASSERT_TRUE(out_stream.is_open());
+    std::string compressed_payload(
+        reinterpret_cast<const char *>(compressed.data()),
+        compressed.size());
+    std::istringstream in_stream(compressed_payload, std::ios::binary);
+    std::ostringstream out_stream(std::ios::binary);
 
     auto decompress_result = hj::gzip::decompress(out_stream, in_stream);
     EXPECT_EQ(decompress_result, hj::gzip::err::ok);
+    ASSERT_TRUE(out_stream.good());
 
-    in_stream.close();
-    out_stream.flush();
-    out_stream.close();
+    std::string                decompressed_payload = out_stream.str();
+    std::vector<unsigned char> decompressed_data(decompressed_payload.begin(),
+                                                 decompressed_payload.end());
 
-    std::ifstream decompressed_file("test_decompressed.txt", std::ios::binary);
-    ASSERT_TRUE(decompressed_file.is_open());
-
-    decompressed_file.seekg(0, std::ios::end);
-    size_t file_size = decompressed_file.tellg();
-    decompressed_file.seekg(0, std::ios::beg);
-
-    std::vector<char> file_content(file_size);
-    decompressed_file.read(file_content.data(), file_size);
-    decompressed_file.close();
-
-    EXPECT_EQ(file_size, test_data.size());
-    EXPECT_TRUE(std::equal(file_content.begin(),
-                           file_content.end(),
+    EXPECT_EQ(decompressed_data.size(), test_data.size());
+    EXPECT_TRUE(std::equal(decompressed_data.begin(),
+                           decompressed_data.end(),
                            test_data.begin(),
                            test_data.end()));
 }

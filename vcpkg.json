@@ -219,7 +219,7 @@
     },
     {
       "name": "libpqxx",
-      "version": "7.10.1"
+      "version": "7.10.1#0"
     },
     {
       "name": "libqrencode",

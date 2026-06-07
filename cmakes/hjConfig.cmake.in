@@ -19,7 +19,9 @@ endmacro()
 
 # Core dependencies (always required)
 find_package(Boost REQUIRED COMPONENTS 
+    system
     filesystem 
+    algorithm
     stacktrace_basic
 )
 list(APPEND hj_LIBRARIES ${Boost_LIBRARIES})
@@ -49,39 +51,211 @@ endif()
 # Feature-based dependencies (conditionally found based on vcpkg features)
 # ==============================================================================
 
-# AI module
-if(@HJ_ENABLE_AI@)
-    find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
-    find_library(QRENCODE_LIBRARY qrencode)
-    if(QRENCODE_LIBRARY)
-        list(APPEND hj_LIBRARIES ${QRENCODE_LIBRARY})
-    endif()
-    
-    find_package(quirc CONFIG QUIET)
-    if(quirc_FOUND)
-        list(APPEND hj_LIBRARIES quirc::quirc)
+# gRPC library
+if(@HJ_ENABLE_GRPC@)
+    find_package(gRPC CONFIG QUIET)
+    if(gRPC_FOUND)
+        list(APPEND hj_LIBRARIES gRPC::grpc)
+        list(APPEND hj_LIBRARIES gRPC::grpc++)
     endif()
 endif()
 
-# Algo module
-if(@HJ_ENABLE_ALGO@)
-    find_package(Boost QUIET COMPONENTS algorithm)
-    find_package(behaviortree_cpp CONFIG QUIET)
-    if(behaviortree_cpp_FOUND)
-        list(APPEND hj_LIBRARIES BT::behaviortree_cpp)
+# jwt library
+if(@HJ_ENABLE_LIC@)
+    find_package(jwt-cpp CONFIG QUIET)
+    if(jwt-cpp_FOUND)
+        list(APPEND hj_LIBRARIES jwt-cpp::jwt-cpp)
     endif()
 endif()
 
-# Compress module
-if(@HJ_ENABLE_COMPRESS@)
-    find_package(ZLIB QUIET)
-    if(ZLIB_FOUND)
-        list(APPEND hj_LIBRARIES ZLIB::ZLIB)
+# singleton library mostly header-only boost libraries
+if(@HJ_ENABLE_SINGLETON@)
+    find_package(Boost QUIET COMPONENTS serialization)
+    if(Boost_SERIALIZATION_FOUND)
+        list(APPEND hj_LIBRARIES Boost::serialization)
     endif()
-    
-    find_package(zstd CONFIG QUIET)
-    if(zstd_FOUND)
-        list(APPEND hj_LIBRARIES zstd::libzstd)
+endif()
+
+# timer - boost-timer
+if(@HJ_ENABLE_TIMER@)
+    find_package(Boost QUIET COMPONENTS timer)
+    if(Boost_TIMER_FOUND)
+        list(APPEND hj_LIBRARIES Boost::timer)
+    endif()
+endif()
+
+# HTTP library
+if(@HJ_ENABLE_HTTP@)
+    find_package(httplib CONFIG QUIET)
+    # cpp-httplib is header-only
+endif()
+
+# ZeroMQ library
+if(@HJ_ENABLE_ZMQ@)
+    find_package(ZeroMQ CONFIG QUIET)
+    if(ZeroMQ_FOUND)
+        list(APPEND hj_LIBRARIES libzmq)
+    endif()
+endif()
+
+# unit test library
+if(@HJ_ENABLE_UNIT_TEST@)
+    find_package(GTest CONFIG QUIET)
+    if(GTest_FOUND)
+        list(APPEND hj_LIBRARIES GTest::gtest GTest::gtest_main)
+    endif()
+endif()
+
+# benchmark library
+if(@HJ_ENABLE_BENCHMARK@)
+    find_package(benchmark CONFIG QUIET)
+    if(benchmark_FOUND)
+        list(APPEND hj_LIBRARIES benchmark::benchmark)
+    endif()
+endif()
+
+# crash trace library
+if(@HJ_ENABLE_CRASH@)
+    find_package(unofficial-breakpad CONFIG QUIET)
+    if(unofficial-breakpad_FOUND)
+        list(APPEND hj_LIBRARIES 
+            unofficial::breakpad::libbreakpad 
+            unofficial::breakpad::libbreakpad_client
+        )
+    endif()
+endif()
+
+# telemetry library
+if(@HJ_ENABLE_TELEMETRY@)
+    find_package(opentelemetry-cpp CONFIG QUIET)
+    if(opentelemetry-cpp_FOUND)
+        list(APPEND hj_LIBRARIES ${OPENTELEMETRY_CPP_LIBRARIES})
+    endif()
+endif()
+
+# thread sync library
+if(@HJ_ENABLE_SYNC@)
+    find_package(TBB CONFIG QUIET)
+    if(TBB_FOUND)
+        list(APPEND hj_LIBRARIES TBB::tbb)
+    endif()
+endif()
+
+# param parse library
+if(@HJ_ENABLE_OPTIONS@)
+    find_package(Boost QUIET COMPONENTS program_options)
+    if(Boost_PROGRAM_OPTIONS_FOUND)
+        list(APPEND hj_LIBRARIES Boost::program_options)
+    endif()
+endif()
+
+# PDF library
+if(@HJ_ENABLE_PDF@)
+    find_package(unofficial-libharu CONFIG QUIET)
+    if(unofficial-libharu_FOUND)
+        list(APPEND hj_LIBRARIES unofficial::libharu::hpdf)
+    endif()
+endif()
+
+# Fix Protocol library
+if(@HJ_ENABLE_FIX@)
+    find_package(hffix CONFIG QUIET)
+    # hffix is header-only
+endif()
+
+# Math module
+if(@HJ_ENABLE_MATH@)
+    find_package(Eigen3 CONFIG QUIET)
+    if(Eigen3_FOUND)
+        list(APPEND hj_LIBRARIES Eigen3::Eigen)
+    endif()
+endif()
+
+# Log module
+if(@HJ_ENABLE_LOG@)
+    find_package(spdlog CONFIG QUIET)
+    if(spdlog_FOUND)
+        list(APPEND hj_LIBRARIES spdlog::spdlog)
+    endif()
+endif()
+
+# USB/Blue Tooth module
+if(@HJ_ENABLE_USB_BT@)
+    find_package(hidapi CONFIG QUIET)
+    if(hidapi_FOUND)
+        list(APPEND hj_LIBRARIES hidapi::hidapi)
+    endif()
+endif()
+
+# GPU library
+if(@HJ_ENABLE_GPU@)
+    find_package(OpenCL QUIET)
+    if(OpenCL_FOUND)
+        list(APPEND hj_LIBRARIES OpenCL::OpenCL)
+    endif()
+endif()
+
+# xml library
+if(@HJ_ENABLE_XML@)
+    find_package(pugixml CONFIG QUIET)
+    if(pugixml_FOUND)
+        list(APPEND hj_LIBRARIES pugixml)
+    endif()
+endif()
+
+# protobuf library
+if(@HJ_ENABLE_PROTOBUF@)
+    find_package(Protobuf CONFIG QUIET)
+    if(Protobuf_FOUND)
+        list(APPEND hj_LIBRARIES protobuf::libprotobuf)
+    endif()
+endif()
+
+# YAML library
+if(@HJ_ENABLE_YAML@)
+    find_package(yaml-cpp CONFIG QUIET)
+    if(yaml-cpp_FOUND)
+        list(APPEND hj_LIBRARIES yaml-cpp::yaml-cpp)
+    endif()
+endif()
+
+# flatbuffers library
+if(@HJ_ENABLE_FLATBUFFER@) 
+    find_package(flatbuffers CONFIG QUIET)
+    if(flatbuffers_FOUND)
+        list(APPEND hj_LIBRARIES flatbuffers::flatbuffers)
+    endif()
+endif()
+
+# SQLite3 Database
+if(@HJ_ENABLE_SQLITE@)
+    find_package(SQLite3 QUIET)
+    if(SQLite3_FOUND)
+        list(APPEND hj_LIBRARIES ${SQLite3_LIBRARIES})
+    endif()
+endif()
+
+# Redis Database
+if(@HJ_ENABLE_REDIS@)
+    find_package(hiredis CONFIG QUIET)
+    if(hiredis_FOUND)
+        list(APPEND hj_LIBRARIES hiredis::hiredis)
+    endif()
+endif()
+
+# click house Database
+if(@HJ_ENABLE_CK@)
+    find_package(clickhouse-cpp CONFIG QUIET)
+    if(TARGET clickhouse-cpp-lib)
+        list(APPEND hj_LIBRARIES clickhouse-cpp-lib::clickhouse-cpp-lib)
+    endif()
+endif()
+
+# PostgreSQL Database
+if(@HJ_ENABLE_PQ@)
+    find_package(libpqxx CONFIG QUIET)
+    if(libpqxx_FOUND)
+        list(APPEND hj_LIBRARIES libpqxx::pqxx)
     endif()
 endif()
 
@@ -93,181 +267,38 @@ if(@HJ_ENABLE_CRYPTO@)
     endif()
 endif()
 
-# DB module
-if(@HJ_ENABLE_DB@)
-    find_package(SQLite3 QUIET)
-    if(SQLite3_FOUND)
-        list(APPEND hj_LIBRARIES ${SQLite3_LIBRARIES})
+# GZip libraries
+if(@HJ_ENABLE_GZIP@)
+    find_package(ZLIB QUIET)
+    if(ZLIB_FOUND)
+        list(APPEND hj_LIBRARIES ZLIB::ZLIB)
     endif()
     
-    find_package(hiredis CONFIG QUIET)
-    if(hiredis_FOUND)
-        list(APPEND hj_LIBRARIES hiredis::hiredis)
-    endif()
-    
-    find_package(clickhouse-cpp CONFIG QUIET)
-    if(TARGET clickhouse-cpp-lib)
-        list(APPEND hj_LIBRARIES clickhouse-cpp-lib::clickhouse-cpp-lib)
-    endif()
-    
-    find_package(libpqxx CONFIG QUIET)
-    if(libpqxx_FOUND)
-        list(APPEND hj_LIBRARIES libpqxx::pqxx)
+    find_package(zstd CONFIG QUIET)
+    if(zstd_FOUND)
+        list(APPEND hj_LIBRARIES zstd::libzstd)
     endif()
 endif()
 
-# Encoding module
-if(@HJ_ENABLE_ENCODING@)
-    find_package(pugixml CONFIG QUIET)
-    if(pugixml_FOUND)
-        list(APPEND hj_LIBRARIES pugixml)
+# behavior tree function
+if(@HJ_ENABLE_BEHAVIOR_TREE@)
+    find_package(behaviortree_cpp CONFIG QUIET)
+    if(behaviortree_cpp_FOUND)
+        list(APPEND hj_LIBRARIES BT::behaviortree_cpp)
+    endif()
+endif()
+
+# QR Code module
+if(@HJ_ENABLE_QRCODE@)
+    find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
+    find_library(QRENCODE_LIBRARY qrencode)
+    if(QRENCODE_LIBRARY)
+        list(APPEND hj_LIBRARIES ${QRENCODE_LIBRARY})
     endif()
     
-    find_package(Protobuf CONFIG QUIET)
-    if(Protobuf_FOUND)
-        list(APPEND hj_LIBRARIES protobuf::libprotobuf)
-    endif()
-    
-    find_package(yaml-cpp CONFIG QUIET)
-    if(yaml-cpp_FOUND)
-        list(APPEND hj_LIBRARIES yaml-cpp::yaml-cpp)
-    endif()
-    
-    find_package(flatbuffers CONFIG QUIET)
-    if(flatbuffers_FOUND)
-        list(APPEND hj_LIBRARIES flatbuffers::flatbuffers)
-    endif()
-endif()
-
-# Hardware module
-if(@HJ_ENABLE_HARDWARE@)
-    find_package(hidapi CONFIG QUIET)
-    if(hidapi_FOUND)
-        list(APPEND hj_LIBRARIES hidapi::hidapi)
-    endif()
-    
-    find_package(OpenCL QUIET)
-    if(OpenCL_FOUND)
-        list(APPEND hj_LIBRARIES OpenCL::OpenCL)
-    endif()
-endif()
-
-# IO module - boost-circular-buffer is header-only
-if(@HJ_ENABLE_IO@)
-    # Header-only, no additional linking needed
-endif()
-
-# Log module
-if(@HJ_ENABLE_LOG@)
-    find_package(spdlog CONFIG QUIET)
-    if(spdlog_FOUND)
-        list(APPEND hj_LIBRARIES spdlog::spdlog)
-    endif()
-endif()
-
-# Math module
-if(@HJ_ENABLE_MATH@)
-    find_package(Eigen3 CONFIG QUIET)
-    if(Eigen3_FOUND)
-        list(APPEND hj_LIBRARIES Eigen3::Eigen)
-    endif()
-endif()
-
-# Misc module
-if(@HJ_ENABLE_MISC@)
-    find_package(hffix CONFIG QUIET)
-    # hffix is header-only
-    
-    find_package(unofficial-libharu CONFIG QUIET)
-    if(unofficial-libharu_FOUND)
-        list(APPEND hj_LIBRARIES unofficial::libharu::hpdf)
-    endif()
-endif()
-
-# Net module
-if(@HJ_ENABLE_NET@)
-    find_package(Boost QUIET COMPONENTS system)
-    if(Boost_SYSTEM_FOUND)
-        list(APPEND hj_LIBRARIES Boost::system)
-    endif()
-    
-    find_package(ZeroMQ CONFIG QUIET)
-    if(ZeroMQ_FOUND)
-        list(APPEND hj_LIBRARIES libzmq)
-    endif()
-    
-    find_package(httplib CONFIG QUIET)
-    # cpp-httplib is header-only
-endif()
-
-# OS module
-if(@HJ_ENABLE_OS@)
-    find_package(Boost QUIET COMPONENTS program_options)
-    if(Boost_PROGRAM_OPTIONS_FOUND)
-        list(APPEND hj_LIBRARIES Boost::program_options)
-    endif()
-endif()
-
-# Sync module
-if(@HJ_ENABLE_SYNC@)
-    find_package(Boost QUIET COMPONENTS thread)
-    if(Boost_THREAD_FOUND)
-        list(APPEND hj_LIBRARIES Boost::thread)
-    endif()
-    
-    find_package(TBB CONFIG QUIET)
-    if(TBB_FOUND)
-        list(APPEND hj_LIBRARIES TBB::tbb)
-    endif()
-endif()
-
-# Testing module
-if(@HJ_ENABLE_TESTING@)
-    find_package(GTest CONFIG QUIET)
-    if(GTest_FOUND)
-        list(APPEND hj_LIBRARIES GTest::gtest GTest::gtest_main)
-    endif()
-    
-    find_package(benchmark CONFIG QUIET)
-    if(benchmark_FOUND)
-        list(APPEND hj_LIBRARIES benchmark::benchmark)
-    endif()
-    
-    find_package(unofficial-breakpad CONFIG QUIET)
-    if(unofficial-breakpad_FOUND)
-        list(APPEND hj_LIBRARIES 
-            unofficial::breakpad::libbreakpad 
-            unofficial::breakpad::libbreakpad_client
-        )
-    endif()
-    
-    find_package(opentelemetry-cpp CONFIG QUIET)
-    if(opentelemetry-cpp_FOUND)
-        list(APPEND hj_LIBRARIES ${OPENTELEMETRY_CPP_LIBRARIES})
-    endif()
-endif()
-
-# Time module - boost-timer
-if(@HJ_ENABLE_TIME@)
-    find_package(Boost QUIET COMPONENTS timer)
-    if(Boost_TIMER_FOUND)
-        list(APPEND hj_LIBRARIES Boost::timer)
-    endif()
-endif()
-
-# Types module - mostly header-only boost libraries
-if(@HJ_ENABLE_TYPES@)
-    find_package(Boost QUIET COMPONENTS serialization)
-    if(Boost_SERIALIZATION_FOUND)
-        list(APPEND hj_LIBRARIES Boost::serialization)
-    endif()
-endif()
-
-# Util module
-if(@HJ_ENABLE_UTIL@)
-    find_package(jwt-cpp CONFIG QUIET)
-    if(jwt-cpp_FOUND)
-        list(APPEND hj_LIBRARIES jwt-cpp::jwt-cpp)
+    find_package(quirc CONFIG QUIET)
+    if(quirc_FOUND)
+        list(APPEND hj_LIBRARIES quirc::quirc)
     endif()
 endif()
 

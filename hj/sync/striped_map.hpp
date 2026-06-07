@@ -18,6 +18,7 @@
 #ifndef STRIPED_MAP_HPP
 #define STRIPED_MAP_HPP
 
+#if(__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <vector>
 #include <unordered_map>
 #include <functional>
@@ -25,19 +26,11 @@
 #include <mutex>
 #include <stdexcept>
 
-#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <shared_mutex>
 
 using shared_mutex_t = std::shared_mutex;
 using unique_lock_t  = std::unique_lock<shared_mutex_t>;
 using shared_lock_t  = std::shared_lock<shared_mutex_t>;
-#else
-#include <boost/thread.hpp>
-
-using shared_mutex_t = boost::shared_mutex;
-using unique_lock_t  = boost::unique_lock<shared_mutex_t>;
-using shared_lock_t  = boost::shared_lock<shared_mutex_t>;
-#endif
 
 // NOTE: This container was implemented by stl and boost, suit to the scene of read more write less,
 //          if you need a higher performance thread safe map, find it here:
@@ -57,10 +50,10 @@ class striped_map
     using allocator_type      = Alloc;
     using value_type          = std::pair<const Key, Value>;
     using bucket_type         = std::unordered_map<Key,
-                                                   Value,
-                                                   std::hash<Key>,
-                                                   std::equal_to<Key>,
-                                                   allocator_type>;
+                                           Value,
+                                           std::hash<Key>,
+                                           std::equal_to<Key>,
+                                           allocator_type>;
 
   public:
     class const_iterator
@@ -156,11 +149,11 @@ class striped_map
     explicit striped_map(std::size_t    capa,
                          allocator_type alloc = allocator_type())
         : striped_map(
-              [capa](const Key &k) -> int {
-                  return static_cast<int>(std::hash<Key>{}(k) % capa);
-              },
-              capa,
-              alloc)
+            [capa](const Key &k) -> int {
+                return static_cast<int>(std::hash<Key>{}(k) % capa);
+            },
+            capa,
+            alloc)
     {
     }
     striped_map(strip_key_handler_t fn,
@@ -291,3 +284,5 @@ class striped_map
 }
 
 #endif
+
+#endif // namespace hj

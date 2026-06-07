@@ -5,8 +5,6 @@
 
 #include <hj/db/db_conn_pool.hpp>
 
-#include <hj/db/postgresql.hpp>
-
 #include <hj/db/redis.hpp>
 
 #include <hj/db/sqlite.hpp>

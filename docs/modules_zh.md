@@ -343,7 +343,6 @@ int main() {
 - OpenCV: https://github.com/opencv/opencv
 - gRPC: https://github.com/grpc/grpc
 - hffix: https://jamesdbrock.github.io/hffix
-- libpqxx: https://pqxx.org/libpqxx/
 - libnice: https://nice.freedesktop.org
 - libiconv: https://www.gnu.org/software/libiconv/
 - ICU: https://icu.unicode.org/home

@@ -64,9 +64,8 @@ find_package(cityhash REQUIRED)
 find_package(unofficial-libharu REQUIRED)
 find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
 find_package(clickhouse-cpp QUIET) # depend: lz4, zstd, cityhash
-# find_package(libpqxx REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
-find_package(gRPC CONFIG QUIET)
+find_package(gRPC CONFIG REQUIRED)
 find_package(hffix REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
@@ -122,13 +121,11 @@ endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 aux_source_directory(. SRC)
-if(gRPC_FOUND)
-    add_definitions(-DGRPC_ENABLE)
-    message(STATUS "gRPC found, enabling gRPC support")
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/grpc)
-    list(APPEND SRC ${CMAKE_CURRENT_SOURCE_DIR}/grpc/grpc_test.pb.cc)
-    list(APPEND SRC ${CMAKE_CURRENT_SOURCE_DIR}/grpc/grpc_test.grpc.pb.cc)
-endif()
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/grpc)
+list(APPEND SRC ${CMAKE_CURRENT_SOURCE_DIR}/grpc/grpc_test.pb.cc)
+list(APPEND SRC ${CMAKE_CURRENT_SOURCE_DIR}/grpc/grpc_test.grpc.pb.cc)
+
 add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
 
 # For Github CI detection
@@ -168,7 +165,6 @@ target_link_libraries(${PROJECT_NAME}
     yaml-cpp::yaml-cpp
     nlohmann_json::nlohmann_json
     jwt-cpp::jwt-cpp
-    # libpqxx::pqxx
     hiredis::hiredis
 
     # breakpad_client
@@ -180,6 +176,10 @@ target_link_libraries(${PROJECT_NAME}
 
     # pdf
     unofficial::libharu::hpdf
+
+    # grpc
+    gRPC::grpc
+    gRPC::grpc++ 
 )
 
 # for os-specific libraries
@@ -188,6 +188,8 @@ if (WIN32)
         ws2_32 # for windows sockets
         bcrypt # for Windows cryptography
         hidapi::winapi
+
+        gRPC::grpc++_reflection # for windows grpc
     )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} 
@@ -202,22 +204,6 @@ else() # Linux
         pthread
         hidapi::hidapi
     )
-endif()
-
-# Link grpc if found
-if(gRPC_FOUND)
-    message(STATUS "gRPC found, enabling gRPC support link")
-    target_link_libraries(${PROJECT_NAME} 
-        # grpc
-        gRPC::grpc
-        gRPC::grpc++ 
-    )
-
-    if (WIN32)
-        target_link_libraries(${PROJECT_NAME} 
-            gRPC::grpc++_reflection # for windows grpc
-        )
-    endif()
 endif()
 
 # Link DPDK libraries if found

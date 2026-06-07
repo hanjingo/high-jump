@@ -57,6 +57,10 @@ if(@HJ_ENABLE_GRPC@)
     if(gRPC_FOUND)
         list(APPEND hj_LIBRARIES gRPC::grpc)
         list(APPEND hj_LIBRARIES gRPC::grpc++)
+
+        if (WIN32)
+            list(APPEND hj_LIBRARIES gRPC::grpc++_reflection)
+        endif()
     endif()
 endif()
 
@@ -248,14 +252,6 @@ if(@HJ_ENABLE_CK@)
     find_package(clickhouse-cpp CONFIG QUIET)
     if(TARGET clickhouse-cpp-lib)
         list(APPEND hj_LIBRARIES clickhouse-cpp-lib::clickhouse-cpp-lib)
-    endif()
-endif()
-
-# PostgreSQL Database
-if(@HJ_ENABLE_PQ@)
-    find_package(libpqxx CONFIG QUIET)
-    if(libpqxx_FOUND)
-        list(APPEND hj_LIBRARIES libpqxx::pqxx)
     endif()
 endif()
 

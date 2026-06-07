@@ -41,7 +41,6 @@
     "libharu",
     "libiconv",
     "libnice",
-    "libpqxx",
     "libqrencode",
     "nlohmann-json",
     "opencl",
@@ -216,10 +215,6 @@
     {
       "name": "libnice",
       "version": "0.1.22"
-    },
-    {
-      "name": "libpqxx",
-      "version": "7.10.1#0"
     },
     {
       "name": "libqrencode",

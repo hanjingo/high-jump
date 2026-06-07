@@ -93,7 +93,6 @@ if (ASAN)
 endif()
 
 # Macro Definitions
-add_definitions(-DI18N_LOCALE="${LANGUAGE_LOCALE}")
 add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
@@ -102,8 +101,12 @@ add_definitions(-DLIC_CORE_VERSION_MAJOR_MIN=${LIC_CORE_VERSION_MAJOR_MIN})
 add_definitions(-DLIC_CORE_VERSION_MINOR_MIN=${LIC_CORE_VERSION_MINOR_MIN})
 add_definitions(-DLIC_CORE_VERSION_PATCH_MIN=${LIC_CORE_VERSION_PATCH_MIN})
 add_definitions(-DEMAIL="${PACKAGE_CONTACT}")
+add_definitions(-DLIC_ENABLE=${LIC_ENABLE})
 add_definitions(-DLIC_ISSUER="${LIC_ISSUER}")
 add_definitions(-DLIC_FPATH="${LIC_FPATH}")
+add_definitions(-DCRASH_HANDLER_ENABLE=${CRASH_HANDLER_ENABLE})
+add_definitions(-DTELEMETRY_ENABLE=${TELEMETRY_ENABLE})
+add_definitions(-DPROPERTY_ENABLE=${PROPERTY_ENABLE})
 
 # windows specific settings
 if (WIN32)
@@ -126,15 +129,10 @@ if (BUILD_BENCHMARK)
 endif()
 
 # add vcpkg library
-find_package(opentelemetry-cpp CONFIG REQUIRED) # depend: spdlog, ...
-find_package(jwt-cpp CONFIG REQUIRED)
-find_package(fmt REQUIRED)
-find_package(unofficial-breakpad REQUIRED)
-find_package(Boost REQUIRED COMPONENTS 
-    program_options
-)
+find_package(hj REQUIRED)
 
 # source files
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 aux_source_directory(./src SRC)
 
@@ -142,25 +140,7 @@ aux_source_directory(./src SRC)
 add_executable(${PROJECT_NAME} ${SRC})
 
 # link library
-set(LINK_LIBS 
-    ${CMAKE_DL_LIBS}
-
-    # boost
-    ${Boost_LIBRARIES}
-
-    # telemetry
-    ${OPENTELEMETRY_CPP_LIBRARIES}
-
-    # jwt
-    jwt-cpp::jwt-cpp
-
-    # fmt
-    fmt::fmt
-
-    # breakpad_client
-    unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
-    unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
-)
+set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES})
 if(WIN32)
     list(APPEND LINK_LIBS 
         bcrypt
@@ -177,18 +157,49 @@ else()
 endif()
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
-# copy resource files
-file(GLOB PROPERTY_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties")
-add_custom_target(${PACKAGE_NAME}_copy_properties ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${PROPERTY_FILES}
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    DEPENDS ${PROPERTY_FILES}
-    COMMENT "Copying .properties files to output dir"
-)
+if (PROPERTY_ENABLE)
+    # copy properties files
+    file(GLOB PROPERTY_FILES 
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties")
+    if (PROPERTY_FILES)
+        add_custom_target(${PACKAGE_NAME}_copy_properties ALL
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${PROPERTY_FILES}
+                $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            DEPENDS ${PROPERTY_FILES}
+            COMMENT "Copying .properties files to output dir"
+        )
+    else()
+        add_custom_target(${PACKAGE_NAME}_copy_properties ALL
+            COMMENT "No .properties files to copy"
+        )
+    endif()
 
-add_dependencies(${PROJECT_NAME} ${PACKAGE_NAME}_copy_properties)
+    add_dependencies(${PROJECT_NAME} ${PACKAGE_NAME}_copy_properties)
+endif()
+
+if (${LIC_ENABLE} EQUAL 1)
+    # copy license file
+    file(GLOB LIC_FILES  
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.lic")
+    if (LIC_FILES)
+        add_custom_target(${PACKAGE_NAME}_copy_lics ALL
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${LIC_FILES}
+                $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            DEPENDS ${LIC_FILES}
+            COMMENT "Copying .lic files to output dir"
+        )
+    else()
+        add_custom_target(${PACKAGE_NAME}_copy_lics ALL
+            COMMENT "No .lic files to copy"
+        )
+    endif()
+
+    add_dependencies(${PROJECT_NAME} ${PACKAGE_NAME}_copy_lics)
+endif()
 
 # Deploy dependencies
 # for windows + vs2019:

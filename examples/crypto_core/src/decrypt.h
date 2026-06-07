@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include <hj/crypto/aes.hpp>
 #include <hj/crypto/base64.hpp>
@@ -57,7 +58,7 @@ class decryptor_mgr
                                      const std::string &fmt);
 
   private:
-    std::vector<std::unique_ptr<decryptor> > _decryptors;
+    std::vector<std::unique_ptr<decryptor>> _decryptors;
 };
 
 class aes_decryptor : public decryptor

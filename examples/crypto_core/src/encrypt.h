@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <memory>
 
 #include <hj/crypto/aes.hpp>
 #include <hj/crypto/base64.hpp>
@@ -60,7 +61,7 @@ class encryptor_mgr
                                      const std::string &fmt);
 
   private:
-    std::vector<std::unique_ptr<encryptor> > _encryptors;
+    std::vector<std::unique_ptr<encryptor>> _encryptors;
 };
 
 class aes_encryptor : public encryptor

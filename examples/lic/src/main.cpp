@@ -2,9 +2,19 @@
 #include <hj/os/env.h>
 #include <hj/os/options.hpp>
 #include <hj/os/signal.hpp>
-#include <hj/util/license.hpp>
+
+#include <iostream>
+#if CRASH_HANDLER_ENABLE == 1
 #include <hj/testing/crash.hpp>
+#endif
+
+#if TELEMETRY_ENABLE == 1
 #include <hj/testing/telemetry.hpp>
+#endif
+
+#if LIC_ENABLE == 1
+#include <hj/util/license.hpp>
+#endif
 
 // add your code here...
 #include <hj/testing/error.hpp>
@@ -16,12 +26,37 @@
 
 int main(int argc, char *argv[])
 {
-    // add options parse support
-    hj::options opts;
-
-    // add crash handle support
+#if CRASH_HANDLER_ENABLE == 1
+// add crash handle support
+#pragma message("crash handler enabled, initializing crash handler...")
     hj::crash_handler::instance()->prevent_set_unhandled_exception_filter();
     hj::crash_handler::instance()->set_local_path("./");
+#endif
+
+#if TELEMETRY_ENABLE == 1
+// add telemetry support
+#pragma message("telemetry enabled, initializing tracer...")
+    auto tracer =
+        hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
+#endif
+
+#if LIC_ENABLE == 1
+// add license check support
+#pragma message("license check enabled, verifying license...")
+    hj::license::verifier vef{LIC_ISSUER, hj::license::sign_algo::none, {}};
+    auto                  verify_err = vef.verify_file(LIC_FPATH, PACKAGE, 1);
+    if(verify_err)
+    {
+        std::cerr << "license verify failed with err: " << verify_err.message()
+                  << ", please check your license file: " << LIC_FPATH
+                  << std::endl;
+        return -1;
+    }
+#endif
+
+    // add your code here...
+    // add options parse support
+    hj::options opts;
 
     // add log support
 #ifdef DEBUG
@@ -30,23 +65,9 @@ int main(int argc, char *argv[])
     hj::log::logger::instance()->set_level(hj::log::level::info);
 #endif
 
-    // add telemetry support
-    auto tracer =
-        hj::telemetry::make_otlp_file_tracer("otlp_call", "./telemetry.json");
-
     // add signals handle support
     hj::sighandler::instance().sigcatch({SIGABRT, SIGTERM}, [](int sig) {});
 
-    // // add license check support
-    // hj::license::verifier vef{"tourist", hj::license::sign_algo::none, {}};
-    // auto err = vef.verify_file("./license.lic", "tourist", 30, {{"sn", hj::license::get_disk_sn()}});
-    // if (err)
-    // {
-    //     LOG_ERROR("license verify failed with err: {}, please check your license file: {}", err.message(), "./license.lic");
-    //     return -1;
-    // }
-
-    // add your code here...
     hj::error_handler<err_t> h{[](const char *src, const char *dst) {
         LOG_DEBUG("error handler state transition: {} -> {}", src, dst);
     }};
@@ -77,7 +98,8 @@ int main(int argc, char *argv[])
                     break;
                 }
                 case ERR_LIC_CORE_VERSION_MISMATCH: {
-                    LOG_ERROR("Error: lic_core version {}.{}.{}, the minimum required version is {}.{}.{}",
+                    LOG_ERROR("Error: lic_core version {}.{}.{}, the minimum "
+                              "required version is {}.{}.{}",
                               major,
                               minor,
                               patch,
@@ -168,7 +190,8 @@ int main(int argc, char *argv[])
                     break;
                 }
                 case LIC_ERR_INVALID_TIMES: {
-                    LOG_ERROR("Error: lic_core invalid times, count: {}", count);
+                    LOG_ERROR("Error: lic_core invalid times, count: {}",
+                              count);
                     break;
                 }
                 case LIC_ERR_KEYS_NOT_ENOUGH: {
@@ -243,11 +266,27 @@ int main(int argc, char *argv[])
     } else if(subcmd == "help")
     {
         // lic help
-        print("Usage: lic <subcommand> [options] [Content]\n\nSubcommands:\n  add       Add the lic issuer\n  issue     Issue a license file\n  verify    Verify a license file\n  help      Show this help message\n\nOptions:\n  -a, --algo      Signature algorithm, one of [none, rsa256], default: none\n  -c, --count     Valid times, default: 1\n  -l, --licensee  Licensee name, default: tourist\n  -o, --output    Output license file path\n  -t, --time      Not less than this days, default: 30\n\nContent:\n  for subcmd add: key-value pairs for keys, e.g. xxx,xxx\n  for subcmd issue: key-value pairs for claims, e.g. xxx:xxx,xxx:xxx\n  for subcmd verify: key-value pairs for claims, e.g. xxx:xxx,xxx:xxx\n\nExamples:\n  lic add -a none -i hehehunanchina@live.com -c 10 -i\n  lic issue -a none -l tourist -i hehehunanchina@live.com -t 30\n  lic verify -a none -i hehehunanchina@live.com\n", output_type::console);
+        print("Usage: lic <subcommand> [options] [Content]\n\nSubcommands:\n  "
+              "add       Add the lic issuer\n  issue     Issue a license "
+              "file\n  verify    Verify a license file\n  help      Show this "
+              "help message\n\nOptions:\n  -a, --algo      Signature "
+              "algorithm, one of [none, rsa256], default: none\n  -c, --count  "
+              "   Valid times, default: 1\n  -l, --licensee  Licensee name, "
+              "default: tourist\n  -o, --output    Output license file path\n  "
+              "-t, --time      Not less than this days, default: "
+              "30\n\nContent:\n  for subcmd add: key-value pairs for keys, "
+              "e.g. xxx,xxx\n  for subcmd issue: key-value pairs for claims, "
+              "e.g. xxx:xxx,xxx:xxx\n  for subcmd verify: key-value pairs for "
+              "claims, e.g. xxx:xxx,xxx:xxx\n\nExamples:\n  lic add -a none -i "
+              "hehehunanchina@live.com -c 10 -i\n  lic issue -a none -l "
+              "tourist -i hehehunanchina@live.com -t 30\n  lic verify -a none "
+              "-i hehehunanchina@live.com\n",
+              output_type::console);
     } else
     {
         h.match(error(ERR_INVALID_SUBCMD), [&](const err_t &e) {
-            LOG_ERROR("Error: unknown subcommand: {}, we expected one of these subcommands: [{}]",
+            LOG_ERROR("Error: unknown subcommand: {}, we expected one of these "
+                      "subcommands: [{}]",
                       subcmd,
                       fmt_strs(all_subcmds));
         });

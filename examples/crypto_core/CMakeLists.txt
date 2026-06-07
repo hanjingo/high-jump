@@ -116,13 +116,7 @@ if (BUILD_BENCHMARK)
 endif()
 
 # add vcpkg library
-find_package(OpenSSL REQUIRED)
-find_package(fmt REQUIRED)
-find_package(unofficial-breakpad REQUIRED)
-find_package(Boost REQUIRED COMPONENTS
-    system
-    filesystem
-)
+find_package(hj REQUIRED)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -141,23 +135,7 @@ foreach(TYPE SHARED STATIC)
 
     add_library(${LIB_NAME} ${TYPE} ${SRC})
 
-    set(LINK_LIBS 
-        ${CMAKE_DL_LIBS}
-
-        # boost
-        ${Boost_LIBRARIES}
-
-        # fmt
-        fmt::fmt
-
-        # openssl
-        OpenSSL::SSL 
-        OpenSSL::Crypto
-
-        # breakpad_client
-        unofficial::breakpad::libbreakpad # for unofficial breakpad cmake config
-        unofficial::breakpad::libbreakpad_client # for unofficial breakpad-client cmake config
-    )
+    set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES})
     if(WIN32)
         list(APPEND LINK_LIBS 
             bcrypt

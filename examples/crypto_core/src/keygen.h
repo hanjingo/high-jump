@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "crypto_core.h"
 #include <hj/crypto/rsa.hpp>
@@ -41,7 +42,7 @@ class keymaker_mgr
                                   const int                 bits);
 
   private:
-    std::vector<std::unique_ptr<keymaker> > _keymakers;
+    std::vector<std::unique_ptr<keymaker>> _keymakers;
 };
 
 class rsa_keymaker : public keymaker

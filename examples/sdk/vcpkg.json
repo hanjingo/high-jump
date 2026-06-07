@@ -1,16 +1,15 @@
 {
   "dependencies": [
-    "benchmark",
-    "gtest"
+    {
+      "name": "hanjingo-high-jump",
+      "features": ["testing"]
+    },
+    "libpqxx"
   ],
   "overrides": [
     {
-      "name": "benchmark",
-      "version": "1.9.4"
-    },
-    {
-      "name": "gtest",
-      "version": "1.17.0"
+      "name": "libpqxx",
+      "version": "7.10.1"
     }
   ]
 }

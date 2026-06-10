@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "hanjingo-high-jump",
-      "features": ["util", "testing"]
+      "features": ["test", "bench", "lic"]
     }
   ]
 }

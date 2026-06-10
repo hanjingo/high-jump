@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "hanjingo-high-jump",
-      "features": ["os", "db", "testing", "sync", "encoding"]
+      "features": ["sqlite", "test", "bench", "sync"]
     }
   ]
 }

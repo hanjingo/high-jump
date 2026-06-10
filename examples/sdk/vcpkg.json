@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "hanjingo-high-jump",
-      "features": ["testing"]
+      "features": ["test"]
     }
   ]
 }

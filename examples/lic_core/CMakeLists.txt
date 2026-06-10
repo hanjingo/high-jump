@@ -137,25 +137,19 @@ foreach(TYPE SHARED STATIC)
 
     add_library(${LIB_NAME} ${TYPE} ${SRC})
 
-    set(LINK_LIBS ${CMAKE_DL_LIBS})
+    set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES})
     if(WIN32)
         list(APPEND LINK_LIBS 
             bcrypt
-
-            jwt-cpp::jwt-cpp
         )
     elseif(APPLE)
         list(APPEND LINK_LIBS 
             pthread
-
-            jwt-cpp::jwt-cpp
         )
     else()
         list(APPEND LINK_LIBS 
             rt 
             pthread
-
-            jwt-cpp::jwt-cpp
         )
     endif()
     target_link_libraries(${LIB_NAME} ${LINK_LIBS})

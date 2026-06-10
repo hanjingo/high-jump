@@ -116,6 +116,7 @@ if (BUILD_BENCHMARK)
 endif()
 
 # add vcpkg library
+find_package(hj REQUIRED)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -134,7 +135,7 @@ foreach(TYPE SHARED STATIC)
 
     add_library(${LIB_NAME} ${TYPE} ${SRC})
 
-    set(LINK_LIBS ${CMAKE_DL_LIBS})
+    set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES})
     if(WIN32)
         list(APPEND LINK_LIBS 
             bcrypt

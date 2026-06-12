@@ -112,7 +112,7 @@ static void bm_sqlite_query(benchmark::State &state)
             db.exec("INSERT INTO t (v) VALUES (0);");
         state.ResumeTiming();
 
-        auto result = db.query("SELECT id, v FROM t WHERE v=0;", nullptr);
+        auto result = db.query("SELECT id, v FROM t WHERE v=0;");
         benchmark::DoNotOptimize(result.size());
 
         state.PauseTiming();

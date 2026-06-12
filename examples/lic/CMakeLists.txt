@@ -157,50 +157,34 @@ else()
 endif()
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
+file(GLOB RESOURCE_FILES CONFIGURE_DEPENDS "")
 if (PROPERTY_ENABLE)
     # copy properties files
-    file(GLOB PROPERTY_FILES 
-        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties")
-    if (PROPERTY_FILES)
-        add_custom_target(${PACKAGE_NAME}_copy_properties ALL
-            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${PROPERTY_FILES}
-                $<TARGET_FILE_DIR:${PROJECT_NAME}>
-            DEPENDS ${PROPERTY_FILES}
-            COMMENT "Copying .properties files to output dir"
-        )
-    else()
-        add_custom_target(${PACKAGE_NAME}_copy_properties ALL
-            COMMENT "No .properties files to copy"
-        )
-    endif()
-
-    add_dependencies(${PROJECT_NAME} ${PACKAGE_NAME}_copy_properties)
+    file(GLOB PROPERTY_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties"
+    )
+    list(APPEND RESOURCE_FILES ${PROPERTY_FILES})
 endif()
-
-if (${LIC_ENABLE} EQUAL 1)
+if (LIC_ENABLE)
     # copy license file
-    file(GLOB LIC_FILES  
-        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.lic")
-    if (LIC_FILES)
-        add_custom_target(${PACKAGE_NAME}_copy_lics ALL
-            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${LIC_FILES}
-                $<TARGET_FILE_DIR:${PROJECT_NAME}>
-            DEPENDS ${LIC_FILES}
-            COMMENT "Copying .lic files to output dir"
-        )
-    else()
-        add_custom_target(${PACKAGE_NAME}_copy_lics ALL
-            COMMENT "No .lic files to copy"
-        )
-    endif()
-
-    add_dependencies(${PROJECT_NAME} ${PACKAGE_NAME}_copy_lics)
+    file(GLOB LIC_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.lic"
+    )
+    list(APPEND RESOURCE_FILES ${LIC_FILES})
 endif()
 
+if (RESOURCE_FILES)
+    add_custom_target(${PACKAGE_NAME}_copy_resources ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${EXECUTABLE_OUTPUT_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${RESOURCE_FILES}
+            "${EXECUTABLE_OUTPUT_PATH}"
+        DEPENDS ${RESOURCE_FILES}
+        COMMENT "Copying resource files to output dir"
+    )
+else()
+    message(STATUS "No resource files to copy for ${PROJECT_NAME}")
+endif()
 # Deploy dependencies
 # for windows + vs2019:
 # cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019"

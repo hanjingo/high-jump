@@ -56,20 +56,18 @@ TEST(sqlite, exec_and_query)
     EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
     EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);"));
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('Alice'),('Bob');"));
-    auto rows =
-        db.query("SELECT id, name FROM t ORDER BY id;", _sqlite_exec_cb);
+    auto rows = db.query("SELECT id, name FROM t ORDER BY id;");
     ASSERT_EQ(rows.size(), 2u);
     EXPECT_EQ(rows[0][1], "Alice");
     EXPECT_EQ(rows[1][1], "Bob");
 
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('C''arol');"));
-    rows = db.query("SELECT id, name FROM t WHERE name='C''arol';",
-                    _sqlite_exec_cb);
+    rows = db.query("SELECT id, name FROM t WHERE name='C''arol';");
     ASSERT_EQ(rows.size(), 1u);
     EXPECT_EQ(rows[0][1], "C'arol");
 
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES (''),('');"));
-    rows = db.query("SELECT name FROM t WHERE name='';", _sqlite_exec_cb);
+    rows = db.query("SELECT name FROM t WHERE name='';");
     ASSERT_EQ(rows.size(), 2u);
     db.close();
     remove("ExecAndQueryTest.db");
@@ -86,12 +84,12 @@ TEST(sqlite, transaction)
     EXPECT_TRUE(db.begin());
     EXPECT_TRUE(db.exec("INSERT INTO t (v) VALUES ('x');"));
     EXPECT_TRUE(db.rollback());
-    auto rows = db.query("SELECT * FROM t;", _sqlite_exec_cb);
+    auto rows = db.query("SELECT * FROM t;");
     EXPECT_TRUE(rows.empty());
     EXPECT_TRUE(db.begin());
     EXPECT_TRUE(db.exec("INSERT INTO t (v) VALUES ('y');"));
     EXPECT_TRUE(db.commit());
-    rows = db.query("SELECT v FROM t;", _sqlite_exec_cb);
+    rows = db.query("SELECT v FROM t;");
     ASSERT_EQ(rows.size(), 1u);
     EXPECT_EQ(rows[0][0], "y");
     db.close();
@@ -117,7 +115,7 @@ TEST(sqlite, query_no_table)
         GTEST_SKIP() << "sqlite not available";
     sqlite db;
     ASSERT_TRUE(db.open("NoTableTest.db"));
-    auto rows = db.query("SELECT * FROM not_exist;", _sqlite_exec_cb);
+    auto rows = db.query("SELECT * FROM not_exist;");
     EXPECT_TRUE(rows.empty());
     db.close();
     remove("NoTableTest.db");
@@ -145,7 +143,7 @@ TEST(sqlite, query_empty)
     ASSERT_TRUE(db.open("QueryEmptyTest.db"));
     EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
     db.exec("CREATE TABLE t (id INTEGER);");
-    auto rows = db.query("SELECT * FROM t;", _sqlite_exec_cb);
+    auto rows = db.query("SELECT * FROM t;");
     EXPECT_TRUE(rows.empty());
     db.close();
     remove("QueryEmptyTest.db");

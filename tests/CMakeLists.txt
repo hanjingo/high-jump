@@ -77,6 +77,12 @@ find_package(Boost REQUIRED COMPONENTS
 find_package(OpenCL QUIET)
 find_package(CUDA QUIET)
 
+# Faiss
+# Find OpenMP (Faiss depends on it for parallel search)
+find_package(OpenMP REQUIRED)
+# Find the installed Faiss package
+find_package(faiss REQUIRED)
+
 # for qrcode encode
 find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
 find_library(QRENCODE_LIBRARY_RELEASE qrencode)
@@ -180,6 +186,10 @@ target_link_libraries(${PROJECT_NAME}
     # grpc
     gRPC::grpc
     gRPC::grpc++ 
+
+    # faiss
+    faiss 
+    OpenMP::OpenMP_CXX
 )
 
 # for os-specific libraries

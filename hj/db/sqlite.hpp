@@ -66,13 +66,13 @@ class sqlite
     inline bool        commit() { return exec("COMMIT;"); }
     inline bool        rollback() { return exec("ROLLBACK;"); }
 
-    bool exec(const std::string &sql)
+    bool exec(const std::string &sql, exec_cb callback = nullptr)
     {
         if(!_db)
             return false;
 
         char *errmsg = nullptr;
-        if(sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &errmsg)
+        if(sqlite3_exec(_db, sql.c_str(), callback, nullptr, &errmsg)
            == SQLITE_OK)
             return true;
 
@@ -88,8 +88,7 @@ class sqlite
     }
 
     // Query: returns vector of rows, each row is vector<string>
-    std::vector<std::vector<std::string>> query(const std::string &sql,
-                                                exec_cb            callback)
+    std::vector<std::vector<std::string>> query(const std::string &sql)
     {
         std::vector<std::vector<std::string>> rows;
         if(!_db)

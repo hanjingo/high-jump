@@ -298,6 +298,19 @@ if(@HJ_ENABLE_QRCODE@)
     endif()
 endif()
 
+# vector index
+if(@HJ_ENABLE_VECTOR_INDEX@)
+    find_package(OpenMP CONFIG QUIET)
+    if(OpenMP_FOUND)
+        list(APPEND hj_LIBRARIES OpenMP::OpenMP_CXX)
+    endif()
+
+    find_package(faiss CONFIG QUIET)
+    if(faiss_FOUND)
+        list(APPEND hj_LIBRARIES faiss)
+    endif()
+endif()
+
 # Remove duplicates
 list(REMOVE_DUPLICATES hj_LIBRARIES)
 

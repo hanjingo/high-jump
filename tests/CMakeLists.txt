@@ -83,9 +83,6 @@ find_package(OpenMP REQUIRED)
 # Find the installed Faiss package
 find_package(faiss REQUIRED)
 
-# Llama
-find_package(Llama REQUIRED)
-
 # for qrcode encode
 find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
 find_library(QRENCODE_LIBRARY_RELEASE qrencode)
@@ -193,9 +190,6 @@ target_link_libraries(${PROJECT_NAME}
     # faiss
     faiss 
     OpenMP::OpenMP_CXX
-
-    # Llama
-    llama
 )
 
 # for os-specific libraries
@@ -264,7 +258,6 @@ file(GLOB TEST_CONFIG_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/client.key"
     "${CMAKE_CURRENT_SOURCE_DIR}/server.crt"
     "${CMAKE_CURRENT_SOURCE_DIR}/server.key"
-    "${CMAKE_CURRENT_SOURCE_DIR}/TinyStories-656K-Q3_K_M.gguf"
 )
 add_custom_target(copy_test_configs ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>

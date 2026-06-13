@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.19.2)
 project(hj 
     VERSION 1.0.0
     DESCRIPTION "Modern C++ Library for C++17 and above"
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 # set options

@@ -20,6 +20,10 @@ option(BUILD_STATIC "Build static object" OFF)
 option(BUILD_TEST "Build test" OFF)
 option(BUILD_BENCHMARK "Build benchmark" OFF)
 
+# Load Environment Info
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/env.cmake)
+load_env("${CMAKE_CURRENT_SOURCE_DIR}/.env")
+
 # import vcpkg module
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     if(DEFINED ENV{VCPKG_ROOT})
@@ -93,12 +97,6 @@ add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
 add_definitions(-DPATCH_VERSION=${PACKAGE_VERSION_PATCH})
-add_definitions(-DCRYPTO_CORE_VERSION_MAJOR_MIN=${CRYPTO_CORE_VERSION_MAJOR_MIN})
-add_definitions(-DCRYPTO_CORE_VERSION_MINOR_MIN=${CRYPTO_CORE_VERSION_MINOR_MIN})
-add_definitions(-DCRYPTO_CORE_VERSION_PATCH_MIN=${CRYPTO_CORE_VERSION_PATCH_MIN})
-add_definitions(-DDB_CORE_VERSION_MAJOR_MIN=${DB_CORE_VERSION_MAJOR_MIN})
-add_definitions(-DDB_CORE_VERSION_MINOR_MIN=${DB_CORE_VERSION_MINOR_MIN})
-add_definitions(-DDB_CORE_VERSION_PATCH_MIN=${DB_CORE_VERSION_PATCH_MIN})
 add_definitions(-DEMAIL="${PACKAGE_CONTACT}")
 add_definitions(-DLIC_ENABLE=${LIC_ENABLE})
 add_definitions(-DLIC_ISSUER="${LIC_ISSUER}")
@@ -129,17 +127,18 @@ endif()
 
 # add vcpkg library
 find_package(hj REQUIRED)
+find_package(Llama REQUIRED)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
+include_directories(${hj_INCLUDE_DIR})
 aux_source_directory(./src SRC)
 
 # build exec file
 add_executable(${PROJECT_NAME} ${SRC})
 
 # link library
-set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES})
+set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES} llama)
 if(WIN32)
     list(APPEND LINK_LIBS 
         bcrypt
@@ -156,7 +155,7 @@ else()
 endif()
 target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
-file(GLOB RESOURCE_FILES CONFIGURE_DEPENDS "")
+file(GLOB RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/*.gguf")
 if (PROPERTY_ENABLE)
     # copy properties files
     file(GLOB PROPERTY_FILES CONFIGURE_DEPENDS

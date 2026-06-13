@@ -6,7 +6,7 @@ load_env("${CMAKE_CURRENT_SOURCE_DIR}/.env")
 
 # set project
 project(${PACKAGE_NAME} 
-    LANGUAGES CXX 
+    LANGUAGES C CXX 
     DESCRIPTION ${PACKAGE_DESCRIPTION_SUMMARY}
 )
 

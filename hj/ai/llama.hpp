@@ -55,26 +55,13 @@ static inline bool supports_rpc()
 {
     return llama_supports_rpc();
 }
+static batch_t batch_get_one(token_t *tokens, int32_t n_tokens)
+{
+    return llama_batch_get_one(tokens, n_tokens);
+}
 static batch_t batch_get_one(std::vector<token_t> &tokens)
 {
     return llama_batch_get_one(tokens.data(), tokens.size());
-}
-static int n_vocab(vocab_t *vocab)
-{
-    return llama_n_vocab(vocab);
-}
-static bool token_is_eog(vocab_t *vocab, token_t token)
-{
-    return llama_token_is_eog(vocab, token);
-}
-static bool token_to_piece(const llama_vocab *vocab,
-                           llama_token        token,
-                           char              *buf,
-                           int32_t            length,
-                           int32_t            lstrip,
-                           bool               special)
-{
-    return llama_token_to_piece(vocab, token, buf, length, lstrip, special);
 }
 
 class memory
@@ -337,6 +324,37 @@ class model
 
         return llama_model_get_vocab(const_cast<llama_model *>(_model));
     }
+    int n_vocab()
+    {
+        if(!_model)
+            return 0;
+
+        return llama_n_vocab(
+            llama_model_get_vocab(const_cast<llama_model *>(_model)));
+    }
+    bool token_is_eog(token_t token)
+    {
+        if(!_model)
+            return false;
+
+        return llama_token_is_eog(
+            llama_model_get_vocab(const_cast<llama_model *>(_model)),
+            token);
+    }
+    int32_t token_to_piece(
+        token_t token, char *buf, int32_t length, int32_t lstrip, bool special)
+    {
+        if(!_model)
+            return -1;
+
+        return llama_token_to_piece(
+            llama_model_get_vocab(const_cast<llama_model *>(_model)),
+            token,
+            buf,
+            length,
+            lstrip,
+            special);
+    }
     llama_rope_type rope_type()
     {
         if(!_model)
@@ -564,6 +582,8 @@ class context
         return llama_context_default_params();
     }
 
+    llama_context *data() { return _ctx; }
+
     void init(model &m, context_params_t params)
     {
         if(_ctx)
@@ -652,10 +672,10 @@ class context
                                       il_end);
     }
 
-    bool decode(batch_t &batch)
+    int32_t decode(batch_t &batch)
     {
         if(!_ctx)
-            return false;
+            return -1;
 
         return llama_decode(_ctx, batch);
     }

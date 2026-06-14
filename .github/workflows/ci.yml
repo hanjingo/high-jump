@@ -327,6 +327,44 @@ jobs:
           echo "ODBC_LIBRARY=$BREW_PREFIX/opt/unixodbc/lib/libodbc.dylib" >> $GITHUB_ENV
           echo "✓ ODBC paths configured: $BREW_PREFIX/opt/unixodbc"
         fi
+
+        # Ensure OpenMP runtime is available and export deterministic hints for later CMake step.
+        if ! brew list libomp >/dev/null 2>&1; then
+          echo "libomp not found, installing..."
+          brew install libomp
+        fi
+        if [ ! -f "$BREW_PREFIX/opt/libomp/lib/libomp.dylib" ]; then
+          echo "ERROR: libomp.dylib not found at $BREW_PREFIX/opt/libomp/lib/libomp.dylib"
+          exit 1
+        fi
+
+        echo "OPENMP_ROOT=$BREW_PREFIX/opt/libomp" >> $GITHUB_ENV
+        echo "OpenMP_omp_LIBRARY=$BREW_PREFIX/opt/libomp/lib/libomp.dylib" >> $GITHUB_ENV
+        echo "OpenMP_C_LIB_NAMES=omp" >> $GITHUB_ENV
+        echo "OpenMP_CXX_LIB_NAMES=omp" >> $GITHUB_ENV
+
+        {
+          echo "OpenMP_C_FLAGS<<EOF"
+          echo "-Xclang -fopenmp"
+          echo "EOF"
+        } >> $GITHUB_ENV
+        {
+          echo "OpenMP_CXX_FLAGS<<EOF"
+          echo "-Xclang -fopenmp"
+          echo "EOF"
+        } >> $GITHUB_ENV
+
+        # Also set generic compiler/linker env flags that FindOpenMP can pick up during try-compile.
+        {
+          echo "CPPFLAGS<<EOF"
+          echo "-I$BREW_PREFIX/opt/libomp/include"
+          echo "EOF"
+        } >> $GITHUB_ENV
+        {
+          echo "LDFLAGS<<EOF"
+          echo "-L$BREW_PREFIX/opt/libomp/lib -Wl,-rpath,$BREW_PREFIX/opt/libomp/lib"
+          echo "EOF"
+        } >> $GITHUB_ENV
         
         # Verify tools are available
         echo "Tool verification:"
@@ -395,6 +433,12 @@ jobs:
         echo "CXX: $CXX"
         echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
         echo "VCPKG_ROOT: $VCPKG_ROOT"
+        echo "OPENMP_ROOT: $OPENMP_ROOT"
+        echo "OpenMP_CXX_FLAGS: $OpenMP_CXX_FLAGS"
+        echo "OpenMP_CXX_LIB_NAMES: $OpenMP_CXX_LIB_NAMES"
+        echo "OpenMP_omp_LIBRARY: $OpenMP_omp_LIBRARY"
+        echo "CPPFLAGS: $CPPFLAGS"
+        echo "LDFLAGS: $LDFLAGS"
         echo "PATH: $PATH"
         echo "=============================="
         
@@ -422,12 +466,13 @@ jobs:
           -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
           -DVCPKG_TARGET_TRIPLET=arm64-osx-relaxed \
-          -DOpenMP_ROOT="$BREW_PREFIX/opt/libomp" \
-          -DOpenMP_C_FLAGS="-Xpreprocessor -fopenmp -I$BREW_PREFIX/opt/libomp/include" \
-          -DOpenMP_CXX_FLAGS="-Xpreprocessor -fopenmp -I$BREW_PREFIX/opt/libomp/include" \
-          -DOpenMP_C_LIB_NAMES="omp" \
-          -DOpenMP_CXX_LIB_NAMES="omp" \
-          -DOpenMP_omp_LIBRARY="$BREW_PREFIX/opt/libomp/lib/libomp.dylib" \
+          -DOpenMP_ROOT="$OPENMP_ROOT" \
+          -DOpenMP_C_FLAGS="$OpenMP_C_FLAGS" \
+          -DOpenMP_CXX_FLAGS="$OpenMP_CXX_FLAGS" \
+          -DOpenMP_CXX_FLAG="$OpenMP_CXX_FLAGS" \
+          -DOpenMP_C_LIB_NAMES="$OpenMP_C_LIB_NAMES" \
+          -DOpenMP_CXX_LIB_NAMES="$OpenMP_CXX_LIB_NAMES" \
+          -DOpenMP_omp_LIBRARY="$OpenMP_omp_LIBRARY" \
           -DCMAKE_CXX_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option" \
           -DCMAKE_C_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option" \
           -DODBC_INCLUDE_DIR="$BREW_PREFIX/opt/unixodbc/include" \

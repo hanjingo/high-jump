@@ -131,7 +131,8 @@ find_package(Llama REQUIRED)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(${hj_INCLUDE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
+#include_directories(${hj_INCLUDE_DIR})
 aux_source_directory(./src SRC)
 
 # build exec file

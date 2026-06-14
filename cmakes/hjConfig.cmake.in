@@ -311,6 +311,14 @@ if(@HJ_ENABLE_VECTOR_INDEX@)
     endif()
 endif()
 
+# llama
+if(@HJ_ENABLE_LLAMA@)
+    find_package(Llama CONFIG QUIET)
+    if(Llama_FOUND)
+        list(APPEND hj_LIBRARIES llama)
+    endif()
+endif()
+
 # Remove duplicates
 list(REMOVE_DUPLICATES hj_LIBRARIES)
 

@@ -614,7 +614,7 @@ class context
     uint32_t n_batch() const { return _ctx ? llama_n_batch(_ctx) : 0; }
     uint32_t n_ubatch() const { return _ctx ? llama_n_ubatch(_ctx) : 0; }
     uint32_t n_seq_max() const { return _ctx ? llama_n_seq_max(_ctx) : 0; }
-    uint32_t n_rs_seq() const { return _ctx ? llama_n_rs_seq(_ctx) : 0; }
+    // uint32_t n_rs_seq() const { return _ctx ? llama_n_rs_seq(_ctx) : 0; }
 
     int32_t set_adapter_lora(std::vector<adapter_lora> &loras, float *scales)
     {

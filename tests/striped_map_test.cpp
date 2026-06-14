@@ -1,6 +1,7 @@
 #include <thread>
 #include <atomic>
 #include <vector>
+#include <algorithm>
 #include <gtest/gtest.h>
 #include <hj/sync/striped_map.hpp>
 #include <string>

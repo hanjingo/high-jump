@@ -122,7 +122,7 @@ TEST(llama, context_default_state)
     EXPECT_EQ(ctx.n_batch(), 0U);
     EXPECT_EQ(ctx.n_ubatch(), 0U);
     EXPECT_EQ(ctx.n_seq_max(), 0U);
-    EXPECT_EQ(ctx.n_rs_seq(), 0U);
+    // EXPECT_EQ(ctx.n_rs_seq(), 0U);
 
     std::vector<hj::llama::adapter_lora> loras;
     EXPECT_EQ(ctx.set_adapter_lora(loras, nullptr), -1);

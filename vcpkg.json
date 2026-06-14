@@ -30,6 +30,7 @@
       "name": "eigen3",
       "default-features": false
     },
+    "faiss",
     "flatbuffers",
     "fmt",
     "grpc",
@@ -38,6 +39,7 @@
     "hidapi",
     "hiredis",
     "jwt-cpp",
+    "llama-cpp",
     "libharu",
     "libiconv",
     "libnice",
@@ -173,6 +175,10 @@
       "version": "5.0.1"
     },
     {
+      "name": "faiss",
+      "version": "1.14.1#0"
+    },
+    {
       "name": "flatbuffers",
       "version": "25.12.19"
     },
@@ -203,6 +209,10 @@
     {
       "name": "jwt-cpp",
       "version": "0.7.2"
+    },
+    {
+      "name": "llama-cpp",
+      "version": "9030#0"
     },
     {
       "name": "libharu",

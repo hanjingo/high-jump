@@ -422,6 +422,12 @@ jobs:
           -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
           -DVCPKG_TARGET_TRIPLET=arm64-osx-relaxed \
+          -DOpenMP_ROOT="$BREW_PREFIX/opt/libomp" \
+          -DOpenMP_C_FLAGS="-Xpreprocessor -fopenmp -I$BREW_PREFIX/opt/libomp/include" \
+          -DOpenMP_CXX_FLAGS="-Xpreprocessor -fopenmp -I$BREW_PREFIX/opt/libomp/include" \
+          -DOpenMP_C_LIB_NAMES="omp" \
+          -DOpenMP_CXX_LIB_NAMES="omp" \
+          -DOpenMP_omp_LIBRARY="$BREW_PREFIX/opt/libomp/lib/libomp.dylib" \
           -DCMAKE_CXX_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option" \
           -DCMAKE_C_FLAGS="-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option" \
           -DODBC_INCLUDE_DIR="$BREW_PREFIX/opt/unixodbc/include" \

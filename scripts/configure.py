@@ -1774,6 +1774,19 @@ class EnvironmentConfigurator:
     def _check_and_install_basic_tools(self):
         """Check and install basic development tools."""
         logger.info("Checking basic development tools...")
+
+        # Ensure OpenMP runtime is present on macOS even when core tools already exist.
+        # CI images often have cmake/ninja preinstalled, which can skip dependency installation.
+        if self.platform == 'macos' and CommandRunner.check_command_exists('brew'):
+            try:
+                libomp_check = CommandRunner.run(['brew', 'list', 'libomp'], capture=True, check=False)
+                if libomp_check.returncode != 0:
+                    logger.info("libomp not found on macOS, installing...")
+                    CommandRunner.run(['brew', 'install', 'libomp'], check=False)
+                else:
+                    logger.info("✓ libomp is already installed")
+            except Exception as e:
+                logger.warning(f"Failed to verify/install libomp: {e}")
         
         tools = self.checker.check_basic_tools()
         missing_tools = [tool for tool, installed in tools.items() if not installed]

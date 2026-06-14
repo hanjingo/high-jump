@@ -176,9 +176,9 @@ jobs:
         echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
         export MACOSX_DEPLOYMENT_TARGET=11.0
         
-        # Install required packages including autoconf-archive, libtool (for glibtoolize), and unixodbc
+        # Install required packages including OpenMP runtime for AppleClang/vcpkg ports.
         echo "=== Installing required packages ==="
-        brew install automake autoconf-archive libtool unixodbc || true
+        brew install automake autoconf-archive libtool unixodbc libomp || true
         brew unlink automake autoconf libtool 2>/dev/null || true
         brew link --force --overwrite automake autoconf autoconf-archive libtool || true
         
@@ -350,9 +350,10 @@ jobs:
       run: |
         echo "=== Creating custom vcpkg triplet ==="
         mkdir -p tools/vcpkg/triplets/community
+        BREW_PREFIX=$(brew --prefix)
         
         # Create a custom triplet for ARM64 macOS with explicit architecture flags
-        cat > tools/vcpkg/triplets/community/arm64-osx-relaxed.cmake << 'EOF'
+        cat > tools/vcpkg/triplets/community/arm64-osx-relaxed.cmake << EOF
         set(VCPKG_TARGET_ARCHITECTURE arm64)
         set(VCPKG_CRT_LINKAGE dynamic)
         set(VCPKG_LIBRARY_LINKAGE static)
@@ -362,9 +363,19 @@ jobs:
         # Explicitly set ARM64 architecture - required for boost-context assembly file selection
         set(VCPKG_OSX_ARCHITECTURES arm64)
         
-        # Add -arch arm64 to ensure correct code generation and assembly file selection
-        set(VCPKG_CXX_FLAGS "-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
-        set(VCPKG_C_FLAGS "-arch arm64 -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
+        # Ensure OpenMP is discoverable for AppleClang (e.g. faiss FindOpenMP).
+        set(VCPKG_CXX_FLAGS "-arch arm64 -I${BREW_PREFIX}/opt/libomp/include -Xpreprocessor -fopenmp -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
+        set(VCPKG_C_FLAGS "-arch arm64 -I${BREW_PREFIX}/opt/libomp/include -Xpreprocessor -fopenmp -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
+        set(VCPKG_LINKER_FLAGS "-L${BREW_PREFIX}/opt/libomp/lib -Wl,-rpath,${BREW_PREFIX}/opt/libomp/lib")
+
+        list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS
+          "-DOpenMP_ROOT=${BREW_PREFIX}/opt/libomp"
+          "-DOpenMP_C_FLAGS=-Xpreprocessor -fopenmp"
+          "-DOpenMP_CXX_FLAGS=-Xpreprocessor -fopenmp"
+          "-DOpenMP_C_LIB_NAMES=omp"
+          "-DOpenMP_CXX_LIB_NAMES=omp"
+          "-DOpenMP_omp_LIBRARY=${BREW_PREFIX}/opt/libomp/lib/libomp.dylib"
+        )
         EOF
         
         echo "Custom triplet created:"

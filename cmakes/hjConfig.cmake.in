@@ -313,6 +313,11 @@ endif()
 
 # llama
 if(@HJ_ENABLE_LLAMA@)
+    find_package(OpenMP CONFIG QUIET)
+    if (OpenMP_FOUND)
+        list(APPEND hj_LIBRARIES OpenMP::OpenMP_CXX)
+    endif()
+    
     find_package(Llama CONFIG QUIET)
     if(Llama_FOUND)
         list(APPEND hj_LIBRARIES llama)

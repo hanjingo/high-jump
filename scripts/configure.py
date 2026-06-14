@@ -506,6 +506,7 @@ class LinuxDependencyInstaller:
             essential_dev_libraries = [
                 'libudev-dev',
                 'libusb-1.0-0-dev',
+                'libomp-dev',
                 'libssl-dev', 'zlib1g-dev',
                 'libdbus-1-dev', 'libgcrypt20-dev',
                 'libsystemd-dev', 'libcap-dev', 'libmount-dev'
@@ -665,7 +666,8 @@ class LinuxDependencyInstaller:
                 'curl', 'zip', 'unzip', 'tar', 'git', 'autoconf', 'automake',
                 'libtool', 'gettext-devel', 'flex', 'bison', 'nasm',
                 'systemd-devel', 'libusbx-devel', 'openssl-devel', 'zlib-devel',
-                'python3-devel', 'python3-pip', 'meson'
+                'python3-devel', 'python3-pip', 'meson', 'libomp-devel',
+                'llvm-openmp-devel'
             ]
             
             failed_packages = CommandRunner.safe_install_packages(packages)
@@ -679,7 +681,7 @@ class LinuxDependencyInstaller:
                 'base-devel', 'cmake', 'ninja', 'pkgconf', 'curl', 'zip',
                 'unzip', 'tar', 'git', 'autoconf', 'automake', 'libtool',
                 'gettext', 'flex', 'bison', 'nasm', 'systemd', 'libusb',
-                'openssl', 'zlib', 'python', 'python-pip', 'meson'
+                'openssl', 'zlib', 'python', 'python-pip', 'meson', 'openmp'
             ]
             
             for package in packages:
@@ -1106,6 +1108,7 @@ class MacOSDependencyInstaller:
         # SSL/TLS and compression libraries
         library_packages = [
             'openssl@3',
+            'libomp',
             'zlib',
             'bzip2',
             'xz',
@@ -1510,6 +1513,7 @@ class MacOSDependencyInstaller:
         # SSL/TLS and compression libraries
         library_packages = [
             'openssl@3',
+            'libomp',
             'zlib',
             'bzip2',
             'xz',

@@ -300,7 +300,7 @@ endif()
 
 # vector index
 if(@HJ_ENABLE_VECTOR_INDEX@)
-    find_package(OpenMP CONFIG QUIET)
+    find_package(OpenMP CONFIG QUIET COMPONENTS CXX)
     if(OpenMP_FOUND)
         list(APPEND hj_LIBRARIES OpenMP::OpenMP_CXX)
     endif()
@@ -313,8 +313,8 @@ endif()
 
 # llama
 if(@HJ_ENABLE_LLAMA@)
-    find_package(OpenMP CONFIG QUIET)
-    if (OpenMP_FOUND)
+    find_package(OpenMP CONFIG QUIET COMPONENTS CXX)
+    if(OpenMP_FOUND)
         list(APPEND hj_LIBRARIES OpenMP::OpenMP_CXX)
     endif()
     

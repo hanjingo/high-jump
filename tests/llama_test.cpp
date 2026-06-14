@@ -3,6 +3,43 @@
 #include <hj/ai/llama.hpp>
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+
+namespace
+{
+std::filesystem::path find_llama_fixture()
+{
+    const std::filesystem::path source_dir =
+        std::filesystem::path(__FILE__).parent_path();
+
+    const std::filesystem::path candidates[] = {
+        std::filesystem::current_path() / "TinyStories-656K-Q3_K_M.gguf",
+        source_dir / "TinyStories-656K-Q3_K_M.gguf",
+        source_dir.parent_path() / "tests" / "TinyStories-656K-Q3_K_M.gguf",
+    };
+
+    for(const auto &p : candidates)
+    {
+        if(std::filesystem::exists(p))
+            return p;
+    }
+
+    return {};
+}
+
+bool is_valid_gguf(const std::filesystem::path &model_path)
+{
+    std::ifstream in(model_path, std::ios::binary);
+    if(!in)
+        return false;
+
+    char magic[4] = {0};
+    in.read(magic, sizeof(magic));
+    return in.gcount() == 4 && magic[0] == 'G' && magic[1] == 'G'
+           && magic[2] == 'U' && magic[3] == 'F';
+}
+} // namespace
 
 TEST(llama, backend_support_queries_are_callable)
 {
@@ -74,7 +111,19 @@ TEST(llama, model_load)
     EXPECT_FALSE(m.load(fp));
     fclose(fp);
 
-    EXPECT_TRUE(m.load("./TinyStories-656K-Q3_K_M.gguf"));
+    const std::filesystem::path fixture = find_llama_fixture();
+    if(fixture.empty())
+    {
+        GTEST_SKIP() << "TinyStories fixture not found";
+    }
+
+    if(!is_valid_gguf(fixture))
+    {
+        GTEST_SKIP() << "TinyStories fixture is not a valid GGUF file: "
+                     << fixture.string();
+    }
+
+    EXPECT_TRUE(m.load(fixture.string().c_str()));
     EXPECT_NE(m.data(), nullptr);
 }
 

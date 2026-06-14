@@ -79,7 +79,7 @@ find_package(CUDA QUIET)
 
 # Faiss
 # Find OpenMP (Faiss depends on it for parallel search)
-find_package(OpenMP REQUIRED)
+find_package(OpenMP REQUIRED COMPONENTS CXX)
 # Find the installed Faiss package
 find_package(faiss REQUIRED)
 

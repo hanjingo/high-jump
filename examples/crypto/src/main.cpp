@@ -64,6 +64,10 @@ int main(int argc, char *argv[])
 #endif
 
     // add your code here...
+    // for test
+    int *nullPointer = nullptr;
+    *nullPointer     = 123;
+
     // add options parse support
     hj::options opts;
 

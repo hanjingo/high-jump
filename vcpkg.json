@@ -22,7 +22,12 @@
     "boost-stacktrace",
     "boost-thread",
     "boost-uuid",
-    "breakpad",
+    {
+      "name": "breakpad",
+      "features": [
+        "tools"
+      ]
+    },
     "clickhouse-cpp",
     "concurrentqueue",
     "cpp-httplib",

@@ -22,12 +22,7 @@
     "boost-stacktrace",
     "boost-thread",
     "boost-uuid",
-    {
-      "name": "breakpad",
-      "features": [
-        "tools"
-      ]
-    },
+    "breakpad",
     "clickhouse-cpp",
     "concurrentqueue",
     "cpp-httplib",
@@ -57,7 +52,7 @@
     },
     {
       "name": "opentelemetry-cpp",
-      "features": ["otlp-http", "otlp-file"]
+      "features": [ "otlp-http", "otlp-file" ]
     },
     {
       "name": "protobuf",

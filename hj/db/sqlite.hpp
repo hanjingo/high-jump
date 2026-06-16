@@ -118,6 +118,32 @@ class sqlite
         return rows;
     }
 
+    // get the sequence of the last inserted row
+    int64_t sequence(const std::string &table)
+    {
+        if(!_db)
+            return -1;
+
+        std::string sql = "SELECT seq FROM sqlite_sequence WHERE name='" + table + "' LIMIT 1;";
+        sqlite3_stmt *stmt = nullptr;
+        if(sqlite3_prepare_v2(_db, sql.c_str(), -1, &stmt, nullptr)
+           != SQLITE_OK)
+        {
+            _last_err = sqlite3_errmsg(_db);
+            return -1;
+        }
+
+        if(sqlite3_step(stmt) != SQLITE_ROW)
+        {
+            sqlite3_finalize(stmt);
+            return -1;
+        }
+
+        int64_t seq = sqlite3_column_int64(stmt, 0);
+        sqlite3_finalize(stmt);
+        return seq;
+    }
+
   private:
     sqlite(const sqlite &)            = delete;
     sqlite &operator=(const sqlite &) = delete;

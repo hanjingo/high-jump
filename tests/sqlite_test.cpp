@@ -54,19 +54,22 @@ TEST(sqlite, exec_and_query)
     sqlite db;
     ASSERT_TRUE(db.open("ExecAndQueryTest.db"));
     EXPECT_TRUE(db.exec("DROP TABLE IF EXISTS t;"));
-    EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);"));
+    EXPECT_TRUE(db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT);"));
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('Alice'),('Bob');"));
+    EXPECT_TRUE(db.sequence("t") > -1);
     auto rows = db.query("SELECT id, name FROM t ORDER BY id;");
     ASSERT_EQ(rows.size(), 2u);
     EXPECT_EQ(rows[0][1], "Alice");
     EXPECT_EQ(rows[1][1], "Bob");
 
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES ('C''arol');"));
+    EXPECT_TRUE(db.sequence("t") > -1);
     rows = db.query("SELECT id, name FROM t WHERE name='C''arol';");
     ASSERT_EQ(rows.size(), 1u);
     EXPECT_EQ(rows[0][1], "C'arol");
 
     EXPECT_TRUE(db.exec("INSERT INTO t (name) VALUES (''),('');"));
+    EXPECT_TRUE(db.sequence("t") > -1);
     rows = db.query("SELECT name FROM t WHERE name='';");
     ASSERT_EQ(rows.size(), 2u);
     db.close();

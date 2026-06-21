@@ -165,7 +165,7 @@ class model
           void              *set_tensor_data_ud,
           model_params_t     params)
         : _model(llama_model_init_from_user(
-            metadata, set_tensor_data, set_tensor_data_ud, params))
+              metadata, set_tensor_data, set_tensor_data_ud, params))
     {
     }
     ~model()
@@ -240,12 +240,12 @@ class model
         std::vector<token_t> tokens(prompt.size() + 4);
         const vocab_t       *vocab    = llama_model_get_vocab(_model);
         int32_t              n_tokens = llama_tokenize(vocab,
-                                          prompt.c_str(),
-                                          prompt.length(),
-                                          tokens.data(),
-                                          tokens.size(),
-                                          add_special,
-                                          parse_special);
+                                                       prompt.c_str(),
+                                                       prompt.length(),
+                                                       tokens.data(),
+                                                       tokens.size(),
+                                                       add_special,
+                                                       parse_special);
         tokens.resize(n_tokens);
         return tokens;
     }
@@ -569,6 +569,11 @@ class context
     }
     context(model &m, context_params_t params)
         : _ctx{llama_init_from_model(m.data(), params)}
+    {
+    }
+    context(model *m, context_params_t params)
+        : _ctx{(m == nullptr) ? nullptr
+                              : llama_init_from_model(m->data(), params)}
     {
     }
     ~context()

@@ -3,12 +3,6 @@
     {
       "name": "hanjingo-high-jump",
       "features": ["test", "bench", "crash", "telemetry", "log", "options", "crypto"]
-    },
-    {
-      "name": "breakpad",
-      "features": [
-        "tools"
-      ]
     }
   ]
 }

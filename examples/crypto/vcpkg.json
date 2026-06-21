@@ -13,12 +13,6 @@
         "crash",
         "telemetry"
       ]
-    },
-    {
-      "name": "breakpad",
-      "features": [
-        "tools"
-      ]
     }
   ]
 }

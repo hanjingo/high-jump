@@ -7,3 +7,12 @@ cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpk
 cmake --build build
 ctest --test-dir build
 ```
+
+Windows (PowerShell):
+
+```powershell
+# from project root
+cmake -S . -B build -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DBUILD_TEST=ON -DBUILD_BENCH=ON
+cmake --build build --config Debug
+cmake --build build --target tests --config Debug
+```

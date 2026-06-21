@@ -186,7 +186,7 @@ else()
 endif()
 
 # Crash Trace
-if (CRASH_HANDLER_ENABLE)
+if (CRASH_HANDLER_ENABLE AND UNIX)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/triplet.cmake)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/crash.cmake)
     generate_sym(${PACKAGE_NAME} "${EXECUTABLE_OUTPUT_PATH}/symbols/${PACKAGE_NAME}")

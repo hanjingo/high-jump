@@ -16,14 +16,14 @@ afQ0WRgZier6MrdwlXd70JZIpgc6kLeOz2GuV4lX
 -----END RSA PRIVATE KEY-----)";
 
     hj::license::issuer  isu{"issuer1",
-                            hj::license::sign_algo::rsa256,
+                             hj::license::sign_algo::rsa256,
                              {"", prikey, "", ""},
-                            2};
+                             2};
     hj::license::token_t token;
-    auto                 err = isu.issue(token,
+    auto err = isu.issue(token,
                          "harry",
                          30,
-                                         {
+                         {
                              {"disk_sn", hj::license::get_disk_sn()},
                          });
     ASSERT_TRUE(err.value() == 0);
@@ -55,19 +55,22 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 -----END PUBLIC KEY-----)";
 
     hj::license::issuer  isu{"issuer1",
-                            hj::license::sign_algo::rsa256,
+                             hj::license::sign_algo::rsa256,
                              {pubkey, prikey, "", ""},
-                            2};
+                             2};
     hj::license::token_t token;
-    auto                 err = isu.issue(token,
+    auto err = isu.issue(token,
                          "harry",
                          30,
-                                         {{"disk_sn", hj::license::get_disk_sn()}});
+                         {{"disk_sn", hj::license::get_disk_sn()}});
     ASSERT_TRUE(err.value() == 0);
 
     hj::license::verifier vefer{"issuer1",
                                 hj::license::sign_algo::rsa256,
                                 {pubkey, prikey, "", ""}};
+
+    ASSERT_TRUE(vefer.id() == "issuer1");
+    ASSERT_TRUE(vefer.algo() == hj::license::sign_algo::rsa256);
     err = vefer.verify(token,
                        "harry",
                        30,
@@ -127,14 +130,14 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 -----END PUBLIC KEY-----)";
 
     hj::license::issuer  isu{"issuer1",
-                            hj::license::sign_algo::rsa256,
+                             hj::license::sign_algo::rsa256,
                              {pubkey, prikey, "", ""},
-                            2};
+                             2};
     hj::license::token_t token;
-    auto                 err = isu.issue(token,
+    auto err = isu.issue(token,
                          "harry",
                          30,
-                                         {{"disk_sn", hj::license::get_disk_sn()}});
+                         {{"disk_sn", hj::license::get_disk_sn()}});
     ASSERT_TRUE(err.value() == 0);
 
     hj::license::verifier vefer{"issuer1",
@@ -189,8 +192,8 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     hj::license::token_t token;
     std::string          disk_sn = hj::license::get_disk_sn();
     auto                 err     = isu.issue(token,
-                         "test_licensee",
-                         30,
+                                             "test_licensee",
+                                             30,
                                              {{"disk_sn", disk_sn},
                                               {"version", "1.0.0"},
                                               {"feature", "premium"},
@@ -234,10 +237,10 @@ TEST(license, parse_none_algorithm_token)
     hj::license::issuer isu{"none_issuer", hj::license::sign_algo::none, {}, 3};
 
     hj::license::token_t token;
-    auto                 err = isu.issue(token,
+    auto err = isu.issue(token,
                          "none_licensee",
                          7,
-                                         {{"license_type", "trial"}, {"company", "TestCorp"}});
+                         {{"license_type", "trial"}, {"company", "TestCorp"}});
     ASSERT_TRUE(err.value() == 0);
 
     hj::license::license_info info;
@@ -325,14 +328,14 @@ TEST(license, parse_complex_claims_token)
                             3};
 
     hj::license::token_t token;
-    auto                 err = isu.issue(token,
+    auto err = isu.issue(token,
                          "complex_licensee",
                          90,
-                                         {{"user_id", "12345"},
-                                          {"permissions", "read,write,admin"},
-                                          {"metadata", "{\"key\":\"value\"}"},
-                                          {"expiry_warning", "30_days_before"},
-                                          {"renewal_url", "https://example.com/renew"}});
+                         {{"user_id", "12345"},
+                          {"permissions", "read,write,admin"},
+                          {"metadata", "{\"key\":\"value\"}"},
+                          {"expiry_warning", "30_days_before"},
+                          {"renewal_url", "https://example.com/renew"}});
     ASSERT_TRUE(err.value() == 0);
 
     hj::license::license_info info;

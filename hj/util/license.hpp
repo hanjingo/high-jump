@@ -487,6 +487,14 @@ class verifier
 
     virtual ~verifier() = default;
 
+    inline const std::string &id() const { return _id; }
+    inline sign_algo          algo() const { return _algo; }
+    inline void               set_keys(std::vector<std::string> &&keys) noexcept
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _keys = std::move(keys);
+    }
+
     err_t verify(const token_t             &token,
                  const std::string         &licensee,
                  const std::size_t          leeway_days,
@@ -569,6 +577,7 @@ class verifier
     }
 
   private:
+    mutable std::mutex       _mu;
     std::string              _id;
     sign_algo                _algo;
     std::vector<std::string> _keys;

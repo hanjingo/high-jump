@@ -78,9 +78,9 @@ find_package(OpenCL QUIET)
 find_package(CUDA QUIET)
 
 # Faiss
-# # Find OpenMP (Faiss depends on it for parallel search)
-# find_package(OpenMP REQUIRED COMPONENTS CXX)
-# # Find the installed Faiss package
+# Find OpenMP (Faiss depends on it for parallel search)
+find_package(OpenMP REQUIRED COMPONENTS CXX)
+# Find the installed Faiss package
 find_package(faiss REQUIRED)
 
 # Llama
@@ -191,8 +191,8 @@ target_link_libraries(${PROJECT_NAME}
     gRPC::grpc++ 
 
     # faiss
-    faiss 
-    # OpenMP::OpenMP_CXX
+    faiss
+    OpenMP::OpenMP_CXX
 
     # Llama
     llama

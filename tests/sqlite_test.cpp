@@ -33,6 +33,34 @@ int _sqlite_exec_cb(void *in, int argc, char **argv, char **col_name)
     return 0;
 }
 
+TEST(sqlite, mprintf)
+{
+    std::string str;
+    str = sqlite::mprintf("Hello %s, %d", "World", 123);
+    EXPECT_EQ(str, "Hello World, 123");
+
+    str = sqlite::mprintf("No args");
+    EXPECT_EQ(str, "No args");
+
+    str = sqlite::mprintf("Percent %% sign");
+    EXPECT_EQ(str, "Percent % sign");
+
+    str = sqlite::mprintf("Hello %1, %1", "World", 123);
+    EXPECT_EQ(str, "Hello ");
+
+    str = sqlite::mprintf("Hello %q, %d, %lld", "World", 123, 456789LL);
+    EXPECT_EQ(str, "Hello World, 123, 456789");
+
+    str = sqlite::mprintf("Null string: %q", nullptr);
+    EXPECT_EQ(str, "Null string: (NULL)");
+
+    str = sqlite::mprintf("Hello %Q, %d, %lld", "World", 123, 456789LL);
+    EXPECT_EQ(str, "Hello 'World', 123, 456789");
+
+    str = sqlite::mprintf("Empty string: %Q", "");
+    EXPECT_EQ(str, "Empty string: ''");
+}
+
 TEST(sqlite, open_close)
 {
     if(!_is_sqlite_valid())

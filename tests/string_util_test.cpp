@@ -90,6 +90,14 @@ TEST(string_util, split)
     auto single_result = hj::string_util::split("hello", ",");
     ASSERT_EQ(single_result.size(), 1);
     ASSERT_EQ(single_result[0], "hello");
+
+    // Test special characters
+    std::string      str = "TinyStories-656K-Q3_K_M;Qwen3-Embedding-0.6B-Q8_0";
+    std::string_view tag{";", 1};
+    auto             items = hj::string_util::split(str, tag);
+    ASSERT_TRUE(items.size() == 2);
+    ASSERT_TRUE(items[0] == "TinyStories-656K-Q3_K_M");
+    ASSERT_TRUE(items[1] == "Qwen3-Embedding-0.6B-Q8_0");
 }
 
 // Test new replace_all function

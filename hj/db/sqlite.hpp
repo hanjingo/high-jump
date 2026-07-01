@@ -39,6 +39,20 @@ class sqlite
     }
     ~sqlite() { close(); }
 
+    static std::string mprintf(const char *format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+        char *result = sqlite3_vmprintf(format, args);
+        va_end(args);
+        if(result == nullptr)
+            return "";
+
+        std::string str(result);
+        sqlite3_free(result);
+        return str;
+    }
+
     bool open(const std::string &filename)
     {
         close();
@@ -124,7 +138,8 @@ class sqlite
         if(!_db)
             return -1;
 
-        std::string sql = "SELECT seq FROM sqlite_sequence WHERE name='" + table + "' LIMIT 1;";
+        std::string sql = "SELECT seq FROM sqlite_sequence WHERE name='" + table
+                          + "' LIMIT 1;";
         sqlite3_stmt *stmt = nullptr;
         if(sqlite3_prepare_v2(_db, sql.c_str(), -1, &stmt, nullptr)
            != SQLITE_OK)

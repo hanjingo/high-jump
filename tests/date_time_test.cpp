@@ -148,6 +148,52 @@ TEST(date_time, parse)
     ASSERT_EQ(dt.time(), hj::date_time(2023, 1, 1, 0, 0, 0).time());
 }
 
+TEST(date_time, sec_since_epoch)
+{
+    auto sec = hj::date_time::now().sec_since_epoch();
+    ASSERT_TRUE(sec > 0);
+}
+
+TEST(date_time, from_sec_since_epoch)
+{
+    // Use a specific time with 0 fractional seconds to guarantee exact match
+    auto now = hj::date_time(2026, 6, 26, 12, 0, 0);
+    auto sec = now.sec_since_epoch();
+    auto dt  = hj::date_time::from_sec_since_epoch(sec);
+    ASSERT_TRUE(dt == now);
+}
+
+TEST(date_time, current_sec_since_epoch)
+{
+    auto sec_before = hj::date_time::now().sec_since_epoch();
+    auto sec_after  = hj::date_time::current_sec_since_epoch();
+    ASSERT_TRUE(sec_after > 0);
+    ASSERT_TRUE(sec_after >= sec_before);
+}
+
+TEST(date_time, ms_since_epoch)
+{
+    auto ms = hj::date_time::now().ms_since_epoch();
+    ASSERT_TRUE(ms > 0);
+}
+
+TEST(date_time, from_ms_since_epoch)
+{
+    // Construct a time with deliberate ms, sub-ms will be 0
+    auto now = hj::date_time(2026, 6, 26, 12, 0, 0, 500); // 500ms
+    auto ms  = now.ms_since_epoch();
+    auto dt  = hj::date_time::from_ms_since_epoch(ms);
+    ASSERT_TRUE(dt == now);
+}
+
+TEST(date_time, current_ms_since_epoch)
+{
+    auto ms_before = hj::date_time::now().ms_since_epoch();
+    auto ms_after  = hj::date_time::current_ms_since_epoch();
+    ASSERT_TRUE(ms_after > 0);
+    ASSERT_TRUE(ms_after >= ms_before);
+}
+
 TEST(date_time, is_null)
 {
     ASSERT_FALSE(hj::date_time::now().is_null());

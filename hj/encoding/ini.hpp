@@ -136,6 +136,11 @@ class ini : public boost::property_tree::ptree
         return *this;
     }
 
+    boost::property_tree::ptree::path_type translate(const std::string &s) const
+    {
+        return boost::property_tree::ptree::path_type(s, '/');
+    }
+
     static ini parse(const char *text) noexcept
     {
         std::stringstream           ss(text);
@@ -201,7 +206,8 @@ class ini : public boost::property_tree::ptree
     {
         try
         {
-            return boost::property_tree::ptree::get<T>(path, default_value);
+            return boost::property_tree::ptree::get<T>(translate(path),
+                                                       default_value);
         }
         catch(...)
         {
@@ -210,11 +216,11 @@ class ini : public boost::property_tree::ptree
     }
 
     template <typename T>
-    void set(const std::string &path, const T &value) noexcept
+    void put(const std::string &path, const T &value) noexcept
     {
         try
         {
-            boost::property_tree::ptree::put(path, value);
+            boost::property_tree::ptree::put(translate(path), value);
         }
         catch(...)
         {

@@ -263,6 +263,13 @@ class date_time
         return _tm >= other._tm;
     }
 
+    static const date_time &epoch_time()
+    {
+        static hj::date_time epoch{
+            boost::posix_time::ptime(boost::gregorian::date(1970, 1, 1))};
+        return epoch;
+    }
+
     static hj::date_time::is_working_day_fn &get_working_day_func()
     {
         static hj::date_time::is_working_day_fn inst =
@@ -288,8 +295,8 @@ class date_time
         {
             auto utc_time = boost::posix_time::microsec_clock::universal_time();
             auto offset   = boost::posix_time::time_duration(tz.hours_offset,
-                                                           tz.minutes_offset,
-                                                           0);
+                                                             tz.minutes_offset,
+                                                             0);
             return date_time(utc_time + offset);
         }
     }
@@ -306,8 +313,8 @@ class date_time
         {
             auto utc_day = boost::gregorian::day_clock::universal_day();
             auto offset  = boost::posix_time::time_duration(tz.hours_offset,
-                                                           tz.minutes_offset,
-                                                           0);
+                                                            tz.minutes_offset,
+                                                            0);
             return date_time(utc_day, offset.hours(), offset.minutes(), 0, 0);
         }
     }
@@ -365,6 +372,34 @@ class date_time
 
         dt._tm = boost::posix_time::ptime_from_tm(tm);
     }
+
+    long long sec_since_epoch()
+    {
+        return (this->_tm - epoch_time()._tm).total_seconds();
+    }
+
+    static date_time from_sec_since_epoch(long long sec)
+    {
+        return date_time(epoch_time()._tm + boost::posix_time::seconds(sec));
+    }
+
+    static long long current_sec_since_epoch()
+    {
+        return now().sec_since_epoch();
+    }
+
+    long long ms_since_epoch()
+    {
+        return (_tm - epoch_time()._tm).total_milliseconds();
+    }
+
+    static date_time from_ms_since_epoch(long long ms)
+    {
+        return date_time(epoch_time()._tm
+                         + boost::posix_time::milliseconds(ms));
+    }
+
+    static long long current_ms_since_epoch() { return now().ms_since_epoch(); }
 
   public:
     inline bool is_null() const noexcept { return NullTime == _tm; }

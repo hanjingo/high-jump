@@ -86,6 +86,9 @@ find_package(faiss REQUIRED)
 # Llama
 find_package(Llama REQUIRED)
 
+# Whisper
+find_package(whisper REQUIRED)
+
 # for qrcode encode
 find_path(QRENCODE_INCLUDE_DIR NAMES qrencode.h)
 find_library(QRENCODE_LIBRARY_RELEASE qrencode)
@@ -196,6 +199,9 @@ target_link_libraries(${PROJECT_NAME}
 
     # Llama
     llama
+
+    # whisper
+    whisper
 )
 
 # for os-specific libraries

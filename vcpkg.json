@@ -33,6 +33,10 @@
     "faiss",
     "flatbuffers",
     "fmt",
+    {
+      "name": "ggml",
+      "features": [ "cuda" ]
+    },
     "grpc",
     "gtest",
     "hffix",
@@ -68,6 +72,10 @@
     {
       "name": "tbb",
       "default-features": false
+    },
+    {
+      "name": "whisper-cpp",
+      "features": [ "cuda" ]
     },
     "yaml-cpp",
     {

@@ -12,8 +12,10 @@ namespace hj
 namespace asr
 {
 
+using ctx_t         = whisper_context;
 using full_params_t = whisper_full_params;
 using ctx_params_t  = whisper_context_params;
+using state_t       = whisper_state;
 
 class context
 {
@@ -84,6 +86,26 @@ class context
                 return whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
         }
     }
+
+    static void convert(std::vector<float> &dst, const std::string &src)
+    {
+        int sample_count = src.size() / sizeof(int16_t);
+        dst.reserve(sample_count);
+        const int16_t *samples = reinterpret_cast<const int16_t *>(src.data());
+        for(int i = 0; i < sample_count; ++i)
+        {
+            float samplef = static_cast<float>(samples[i]) / 32768.0f;
+            if(samplef < -1.0f)
+                samplef = -1.0f;
+
+            if(samplef > 1.0f)
+                samplef = 1.0f;
+
+            dst.push_back(samplef);
+        }
+    }
+
+    inline ctx_t *const data() { return _ctx; }
 
     int full(full_params_t params, const std::vector<float> &samples)
     {

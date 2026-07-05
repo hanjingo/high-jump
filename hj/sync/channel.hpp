@@ -58,6 +58,8 @@ struct channel
 
     inline void enqueue(const T &t) { _q.enqueue(t); }
 
+    inline size_t size() const { return _q.size_approx(); }
+
   private:
     moodycamel::BlockingConcurrentQueue<T> _q;
 };

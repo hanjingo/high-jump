@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <hj/ai/asr.hpp>
 
+#include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -64,4 +66,50 @@ TEST(asr_test, move_construct_and_assign_are_safe_for_null_context)
 
     EXPECT_EQ(moved.n_segments(), -1);
     EXPECT_EQ(dst.n_segments(), -1);
+}
+
+TEST(asr_test, convert_pcm16_to_normalized_float)
+{
+    const int16_t     pcm_samples[] = {0, 32767, -32768, 16384, -16384};
+    const std::string raw(reinterpret_cast<const char *>(pcm_samples),
+                          sizeof(pcm_samples));
+
+    std::vector<float> out;
+    hj::asr::context::convert(out, raw);
+
+    ASSERT_EQ(out.size(), 5U);
+    EXPECT_FLOAT_EQ(out[0], 0.0f);
+    EXPECT_FLOAT_EQ(out[1], 32767.0f / 32768.0f);
+    EXPECT_FLOAT_EQ(out[2], -1.0f);
+    EXPECT_FLOAT_EQ(out[3], 0.5f);
+    EXPECT_FLOAT_EQ(out[4], -0.5f);
+}
+
+TEST(asr_test, convert_ignores_incomplete_trailing_byte)
+{
+    const int16_t pcm_samples[] = {1000, -1000};
+    std::string   raw(reinterpret_cast<const char *>(pcm_samples),
+                      sizeof(pcm_samples));
+    raw.push_back('\x7f');
+
+    std::vector<float> out;
+    hj::asr::context::convert(out, raw);
+
+    ASSERT_EQ(out.size(), 2U);
+    EXPECT_FLOAT_EQ(out[0], 1000.0f / 32768.0f);
+    EXPECT_FLOAT_EQ(out[1], -1000.0f / 32768.0f);
+}
+
+TEST(asr_test, convert_appends_to_existing_destination)
+{
+    const int16_t     pcm_samples[] = {32767};
+    const std::string raw(reinterpret_cast<const char *>(pcm_samples),
+                          sizeof(pcm_samples));
+
+    std::vector<float> out{-0.25f};
+    hj::asr::context::convert(out, raw);
+
+    ASSERT_EQ(out.size(), 2U);
+    EXPECT_FLOAT_EQ(out[0], -0.25f);
+    EXPECT_FLOAT_EQ(out[1], 32767.0f / 32768.0f);
 }

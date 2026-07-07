@@ -122,14 +122,15 @@ int main(int argc, char *argv[])
     // // 6. Tokenize the input prompt
     // std::string        prompt   = "User: Tell me a joke.\nAI:";
     // const llama_vocab *vocab    = llama_model_get_vocab(model);
-    // int                n_tokens = llama_tokenize(vocab,
+    // auto               n_tokens = llama_tokenize(vocab,
     //                                              prompt.c_str(),
     //                                              prompt.length(),
     //                                              nullptr,
     //                                              0,
     //                                              true,
     //                                              true);
-    // if(n_tokens < 0)
+    // n_tokens                    = std::abs(n_tokens);
+    // if(n_tokens <= 0)
     // {
     //     std::cerr << "Error: Tokenization failed." << std::endl;
     //     cleanup(model, ctx, smpl);
@@ -143,6 +144,7 @@ int main(int argc, char *argv[])
     //                           tokens.size(),
     //                           true,
     //                           true);
+    // n_tokens = std::abs(n_tokens);
     // tokens.resize(n_tokens);
 
     // // 7. Clear KV cache and evaluate prompt
@@ -161,37 +163,22 @@ int main(int argc, char *argv[])
     // // 9. Text Generation Loop
     // int max_tokens         = 100;
     // int n_tokens_generated = 0;
-    // int n_past             = tokens.size();
     // for(int i = 0; i < max_tokens; ++i)
     // {
-    //     // Sample the next token USING THE SAMPLER
     //     llama_token next_token = llama_sampler_sample(smpl, ctx, -1);
-
-    //     // Check for end of generation
     //     if(llama_token_is_eog(vocab, next_token))
     //         break;
 
-    //     // Convert token to string and print
     //     char buf[128];
     //     int  n_chars =
     //         llama_token_to_piece(vocab, next_token, buf, sizeof(buf), 0, false);
     //     if(n_chars > 0)
     //     {
-    //         std::string piece(buf, n_chars);
-    //         std::cout << piece << std::flush;
+    //         std::cout << std::string(buf, n_chars) << std::flush;
     //     }
 
-    //     // Accept the token (updates sampler state)
     //     llama_sampler_accept(smpl, next_token);
-
-    //     // Prepare batch for next token
     //     batch = llama_batch_get_one(&next_token, 1);
-
-    //     // IMPORTANT: Need to set position correctly for KV cache
-    //     batch.n_tokens     = 1;
-    //     batch.pos[0]       = n_past + i;
-    //     batch.seq_id[0][0] = 0;
-
     //     if(llama_decode(ctx, batch) != 0)
     //     {
     //         std::cerr << "\n❌ Error: Failed to decode token." << std::endl;
@@ -221,7 +208,7 @@ int main(int argc, char *argv[])
 
     // Create context for inference
     auto ctx_params    = hj::llama::context::default_params();
-    ctx_params.n_ctx   = 2048; // Context window size
+    ctx_params.n_ctx   = 2048;
     ctx_params.n_batch = 512;
     hj::llama::context ctx{m, ctx_params};
     if(ctx.data() == nullptr)
@@ -244,32 +231,35 @@ int main(int argc, char *argv[])
     if(tokens.empty())
     {
         std::cerr << "Error: Tokenization failed." << std::endl;
+        hj::llama::backend_free();
         return 1;
     }
 
     // Clear KV cache and evaluate prompt
-    auto batch = hj::llama::batch::get_one(tokens.data(), tokens.size());
+    auto batch = hj::llama::batch_get_one(tokens);
     if(ctx.decode(batch) != 0)
     {
         std::cerr << "Error: Failed to decode prompt." << std::endl;
+        hj::llama::backend_free();
         return 1;
     }
 
-    // Reset sampler state (clears token history)
+    // Reset sampler state
     sampler.reset();
 
     // Text Generation Loop
     int max_tokens         = 100;
     int n_tokens_generated = 0;
-    int n_past             = tokens.size();
+    int n_past             = static_cast<int>(tokens.size());
     for(int i = 0; i < max_tokens; ++i)
     {
-        // Sample the next token USING THE SAMPLER
+        // Sample the next token
         auto next_token = sampler.sample(ctx, -1);
-
-        // Check for end of generation
         if(m.token_is_eog(next_token))
+        {
+            std::cout << "\n⏹️  EOG token encountered" << std::endl;
             break;
+        }
 
         // Convert token to string and print
         char buf[128];
@@ -282,14 +272,7 @@ int main(int argc, char *argv[])
 
         // Accept the token (updates sampler state)
         sampler.accept(next_token);
-
-        // Prepare batch for next token
-        auto next_batch = hj::llama::batch::get_one(&next_token, 1);
-
-        // IMPORTANT: Need to set position correctly for KV cache
-        next_batch.set_n_tokens(1);
-        next_batch.set_pos(0, n_past + 1);
-        next_batch.set_seq_id(0, 0, 0);
+        batch = hj::llama::batch_get_one(&next_token, 1);
         if(ctx.decode(batch) != 0)
         {
             std::cerr << "\n❌ Error: Failed to decode token." << std::endl;
@@ -300,4 +283,7 @@ int main(int argc, char *argv[])
     }
 
     std::cout << std::endl;
+
+    hj::llama::backend_free();
+    return 0;
 }

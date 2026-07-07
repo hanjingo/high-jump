@@ -3,6 +3,7 @@
 
 #include <llama.h>
 #include <memory>
+#include <cstdlib>
 
 #include <boost/filesystem.hpp>
 
@@ -56,72 +57,15 @@ static inline bool supports_rpc()
 {
     return llama_supports_rpc();
 }
-
-class batch
+static batch_t batch_get_one(token_t *tokens, int32_t n_tokens)
 {
-  public:
-    batch()
-        : _batch{llama_batch_init(0, 0, 0)}
-    {
-    }
-    batch(batch_t &&bt)
-        : _batch{std::move(bt)}
-    {
-    }
-    batch(int32_t n_tokens, int32_t embd, int32_t n_seq_max)
-        : _batch(llama_batch_init(n_tokens, embd, n_seq_max))
-    {
-    }
-    batch(const batch &)            = delete;
-    batch &operator=(const batch &) = delete;
-    batch &operator=(batch &&other) noexcept
-    {
-        if(this != &other)
-        {
-            llama_batch_free(_batch);
-            _batch       = other._batch;
-            other._batch = llama_batch_init(0, 0, 0);
-        }
-        return *this;
-    }
-    batch(batch &&other) noexcept
-        : _batch(other._batch)
-    {
-    }
-
-    ~batch() { llama_batch_free(_batch); }
-    batch_t *operator->() { return &_batch; }
-    batch_t &data() { return _batch; }
-
-    static batch get_one(token_t *tokens, int32_t n_tokens)
-    {
-        auto bt = llama_batch_get_one(tokens, n_tokens);
-        return batch(std::move(bt));
-    }
-
-    static batch get_one(std::vector<token_t> &tokens)
-    {
-        auto bt = llama_batch_get_one(tokens.data(), tokens.size());
-        return batch(std::move(bt));
-    }
-
-    inline void set_n_tokens(size_t n_tokens) { _batch.n_tokens = n_tokens; }
-    inline void set_token(size_t idx, token_t token)
-    {
-        if(idx < _batch.n_tokens && _batch.token)
-            _batch.token[idx] = token;
-    }
-    inline void set_embd(float embd) { *_batch.embd = embd; }
-    inline void set_pos(size_t idx, int32_t pos) { _batch.pos[idx] = pos; }
-    inline void set_seq_id(size_t row, size_t col, seq_id_t val)
-    {
-        _batch.seq_id[row][col] = val;
-    }
-    inline void set_logits(int8_t logits) { *_batch.logits = logits; }
-
-  private:
-    llama_batch _batch;
-};
+    return llama_batch_get_one(tokens, n_tokens);
+}
+static batch_t batch_get_one(std::vector<token_t> &tokens)
+{
+    return llama_batch_get_one(tokens.data(),
+                               static_cast<int32_t>(tokens.size()));
+}
 
 class memory
 {
@@ -247,7 +191,7 @@ class model
 
     inline llama_model *data() { return _model; }
 
-    inline const llama_model *data() const { return _model; }
+    inline const llama_model *const_data() const { return _model; }
 
     bool load(const char    *filename,
               model_params_t params = llama_model_default_params())
@@ -308,17 +252,18 @@ class model
         if(!_model)
             return {};
 
-        const vocab_t *vocab = llama_model_get_vocab(_model);
+        auto vocab = llama_model_get_vocab(_model);
         if(!vocab)
             return {};
 
-        int n_tokens = llama_tokenize(vocab,
-                                      prompt.c_str(),
-                                      prompt.length(),
-                                      nullptr,
-                                      0,
-                                      add_special,
-                                      parse_special);
+        auto n_tokens = llama_tokenize(vocab,
+                                       prompt.c_str(),
+                                       prompt.length(),
+                                       nullptr,
+                                       0,
+                                       add_special,
+                                       parse_special);
+        n_tokens      = std::abs(n_tokens);
         if(n_tokens <= 0)
             return {};
 
@@ -330,9 +275,7 @@ class model
                                   tokens.size(),
                                   add_special,
                                   parse_special);
-        if(n_tokens <= 0)
-            return {};
-
+        n_tokens = std::abs(n_tokens);
         tokens.resize(n_tokens);
         return tokens;
     }
@@ -764,12 +707,12 @@ class context
                                       il_end);
     }
 
-    int32_t decode(batch &bt)
+    int32_t decode(batch_t batch)
     {
         if(!_ctx)
             return -1;
 
-        return llama_decode(_ctx, bt.data());
+        return llama_decode(_ctx, batch);
     }
 
     const float *get_logits_ith(int32_t i)

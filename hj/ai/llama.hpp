@@ -17,6 +17,7 @@ namespace llama
 {
 using model_params_t   = llama_model_params;
 using context_params_t = llama_context_params;
+using sampler_params_t = llama_sampler_chain_params;
 
 using vocab_t        = llama_vocab;
 using memory_t       = llama_memory_t;
@@ -55,14 +56,72 @@ static inline bool supports_rpc()
 {
     return llama_supports_rpc();
 }
-static batch_t batch_get_one(token_t *tokens, int32_t n_tokens)
+
+class batch
 {
-    return llama_batch_get_one(tokens, n_tokens);
-}
-static batch_t batch_get_one(std::vector<token_t> &tokens)
-{
-    return llama_batch_get_one(tokens.data(), tokens.size());
-}
+  public:
+    batch()
+        : _batch{llama_batch_init(0, 0, 0)}
+    {
+    }
+    batch(batch_t &&bt)
+        : _batch{std::move(bt)}
+    {
+    }
+    batch(int32_t n_tokens, int32_t embd, int32_t n_seq_max)
+        : _batch(llama_batch_init(n_tokens, embd, n_seq_max))
+    {
+    }
+    batch(const batch &)            = delete;
+    batch &operator=(const batch &) = delete;
+    batch &operator=(batch &&other) noexcept
+    {
+        if(this != &other)
+        {
+            llama_batch_free(_batch);
+            _batch       = other._batch;
+            other._batch = llama_batch_init(0, 0, 0);
+        }
+        return *this;
+    }
+    batch(batch &&other) noexcept
+        : _batch(other._batch)
+    {
+    }
+
+    ~batch() { llama_batch_free(_batch); }
+    batch_t *operator->() { return &_batch; }
+    batch_t &data() { return _batch; }
+
+    static batch get_one(token_t *tokens, int32_t n_tokens)
+    {
+        auto bt = llama_batch_get_one(tokens, n_tokens);
+        return batch(std::move(bt));
+    }
+
+    static batch get_one(std::vector<token_t> &tokens)
+    {
+        auto bt = llama_batch_get_one(tokens.data(), tokens.size());
+        return batch(std::move(bt));
+    }
+
+    inline void set_n_tokens(size_t n_tokens) { _batch.n_tokens = n_tokens; }
+    inline void set_token(size_t idx, token_t token)
+    {
+        if(idx < _batch.n_tokens && _batch.token)
+            _batch.token[idx] = token;
+    }
+    inline void set_embd(float embd) { *_batch.embd = embd; }
+    inline void set_pos(size_t idx, int32_t pos) { _batch.pos[idx] = pos; }
+    inline void set_seq_id(size_t row, size_t col, seq_id_t val)
+    {
+        _batch.seq_id[row][col] = val;
+    }
+    inline void set_logits(int8_t logits) { *_batch.logits = logits; }
+
+  private:
+    llama_batch _batch;
+};
 
 class memory
 {
@@ -168,6 +227,13 @@ class model
               metadata, set_tensor_data, set_tensor_data_ud, params))
     {
     }
+    model(const model &)            = delete;
+    model &operator=(const model &) = delete;
+    model(model &&other) noexcept
+        : _model(other._model)
+    {
+        other._model = nullptr;
+    }
     ~model()
     {
         if(_model)
@@ -179,7 +245,9 @@ class model
         return llama_model_default_params();
     }
 
-    inline llama_model *const data() { return _model; }
+    inline llama_model *data() { return _model; }
+
+    inline const llama_model *data() const { return _model; }
 
     bool load(const char    *filename,
               model_params_t params = llama_model_default_params())
@@ -237,15 +305,34 @@ class model
     std::vector<token_t>
     tokenize(const std::string &prompt, bool add_special, bool parse_special)
     {
-        std::vector<token_t> tokens(prompt.size() + 4);
-        const vocab_t       *vocab    = llama_model_get_vocab(_model);
-        int32_t              n_tokens = llama_tokenize(vocab,
-                                                       prompt.c_str(),
-                                                       prompt.length(),
-                                                       tokens.data(),
-                                                       tokens.size(),
-                                                       add_special,
-                                                       parse_special);
+        if(!_model)
+            return {};
+
+        const vocab_t *vocab = llama_model_get_vocab(_model);
+        if(!vocab)
+            return {};
+
+        int n_tokens = llama_tokenize(vocab,
+                                      prompt.c_str(),
+                                      prompt.length(),
+                                      nullptr,
+                                      0,
+                                      add_special,
+                                      parse_special);
+        if(n_tokens <= 0)
+            return {};
+
+        std::vector<token_t> tokens(n_tokens);
+        n_tokens = llama_tokenize(vocab,
+                                  prompt.c_str(),
+                                  prompt.length(),
+                                  tokens.data(),
+                                  tokens.size(),
+                                  add_special,
+                                  parse_special);
+        if(n_tokens <= 0)
+            return {};
+
         tokens.resize(n_tokens);
         return tokens;
     }
@@ -587,7 +674,7 @@ class context
         return llama_context_default_params();
     }
 
-    llama_context *data() { return _ctx; }
+    llama_context *const data() { return _ctx; }
 
     void init(model &m, context_params_t params)
     {
@@ -677,12 +764,12 @@ class context
                                       il_end);
     }
 
-    int32_t decode(batch_t &batch)
+    int32_t decode(batch &bt)
     {
         if(!_ctx)
             return -1;
 
-        return llama_decode(_ctx, batch);
+        return llama_decode(_ctx, bt.data());
     }
 
     const float *get_logits_ith(int32_t i)
@@ -695,6 +782,115 @@ class context
 
   private:
     llama_context *_ctx;
+};
+
+class sampler
+{
+  public:
+    sampler()
+        : _smpl{llama_sampler_chain_init(llama_sampler_chain_default_params())}
+    {
+    }
+
+    sampler(sampler_params_t params)
+        : _smpl{llama_sampler_chain_init(params)}
+    {
+    }
+
+    sampler(sampler_params_t params,
+            int32_t          top_k,
+            float            top_p,
+            size_t           top_p_keep,
+            float            min_p,
+            size_t           min_p_keep,
+            float            temp,
+            uint32_t         seed)
+        : _smpl{llama_sampler_chain_init(params)}
+    {
+        init_top_k(top_k);
+        init_top_p(top_p, top_p_keep);
+        init_min_p(min_p, min_p_keep);
+        init_temp(temp);
+        init_dist(seed);
+    }
+
+    ~sampler()
+    {
+        if(_smpl)
+            llama_sampler_free(_smpl);
+    }
+
+    static sampler_params_t default_params()
+    {
+        return llama_sampler_chain_default_params();
+    }
+
+    void init_top_k(int32_t top_k)
+    {
+        if(!_smpl || top_k <= 0)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_top_k(top_k));
+    }
+
+    void init_top_p(float p, size_t min_keep)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_top_p(p, min_keep));
+    }
+
+    void init_min_p(float p, size_t min_keep)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_min_p(p, min_keep));
+    }
+
+    void init_temp(float temp)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_temp(temp));
+    }
+
+    void init_dist(uint32_t seed)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_dist(seed));
+    }
+
+    void reset()
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_reset(_smpl);
+    }
+
+    token_t sample(context &ctx, const int32_t idx)
+    {
+        if(!_smpl || !ctx.data())
+            return -1;
+
+        return llama_sampler_sample(_smpl, ctx.data(), idx);
+    }
+
+    void accept(const token_t token)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_accept(_smpl, token);
+    }
+
+  private:
+    llama_sampler *_smpl;
 };
 
 } // namespace llama

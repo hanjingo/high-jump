@@ -16,16 +16,16 @@ namespace hj
 
 namespace llama
 {
-using model_params_t   = llama_model_params;
-using context_params_t = llama_context_params;
-using sampler_params_t = llama_sampler_chain_params;
+using model_params_t         = llama_model_params;
+using context_params_t       = llama_context_params;
+using sampler_chain_params_t = llama_sampler_chain_params;
 
 using vocab_t        = llama_vocab;
 using memory_t       = llama_memory_t;
 using threadpool_t   = ggml_threadpool_t;
 using gguf_ctx_t     = gguf_context;
 using adapter_lora_t = llama_adapter_lora;
-using batch_t        = llama_batch;
+using logit_bias_t   = llama_logit_bias;
 
 using pos_t    = llama_pos;
 using token_t  = llama_token;
@@ -57,15 +57,94 @@ static inline bool supports_rpc()
 {
     return llama_supports_rpc();
 }
-static batch_t batch_get_one(token_t *tokens, int32_t n_tokens)
+
+class batch
 {
-    return llama_batch_get_one(tokens, n_tokens);
-}
-static batch_t batch_get_one(std::vector<token_t> &tokens)
-{
-    return llama_batch_get_one(tokens.data(),
-                               static_cast<int32_t>(tokens.size()));
-}
+  public:
+    batch(int32_t n_tokens, int32_t embd, int32_t n_seq_max)
+        : _capacity(n_tokens)
+        , _batch{llama_batch_init(n_tokens, embd, n_seq_max)}
+    {
+    }
+
+    batch(const std::vector<token_t> &tokens)
+        : _capacity(static_cast<int32_t>(tokens.size()))
+        , _batch{llama_batch_init(_capacity, 0, 1)}
+    {
+        set_tokens(tokens.data(), _capacity, 0);
+    }
+
+    batch(const token_t *tokens, int32_t n_tokens)
+        : _capacity(n_tokens)
+        , _batch{llama_batch_init(n_tokens, 0, 1)}
+    {
+        set_tokens(tokens, n_tokens, 0);
+    }
+
+    ~batch()
+    {
+        if(_batch.token != nullptr || _batch.embd != nullptr)
+            llama_batch_free(_batch);
+    }
+
+    batch(const batch &)            = delete;
+    batch &operator=(const batch &) = delete;
+
+    batch(batch &&other) noexcept
+        : _capacity(other._capacity)
+        , _batch(other._batch)
+    {
+        std::memset(&other._batch, 0, sizeof(llama_batch));
+        other._capacity = 0;
+    }
+
+    batch &operator=(batch &&other) noexcept
+    {
+        if(this != &other)
+        {
+            if(_batch.token != nullptr || _batch.embd != nullptr)
+                llama_batch_free(_batch);
+
+            _batch    = other._batch;
+            _capacity = other._capacity;
+
+            std::memset(&other._batch, 0, sizeof(llama_batch));
+            other._capacity = 0;
+        }
+        return *this;
+    }
+
+    llama_batch       &get() { return _batch; }
+    const llama_batch &get() const { return _batch; }
+
+    operator llama_batch &() { return _batch; }
+    operator const llama_batch &() const { return _batch; }
+
+    void set_logits(int32_t idx, bool value)
+    {
+        if(idx >= 0 && idx < _batch.n_tokens)
+            _batch.logits[idx] = value;
+    }
+
+    void
+    set_tokens(const token_t *tokens, int32_t n_tokens, int32_t start_pos = 0)
+    {
+        int32_t safe_tokens = std::min(n_tokens, _capacity);
+        for(int32_t i = 0; i < safe_tokens; ++i)
+        {
+            _batch.token[i]     = tokens[i];
+            _batch.pos[i]       = start_pos + i;
+            _batch.n_seq_id[i]  = 1;
+            _batch.seq_id[i][0] = 0;
+            _batch.logits[i]    = false;
+        }
+        _batch.n_tokens = safe_tokens;
+    }
+
+  private:
+    int32_t     _capacity = 0;
+    llama_batch _batch{};
+};
 
 class memory
 {
@@ -707,12 +786,20 @@ class context
                                       il_end);
     }
 
-    int32_t decode(batch_t batch)
+    int32_t decode(llama_batch batch)
     {
         if(!_ctx)
             return -1;
 
         return llama_decode(_ctx, batch);
+    }
+
+    int32_t decode(const batch &batch)
+    {
+        if(!_ctx)
+            return -1;
+
+        return llama_decode(_ctx, batch.get());
     }
 
     const float *get_logits_ith(int32_t i)
@@ -730,31 +817,83 @@ class context
 class sampler
 {
   public:
+    struct params
+    {
+        int32_t penalty_last_n    = 64;
+        float   penalty_repeat    = 0.0;
+        float   penalty_frequency = 0.0;
+        float   penalty_present   = 0.0;
+
+        float temperature              = 0.0;
+        float temperature_ext          = 0.0;
+        float temperature_ext_delta    = 0.0;
+        float temperature_ext_exponent = 0.0;
+
+        uint32_t seed = 0;
+
+        int32_t top_k          = 0;
+        float   top_p          = 0.0;
+        int32_t top_p_min_keep = 0;
+        float   min_p          = 0.0;
+        int32_t min_p_min_keep = 0;
+
+        // add more param laters as needed
+    };
+
+  public:
     sampler()
         : _smpl{llama_sampler_chain_init(llama_sampler_chain_default_params())}
     {
     }
 
-    sampler(sampler_params_t params)
-        : _smpl{llama_sampler_chain_init(params)}
+    sampler(sampler_chain_params_t chain_params)
+        : _smpl{llama_sampler_chain_init(chain_params)}
     {
     }
 
-    sampler(sampler_params_t params,
-            int32_t          top_k,
-            float            top_p,
-            size_t           top_p_keep,
-            float            min_p,
-            size_t           min_p_keep,
-            float            temp,
-            uint32_t         seed)
-        : _smpl{llama_sampler_chain_init(params)}
+    sampler(sampler_chain_params_t chain_params, params sampler_params)
+        : _smpl{llama_sampler_chain_init(chain_params)}
     {
-        init_top_k(top_k);
-        init_top_p(top_p, top_p_keep);
-        init_min_p(min_p, min_p_keep);
-        init_temp(temp);
-        init_dist(seed);
+        if(!_smpl)
+            return;
+
+        // init penalty first (MUST)
+        if(sampler_params.penalty_last_n > 0
+           && (sampler_params.penalty_repeat != 1.0f
+               || sampler_params.penalty_frequency != 0.0f
+               || sampler_params.penalty_present != 0.0f))
+            init_penalties(sampler_params.penalty_last_n,
+                           sampler_params.penalty_repeat,
+                           sampler_params.penalty_frequency,
+                           sampler_params.penalty_present);
+
+        // init top-k, top-p, min-p before temperature init (MUST)
+        if(sampler_params.top_k > 0)
+            init_top_k(sampler_params.top_k);
+
+        if(sampler_params.top_p > 0.0f && sampler_params.top_p < 1.0f)
+            init_top_p(sampler_params.top_p,
+                       sampler_params.top_p_min_keep > 0
+                           ? sampler_params.top_p_min_keep
+                           : 1);
+
+        if(sampler_params.min_p > 0.0f && sampler_params.min_p < 1.0f)
+            init_min_p(sampler_params.min_p,
+                       sampler_params.min_p_min_keep > 0
+                           ? sampler_params.min_p_min_keep
+                           : 1);
+
+        // init temperature after top-k/top-p (MUST)
+        if(sampler_params.temperature > 0.0f)
+            init_temp(sampler_params.temperature);
+
+        if(sampler_params.temperature_ext > 0.0f)
+            init_temp_ext(sampler_params.temperature_ext,
+                          sampler_params.temperature_ext_delta,
+                          sampler_params.temperature_ext_exponent);
+
+        // init seed last (MUST)
+        init_dist(sampler_params.seed);
     }
 
     ~sampler()
@@ -763,9 +902,27 @@ class sampler
             llama_sampler_free(_smpl);
     }
 
-    static sampler_params_t default_params()
+    static sampler_chain_params_t default_chain_params()
     {
         return llama_sampler_chain_default_params();
+    }
+
+    llama_sampler *data() { return _smpl; }
+
+    void init_greedy()
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_greedy());
+    }
+
+    void init_dist(uint32_t seed)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_dist(seed));
     }
 
     void init_top_k(int32_t top_k)
@@ -792,6 +949,14 @@ class sampler
         llama_sampler_chain_add(_smpl, llama_sampler_init_min_p(p, min_keep));
     }
 
+    void init_typical(float p, size_t min_keep)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_typical(p, min_keep));
+    }
+
     void init_temp(float temp)
     {
         if(!_smpl)
@@ -800,12 +965,175 @@ class sampler
         llama_sampler_chain_add(_smpl, llama_sampler_init_temp(temp));
     }
 
-    void init_dist(uint32_t seed)
+    void init_temp_ext(float t, float delta, float exponent)
     {
         if(!_smpl)
             return;
 
-        llama_sampler_chain_add(_smpl, llama_sampler_init_dist(seed));
+        llama_sampler_chain_add(
+            _smpl,
+            llama_sampler_init_temp_ext(t, delta, exponent));
+    }
+
+    void init_xtc(float p, float t, size_t min_keep, uint32_t seed)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl,
+                                llama_sampler_init_xtc(p, t, min_keep, seed));
+    }
+
+    void init_top_n_sigma(float n)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_top_n_sigma(n));
+    }
+
+    void init_mirostat(
+        int32_t n_vocab, uint32_t seed, float tau, float eta, int32_t m)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(
+            _smpl,
+            llama_sampler_init_mirostat(n_vocab, seed, tau, eta, m));
+    }
+
+    void init_mirostat_v2(uint32_t seed, float tau, float eta)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl,
+                                llama_sampler_init_mirostat_v2(seed, tau, eta));
+    }
+
+    void init_grammar(const vocab_t *vocab,
+                      const char    *grammar_str,
+                      const char    *grammar_root)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(
+            _smpl,
+            llama_sampler_init_grammar(vocab, grammar_str, grammar_root));
+    }
+
+    void init_grammar_lazy(const vocab_t *vocab,
+                           const char    *grammar_str,
+                           const char    *grammar_root,
+                           const char   **trigger_words,
+                           size_t         num_trigger_words,
+                           const token_t *trigger_tokens,
+                           size_t         num_trigger_tokens)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(
+            _smpl,
+            llama_sampler_init_grammar_lazy(vocab,
+                                            grammar_str,
+                                            grammar_root,
+                                            trigger_words,
+                                            num_trigger_words,
+                                            trigger_tokens,
+                                            num_trigger_tokens));
+    }
+
+    void init_grammar_lay_patterns(const vocab_t *vocab,
+                                   const char    *grammar_str,
+                                   const char    *grammar_root,
+                                   const char   **trigger_patterns,
+                                   size_t         num_trigger_patterns,
+                                   const token_t *trigger_tokens,
+                                   size_t         num_trigger_tokens)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(
+            _smpl,
+            llama_sampler_init_grammar_lazy_patterns(vocab,
+                                                     grammar_str,
+                                                     grammar_root,
+                                                     trigger_patterns,
+                                                     num_trigger_patterns,
+                                                     trigger_tokens,
+                                                     num_trigger_tokens));
+    }
+
+    void init_penalties(int32_t penalty_last_n,
+                        float   penalty_repeat,
+                        float   penalty_freq,
+                        float   penalty_present)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl,
+                                llama_sampler_init_penalties(penalty_last_n,
+                                                             penalty_repeat,
+                                                             penalty_freq,
+                                                             penalty_present));
+    }
+
+    void init_sampler_init_dry(const vocab_t *vocab,
+                               int32_t        n_ctx_train,
+                               float          dry_multiplier,
+                               float          dry_base,
+                               int32_t        dry_allowed_length,
+                               int32_t        dry_penalty_last_n,
+                               const char   **seq_breakers,
+                               size_t         num_breakers)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl,
+                                llama_sampler_init_dry(vocab,
+                                                       n_ctx_train,
+                                                       dry_multiplier,
+                                                       dry_base,
+                                                       dry_allowed_length,
+                                                       dry_penalty_last_n,
+                                                       seq_breakers,
+                                                       num_breakers));
+    }
+
+    void init_adaptive_p(float target, float decay, uint32_t seed)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(
+            _smpl,
+            llama_sampler_init_adaptive_p(target, decay, seed));
+    }
+
+    void init_logit_bias(int32_t                 n_vocab,
+                         int32_t                 n_logit_bias,
+                         const llama_logit_bias *logit_bias)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(
+            _smpl,
+            llama_sampler_init_logit_bias(n_vocab, n_logit_bias, logit_bias));
+    }
+
+    void init_infill(const vocab_t *vocab)
+    {
+        if(!_smpl)
+            return;
+
+        llama_sampler_chain_add(_smpl, llama_sampler_init_infill(vocab));
     }
 
     void reset()

@@ -236,8 +236,10 @@ int main(int argc, char *argv[])
     }
 
     // Clear KV cache and evaluate prompt
-    auto batch = hj::llama::batch_get_one(tokens);
-    if(ctx.decode(batch) != 0)
+    hj::llama::batch pre_batch{tokens};
+    pre_batch.set_logits(static_cast<int32_t>(tokens.size() - 1),
+                         true); // Enable logits for the last token
+    if(ctx.decode(pre_batch) != 0)
     {
         std::cerr << "Error: Failed to decode prompt." << std::endl;
         hj::llama::backend_free();
@@ -248,13 +250,15 @@ int main(int argc, char *argv[])
     sampler.reset();
 
     // Text Generation Loop
-    int max_tokens         = 100;
-    int n_tokens_generated = 0;
-    int n_past             = static_cast<int>(tokens.size());
+    hj::llama::batch loop_batch{1, 0, 1};
+    int              max_tokens = 100;
+    int              n_past     = static_cast<int>(tokens.size());
     for(int i = 0; i < max_tokens; ++i)
     {
         // Sample the next token
-        auto next_token = sampler.sample(ctx, -1);
+        int32_t sample_idx =
+            (n_past == static_cast<int32_t>(tokens.size())) ? (n_past - 1) : 0;
+        auto next_token = sampler.sample(ctx, sample_idx);
         if(m.token_is_eog(next_token))
         {
             std::cout << "\n⏹️  EOG token encountered" << std::endl;
@@ -272,14 +276,17 @@ int main(int argc, char *argv[])
 
         // Accept the token (updates sampler state)
         sampler.accept(next_token);
-        batch = hj::llama::batch_get_one(&next_token, 1);
-        if(ctx.decode(batch) != 0)
+
+        // Prepare the next token for the next iteration
+        loop_batch.set_tokens(&next_token, 1, n_past);
+        loop_batch.set_logits(0, true);
+        if(ctx.decode(loop_batch) != 0)
         {
             std::cerr << "\n❌ Error: Failed to decode token." << std::endl;
             break;
         }
 
-        n_tokens_generated++;
+        n_past++;
     }
 
     std::cout << std::endl;

@@ -91,7 +91,9 @@ endif()
 # HTTP library
 if(@HJ_ENABLE_HTTP@)
     find_package(httplib CONFIG QUIET)
-    # cpp-httplib is header-only
+    if(httplib_FOUND)
+        list(APPEND hj_LIBRARIES httplib::httplib)
+    endif()
 endif()
 
 # ZeroMQ library

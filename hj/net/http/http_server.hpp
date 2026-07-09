@@ -19,8 +19,10 @@
 #ifndef HTTP_SERVER_HPP
 #define HTTP_SERVER_HPP
 
-#if defined(OPENSSL_ENABLE)
+#ifdef OPENSSL_ENABLE
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
 #define CPPHTTPLIB_OPENSSL_SUPPORT
+#endif
 #endif
 
 #include <httplib.h>

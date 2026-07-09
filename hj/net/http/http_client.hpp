@@ -18,6 +18,12 @@
 #ifndef HTTP_CLIENT_HPP
 #define HTTP_CLIENT_HPP
 
+#ifdef OPENSSL_ENABLE
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#endif
+#endif
+
 #include <httplib.h>
 
 #if defined(_WIN32)
@@ -28,6 +34,10 @@ namespace hj
 {
 
 using http_client = httplib::Client;
+
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+using http_ssl_client = httplib::SSLClient;
+#endif
 
 }
 

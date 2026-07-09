@@ -25,7 +25,10 @@
     "breakpad",
     "clickhouse-cpp",
     "concurrentqueue",
-    "cpp-httplib",
+    {
+      "name": "cpp-httplib",
+      "features": ["openssl"]
+    },
     {
       "name": "eigen3",
       "default-features": false

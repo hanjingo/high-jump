@@ -14,11 +14,15 @@ project(${PACKAGE_NAME}
 option(ASAN "Enable AddressSanitizer" OFF)
 option(COVERAGE "Enable code coverage support" OFF)
 # Options--library
-option(BUILD_SHARED "Build shared object" ON)
+option(BUILD_SHARED "Build shared object" OFF)
 option(BUILD_STATIC "Build static object" OFF)
 # Options--build
 option(BUILD_TEST "Build test" OFF)
 option(BUILD_BENCHMARK "Build benchmark" OFF)
+
+# Load Environment Info
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/env.cmake)
+load_env("${CMAKE_CURRENT_SOURCE_DIR}/.env")
 
 # import vcpkg module
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
@@ -53,8 +57,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # set output path
-if (NOT LIBRARY_OUTPUT_PATH )
-    set(LIBRARY_OUTPUT_PATH  ${CMAKE_SOURCE_DIR}/bin)
+if (NOT EXECUTABLE_OUTPUT_PATH)
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
 
 # Avoid use of compiler language extensions, i.e. -std=c++11 not -std=gnu++11
@@ -93,9 +97,12 @@ add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
 add_definitions(-DPATCH_VERSION=${PACKAGE_VERSION_PATCH})
-add_definitions(-DERR_START=${ERR_START})
-add_definitions(-DERR_END=${ERR_END})
-
+add_definitions(-DLIC_ENABLE=${LIC_ENABLE})
+add_definitions(-DLIC_ISSUER="${LIC_ISSUER}")
+add_definitions(-DLIC_FPATH="${LIC_FPATH}")
+add_definitions(-DCRASH_HANDLER_ENABLE=${CRASH_HANDLER_ENABLE})
+add_definitions(-DTELEMETRY_ENABLE=${TELEMETRY_ENABLE})
+add_definitions(-DPROPERTY_ENABLE=${PROPERTY_ENABLE})
 
 # windows specific settings
 if (WIN32)
@@ -119,54 +126,101 @@ endif()
 
 # add vcpkg library
 find_package(hj REQUIRED)
+find_package(httplib CONFIG REQUIRED)
 
 # source files
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
+#include_directories(${hj_INCLUDE_DIR})
 aux_source_directory(./src SRC)
 
-# build lib file
-foreach(TYPE SHARED STATIC)
-    if(TYPE STREQUAL "SHARED" AND BUILD_SHARED)
-        set(LIB_NAME "${PROJECT_NAME}")
-    elseif(TYPE STREQUAL "STATIC" AND BUILD_STATIC)
-        set(LIB_NAME "${PROJECT_NAME}_static")
-    else()
-        continue()
-    endif()
+# Define your main executable
+add_executable(${PROJECT_NAME} ${SRC})
 
-    add_library(${LIB_NAME} ${TYPE} ${SRC})
+# link library
+set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES} httplib::httplib)
+if(WIN32)
+    list(APPEND LINK_LIBS 
+        bcrypt
+    )
+elseif(APPLE)
+    list(APPEND LINK_LIBS 
+        pthread
+    )
+else()
+    list(APPEND LINK_LIBS 
+        rt 
+        pthread
+    )
+endif()
+target_link_libraries(${PROJECT_NAME} ${LINK_LIBS})
 
-    set(LINK_LIBS ${CMAKE_DL_LIBS} ${hj_LIBRARIES})
-    if(WIN32)
-        list(APPEND LINK_LIBS 
-            bcrypt
-        )
-    elseif(APPLE)
-        list(APPEND LINK_LIBS 
-            pthread
-        )
-    else()
-        list(APPEND LINK_LIBS 
-            rt 
-            pthread
-        )
-    endif()
-    target_link_libraries(${LIB_NAME} ${LINK_LIBS})
+file(GLOB RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/*.gguf")
+if (PROPERTY_ENABLE)
+    # copy properties files
+    file(GLOB PROPERTY_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.properties"
+    )
+    list(APPEND RESOURCE_FILES ${PROPERTY_FILES})
+endif()
+if (LIC_ENABLE)
+    # copy license file
+    file(GLOB LIC_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/*.lic"
+    )
+    list(APPEND RESOURCE_FILES ${LIC_FILES})
+endif()
 
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/deploy.cmake)
-    if(WIN32)
-        win_deploy(${LIB_NAME} 
-            ${LINK_LIBS}
-        )
-    elseif(APPLE)
-        mac_deploy(${LIB_NAME} 
-            ${LINK_LIBS}
-        )
-    else()
-        linux_deploy(${LIB_NAME} 
-            ${LINK_LIBS}
-        )
-    endif()
-endforeach()
+if (RESOURCE_FILES)
+    add_custom_target(${PACKAGE_NAME}_copy_resources ALL
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${EXECUTABLE_OUTPUT_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${RESOURCE_FILES}
+            "${EXECUTABLE_OUTPUT_PATH}"
+        DEPENDS ${RESOURCE_FILES}
+        COMMENT "Copying resource files to output dir"
+    )
+else()
+    message(STATUS "No resource files to copy for ${PROJECT_NAME}")
+endif()
 
+# Crash Trace
+if (CRASH_HANDLER_ENABLE AND UNIX)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/triplet.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/crash.cmake)
+    generate_sym(${PACKAGE_NAME} "${EXECUTABLE_OUTPUT_PATH}/symbols/${PACKAGE_NAME}")
+endif()
+
+
+# Deploy dependencies
+# for windows + vs2019:
+# cmake .. -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019"
+# for *nix:
+# cmake .. -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+#
+# cmake --build .
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/deploy.cmake)
+if(WIN32)
+    win_deploy(${PROJECT_NAME} 
+        ${LINK_LIBS}
+    )
+elseif(APPLE)
+    mac_deploy(${PROJECT_NAME} 
+        ${LINK_LIBS}
+    )
+else()
+    linux_deploy(${PROJECT_NAME} 
+        ${LINK_LIBS}
+    )
+endif()
+
+# Package
+# for windows + NSIS:
+# cpack -G NSIS -C Debug
+#
+# for linux + DEB:
+# cpack -G DEB -C Debug
+#
+# for mac + dmg:
+# cpack -G DragNDrop -C Debug
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pack.cmake)

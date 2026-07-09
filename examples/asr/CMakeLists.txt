@@ -97,7 +97,7 @@ add_definitions(-DPACKAGE="${PACKAGE_NAME}")
 add_definitions(-DMAJOR_VERSION=${PACKAGE_VERSION_MAJOR})
 add_definitions(-DMINOR_VERSION=${PACKAGE_VERSION_MINOR})
 add_definitions(-DPATCH_VERSION=${PACKAGE_VERSION_PATCH})
-add_definitions(-DEMAIL="${PACKAGE_CONTACT}")
+
 add_definitions(-DLIC_ENABLE=${LIC_ENABLE})
 add_definitions(-DLIC_ISSUER="${LIC_ISSUER}")
 add_definitions(-DLIC_FPATH="${LIC_FPATH}")

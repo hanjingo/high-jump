@@ -316,6 +316,14 @@ if(@HJ_ENABLE_LLAMA@)
     endif()
 endif()
 
+# asr
+if(@HJ_ENABLE_ASR@)
+    find_package(whisper CONFIG QUIET)
+    if(whisper_FOUND)
+        list(APPEND hj_LIBRARIES whisper)
+    endif()
+endif()
+
 # Remove duplicates
 list(REMOVE_DUPLICATES hj_LIBRARIES)
 

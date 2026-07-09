@@ -38,7 +38,7 @@
     "fmt",
     {
       "name": "ggml",
-      "features": [ "cuda" ]
+      "default-features": false
     },
     "grpc",
     "gtest",
@@ -78,7 +78,7 @@
     },
     {
       "name": "whisper-cpp",
-      "features": [ "cuda" ]
+      "default-features": false
     },
     "yaml-cpp",
     {
@@ -88,6 +88,21 @@
     "zlib",
     "zstd"
   ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA support for GGML, Whisper",
+      "dependencies": [
+        {
+          "name": "ggml",
+          "features": ["cuda"]
+        },
+        {
+          "name": "whisper-cpp",
+          "features": ["cuda"]
+        }
+      ]
+    }
+  },
   "overrides": [
     {
       "name": "abseil",

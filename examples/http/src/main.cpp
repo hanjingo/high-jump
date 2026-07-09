@@ -145,8 +145,8 @@ int main(int argc, char *argv[])
         req.content_receiver = [&](const char *data,
                                    size_t      data_length,
                                    size_t      offset,
-                                   size_t
-                                       total_length) { // Handle streaming data
+                                   size_t      total_length) {
+            // Handle streaming data
             LOG_DEBUG(
                 "Received data chunk: {} bytes, offset: {}, total_length: {}",
                 data_length,

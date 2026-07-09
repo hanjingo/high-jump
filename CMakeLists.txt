@@ -44,6 +44,7 @@ option(HJ_ENABLE_BEHAVIOR_TREE "Enable behavior tree support" OFF)
 option(HJ_ENABLE_QRCODE "Enable QR code support" OFF)
 option(HJ_ENABLE_VECTOR_INDEX "Enable vector index support" OFF)
 option(HJ_ENABLE_LLAMA "Enable llama.cpp support" OFF)
+option(HJ_ENABLE_ASR "Enable whisper-cpp support" OFF)
 
 # import vcpkg module
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)

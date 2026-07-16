@@ -723,6 +723,37 @@ class context
         return std::make_shared<memory>(llama_get_memory(_ctx));
     }
 
+    size_t state_get_size()
+    {
+        if(!_ctx)
+            return 0;
+
+        return llama_state_get_size(_ctx);
+    }
+
+    float *get_embeddings()
+    {
+        if(!_ctx)
+            return nullptr;
+
+        return llama_get_embeddings(_ctx);
+    }
+
+    float *get_embeddings_ith(int32_t i)
+    {
+        if(!_ctx)
+            return nullptr;
+
+        return llama_get_embeddings_ith(_ctx, i);
+    }
+
+    float *get_embeddings_seq(seq_id_t seq_id)
+    {
+        if(!_ctx)
+            return nullptr;
+
+        return llama_get_embeddings_seq(_ctx, seq_id);
+    }
 
     bool attach_threadpool(threadpool_t threadpool,
                            threadpool_t threadpool_batch)
@@ -784,6 +815,13 @@ class context
                                       n_embd,
                                       il_start,
                                       il_end);
+    }
+    size_t state_set_data(const uint8_t *src, size_t size)
+    {
+        if(!_ctx)
+            return 0;
+
+        return llama_state_set_data(_ctx, src, size);
     }
 
     int32_t decode(llama_batch batch)

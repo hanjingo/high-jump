@@ -56,14 +56,13 @@ struct channel
 
     inline bool try_dequeue(T &t) { return _q.try_dequeue(t); }
 
-    inline void enqueue(const T &t) { _q.enqueue(t); }
-
-    inline size_t size() const { return _q.size_approx(); }
+    inline bool enqueue(const T &t) { return _q.enqueue(t); }
+    inline bool enqueue(T &&t) { return _q.enqueue(std::move(t)); }
 
   private:
     moodycamel::BlockingConcurrentQueue<T> _q;
 };
 
-}
+} // namespace hj
 
 #endif

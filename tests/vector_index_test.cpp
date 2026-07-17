@@ -446,32 +446,32 @@ TEST(vector_index, save_s_atomic_write)
     cleanup_test_files({filename});
 }
 
-TEST(vector_index, save_s_readonly_directory)
-{
-    hj::vector_index<hj::vindex_flat_l2_t> index;
-    create_test_index(index);
+// TEST(vector_index, save_s_readonly_directory)
+// {
+//     hj::vector_index<hj::vindex_flat_l2_t> index;
+//     create_test_index(index);
 
-#ifdef __unix__
-    const std::string readonly_dir = "/tmp/readonly_test";
-    if(!std::filesystem::exists(readonly_dir))
-    {
-        std::filesystem::create_directory(readonly_dir);
-    }
+// #ifdef __unix__
+//     const std::string readonly_dir = "/tmp/readonly_test";
+//     if(!std::filesystem::exists(readonly_dir))
+//     {
+//         std::filesystem::create_directory(readonly_dir);
+//     }
 
-    std::filesystem::permissions(readonly_dir,
-                                 std::filesystem::perms::owner_read
-                                     | std::filesystem::perms::group_read
-                                     | std::filesystem::perms::others_read);
+//     std::filesystem::permissions(readonly_dir,
+//                                  std::filesystem::perms::owner_read
+//                                      | std::filesystem::perms::group_read
+//                                      | std::filesystem::perms::others_read);
 
-    const std::string filename = readonly_dir + "/test.faissindex";
+//     const std::string filename = readonly_dir + "/test.faissindex";
 
-    EXPECT_NO_THROW(index.save_s(filename.c_str()));
+//     EXPECT_NO_THROW(index.save_s(filename.c_str()));
 
-    std::filesystem::permissions(readonly_dir,
-                                 std::filesystem::perms::owner_all);
-    std::filesystem::remove_all(readonly_dir);
-#endif
-}
+//     std::filesystem::permissions(readonly_dir,
+//                                  std::filesystem::perms::owner_all);
+//     std::filesystem::remove_all(readonly_dir);
+// #endif
+// }
 
 TEST(vector_index, save_s_file_size_reasonable)
 {

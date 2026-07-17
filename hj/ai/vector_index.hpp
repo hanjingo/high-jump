@@ -9,6 +9,7 @@
 
 #include <faiss/IndexFlat.h>
 #include <faiss/index_io.h>
+#include <faiss/IndexIDMap.h>
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/io.h>
 
@@ -22,6 +23,7 @@ using vindex_flat_panorama_t    = faiss::IndexFlatPanorama;
 using vindex_flat_l2_panorama_t = faiss::IndexFlatL2Panorama;
 using vindex_flat_ip_panorama_t = faiss::IndexFlatIPPanorama;
 using vindex_flat_1d_t          = faiss::IndexFlat1D;
+using vindex_idmap_t            = faiss::IndexIDMap;
 
 using vindex_dimension_t           = typename faiss::idx_t;
 using vindex_idx_t                 = typename faiss::idx_t;
@@ -55,10 +57,46 @@ class vector_index
     {
     }
 
+    vector_index(T *idx)
+        : _index(idx)
+    {
+    }
+
+    vector_index(const vector_index &)            = delete;
+    vector_index &operator=(const vector_index &) = delete;
+
+    vector_index(vector_index &&other) noexcept
+        : _index(other._index)
+    {
+        other._index = nullptr;
+    }
+
+    vector_index &operator=(vector_index &&other) noexcept
+    {
+        if(this != &other)
+        {
+            if(_index)
+                delete _index;
+            _index       = other._index;
+            other._index = nullptr;
+        }
+        return *this;
+    }
+
     ~vector_index()
     {
         if(_index)
             delete _index;
+    }
+
+    T       *get_index() { return _index; }
+    const T *get_index() const { return _index; }
+    void     set_index(T *idx)
+    {
+        if(_index)
+            delete _index;
+
+        _index = idx;
     }
 
     template <typename... Args>
@@ -81,6 +119,21 @@ class vector_index
             return false;
 
         _index->add(vectors_num, vectors);
+        return true;
+    }
+
+    bool add_with_ids(vindex_count_t      vectors_num,
+                      const float        *vectors,
+                      const vindex_idx_t *ids)
+    {
+        if(!_index)
+            return false;
+
+        faiss::IndexIDMap *idMap = dynamic_cast<faiss::IndexIDMap *>(_index);
+        if(!idMap)
+            return false;
+
+        idMap->add_with_ids(vectors_num, vectors, ids);
         return true;
     }
 

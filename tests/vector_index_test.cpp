@@ -1185,3 +1185,65 @@ TEST(vector_index, serialize_deserialize_get_all_vectors_integration)
         EXPECT_FLOAT_EQ(original_vectors[i], restored_vectors[i]);
     }
 }
+
+TEST(vector_index, add_with_ids_without_idmap)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(2);
+
+    const float        vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+    const faiss::idx_t ids[]     = {100, 200, 300};
+
+    EXPECT_FALSE(index.add_with_ids(3, vectors, ids));
+}
+
+TEST(vector_index, add_with_ids_empty)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(2);
+
+    const float        vectors[] = {1.0f, 0.0f};
+    const faiss::idx_t ids[]     = {100};
+
+    EXPECT_FALSE(index.add_with_ids(0, vectors, ids));
+}
+
+TEST(vector_index, add_with_ids_null_params)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(2);
+
+    EXPECT_FALSE(index.add_with_ids(1, nullptr, nullptr));
+}
+
+TEST(vector_index, add_with_ids_null_index)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+
+    const float        vectors[] = {1.0f, 0.0f};
+    const faiss::idx_t ids[]     = {100};
+
+    EXPECT_FALSE(index.add_with_ids(1, vectors, ids));
+}
+
+TEST(vector_index, add_with_ids_with_idmap)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(2);
+
+    faiss::Index     *base_index = index.get_index();
+    faiss::IndexIDMap idMap(base_index);
+
+    const float        vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+    const faiss::idx_t ids[]     = {10, 20, 30};
+
+    idMap.add_with_ids(3, vectors, ids);
+    EXPECT_EQ(idMap.ntotal, 3u);
+
+    const float  query[] = {1.0f, 0.0f};
+    float        distances[2];
+    faiss::idx_t indices[2];
+    idMap.search(1, query, 2, distances, indices);
+
+    EXPECT_EQ(indices[0], 10);
+}

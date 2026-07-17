@@ -3,6 +3,6 @@
 
 #define HJ_MAJOR_VERSION 1
 #define HJ_MINOR_VERSION 0
-#define HJ_PATCH_VERSION 9
+#define HJ_PATCH_VERSION 10
 
 #endif

@@ -17,7 +17,7 @@ afQ0WRgZier6MrdwlXd70JZIpgc6kLeOz2GuV4lX
 
     hj::license::issuer  isu{"issuer1",
                              hj::license::sign_algo::rsa256,
-                             {"", prikey, "", ""},
+                             {"", prikey},
                              2};
     hj::license::token_t token;
     auto err = isu.issue(token,
@@ -56,7 +56,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     hj::license::issuer  isu{"issuer1",
                              hj::license::sign_algo::rsa256,
-                             {pubkey, prikey, "", ""},
+                             {"", prikey},
                              2};
     hj::license::token_t token;
     auto err = isu.issue(token,
@@ -67,13 +67,12 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     hj::license::verifier vefer{"issuer1",
                                 hj::license::sign_algo::rsa256,
-                                {pubkey, prikey, "", ""}};
+                                {pubkey, ""}};
 
     ASSERT_TRUE(vefer.id() == "issuer1");
     ASSERT_TRUE(vefer.algo() == hj::license::sign_algo::rsa256);
     err = vefer.verify(token,
                        "harry",
-                       30,
                        {
                            {"disk_sn", hj::license::get_disk_sn()},
                        });
@@ -81,7 +80,6 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     err = vefer.verify(token,
                        "harry1",
-                       30,
                        {
                            {"disk_sn", hj::license::get_disk_sn()},
                        });
@@ -97,7 +95,6 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     err = vefer.verify_file("./test2.lic",
                             "harry",
-                            30,
                             {
                                 {"disk_sn", hj::license::get_disk_sn()},
                             });
@@ -105,7 +102,6 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     err = vefer.verify_file("./test2.lic",
                             "harry1",
-                            30,
                             {
                                 {"disk_sn", hj::license::get_disk_sn()},
                             });
@@ -131,7 +127,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     hj::license::issuer  isu{"issuer1",
                              hj::license::sign_algo::rsa256,
-                             {pubkey, prikey, "", ""},
+                             {"", prikey},
                              2};
     hj::license::token_t token;
     auto err = isu.issue(token,
@@ -142,10 +138,9 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     hj::license::verifier vefer{"issuer1",
                                 hj::license::sign_algo::rsa256,
-                                {pubkey, prikey, "", ""}};
+                                {pubkey}};
     err = vefer.verify(token,
                        "harry",
-                       30,
                        {
                            {"disk_sn", hj::license::get_disk_sn()},
                        });
@@ -160,7 +155,6 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     err = vefer.verify(token,
                        "harry",
-                       30,
                        {
                            {"disk_sn", hj::license::get_disk_sn()},
                        });
@@ -186,7 +180,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
 
     hj::license::issuer isu{"test_issuer",
                             hj::license::sign_algo::rsa256,
-                            {pubkey, prikey, "", ""},
+                            {"", prikey},
                             5};
 
     hj::license::token_t token;
@@ -226,10 +220,10 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
         claims_map[claim.first] = claim.second;
     }
 
-    EXPECT_EQ(claims_map["disk_sn"], "\"" + disk_sn + "\"");
-    EXPECT_EQ(claims_map["version"], "\"1.0.0\"");
-    EXPECT_EQ(claims_map["feature"], "\"premium\"");
-    EXPECT_EQ(claims_map["max_users"], "\"100\"");
+    EXPECT_EQ(claims_map["disk_sn"], disk_sn);
+    EXPECT_EQ(claims_map["version"], "1.0.0");
+    EXPECT_EQ(claims_map["feature"], "premium");
+    EXPECT_EQ(claims_map["max_users"], "100");
 }
 
 TEST(license, parse_none_algorithm_token)
@@ -257,8 +251,8 @@ TEST(license, parse_none_algorithm_token)
         claims_map[claim.first] = claim.second;
     }
 
-    EXPECT_EQ(claims_map["license_type"], "\"trial\"");
-    EXPECT_EQ(claims_map["company"], "\"TestCorp\"");
+    EXPECT_EQ(claims_map["license_type"], "trial");
+    EXPECT_EQ(claims_map["company"], "TestCorp");
 }
 
 TEST(license, parse_empty_claims_token)
@@ -352,9 +346,9 @@ TEST(license, parse_complex_claims_token)
         claims_map[claim.first] = claim.second;
     }
 
-    EXPECT_EQ(claims_map["user_id"], "\"12345\"");
-    EXPECT_EQ(claims_map["permissions"], "\"read,write,admin\"");
-    EXPECT_EQ(claims_map["metadata"], "\"{\\\"key\\\":\\\"value\\\"}\"");
-    EXPECT_EQ(claims_map["expiry_warning"], "\"30_days_before\"");
-    EXPECT_EQ(claims_map["renewal_url"], "\"https://example.com/renew\"");
+    EXPECT_EQ(claims_map["user_id"], "12345");
+    EXPECT_EQ(claims_map["permissions"], "read,write,admin");
+    EXPECT_EQ(claims_map["metadata"], "{\"key\":\"value\"}");
+    EXPECT_EQ(claims_map["expiry_warning"], "30_days_before");
+    EXPECT_EQ(claims_map["renewal_url"], "https://example.com/renew");
 }

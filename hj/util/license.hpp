@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <fstream>
 #include <iostream>
+#include <atomic>
 #include <mutex>
 
 #include <jwt-cpp/traits/nlohmann-json/traits.h>
@@ -74,7 +75,7 @@ enum class error_code
     parse_license_info_failed,
 };
 
-static const char *JWT_TYPE = "JWT";
+inline constexpr const char *JWT_TYPE = "JWT";
 
 namespace detail
 {
@@ -177,7 +178,7 @@ static err_t issue(token_t                        &token,
                    const std::string              &issuer,
                    const std::string              &licensee,
                    const time_point_t              issue_tm,
-                   const std::size_t               leeway_secs,
+                   const std::size_t               valid_secs,
                    const sign_algo                 algo,
                    const std::vector<std::string> &keys,
                    const std::vector<pair_t>      &claims)
@@ -188,21 +189,22 @@ static err_t issue(token_t                        &token,
     lic.set_issuer(issuer);
     lic.set_audience(licensee);
     lic.set_issued_at(issue_tm);
-    lic.set_expires_at(issue_tm + std::chrono::seconds(leeway_secs));
+    lic.set_expires_at(issue_tm + std::chrono::seconds(valid_secs));
     for(const auto &p : claims)
         lic.set_payload_claim(p.first, claim_t(p.second));
 
     switch(algo)
     {
         case sign_algo::rsa256: {
-            if(keys.size() < 4)
+            if(keys.size() < 2)
                 return detail::make_err(error_code::keys_not_enough);
-            // public_key, private_key, public_key_password, private_key_password
-            token = lic.sign(jwt::algorithm::rs256(keys.at(0),
-                                                   keys.at(1),
-                                                   keys.at(2),
-                                                   keys.at(3)),
-                             error_code);
+            // public_key, private_key, public_key_password(optional), private_key_password(optional)
+            token =
+                lic.sign(jwt::algorithm::rs256(keys[0],
+                                               keys[1],
+                                               keys.size() > 2 ? keys[2] : "",
+                                               keys.size() > 3 ? keys[3] : ""),
+                         error_code);
             break;
         }
         default: {
@@ -217,27 +219,30 @@ static err_t issue(token_t                        &token,
 static err_t verify(const token_t                  &token,
                     const std::string              &issuer,
                     const std::string              &licensee,
-                    const std::size_t               leeway_secs,
                     const sign_algo                 algo,
                     const std::vector<std::string> &keys,
-                    const std::vector<pair_t>      &claims)
+                    const std::vector<pair_t>      &claims,
+                    std::size_t                     leeway_secs = 5)
 {
     err_t error_code;
-    auto  decoded = jwt::decode<json_traits>(token);
-    auto  verifier =
-        jwt::verify<json_traits>()
-            .with_type(JWT_TYPE)
-            .with_issuer(issuer)
-            .with_audience(licensee)
-            .expires_at_leeway(std::chrono::seconds(leeway_secs).count());
+    auto  decoded  = jwt::decode<json_traits>(token);
+    auto  verifier = jwt::verify<json_traits>()
+                         .with_type(JWT_TYPE)
+                         .with_issuer(issuer)
+                         .with_audience(licensee)
+                         .leeway(leeway_secs);
 
     switch(algo)
     {
         case sign_algo::rsa256: {
-            verifier.allow_algorithm(jwt::algorithm::rs256(keys.at(0),
-                                                           keys.at(1),
-                                                           keys.at(2),
-                                                           keys.at(3)));
+            if(keys.size() < 1)
+                return detail::make_err(error_code::keys_not_enough);
+
+            verifier.allow_algorithm(
+                jwt::algorithm::rs256(keys[0],
+                                      keys.size() > 1 ? keys[1] : "",
+                                      keys.size() > 2 ? keys[2] : "",
+                                      keys.size() > 3 ? keys[3] : ""));
             break;
         }
         default: {
@@ -291,6 +296,9 @@ static std::string get_disk_sn() noexcept
     {
         // Try multiple methods for better reliability
         std::vector<std::string> commands = {
+            "lsblk -ndo SERIAL $(lsblk -ndo NAME | head -1) 2>/dev/null",
+            "cat /sys/block/$(lsblk -ndo NAME | head -1)/device/serial "
+            "2>/dev/null",
             "lsblk -ndo SERIAL /dev/sda 2>/dev/null",
             "hdparm -I /dev/sda 2>/dev/null | grep 'Serial Number' | awk "
             "'{print $3}'",
@@ -355,31 +363,18 @@ class issuer
         , _valid_times{valid_times}
     {
     }
-    issuer(const issuer &other)
-        : _id{other._id}
-        , _algo{other._algo}
-        , _keys{other._keys}
-        , _valid_times{other._valid_times}
-    {
-    }
-    issuer(issuer &&) = delete;
+    issuer(const issuer &other) = delete;
+    issuer(issuer &&)           = default;
 
     virtual ~issuer() = default;
 
-    issuer &operator=(const issuer &other)
-    {
-        _id          = other._id;
-        _algo        = other._algo;
-        _keys        = other._keys;
-        _valid_times = other._valid_times;
-        return *this;
-    }
-    issuer &operator=(issuer &&) = delete;
+    issuer &operator=(const issuer &other) = delete;
+    issuer &operator=(issuer &&)           = default;
 
     inline const std::string &id() const { return _id; }
     inline sign_algo          algo() const { return _algo; }
-    inline std::size_t        valid_times() const { return _valid_times; }
-    inline void               set_keys(std::vector<std::string> &&keys) noexcept
+    inline std::size_t valid_times() const { return _valid_times.load(); }
+    inline void        set_keys(std::vector<std::string> &&keys) noexcept
     {
         std::lock_guard<std::mutex> lock(_mu);
         _keys = std::move(keys);
@@ -387,19 +382,22 @@ class issuer
 
     err_t issue(token_t                   &token,
                 const std::string         &licensee,
-                const std::size_t          leeway_days,
+                const std::size_t          valid_days,
                 const std::vector<pair_t> &claims = {})
     {
-        err_t error_code;
-        if(_valid_times < 1)
-            return detail::make_err(error_code::invalid_times);
+        std::size_t old_count = _valid_times.load();
+        do
+        {
+            if(old_count == 0)
+                return detail::make_err(error_code::invalid_times);
+        } while(!_valid_times.compare_exchange_weak(old_count, old_count - 1));
 
-        _valid_times--;
+        std::lock_guard<std::mutex> lock(_mu);
         return detail::issue(token,
                              _id,
                              licensee,
                              jwt::date::clock::now(),
-                             leeway_days * 24 * 60 * 60,
+                             valid_days * 24 * 60 * 60,
                              _algo,
                              _keys,
                              claims);
@@ -407,14 +405,14 @@ class issuer
 
     err_t issue(std::ostream              &out,
                 const std::string         &licensee,
-                const std::size_t          leeway_days,
+                const std::size_t          valid_days,
                 const std::vector<pair_t> &claims = {})
     {
         if(!out || !out.good())
             return detail::make_err(error_code::output_stream_invalid);
 
         token_t token;
-        auto    error_code = issue(token, licensee, leeway_days, claims);
+        auto    error_code = issue(token, licensee, valid_days, claims);
         if(error_code)
             return error_code;
 
@@ -426,26 +424,26 @@ class issuer
 
     err_t issue_file(const std::string         &filepath,
                      const std::string         &licensee,
-                     const std::size_t          leeway_days,
+                     const std::size_t          valid_days,
                      const std::vector<pair_t> &claims = {})
     {
         std::ofstream out(filepath, std::ios::binary);
         if(!out || !out.is_open())
             return detail::make_err(error_code::file_not_exist);
 
-        return issue(out, licensee, leeway_days, claims);
+        return issue(out, licensee, valid_days, claims);
     }
 
     // release all issued licences by reset encrypt keys
     err_t release(const sign_algo algo, const std::vector<std::string> &keys)
     {
+        std::lock_guard<std::mutex> lock(_mu);
         if(algo == _algo && keys == _keys)
             return detail::make_err(error_code::keys_not_changed);
 
-        err_t error_code;
         _algo = algo;
         _keys = keys;
-        return error_code;
+        return err_t{};
     }
 
   private:
@@ -453,7 +451,7 @@ class issuer
     std::string              _id;
     sign_algo                _algo;
     std::vector<std::string> _keys;
-    std::size_t              _valid_times;
+    std::atomic<std::size_t> _valid_times;
 };
 
 struct license_info
@@ -477,15 +475,13 @@ class verifier
         , _keys{keys}
     {
     }
-    verifier(const verifier &other)
-        : _id{other._id}
-        , _algo{other._algo}
-        , _keys{other._keys}
-    {
-    }
-    verifier(verifier &&) = default;
+    verifier(const verifier &other) = delete;
+    verifier(verifier &&)           = default;
 
     virtual ~verifier() = default;
+
+    verifier &operator=(const verifier &other) = delete;
+    verifier &operator=(verifier &&)           = default;
 
     inline const std::string &id() const { return _id; }
     inline sign_algo          algo() const { return _algo; }
@@ -497,22 +493,23 @@ class verifier
 
     err_t verify(const token_t             &token,
                  const std::string         &licensee,
-                 const std::size_t          leeway_days,
-                 const std::vector<pair_t> &claims = {})
+                 const std::vector<pair_t> &claims      = {},
+                 std::size_t                leeway_secs = 5)
     {
+        std::lock_guard<std::mutex> lock(_mu);
         return detail::verify(token,
                               _id,
                               licensee,
-                              leeway_days * 24 * 60 * 60,
                               _algo,
                               _keys,
-                              claims);
+                              claims,
+                              leeway_secs);
     }
 
     err_t verify(std::istream              &in,
                  const std::string         &licensee,
-                 const std::size_t          leeway_days,
-                 const std::vector<pair_t> &claims = {})
+                 const std::vector<pair_t> &claims      = {},
+                 std::size_t                leeway_secs = 5)
     {
         if(!in)
             return detail::make_err(error_code::input_stream_invalid);
@@ -524,26 +521,27 @@ class verifier
         if(buf.empty())
             return detail::make_err(error_code::input_stream_invalid);
 
-        token_t token = buf;
+        token_t                     token = buf;
+        std::lock_guard<std::mutex> lock(_mu);
         return detail::verify(token,
                               _id,
                               licensee,
-                              leeway_days * 24 * 60 * 60,
                               _algo,
                               _keys,
-                              claims);
+                              claims,
+                              leeway_secs);
     }
 
-    err_t verify_file(const token_t             &filepath,
+    err_t verify_file(const std::string         &filepath,
                       const std::string         &licensee,
-                      const std::size_t          leeway_days,
-                      const std::vector<pair_t> &claims = {})
+                      const std::vector<pair_t> &claims      = {},
+                      std::size_t                leeway_secs = 5)
     {
         std::ifstream in(filepath, std::ios::binary);
         if(!in || !in.is_open())
             return detail::make_err(error_code::file_not_exist);
 
-        return verify(in, licensee, leeway_days, claims);
+        return verify(in, licensee, claims, leeway_secs);
     }
 
     static err_t parse(license_info &info, const token_t &token) noexcept
@@ -566,7 +564,11 @@ class verifier
                 if(key == "iss" || key == "aud" || key == "iat" || key == "exp")
                     continue;
 
-                info.claims.emplace_back(key, pair.second.dump());
+                // avoid "\"xxx\"" format, use get<std::string>() to get the value directly
+                info.claims.emplace_back(key,
+                                         pair.second.is_string()
+                                             ? pair.second.get<std::string>()
+                                             : pair.second.dump());
             }
             return detail::make_err(error_code::ok);
         }

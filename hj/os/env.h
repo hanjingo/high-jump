@@ -134,6 +134,39 @@ static inline const char *_COMPILE_TIME()
 #define COMPILE_TIME _COMPILE_TIME()
 
 
+// ARCH + OS
+#if defined(_WIN32) || defined(_WIN64)
+#define ENV_OS "windows"
+#elif defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#define ENV_OS "ios"
+#else
+#define ENV_OS "macos"
+#endif
+#elif defined(__linux__)
+#define ENV_OS "linux"
+#elif defined(__ANDROID__)
+#define ENV_OS "android"
+#else
+#define ENV_OS "unknown"
+#endif
+
+#if defined(_M_IX86) || defined(__i386__)
+#define ENV_ARCH "x86"
+#elif defined(_M_X64) || defined(__x86_64__)
+#define ENV_ARCH "x64"
+#elif defined(_M_ARM64) || defined(__aarch64__)
+#define ENV_ARCH "arm64"
+#elif defined(_M_ARM) || defined(__arm__)
+#define ENV_ARCH "arm"
+#elif defined(__loongarch__)
+#define ENV_ARCH "loong64"
+#else
+#define ENV_ARCH "unknown"
+#endif
+
+
 // QT
 #if defined(QT_VERSION) && defined(QT_CORE_LIB)
 #define ENV_QT_ENVIRONMENT 1

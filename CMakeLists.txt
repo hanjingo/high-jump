@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.19.2)
 
+if(NOT DEFINED HJ_VERSION)
+    set(HJ_VERSION "1.0.10")
+endif()
+
 # set environment param
 project(hj 
-    VERSION 1.0.0
+    VERSION ${HJ_VERSION}
     DESCRIPTION "Modern C++ Library for C++17 and above"
     LANGUAGES C CXX
 )
@@ -107,6 +111,8 @@ endif()
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+set(HJ_VERSION ${HJ_VERSION})
 
 add_library(hj INTERFACE)
 target_include_directories(hj INTERFACE

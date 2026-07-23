@@ -11,7 +11,9 @@
 
 #include <hj/types/result.hpp>
 
+#ifdef HJ_ENABLE_SINGLETON
 #include <hj/types/singleton.hpp>
+#endif
 
 #include <hj/types/string_view.hpp>
 

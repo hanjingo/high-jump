@@ -3,7 +3,9 @@
 
 #include <hj/algo/astar.hpp>
 
+#ifdef HJ_ENABLE_HEHAVIOR_TREE
 #include <hj/algo/behavior_tree.hpp>
+#endif
 
 #include <hj/algo/bloom_filter.hpp>
 

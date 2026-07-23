@@ -5,7 +5,9 @@
 
 #include <hj/util/init.hpp>
 
+#ifdef HJ_ENABLE_LIC
 #include <hj/util/license.hpp>
+#endif
 
 #include <hj/util/once.hpp>
 

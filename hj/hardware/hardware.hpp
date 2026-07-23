@@ -3,7 +3,9 @@
 
 #include <hj/hardware/bios.h>
 
+#ifdef HJ_ENABLE_USB_BT
 #include <hj/hardware/bluetooth.h>
+#endif
 
 #include <hj/hardware/cpu.h>
 
@@ -11,7 +13,9 @@
 
 #include <hj/hardware/dpdk.h>
 
+#ifdef HJ_ENABLE_GPU
 #include <hj/hardware/gpu.h>
+#endif
 
 #include <hj/hardware/keyboard.h>
 
@@ -27,6 +31,8 @@
 
 #include <hj/hardware/simd.h>
 
+#ifdef HJ_ENABLE_USB_BT
 #include <hj/hardware/usb.h>
+#endif
 
 #endif

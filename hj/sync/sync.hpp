@@ -9,9 +9,10 @@
 
 #include <hj/sync/object_pool.hpp>
 
+#ifdef HJ_ENABLE_SYNC
 #include <hj/sync/safe_map.hpp>
-
 #include <hj/sync/safe_vector.hpp>
+#endif
 
 #include <hj/sync/shared_memory.hpp>
 

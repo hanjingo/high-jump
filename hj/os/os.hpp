@@ -11,7 +11,9 @@
 
 #include <hj/os/kernel.h>
 
+#ifdef HJ_ENABLE_OPTIONS
 #include <hj/os/options.hpp>
+#endif
 
 #include <hj/os/process.hpp>
 

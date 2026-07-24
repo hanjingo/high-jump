@@ -21,14 +21,22 @@
 #include <set>
 #include <string>
 #include <iostream>
+#include <fstream>
+#include <chrono>
 #include <functional>
 
 #if defined(_WIN32)
 #include <windows.h>
 #include <client/windows/handler/exception_handler.h>
 #elif __APPLE__
+#include <unistd.h>
+#include <fcntl.h>
+#include <time.h>
 #include <client/mac/handler/exception_handler.h>
 #elif __linux__
+#include <unistd.h>
+#include <fcntl.h>
+#include <time.h>
 #include <client/linux/handler/exception_handler.h>
 #endif
 
@@ -96,19 +104,29 @@ class crash_handler
   public:
     crash_handler()
         : _dump_cb{default_dump_callback}
+        , _handler{nullptr}
     {
     }
     crash_handler(const char *abs_path)
         : _dump_cb{default_dump_callback}
+        , _handler{nullptr}
     {
         set_local_path(abs_path);
     }
     crash_handler(const char *abs_path, const dump_callback_t cb)
         : _dump_cb{cb}
+        , _handler{nullptr}
     {
         set_local_path(abs_path);
     }
-    virtual ~crash_handler() {};
+    virtual ~crash_handler()
+    {
+        if(_handler != nullptr)
+        {
+            delete _handler;
+            _handler = nullptr;
+        }
+    };
 
     crash_handler(const crash_handler &)            = delete;
     crash_handler &operator=(const crash_handler &) = delete;
@@ -128,7 +146,19 @@ class crash_handler
             delete _handler;
 
 #if defined(_WIN32)
-        std::wstring wabs_path(abs_path.begin(), abs_path.end());
+        int wlen =
+            ::MultiByteToWideChar(CP_UTF8, 0, abs_path.c_str(), -1, NULL, 0);
+        std::wstring wabs_path(wlen, 0);
+        ::MultiByteToWideChar(CP_UTF8,
+                              0,
+                              abs_path.c_str(),
+                              -1,
+                              &wabs_path[0],
+                              wlen);
+        if(!wabs_path.empty() && wabs_path.back() == L'\0')
+            wabs_path.pop_back();
+
+        ::CreateDirectoryW(wabs_path.c_str(), NULL);
         _handler = new google_breakpad::ExceptionHandler(
             wabs_path,
             nullptr, // FilterCallback
@@ -211,6 +241,83 @@ class crash_handler
     {
         static crash_handler inst;
         return &inst;
+    }
+
+    static void print(const char *content, const char *path = "crash.log")
+    {
+        if(!content || !path)
+            return;
+
+#if defined(_WIN32)
+        HANDLE hFile = ::CreateFileA(path,
+                                     FILE_APPEND_DATA,
+                                     FILE_SHARE_READ,
+                                     NULL,
+                                     OPEN_ALWAYS,
+                                     FILE_ATTRIBUTE_NORMAL,
+                                     NULL);
+
+        if(hFile == INVALID_HANDLE_VALUE)
+            return;
+
+        SYSTEMTIME st;
+        ::GetLocalTime(&st);
+        char timeBuf[64];
+        int  timeLen = ::wsprintfA(timeBuf,
+                                   "%04d-%02d-%02d %02d:%02d:%02d : ",
+                                   st.wYear,
+                                   st.wMonth,
+                                   st.wDay,
+                                   st.wHour,
+                                   st.wMinute,
+                                   st.wSecond);
+
+        DWORD bytesWritten;
+        if(timeLen > 0)
+            ::WriteFile(hFile, timeBuf, timeLen, &bytesWritten, NULL);
+
+        int contentLen = 0;
+        while(content[contentLen])
+            contentLen++;
+
+        ::WriteFile(hFile, content, contentLen, &bytesWritten, NULL);
+        ::WriteFile(hFile, "\r\n", 2, &bytesWritten, NULL);
+        ::CloseHandle(hFile);
+
+#else // Linux / macOS (POSIX)
+        int fd = ::open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if(fd < 0)
+            return;
+
+        struct timespec ts;
+        struct tm       tm_info;
+        if(::clock_gettime(CLOCK_REALTIME, &ts) == 0)
+        {
+            ::localtime_r(&ts.tv_sec, &tm_info);
+            char   timeBuf[64];
+            size_t timeLen = ::strftime(timeBuf,
+                                        sizeof(timeBuf),
+                                        "%Y-%m-%d %H:%M:%S : ",
+                                        &tm_info);
+            if(timeLen > 0)
+            {
+                auto ret = ::write(fd, timeBuf, timeLen);
+                (void) ret;
+            }
+        }
+
+        size_t contentLen = 0;
+        while(content[contentLen])
+            contentLen++;
+
+        auto ret1 = ::write(fd, content, contentLen);
+        (void) ret1;
+
+        auto ret2 = ::write(fd, "\n", 1);
+        (void) ret2;
+
+        ::close(fd);
+#endif
     }
 
   private:

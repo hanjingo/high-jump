@@ -28,6 +28,9 @@
 #include <httplib.h>
 
 #if defined(_WIN32)
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #endif
 

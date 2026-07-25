@@ -611,8 +611,8 @@ class aes
         while(total_read < cipher_len)
         {
             std::streamsize to_read =
-                std::min(static_cast<std::streamsize>(AES_BUF_SIZE),
-                         cipher_len - total_read);
+                (std::min) (static_cast<std::streamsize>(AES_BUF_SIZE),
+                            cipher_len - total_read);
             in.read(reinterpret_cast<char *>(inbuf.data()), to_read);
             std::streamsize read_len = in.gcount();
             total_read += read_len;

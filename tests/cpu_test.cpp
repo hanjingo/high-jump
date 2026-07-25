@@ -31,7 +31,7 @@ TEST(cpu, cpu_vendor)
     unsigned char vendor[64] = {0};
     auto          ec         = cpu_vendor(vendor, sizeof(vendor));
     std::string   vendor_str(reinterpret_cast<char *>(vendor));
-    
+
 #if defined(__APPLE__) && defined(__aarch64__)
     // On Apple Silicon (ARM), machdep.cpu.vendor is not available
     // The sysctlbyname call will fail with CPU_ERR_SYSCTL_FAILED (-8)
@@ -41,7 +41,7 @@ TEST(cpu, cpu_vendor)
         return;
     }
 #endif
-    
+
     EXPECT_EQ(ec, CPU_OK) << "cpu_vendor should return CPU_OK";
     EXPECT_FALSE(vendor_str.empty()) << "CPU vendor string should not be empty";
     EXPECT_GT(vendor_str.length(), 2u)
@@ -158,7 +158,7 @@ TEST(cpu, cpu_core_bind)
     }
 
 #elif defined(__APPLE__)
-    for(unsigned int i = 0; i < std::min(2u, list_len); ++i)
+    for(unsigned int i = 0; i < (std::min) (2u, list_len); ++i)
     {
         auto ec = cpu_core_bind(core_list[i]);
         EXPECT_EQ(ec, CPU_ERR_NOT_SUPPORTED)
@@ -231,34 +231,37 @@ TEST(cpu, cpu_id)
 TEST(cpu, cpu_pause)
 {
     SCOPED_TRACE("Testing cpu_pause");
-    
+
     // Test that cpu_pause executes without crashing
     for(int i = 0; i < 10; ++i)
     {
         cpu_pause();
     }
-    
+
     // Test with more iterations to ensure measurable time difference
     auto start = std::chrono::high_resolution_clock::now();
-    for(int i = 0; i < 10000; ++i)  // Increased iterations for measurable time
+    for(int i = 0; i < 10000; ++i) // Increased iterations for measurable time
     {
         cpu_pause();
     }
     auto end = std::chrono::high_resolution_clock::now();
-    
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    
+
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
     // cpu_pause should complete successfully (main requirement)
     SUCCEED() << "cpu_pause executed without errors";
-    
+
     // Optional timing check - don't fail if timing is not measurable
     if(duration.count() > 0)
     {
-        EXPECT_LT(duration.count(), 500000000) << "cpu_pause should not take excessively long (< 500ms)";
-    }
-    else
+        EXPECT_LT(duration.count(), 500000000)
+            << "cpu_pause should not take excessively long (< 500ms)";
+    } else
     {
-        std::cout << "Note: cpu_pause timing not measurable on this system (very fast execution)" << std::endl;
+        std::cout << "Note: cpu_pause timing not measurable on this system "
+                     "(very fast execution)"
+                  << std::endl;
     }
 }
 
@@ -282,43 +285,50 @@ TEST(cpu, cpu_nop)
 TEST(cpu, cpu_delay)
 {
     SCOPED_TRACE("Testing cpu_delay");
-    
+
     // Test that cpu_delay executes without crashing for various cycle counts
     std::vector<uint64_t> test_cycles = {1000, 10000, 100000, 1000000};
     for(uint64_t cycles : test_cycles)
     {
-        cpu_delay(cycles);  // Basic functionality test
+        cpu_delay(cycles); // Basic functionality test
     }
-    
+
     // Test with larger cycle count to ensure measurable delay
-    bool any_measurable = false;
-    std::vector<uint64_t> large_cycles = {10000000, 50000000, 100000000}; // 10M, 50M, 100M cycles
-    
+    bool                  any_measurable = false;
+    std::vector<uint64_t> large_cycles   = {10000000,
+                                            50000000,
+                                            100000000}; // 10M, 50M, 100M cycles
+
     for(uint64_t cycles : large_cycles)
     {
         auto start = std::chrono::high_resolution_clock::now();
         cpu_delay(cycles);
         auto end = std::chrono::high_resolution_clock::now();
-        
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        
+
+        auto duration =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
         if(duration.count() > 0)
         {
             any_measurable = true;
-            EXPECT_LT(duration.count(), 1000000000) << "Delay should not be excessive (< 1 second)";
+            EXPECT_LT(duration.count(), 1000000000)
+                << "Delay should not be excessive (< 1 second)";
             break; // Found a measurable delay, no need to test larger values
         }
     }
-    
+
     if(any_measurable)
     {
-        std::cout << "cpu_delay produced measurable timing with large cycle counts" << std::endl;
-    }
-    else
+        std::cout
+            << "cpu_delay produced measurable timing with large cycle counts"
+            << std::endl;
+    } else
     {
-        std::cout << "Note: cpu_delay timing not measurable on this system (very fast CPU or virtualized environment)" << std::endl;
+        std::cout << "Note: cpu_delay timing not measurable on this system "
+                     "(very fast CPU or virtualized environment)"
+                  << std::endl;
     }
-    
+
     // The main requirement is that cpu_delay completes without error
     SUCCEED() << "cpu_delay executed successfully for all test cases";
 }
@@ -577,7 +587,7 @@ TEST(cpu, cpu_pmu_cycle_counter_functionality)
     if(wall_time.count() > 0)
     {
         double cycles_per_microsecond = (double) pmu_cycles / wall_time.count();
-        
+
 #if defined(__APPLE__)
         // On macOS, mach_absolute_time returns time in nanoseconds (scaled by timebase),
         // not actual CPU cycles. The frequency is much lower than CPU clock speed.

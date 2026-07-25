@@ -26,6 +26,9 @@
 #include <functional>
 
 #if defined(_WIN32)
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <client/windows/handler/exception_handler.h>
 #elif __APPLE__

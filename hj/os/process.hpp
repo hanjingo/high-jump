@@ -30,6 +30,9 @@
 #include <cstring>
 
 #if defined(_WIN32)
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <tlhelp32.h>
 #else
@@ -104,15 +107,15 @@ inline child_t child(const std::string &cmd)
     STARTUPINFOA        si  = {sizeof(si)};
     PROCESS_INFORMATION pi  = {};
     BOOL                ret = CreateProcessA(nullptr,
-                              const_cast<char *>(cmd.c_str()),
-                              nullptr,
-                              nullptr,
-                              FALSE,
-                              0,
-                              nullptr,
-                              nullptr,
-                              &si,
-                              &pi);
+                                             const_cast<char *>(cmd.c_str()),
+                                             nullptr,
+                                             nullptr,
+                                             FALSE,
+                                             0,
+                                             nullptr,
+                                             nullptr,
+                                             &si,
+                                             &pi);
     if(ret)
     {
         CloseHandle(pi.hThread);
@@ -143,15 +146,15 @@ inline void daemon(const std::string &cmd)
     STARTUPINFOA        si  = {sizeof(si)};
     PROCESS_INFORMATION pi  = {};
     BOOL                ret = CreateProcessA(nullptr,
-                              const_cast<char *>(cmd.c_str()),
-                              nullptr,
-                              nullptr,
-                              FALSE,
-                              DETACHED_PROCESS,
-                              nullptr,
-                              nullptr,
-                              &si,
-                              &pi);
+                                             const_cast<char *>(cmd.c_str()),
+                                             nullptr,
+                                             nullptr,
+                                             FALSE,
+                                             DETACHED_PROCESS,
+                                             nullptr,
+                                             nullptr,
+                                             &si,
+                                             &pi);
     if(ret)
     {
         CloseHandle(pi.hProcess);

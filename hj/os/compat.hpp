@@ -38,6 +38,11 @@
 #endif
 #endif // HJ_CPP_VERSION
 
+// -------- avoid redefine std::min/std::max in windows ------------
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
+
 // -------- detect whether std::unary_function exists ------------
 #ifndef HJ_UNARY_FUNCTION_DEFINED
 // Historically std::unary_function was provided by the standard

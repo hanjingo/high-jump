@@ -36,6 +36,9 @@
 #include <regex>
 
 #ifdef _WIN32
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <windows.h>
 
 #else
@@ -50,7 +53,8 @@
 // environments. Many files in this project call strncpy_s(dest, destsz, src, count).
 // This implementation copies at most `count` bytes from `src` into `dest`,
 // ensures null-termination and never writes past `destsz` bytes.
-static inline int strncpy_s(char *dest, size_t destsz, const char *src, size_t count)
+static inline int
+strncpy_s(char *dest, size_t destsz, const char *src, size_t count)
 {
     if(dest == nullptr || src == nullptr || destsz == 0)
         return EINVAL;
@@ -152,7 +156,7 @@ utf8_to_wide_impl(std::string_view utf8_str) noexcept
         return std::nullopt;
 
     std::wstring result(size_needed, 0);
-    const int    converted = MultiByteToWideChar(CP_UTF8,
+    const int converted = MultiByteToWideChar(CP_UTF8,
                                               0,
                                               utf8_str.data(),
                                               static_cast<int>(utf8_str.size()),
@@ -183,7 +187,7 @@ wide_to_utf8_impl(std::wstring_view wide_str) noexcept
         return std::nullopt;
 
     std::string result(size_needed, 0);
-    const int   converted = WideCharToMultiByte(CP_UTF8,
+    const int converted = WideCharToMultiByte(CP_UTF8,
                                               0,
                                               wide_str.data(),
                                               static_cast<int>(wide_str.size()),

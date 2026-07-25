@@ -129,7 +129,7 @@ class batch
     void
     set_tokens(const token_t *tokens, int32_t n_tokens, int32_t start_pos = 0)
     {
-        int32_t safe_tokens = std::min(n_tokens, _capacity);
+        int32_t safe_tokens = (std::min) (n_tokens, _capacity);
         for(int32_t i = 0; i < safe_tokens; ++i)
         {
             _batch.token[i]     = tokens[i];

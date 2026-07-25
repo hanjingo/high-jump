@@ -1003,7 +1003,7 @@ class des
     {
         memset(dst, 0, dst_len);
         if(src && src_len > 0)
-            memcpy(dst, src, std::min(src_len, dst_len));
+            memcpy(dst, src, (std::min) (src_len, dst_len));
 
         unsigned char pad_val = static_cast<unsigned char>(dst_len - src_len);
         switch(pad_style)

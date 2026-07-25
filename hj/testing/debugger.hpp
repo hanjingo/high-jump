@@ -24,7 +24,7 @@
 #include <vector>
 #include <mutex>
 
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include <boost/asio.hpp>
 
 #ifndef DEBUG_BUF_SIZE

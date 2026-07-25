@@ -314,7 +314,7 @@ template <typename T>
 inline std::string bytes_to_string(const T &bytes, const size_t sz)
 {
     // Handle both containers with .data() and raw C arrays
-    if constexpr (std::is_array_v<T>)
+    if constexpr(std::is_array_v<T>)
         return std::string(reinterpret_cast<const char *>(bytes), sz);
     else
         return std::string(reinterpret_cast<const char *>(bytes.data()), sz);
@@ -325,7 +325,9 @@ inline T &string_to_bytes(T &bytes, const std::string &str)
 {
     static_assert(std::is_trivially_copyable<T>::value,
                   "T must be trivially copyable");
-    std::memcpy(bytes.data(), str.data(), std::min(str.size(), bytes.size()));
+    std::memcpy(bytes.data(),
+                str.data(),
+                (std::min) (str.size(), bytes.size()));
     return bytes;
 }
 
@@ -335,7 +337,7 @@ string_to_bytes(unsigned char *bytes, size_t &sz, const std::string &str)
     assert(bytes != nullptr && sz >= str.size()
            && "bytes pointer must not be null and size must be at least string "
               "size");
-    sz = std::min(str.size(), sz);
+    sz = (std::min) (str.size(), sz);
     std::memcpy(bytes, str.data(), sz);
     return bytes;
 }
@@ -345,7 +347,7 @@ inline char *string_to_bytes(char *bytes, size_t &sz, const std::string &str)
     assert(bytes != nullptr && sz >= str.size()
            && "bytes pointer must not be null and size must be at least string "
               "size");
-    sz = std::min(str.size(), sz);
+    sz = (std::min) (str.size(), sz);
     std::memcpy(bytes, str.data(), sz);
     return bytes;
 }

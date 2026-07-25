@@ -20,6 +20,9 @@
 #define TCP_SOCKET_HPP
 
 #ifdef _WIN32
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <WinSock2.h>
 #include <Windows.h>
 #endif
@@ -338,9 +341,9 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
 
         err_t err;
         auto  sz = boost::asio::read(*_sock,
-                                    buf,
-                                    boost::asio::transfer_at_least(least),
-                                    err);
+                                     buf,
+                                     boost::asio::transfer_at_least(least),
+                                     err);
         if(err.failed())
             assert(false);
 

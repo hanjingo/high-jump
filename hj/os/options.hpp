@@ -107,6 +107,9 @@ struct unary_function
 #include <chrono>
 
 #if defined(_WIN32)
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <io.h>
 #include <fcntl.h>
 #include <windows.h>

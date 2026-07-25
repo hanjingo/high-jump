@@ -60,7 +60,7 @@ class chain_buffer
             }
 
             size_t space   = _block_size - _blocks.back().size();
-            size_t to_copy = std::min(space, len);
+            size_t to_copy = (std::min) (space, len);
             _blocks.back().insert(_blocks.back().end(), p, p + to_copy);
             p += to_copy;
             len -= to_copy;
@@ -106,7 +106,7 @@ class chain_buffer
             }
 
             size_t avail   = blk.size() - pos;
-            size_t to_copy = std::min(avail, len);
+            size_t to_copy = (std::min) (avail, len);
             std::memcpy(p + copied, blk.data() + pos, to_copy);
             copied += to_copy;
             len -= to_copy;

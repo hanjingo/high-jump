@@ -104,7 +104,7 @@ class gzip
         const size_t MIN_ALLOC      = 4096;              // 4KB
         const size_t MAX_SAFE_ALLOC = 1024 * 1024 * 256; // 256MB
         if(max_output_sz > 0)
-            return std::min(max_output_sz, MAX_SAFE_ALLOC);
+            return (std::min) (max_output_sz, MAX_SAFE_ALLOC);
 
         if(src_sz == 0)
             return MIN_ALLOC;
@@ -112,7 +112,7 @@ class gzip
         size_t estimated =
             (src_sz <= MAX_SAFE_ALLOC / 4) ? src_sz * 4 : MAX_SAFE_ALLOC;
 
-        return std::max(MIN_ALLOC, std::min(estimated, MAX_SAFE_ALLOC));
+        return (std::max) (MIN_ALLOC, (std::min) (estimated, MAX_SAFE_ALLOC));
     }
 
     static err compress(

@@ -19,6 +19,9 @@
 #include <unordered_set>
 
 #if defined(_WIN32)
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <windows.h>
 
 #elif __APPLE__

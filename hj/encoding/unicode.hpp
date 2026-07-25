@@ -25,6 +25,9 @@
 
 #if (__cplusplus >= 201703L)
 #if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #endif
 #else

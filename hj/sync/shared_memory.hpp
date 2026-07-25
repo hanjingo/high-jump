@@ -26,6 +26,9 @@
 #include <fcntl.h>
 
 #if defined(_WIN32) || defined(_WIN64)
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <windows.h>
 #else
 #include <unistd.h>

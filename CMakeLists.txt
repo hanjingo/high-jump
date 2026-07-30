@@ -22,6 +22,7 @@ option(HJ_ENABLE_LIC "Enable license support" OFF)
 option(HJ_ENABLE_SINGLETON "Enable singleton support" OFF)
 option(HJ_ENABLE_TIMER "Enable timer support" OFF)
 option(HJ_ENABLE_HTTP "Enable HTTP support" OFF)
+option(HJ_ENABLE_HTTPS "Enable HTTPS support" OFF)
 option(HJ_ENABLE_ZMQ "Enable ZMQ support" OFF)
 option(HJ_ENABLE_UNIT_TEST "Enable unit test support" OFF)
 option(HJ_ENABLE_BENCHMARK "Enable benchmark support" OFF)
@@ -126,6 +127,7 @@ target_compile_definitions(hj INTERFACE
     $<$<BOOL:${HJ_ENABLE_SINGLETON}>:HJ_ENABLE_SINGLETON>
     $<$<BOOL:${HJ_ENABLE_TIMER}>:HJ_ENABLE_TIMER>
     $<$<BOOL:${HJ_ENABLE_HTTP}>:HJ_ENABLE_HTTP>
+    $<$<BOOL:${HJ_ENABLE_HTTPS}>:HJ_ENABLE_HTTPS>
     $<$<BOOL:${HJ_ENABLE_ZMQ}>:HJ_ENABLE_ZMQ>
     $<$<BOOL:${HJ_ENABLE_UNIT_TEST}>:HJ_ENABLE_UNIT_TEST>
     $<$<BOOL:${HJ_ENABLE_BENCHMARK}>:HJ_ENABLE_BENCHMARK>

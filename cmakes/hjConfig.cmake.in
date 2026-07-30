@@ -23,6 +23,8 @@ find_package(Boost REQUIRED COMPONENTS
     filesystem 
     algorithm
     stacktrace_basic
+    coroutine2
+    context
 )
 list(APPEND hj_LIBRARIES ${Boost_LIBRARIES})
 
@@ -94,6 +96,16 @@ if(@HJ_ENABLE_HTTP@)
         list(APPEND hj_LIBRARIES httplib::httplib)
 
         target_compile_definitions(hj INTERFACE HJ_ENABLE_HTTP)
+    endif()
+endif()
+
+# HTTPS library
+if(@HJ_ENABLE_HTTPS@)
+    find_package(httplib CONFIG QUIET)
+    if(httplib_FOUND)
+        list(APPEND hj_LIBRARIES httplib::httplib)
+
+        target_compile_definitions(hj INTERFACE HJ_ENABLE_HTTPS)
     endif()
 endif()
 

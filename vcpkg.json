@@ -101,6 +101,15 @@
           "features": ["cuda"]
         }
       ]
+    },
+    "https": {
+      "description": "Enable HTTPS support for cpp-httplib",
+      "dependencies": [
+        {
+          "name": "cpp-httplib",
+          "features": ["openssl"]
+        }
+      ]
     }
   },
   "overrides": [

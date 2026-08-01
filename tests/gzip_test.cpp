@@ -221,41 +221,41 @@ TEST_F(gzip, max_output_size_limit)
 
     size_t max_output_size   = test_data.size() * 2;
     auto   decompress_result = hj::gzip::decompress(decompressed,
-                                                  compressed.data(),
-                                                  compressed.size(),
-                                                  max_output_size);
+                                                    compressed.data(),
+                                                    compressed.size(),
+                                                    max_output_size);
     EXPECT_EQ(decompress_result, hj::gzip::err::ok);
     EXPECT_EQ(decompressed, test_data);
 }
 
 TEST_F(gzip, stream_compression)
 {
-    {
-        std::ofstream input_file("test_input.txt", std::ios::binary);
-        ASSERT_TRUE(input_file.is_open());
-        input_file.write(reinterpret_cast<const char *>(test_data.data()),
-                         test_data.size());
-        ASSERT_TRUE(input_file.good()) << "Failed to write test_input.txt";
-        input_file.flush();
-    }
+    std::stringstream in_stream(std::ios::binary | std::ios::in
+                                | std::ios::out);
+    std::stringstream out_stream(std::ios::binary | std::ios::in
+                                 | std::ios::out);
 
-    std::ifstream in_stream("test_input.txt", std::ios::binary);
-    std::ofstream out_stream("test_output.gz", std::ios::binary);
-    ASSERT_TRUE(in_stream.is_open());
-    ASSERT_TRUE(out_stream.is_open());
+    in_stream.write(reinterpret_cast<const char *>(test_data.data()),
+                    test_data.size());
+    in_stream.seekg(0, std::ios::beg);
 
     auto compress_result = hj::gzip::compress(out_stream, in_stream);
     EXPECT_EQ(compress_result, hj::gzip::err::ok);
 
-    in_stream.close();
-    out_stream.close();
-
-    std::ifstream compressed_file("test_output.gz",
-                                  std::ios::binary | std::ios::ate);
-    ASSERT_TRUE(compressed_file.is_open());
-    size_t compressed_size = compressed_file.tellg();
+    out_stream.seekg(0, std::ios::end);
+    size_t compressed_size = out_stream.tellg();
     EXPECT_GT(compressed_size, 0);
-    compressed_file.close();
+
+    out_stream.seekg(0, std::ios::beg);
+    std::stringstream decompress_stream(std::ios::binary | std::ios::in
+                                        | std::ios::out);
+    auto              decompress_result =
+        hj::gzip::decompress(decompress_stream, out_stream);
+    EXPECT_EQ(decompress_result, hj::gzip::err::ok);
+
+    decompress_stream.seekg(0, std::ios::end);
+    size_t decompressed_size = decompress_stream.tellg();
+    EXPECT_EQ(decompressed_size, test_data.size());
 }
 
 TEST_F(gzip, stream_decompression)

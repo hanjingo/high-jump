@@ -331,15 +331,7 @@ class vector_index
                 return false;
             }
 
-            T *typed_idx = dynamic_cast<T *>(idx);
-            if(typed_idx == nullptr)
-            {
-                std::cerr << "Error: Index type mismatch. Expected type: "
-                          << typeid(T).name() << std::endl;
-                delete idx;
-                return false;
-            }
-
+            T *typed_idx = static_cast<T *>(idx);
             T *old_index = _index;
             _index       = typed_idx;
             if(old_index)

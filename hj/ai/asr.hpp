@@ -15,6 +15,7 @@ namespace asr
 using ctx_t         = whisper_context;
 using full_params_t = whisper_full_params;
 using ctx_params_t  = whisper_context_params;
+using vad_params_t  = whisper_vad_params;
 using state_t       = whisper_state;
 
 class context

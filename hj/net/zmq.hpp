@@ -19,14 +19,17 @@
 #ifndef ZMQ_HPP
 #define ZMQ_HPP
 
-#include <string>
-#include <sstream>
-#include <iostream>
-#include <assert.h>
-#include <vector>
-#include <functional>
-#include <unordered_map>
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
 #include <cstring>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include <zmq.h>
 
@@ -35,61 +38,117 @@ namespace hj
 namespace zmq
 {
 
-class context
+// -----------------------------------------------------------------------------
+// Exception Handling
+// -----------------------------------------------------------------------------
+class zmq_error : public std::runtime_error
 {
   public:
+    explicit zmq_error(const std::string &prefix)
+        : std::runtime_error(prefix + ": " + zmq_strerror(zmq_errno()))
+        , _errnum(zmq_errno())
+    {
+    }
+
+    explicit zmq_error(const char *prefix)
+        : std::runtime_error(std::string(prefix) + ": "
+                             + zmq_strerror(zmq_errno()))
+        , _errnum(zmq_errno())
+    {
+    }
+
+    int error_number() const noexcept { return _errnum; }
+
+  private:
+    int _errnum;
+};
+
+// -----------------------------------------------------------------------------
+// Context (Managed with Shared Pointer)
+// -----------------------------------------------------------------------------
+class context : public std::enable_shared_from_this<context>
+{
+  public:
+    using ptr = std::shared_ptr<context>;
+
+    static ptr create() { return std::make_shared<context>(); }
+
     context()
         : _ctx(zmq_ctx_new())
     {
         if(!_ctx)
-            throw std::runtime_error("zmq_ctx_new failed");
+            throw zmq_error("zmq_ctx_new failed");
     }
-    context(const context &) = delete;
+
+    context(const context &)            = delete;
+    context &operator=(const context &) = delete;
+
     context(context &&other) noexcept
         : _ctx(other._ctx)
     {
         other._ctx = nullptr;
     }
 
-    ~context()
+    ~context() noexcept
     {
         if(_ctx)
             zmq_ctx_term(_ctx);
     }
 
-    context &operator=(const context &) = delete;
     context &operator=(context &&other) noexcept
     {
-        if(this == &other)
-            return *this;
-
-        if(_ctx)
-            zmq_ctx_term(_ctx);
-
-        _ctx       = other._ctx;
-        other._ctx = nullptr;
+        if(this != &other)
+        {
+            if(_ctx)
+                zmq_ctx_term(_ctx);
+            _ctx       = other._ctx;
+            other._ctx = nullptr;
+        }
         return *this;
     }
-    void *get() const { return _ctx; }
+
+    void *get() const noexcept { return _ctx; }
 
   private:
     void *_ctx;
-}; // context
+};
 
+// -----------------------------------------------------------------------------
+// Message
+// -----------------------------------------------------------------------------
 class message
 {
   public:
     message()
     {
         if(zmq_msg_init(&_msg) != 0)
-            throw std::runtime_error("zmq_msg_init failed");
+            throw zmq_error("zmq_msg_init failed");
     }
+
     explicit message(size_t size)
     {
         if(zmq_msg_init_size(&_msg, size) != 0)
-            throw std::runtime_error("zmq_msg_init_size failed");
+            throw zmq_error("zmq_msg_init_size failed");
     }
-    message(const message &) = delete;
+
+    explicit message(std::string_view sv)
+    {
+        if(zmq_msg_init_size(&_msg, sv.size()) != 0)
+            throw zmq_error("zmq_msg_init_size failed");
+        if(!sv.empty())
+            std::memcpy(data(), sv.data(), sv.size());
+    }
+
+    // Zero-Copy Custom Deallocator Message Construction
+    message(void *data_ptr, size_t size, zmq_free_fn *ffn, void *hint = nullptr)
+    {
+        if(zmq_msg_init_data(&_msg, data_ptr, size, ffn, hint) != 0)
+            throw zmq_error("zmq_msg_init_data failed");
+    }
+
+    message(const message &)            = delete;
+    message &operator=(const message &) = delete;
+
     message(message &&rhs) noexcept
     {
         zmq_msg_init(&_msg);
@@ -106,7 +165,6 @@ class message
             zmq_msg_init(&_msg);
             zmq_msg_move(&_msg, &rhs._msg);
         }
-
         return *this;
     }
 
@@ -117,139 +175,271 @@ class message
     {
         return zmq_msg_data(const_cast<zmq_msg_t *>(&_msg));
     }
-    size_t size() const noexcept { return zmq_msg_size(&_msg); }
+    size_t           size() const noexcept { return zmq_msg_size(&_msg); }
+    std::string_view to_string_view() const noexcept
+    {
+        return std::string_view(static_cast<const char *>(data()), size());
+    }
 
   private:
     zmq_msg_t _msg;
-}; // message
+};
 
-class socket
+// -----------------------------------------------------------------------------
+// Base Socket Class (Handles Option, Lifetime and Multipart Messaging)
+// -----------------------------------------------------------------------------
+class socket_base
 {
   public:
-    socket(void *ctx, int type)
-        : _sock(zmq_socket(ctx, type))
+    socket_base(context::ptr ctx, int type)
+        : _ctx(std::move(ctx))
+        , _sock(nullptr)
     {
+        if(!_ctx)
+            throw std::invalid_argument("context pointer cannot be null");
+
+        _sock = zmq_socket(_ctx->get(), type);
         if(!_sock)
-            throw std::runtime_error("zmq_socket failed");
-    }
-    socket(const socket &) = delete;
-    socket(socket &&other) noexcept
-        : _sock(other._sock)
-    {
-        other._sock = nullptr;
+            throw zmq_error("zmq_socket failed");
     }
 
-    ~socket()
+    virtual ~socket_base() noexcept
     {
         if(_sock)
             zmq_close(_sock);
     }
 
-    socket &operator=(const socket &) = delete;
-    socket &operator=(socket &&other) noexcept
+    socket_base(const socket_base &)            = delete;
+    socket_base &operator=(const socket_base &) = delete;
+
+    socket_base(socket_base &&other) noexcept
+        : _ctx(std::move(other._ctx))
+        , _sock(other._sock)
+    {
+        other._sock = nullptr;
+    }
+
+    socket_base &operator=(socket_base &&other) noexcept
     {
         if(this != &other)
         {
             if(_sock)
                 zmq_close(_sock);
+            _ctx        = std::move(other._ctx);
             _sock       = other._sock;
             other._sock = nullptr;
         }
         return *this;
     }
 
-    inline void *get() const noexcept { return _sock; }
+    void set_linger(int ms) { set_opt(ZMQ_LINGER, ms); }
 
-  private:
-    void *_sock;
+    int set_opt(int opt, int value)
+    {
+        return zmq_setsockopt(_sock, opt, &value, sizeof(value));
+    }
+
+    int set_opt(int opt, const void *value, size_t len)
+    {
+        return zmq_setsockopt(_sock, opt, value, len);
+    }
+
+    int get_opt(int opt, void *value, size_t *len) const
+    {
+        return zmq_getsockopt(_sock, opt, value, len);
+    }
+
+    void *get() const noexcept { return _sock; }
+
+    // Multi-part Sending Support
+    bool send_multipart(const std::vector<std::string_view> &parts,
+                        int                                  flags = 0)
+    {
+        for(size_t i = 0; i < parts.size(); ++i)
+        {
+            int send_flags = flags | ((i + 1 < parts.size()) ? ZMQ_SNDMORE : 0);
+            while(true)
+            {
+                int rc = zmq_send(_sock,
+                                  parts[i].data(),
+                                  parts[i].size(),
+                                  send_flags);
+                if(rc >= 0)
+                    break;
+                if(errno == EINTR)
+                    continue;
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Multi-part Receiving Support
+    bool recv_multipart(std::vector<std::string> &dst, int flags = 0)
+    {
+        dst.clear();
+        while(true)
+        {
+            zmq_msg_t msg;
+            if(zmq_msg_init(&msg) != 0)
+                return false;
+
+            int rc = zmq_msg_recv(&msg, _sock, flags);
+            if(rc < 0)
+            {
+                zmq_msg_close(&msg);
+                if(errno == EINTR)
+                    continue;
+                return false;
+            }
+
+            dst.emplace_back(static_cast<char *>(zmq_msg_data(&msg)),
+                             zmq_msg_size(&msg));
+
+            int64_t more     = 0;
+            size_t  more_len = sizeof(more);
+            zmq_getsockopt(_sock, ZMQ_RCVMORE, &more, &more_len);
+            zmq_msg_close(&msg);
+
+            if(!more)
+                break;
+        }
+        return true;
+    }
+
+  protected:
+    context::ptr _ctx;
+    void        *_sock;
 };
 
-class chan
+// Generic Socket
+class socket : public socket_base
 {
   public:
-    explicit chan(void *ctx, int flags = ZMQ_DONTWAIT)
-        : _flags{flags}
-        , _ctx{ctx}
-        , _sock_in{zmq_socket(ctx, ZMQ_PAIR)}
-        , _sock_out{zmq_socket(ctx, ZMQ_PAIR)}
+    socket(context::ptr ctx, int type)
+        : socket_base(std::move(ctx), type)
     {
-        if(!_sock_in || !_sock_out)
-            assert(false);
-
-        std::ostringstream ss;
-        ss << std::hex << this;
-        std::string id = "inproc://" + ss.str();
-        if(0 != zmq_bind(_sock_in, id.c_str())
-           || 0 != zmq_connect(_sock_out, id.c_str()))
-        {
-            zmq_close(_sock_in);
-            _sock_in = nullptr;
-
-            zmq_close(_sock_out);
-            _sock_out = nullptr;
-
-            assert(false);
-        }
-
-        zmq_msg_init(&_buf_in);
-        zmq_msg_init(&_buf_out);
     }
-    ~chan()
+};
+
+// -----------------------------------------------------------------------------
+// Channel Read End (r_chan)
+// -----------------------------------------------------------------------------
+class r_chan : public socket_base
+{
+  public:
+    explicit r_chan(context::ptr ctx, const std::string &addr, int flags = 0)
+        : socket_base(std::move(ctx), ZMQ_PAIR)
+        , _flags{flags}
+        , _addr{addr}
     {
-        if(_sock_in != nullptr)
-            zmq_close(_sock_in);
-
-        if(_sock_out != nullptr)
-            zmq_close(_sock_out);
-
-        zmq_msg_close(&_buf_in);
-        zmq_msg_close(&_buf_out);
+        if(0 != zmq_connect(_sock, addr.c_str()))
+            throw zmq_error("zmq_connect failed for r_chan");
     }
-
-    chan(const chan &)            = delete;
-    chan &operator=(const chan &) = delete;
-    chan(chan &&)                 = default;
-    chan &operator=(chan &&)      = default;
 
     inline bool operator>>(zmq_msg_t &dst)
     {
-        return zmq_msg_recv(&dst, _sock_out, _flags) >= 0;
+        while(true)
+        {
+            int rc = zmq_msg_recv(&dst, _sock, _flags);
+            if(rc >= 0)
+                return true;
+            if(errno == EINTR)
+                continue;
+
+            zmq_msg_close(&dst);
+            return false;
+        }
     }
 
     inline bool operator>>(std::string &dst)
     {
-        int nbytes = zmq_msg_recv(&_buf_out, _sock_out, _flags);
-        if(nbytes < 0)
+        zmq_msg_t msg;
+        if(zmq_msg_init(&msg) != 0)
             return false;
 
-        dst.reserve(nbytes);
-        dst.assign(static_cast<char *>(zmq_msg_data(&_buf_out)), nbytes);
-        return true;
+        while(true)
+        {
+            int nbytes = zmq_msg_recv(&msg, _sock, _flags);
+            if(nbytes >= 0)
+            {
+                dst.assign(static_cast<char *>(zmq_msg_data(&msg)), nbytes);
+                zmq_msg_close(&msg);
+                return true;
+            }
+            if(errno == EINTR)
+                continue;
+
+            zmq_msg_close(&msg);
+            return false;
+        }
+    }
+
+  private:
+    int         _flags;
+    std::string _addr;
+};
+
+// -----------------------------------------------------------------------------
+// Channel Write End (w_chan)
+// -----------------------------------------------------------------------------
+class w_chan : public socket_base
+{
+  public:
+    explicit w_chan(context::ptr ctx, int flags = 0)
+        : socket_base(ctx, ZMQ_PAIR)
+        , _flags{flags}
+    {
+        static std::atomic<uint64_t> chan_counter{0};
+        uint64_t                     id = ++chan_counter;
+
+        std::ostringstream ss;
+        ss << "inproc://chan_" << id;
+        _addr = ss.str();
+
+        if(0 != zmq_bind(_sock, _addr.c_str()))
+            throw zmq_error("zmq_bind failed for w_chan");
     }
 
     inline bool operator<<(zmq_msg_t &src)
     {
-        return zmq_msg_send(&src, _sock_in, _flags) >= 0;
+        while(true)
+        {
+            if(zmq_msg_send(&src, _sock, _flags) >= 0)
+                return true;
+            if(errno == EINTR)
+                continue;
+
+            zmq_msg_close(&src);
+            return false;
+        }
     }
 
-    inline bool operator<<(const std::string &src)
+    inline bool operator<<(std::string_view src)
     {
-        if(zmq_msg_init_size(&_buf_in, src.size()) != 0)
+        zmq_msg_t msg;
+        if(zmq_msg_init_size(&msg, src.size()) != 0)
             return false;
 
-        memcpy(zmq_msg_data(&_buf_in), src.data(), src.size());
-        return zmq_msg_send(&_buf_in, _sock_in, _flags) >= 0;
+        if(!src.empty())
+            std::memcpy(zmq_msg_data(&msg), src.data(), src.size());
+
+        return *this << msg;
+    }
+
+    inline r_chan make_r_chan(int flags = 0) const
+    {
+        return r_chan(_ctx, _addr, flags);
     }
 
   private:
-    int       _flags;
-    void     *_ctx;
-    void     *_sock_in;
-    void     *_sock_out;
-    zmq_msg_t _buf_out;
-    zmq_msg_t _buf_in;
-}; // chan
+    int         _flags;
+    std::string _addr;
+};
 
+// -----------------------------------------------------------------------------
+// Broker
+// -----------------------------------------------------------------------------
 class broker
 {
   public:
@@ -258,19 +448,31 @@ class broker
         , _front{front}
     {
     }
-    virtual ~broker()
-    {
-        if(_back != nullptr)
-            _back = nullptr;
 
-        if(_front != nullptr)
-            _front = nullptr;
-    }
+    ~broker() noexcept = default;
 
     broker(const broker &)            = delete;
     broker &operator=(const broker &) = delete;
-    broker(broker &&)                 = delete;
-    broker &operator=(broker &&)      = delete;
+
+    broker(broker &&rhs) noexcept
+        : _back{rhs._back}
+        , _front{rhs._front}
+    {
+        rhs._back  = nullptr;
+        rhs._front = nullptr;
+    }
+
+    broker &operator=(broker &&rhs) noexcept
+    {
+        if(this != &rhs)
+        {
+            _back      = rhs._back;
+            _front     = rhs._front;
+            rhs._back  = nullptr;
+            rhs._front = nullptr;
+        }
+        return *this;
+    }
 
     inline int bind(const std::string &back_addr, const std::string &front_addr)
     {
@@ -278,48 +480,36 @@ class broker
         if(ret != 0)
             return ret;
 
-        ret = zmq_bind(_front, front_addr.c_str());
-        if(ret != 0)
-            return ret;
-
-        return 0;
+        return zmq_bind(_front, front_addr.c_str());
     }
 
     inline int proxy(void *capture = nullptr)
     {
-        return zmq_proxy(_front, _back, capture);
+        while(true)
+        {
+            int rc = zmq_proxy(_front, _back, capture);
+            if(rc == 0)
+                return 0;
+            if(errno == EINTR)
+                continue;
+            return rc;
+        }
     }
 
   private:
     void *_back;
     void *_front;
-}; // broker
+};
 
-class consumer
+// -----------------------------------------------------------------------------
+// Consumer (PULL)
+// -----------------------------------------------------------------------------
+class consumer : public socket_base
 {
   public:
-    consumer(void *ctx)
-        : _ctx{ctx}
-        , _sock{zmq_socket(ctx, ZMQ_PULL)}
+    explicit consumer(context::ptr ctx)
+        : socket_base(std::move(ctx), ZMQ_PULL)
     {
-        zmq_msg_init(&_buf);
-    }
-    ~consumer()
-    {
-        zmq_close(_sock);
-        _sock = nullptr;
-
-        zmq_msg_close(&_buf);
-    }
-
-    consumer(const consumer &)            = delete;
-    consumer &operator=(const consumer &) = delete;
-    consumer(consumer &&)                 = delete;
-    consumer &operator=(consumer &&)      = delete;
-
-    inline int set_opt(const int opt, const int value)
-    {
-        return zmq_setsockopt(_sock, opt, &value, sizeof(value));
     }
 
     inline int connect(const std::string &addr)
@@ -332,55 +522,75 @@ class consumer
         return zmq_disconnect(_sock, addr.c_str());
     }
 
-    int pull(std::string &dst, int flags = 0)
+    inline int pull(std::string &dst, int flags = 0)
     {
-        zmq_msg_init(&_buf);
-        int nbytes = zmq_msg_recv(&_buf, _sock, flags);
-        if(nbytes < 0)
-            return nbytes;
+        zmq_msg_t msg;
+        if(zmq_msg_init(&msg) != 0)
+            return -1;
 
-        dst.reserve(nbytes);
-        dst.assign(static_cast<char *>(zmq_msg_data(&_buf)), nbytes);
-        return nbytes;
+        while(true)
+        {
+            int nbytes = zmq_msg_recv(&msg, _sock, flags);
+            if(nbytes >= 0)
+            {
+                dst.assign(static_cast<char *>(zmq_msg_data(&msg)), nbytes);
+                zmq_msg_close(&msg);
+                return nbytes;
+            }
+            if(errno == EINTR)
+                continue;
+
+            zmq_msg_close(&msg);
+            return -1;
+        }
     }
 
     inline int pull(zmq_msg_t &data, int flags = 0)
     {
-        return zmq_msg_recv(&data, _sock, flags);
+        while(true)
+        {
+            int rc = zmq_msg_recv(&data, _sock, flags);
+            if(rc >= 0 || errno != EINTR)
+                return rc;
+        }
     }
 
-  private:
-    void     *_ctx;
-    void     *_sock;
-    zmq_msg_t _buf;
-}; // consumer
+    inline void safe_pull(w_chan &ch, const int flags = 0)
+    {
+        while(true)
+        {
+            zmq_msg_t buf;
+            if(zmq_msg_init(&buf) != 0)
+                break;
 
-class producer
+            if(pull(buf, flags) < 0)
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            bool is_poison_pill = (zmq_msg_size(&buf) == 0);
+            if(!ch.operator<<(buf))
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            if(is_poison_pill)
+                break;
+        }
+    }
+};
+
+// -----------------------------------------------------------------------------
+// Producer (PUSH)
+// -----------------------------------------------------------------------------
+class producer : public socket_base
 {
   public:
-    producer(void *ctx)
-        : _ctx{ctx}
-        , _sock{zmq_socket(ctx, ZMQ_PUSH)}
-        , _ch{zmq::chan(ctx)}
+    explicit producer(context::ptr ctx)
+        : socket_base(std::move(ctx), ZMQ_PUSH)
     {
-        zmq_msg_init(&_buf);
-    }
-    ~producer()
-    {
-        zmq_close(_sock);
-        _sock = nullptr;
-
-        zmq_msg_close(&_buf);
-    }
-
-    producer(const producer &)            = delete;
-    producer &operator=(const producer &) = delete;
-    producer(producer &&)                 = delete;
-    producer &operator=(producer &&)      = delete;
-
-    inline int set_opt(const int opt, const int value)
-    {
-        return zmq_setsockopt(_sock, opt, &value, sizeof(value));
     }
 
     inline int bind(const std::string &addr)
@@ -388,63 +598,63 @@ class producer
         return zmq_bind(_sock, addr.c_str());
     }
 
-    inline int push(const std::string &str, const int flags = 0)
+    inline int push(std::string_view str, const int flags = 0)
     {
-        return zmq_send(_sock, str.data(), str.size(), flags);
+        while(true)
+        {
+            int rc = zmq_send(_sock, str.data(), str.size(), flags);
+            if(rc >= 0 || errno != EINTR)
+                return rc;
+        }
     }
 
     inline int push(zmq_msg_t &data, int flags = 0)
     {
-        return zmq_msg_send(&data, _sock, flags);
+        while(true)
+        {
+            int rc = zmq_msg_send(&data, _sock, flags);
+            if(rc >= 0 || errno != EINTR)
+                return rc;
+        }
     }
 
-    int safe_push(const std::string &str, int flags = 0)
+    inline void safe_push(r_chan &ch, const int flags = 0)
     {
-        _ch << str;
-        _ch >> _buf;
-        return zmq_msg_send(&_buf, _sock, flags);
+        while(true)
+        {
+            zmq_msg_t buf;
+            if(zmq_msg_init(&buf) != 0)
+                break;
+
+            if(!ch.operator>>(buf))
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            bool is_poison_pill = (zmq_msg_size(&buf) == 0);
+
+            if(push(buf, flags) < 0)
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            if(is_poison_pill)
+                break;
+        }
     }
+};
 
-    int safe_push(zmq_msg_t &data, int flags = 0)
-    {
-        _ch << data;
-        _ch >> _buf;
-        return zmq_msg_send(&_buf, _sock, flags);
-    }
-
-  private:
-    void         *_ctx;
-    void         *_sock;
-    hj::zmq::chan _ch;
-    zmq_msg_t     _buf;
-}; // producer
-
-class publisher
+// -----------------------------------------------------------------------------
+// Publisher (PUB)
+// -----------------------------------------------------------------------------
+class publisher : public socket_base
 {
   public:
-    publisher(void *ctx)
-        : _ctx{ctx}
-        , _sock{zmq_socket(ctx, ZMQ_PUB)}
-        , _ch{hj::zmq::chan(ctx)}
+    explicit publisher(context::ptr ctx)
+        : socket_base(std::move(ctx), ZMQ_PUB)
     {
-        zmq_msg_init(&_buf);
-    }
-    ~publisher()
-    {
-        zmq_close(_sock);
-        _sock = nullptr;
-
-        zmq_msg_close(&_buf);
-    }
-
-    publisher(const publisher &)            = delete;
-    publisher &operator=(const publisher &) = delete;
-    publisher(publisher &&)                 = delete;
-    publisher &operator=(publisher &&)      = delete;
-
-    inline int set_opt(const int opt, const int value)
-    {
-        return zmq_setsockopt(_sock, opt, &value, sizeof(value));
     }
 
     inline int bind(const std::string &addr)
@@ -457,62 +667,63 @@ class publisher
         return zmq_connect(_sock, addr.c_str());
     }
 
-    inline int pub(const std::string &str, const int flags = 0)
+    inline int pub(std::string_view str, const int flags = 0)
     {
-        return zmq_send(_sock, str.data(), str.size(), flags);
+        while(true)
+        {
+            int rc = zmq_send(_sock, str.data(), str.size(), flags);
+            if(rc >= 0 || errno != EINTR)
+                return rc;
+        }
     }
 
     inline int pub(zmq_msg_t &data, int flags = 0)
     {
-        return zmq_msg_send(&data, _sock, flags);
+        while(true)
+        {
+            int rc = zmq_msg_send(&data, _sock, flags);
+            if(rc >= 0 || errno != EINTR)
+                return rc;
+        }
     }
 
-    int safe_pub(const std::string &str, int flags = 0)
+    inline void safe_pub(r_chan &ch, const int flags = 0)
     {
-        _ch << str;
-        _ch >> _buf;
-        return zmq_msg_send(&_buf, _sock, flags);
+        while(true)
+        {
+            zmq_msg_t buf;
+            if(zmq_msg_init(&buf) != 0)
+                break;
+
+            if(!ch.operator>>(buf))
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            bool is_poison_pill = (zmq_msg_size(&buf) == 0);
+
+            if(pub(buf, flags) < 0)
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            if(is_poison_pill)
+                break;
+        }
     }
+};
 
-    int safe_pub(zmq_msg_t &data, int flags = 0)
-    {
-        _ch << data;
-        _ch >> _buf;
-        return zmq_msg_send(&_buf, _sock, flags);
-    }
-
-  private:
-    void         *_ctx;
-    void         *_sock;
-    hj::zmq::chan _ch;
-    zmq_msg_t     _buf;
-}; // publisher
-
-class subscriber
+// -----------------------------------------------------------------------------
+// Subscriber (SUB)
+// -----------------------------------------------------------------------------
+class subscriber : public socket_base
 {
   public:
-    subscriber(void *ctx)
-        : _ctx{ctx}
-        , _sock{zmq_socket(ctx, ZMQ_SUB)}
+    explicit subscriber(context::ptr ctx)
+        : socket_base(std::move(ctx), ZMQ_SUB)
     {
-        zmq_msg_init(&_buf);
-    }
-    ~subscriber()
-    {
-        zmq_close(_sock);
-        _sock = nullptr;
-
-        zmq_msg_close(&_buf);
-    }
-
-    subscriber(const subscriber &)            = delete;
-    subscriber &operator=(const subscriber &) = delete;
-    subscriber(subscriber &&)                 = delete;
-    subscriber &operator=(subscriber &&)      = delete;
-
-    inline int set_opt(const int opt, const int value)
-    {
-        return zmq_setsockopt(_sock, opt, &value, sizeof(value));
     }
 
     inline int connect(const std::string &addr)
@@ -525,38 +736,247 @@ class subscriber
         return zmq_disconnect(_sock, addr.c_str());
     }
 
-    inline int sub(const std::string &topic)
+    inline int sub(std::string_view topic)
     {
-        return zmq_setsockopt(_sock,
-                              ZMQ_SUBSCRIBE,
-                              topic.c_str(),
-                              topic.length());
+        return zmq_setsockopt(_sock, ZMQ_SUBSCRIBE, topic.data(), topic.size());
     }
 
-    int recv(std::string &dst, int flags = 0)
+    inline int sub(const void *topic, size_t len)
     {
-        zmq_msg_init(&_buf);
-        int nbytes = zmq_msg_recv(&_buf, _sock, flags);
-        if(nbytes < 0)
-            return nbytes;
+        return zmq_setsockopt(_sock, ZMQ_SUBSCRIBE, topic, len);
+    }
 
-        dst.reserve(nbytes);
-        dst.assign(static_cast<char *>(zmq_msg_data(&_buf)), nbytes);
-        return nbytes;
+    inline int unsub(std::string_view topic)
+    {
+        return zmq_setsockopt(_sock,
+                              ZMQ_UNSUBSCRIBE,
+                              topic.data(),
+                              topic.size());
+    }
+
+    inline int unsub(const void *topic, size_t len)
+    {
+        return zmq_setsockopt(_sock, ZMQ_UNSUBSCRIBE, topic, len);
+    }
+
+    inline int recv(std::string &dst, int flags = 0)
+    {
+        zmq_msg_t msg;
+        if(zmq_msg_init(&msg) != 0)
+            return -1;
+
+        while(true)
+        {
+            int nbytes = zmq_msg_recv(&msg, _sock, flags);
+            if(nbytes >= 0)
+            {
+                dst.assign(static_cast<char *>(zmq_msg_data(&msg)), nbytes);
+                zmq_msg_close(&msg);
+                return nbytes;
+            }
+            if(errno == EINTR)
+                continue;
+
+            zmq_msg_close(&msg);
+            return -1;
+        }
     }
 
     inline int recv(zmq_msg_t &data, int flags = 0)
     {
-        return zmq_msg_recv(&data, _sock, flags);
+        while(true)
+        {
+            int rc = zmq_msg_recv(&data, _sock, flags);
+            if(rc >= 0 || errno != EINTR)
+                return rc;
+        }
+    }
+
+    inline void safe_recv(w_chan &ch, const int flags = 0)
+    {
+        while(true)
+        {
+            zmq_msg_t buf;
+            if(zmq_msg_init(&buf) != 0)
+                break;
+
+            if(recv(buf, flags) < 0)
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            bool is_poison_pill = (zmq_msg_size(&buf) == 0);
+
+            if(!ch.operator<<(buf))
+            {
+                zmq_msg_close(&buf);
+                break;
+            }
+
+            if(is_poison_pill)
+                break;
+        }
+    }
+};
+
+// -----------------------------------------------------------------------------
+// Poller
+// -----------------------------------------------------------------------------
+class poller
+{
+  public:
+    poller()  = default;
+    ~poller() = default; // Non-virtual destructor
+
+    poller(const poller &)            = delete;
+    poller &operator=(const poller &) = delete;
+
+    poller(poller &&other) noexcept
+        : _items(std::move(other._items))
+        , _user_datas(std::move(other._user_datas))
+    {
+    }
+
+    poller &operator=(poller &&other) noexcept
+    {
+        if(this != &other)
+        {
+            _items      = std::move(other._items);
+            _user_datas = std::move(other._user_datas);
+        }
+        return *this;
+    }
+
+    inline size_t size() const noexcept { return _items.size(); }
+
+    template <typename T = void>
+    inline int add(const socket_base &sock,
+                   T                 *user_data = nullptr,
+                   short              events    = ZMQ_POLLIN | ZMQ_POLLERR)
+    {
+        return _add(sock.get(), 0, events, static_cast<void *>(user_data));
+    }
+
+    template <typename T = void>
+    inline int add(zmq_fd_t fd, T *user_data, short events)
+    {
+        return _add(nullptr, fd, events, static_cast<void *>(user_data));
+    }
+
+    inline int modify(const socket_base &sock, short events)
+    {
+        return _modify(sock.get(), 0, events);
+    }
+
+    inline int modify(zmq_fd_t fd, short events)
+    {
+        return _modify(nullptr, fd, events);
+    }
+
+    inline int remove(const socket_base &sock)
+    {
+        return _remove(sock.get(), 0);
+    }
+    inline int remove(zmq_fd_t fd) { return _remove(nullptr, fd); }
+
+    inline int poll(long timeout_ms = -1)
+    {
+        if(_items.empty())
+            return 0;
+
+        while(true)
+        {
+            int rc = zmq_poll(_items.data(),
+                              static_cast<int>(_items.size()),
+                              timeout_ms);
+            if(rc >= 0 || errno != EINTR)
+                return rc;
+        }
+    }
+
+    inline int wait(long timeout_ms = -1) { return poll(timeout_ms); }
+
+    template <typename T = void>
+    inline int wait_for(T **user_data, short *events, long timeout_ms = -1)
+    {
+        int rc = poll(timeout_ms);
+        if(rc <= 0)
+            return rc;
+
+        for(size_t i = 0; i < _items.size(); ++i)
+        {
+            if(_items[i].revents == 0)
+                continue;
+
+            if(user_data)
+                *user_data = static_cast<T *>(_user_datas[i]);
+            if(events)
+                *events = _items[i].revents;
+            break;
+        }
+        return rc;
+    }
+
+    inline const std::vector<zmq_pollitem_t> &items() const noexcept
+    {
+        return _items;
+    }
+
+    inline void *user_data(size_t index) const noexcept
+    {
+        return _user_datas[index];
     }
 
   private:
-    void     *_ctx;
-    void     *_sock;
-    zmq_msg_t _buf;
-}; // subscriber
+    inline int
+    _add(void *socket_ptr, zmq_fd_t fd, short events, void *user_data)
+    {
+        zmq_pollitem_t item;
+        item.socket  = socket_ptr;
+        item.fd      = fd;
+        item.events  = events;
+        item.revents = 0;
+
+        _items.push_back(item);
+        _user_datas.push_back(user_data);
+        return 0;
+    }
+
+    inline int _modify(void *socket_ptr, zmq_fd_t fd, short events)
+    {
+        for(size_t i = 0; i < _items.size(); ++i)
+        {
+            if((socket_ptr && _items[i].socket == socket_ptr)
+               || (!socket_ptr && _items[i].fd == fd))
+            {
+                _items[i].events = events;
+                return 0;
+            }
+        }
+        return -1;
+    }
+
+    inline int _remove(void *socket_ptr, zmq_fd_t fd)
+    {
+        for(size_t i = 0; i < _items.size(); ++i)
+        {
+            if((socket_ptr && _items[i].socket == socket_ptr)
+               || (!socket_ptr && _items[i].fd == fd))
+            {
+                _items.erase(_items.begin() + i);
+                _user_datas.erase(_user_datas.begin() + i);
+                return 0;
+            }
+        }
+        return -1;
+    }
+
+    std::vector<zmq_pollitem_t> _items;
+    std::vector<void *>         _user_datas;
+};
 
 } // namespace zmq
 } // namespace hj
 
-#endif
+#endif // ZMQ_HPP

@@ -20,15 +20,22 @@
 #define FMT_HPP
 
 #include <fmt/core.h>
+#include <fmt/ranges.h>
 
 namespace hj
 {
 
 template <typename... Args>
-std::string fmt(const char *style, Args &&...args)
+[[nodiscard]] inline std::string format(fmt::format_string<Args...> style,
+                                        Args &&...args)
 {
-    return fmt::vformat(style,
-                        fmt::make_format_args(std::forward<Args>(args)...));
+    return fmt::format(style, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+[[nodiscard]] inline std::string vformat(fmt::string_view style, Args &&...args)
+{
+    return fmt::vformat(style, fmt::make_format_args(args...));
 }
 
 } // namespace hj

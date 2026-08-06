@@ -23,9 +23,8 @@ TEST(zmq, context_and_message_basic)
 
     hj::zmq::message msg3 = std::move(msg2);
     ASSERT_EQ(msg3.size(), 32u);
-    ASSERT_EQ(msg2.size(), 0u); // 原对象被 reset
+    ASSERT_EQ(msg2.size(), 0u);
 
-    // 测试Zero-Copy自定义释放回调
     static bool freed = false;
     {
         char            *buffer = new char[100];
@@ -47,8 +46,6 @@ TEST(zmq, context_and_message_basic)
 TEST(zmq, exception_handling)
 {
     auto ctx = hj::zmq::context::create();
-
-    // 测试连接非法地址时抛出 hj::zmq::zmq_error
     EXPECT_THROW(
         { hj::zmq::r_chan r_ch(ctx, "invalid_protocol://address"); },
         hj::zmq::zmq_error);

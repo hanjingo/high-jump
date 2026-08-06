@@ -31,7 +31,8 @@ TEST(rom, load)
 {
     rom_t       _rom;
     std::string test_content = "ROMDATA123";
-    std::string test_file = (std::filesystem::current_path() / "test.rom").string();
+    std::string test_file =
+        (std::filesystem::current_path() / "test1.rom").string();
 
     std::filesystem::remove_all(test_file);
     create_test_rom(test_file.c_str(), test_content.c_str());
@@ -51,8 +52,9 @@ TEST(rom, read)
 {
     rom_t       _rom;
     std::string test_content = "ROMDATA123";
-    std::string test_file = (std::filesystem::current_path() / "test.rom").string();
-    
+    std::string test_file =
+        (std::filesystem::current_path() / "test2.rom").string();
+
     std::filesystem::remove_all(test_file);
     create_test_rom(test_file.c_str(), test_content.c_str());
     rom_init(&_rom);
@@ -77,14 +79,16 @@ TEST(rom, read_offset_out_of_range)
 {
     rom_t       _rom;
     std::string test_content = "ROMDATA123";
-    std::string test_file = (std::filesystem::current_path() / "test.rom").string();
-    
+    std::string test_file =
+        (std::filesystem::current_path() / "test3.rom").string();
+
     std::filesystem::remove_all(test_file);
     create_test_rom(test_file.c_str(), test_content.c_str());
     rom_init(&_rom);
     if(!std::filesystem::exists(test_file))
     {
-        GTEST_SKIP() << "skip test rom::read_offset_out_of_range create file failed";
+        GTEST_SKIP()
+            << "skip test rom::read_offset_out_of_range create file failed";
     }
 
     ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
@@ -98,8 +102,9 @@ TEST(rom, load_invalid_args)
 {
     rom_t       _rom;
     std::string test_content = "ROMDATA123";
-    std::string test_file = (std::filesystem::current_path() / "test.rom").string();
-    
+    std::string test_file =
+        (std::filesystem::current_path() / "test4.rom").string();
+
     std::filesystem::remove_all(test_file);
     create_test_rom(test_file.c_str(), test_content.c_str());
     rom_init(&_rom);
@@ -117,8 +122,8 @@ TEST(rom, load_invalid_args)
 // {
 //     rom_t       _rom;
 //     std::string test_content = "ROMDATA123";
-//     std::string test_file = (std::filesystem::current_path() / "test.rom").string();
-    
+//     std::string test_file = (std::filesystem::current_path() / "test5.rom").string();
+
 //     std::filesystem::remove_all(test_file);
 //     create_test_rom(test_file.c_str(), test_content.c_str());
 //     rom_init(&_rom);

@@ -18,6 +18,10 @@
 #ifndef COUNTER_HPP
 #define COUNTER_HPP
 
+#if defined(_WIN32) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
+
 #include <limits>
 #include <atomic>
 #include <mutex>
@@ -40,22 +44,22 @@ class counter
         : _value{value}
         , _step{1}
     {
-        _min = std::numeric_limits<T>::min();
-        _max = std::numeric_limits<T>::max();
+        _min = (std::numeric_limits<T>::min)();
+        _max = (std::numeric_limits<T>::max)();
     }
     counter(const T value, const T min)
         : _value{value}
         , _step{1}
         , _min{min}
     {
-        _max = std::numeric_limits<T>::max();
+        _max = (std::numeric_limits<T>::max)();
     }
     counter(const T value, const T min, const T step)
         : _value{value}
         , _step{step}
         , _min{min}
     {
-        _max = std::numeric_limits<T>::max();
+        _max = (std::numeric_limits<T>::max)();
     }
     counter(const T value, const T min, const T max, const T step)
         : _value{value}
@@ -279,8 +283,8 @@ class counter
 
     inline counter &operator=(const T &value)
     {
-        _min  = std::numeric_limits<T>::min();
-        _max  = std::numeric_limits<T>::max();
+        _min  = (std::numeric_limits<T>::min)();
+        _max  = (std::numeric_limits<T>::max)();
         _step = 1;
 
         T tmp = _value.load();

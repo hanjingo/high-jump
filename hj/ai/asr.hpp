@@ -114,7 +114,7 @@ class context
             return -1;
 
         if(samples.size()
-           > static_cast<size_t>(std::numeric_limits<int>::max()))
+           > static_cast<size_t>((std::numeric_limits<int>::max)()))
             return -1;
 
         return whisper_full(_ctx,

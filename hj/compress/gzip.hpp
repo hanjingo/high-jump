@@ -35,7 +35,7 @@ namespace hj
 static constexpr int GZIP_WINDOW_BITS =
     15 + 16; // 15 for window size, 16 for gzip format
 static constexpr size_t GZIP_MAX_SAFE_SZ =
-    std::numeric_limits<size_t>::max() - 1000;
+    (std::numeric_limits<size_t>::max()) - 1000;
 
 class gzip
 {

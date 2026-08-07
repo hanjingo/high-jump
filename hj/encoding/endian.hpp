@@ -63,7 +63,7 @@ inline uint64_t ENDIAN_SWAP64(uint64_t x)
 namespace hj
 {
 
-bool is_big_endian() noexcept
+inline bool is_big_endian() noexcept
 {
     union
     {

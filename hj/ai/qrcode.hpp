@@ -169,14 +169,14 @@ class builder
             return detail::make_err(error_code::encode_failed);
 
         // calculate image size and check for overflow
-        const uint64_t side = static_cast<uint64_t>(modules)
-                              + 2ULL * static_cast<uint64_t>(margin);
+        const uint64_t side       = static_cast<uint64_t>(modules)
+                                    + 2ULL * static_cast<uint64_t>(margin);
         const uint64_t img_size64 = side * static_cast<uint64_t>(scale);
         if(img_size64 == 0)
             return detail::make_err(error_code::encode_failed);
 
         const uint64_t max_sz =
-            static_cast<uint64_t>(std::numeric_limits<size_t>::max());
+            static_cast<uint64_t>((std::numeric_limits<size_t>::max)());
         // if img_size64 cannot fit into size_t, fail
         if(img_size64 > max_sz)
             return detail::make_err(error_code::encode_failed);

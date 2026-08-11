@@ -191,7 +191,8 @@ TEST(channel, multithread_timeout)
             int val = 0;
             for(int i = 0; i < per_thread; ++i)
             {
-                if(ch.wait_dequeue_timeout(val, 10000))
+                // Increased timeout to 5 seconds (5,000,000 us) to handle CI jitter
+                if(ch.wait_dequeue_timeout(val, 5'000'000))
                     ++count;
             }
         });

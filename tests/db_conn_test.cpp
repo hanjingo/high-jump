@@ -4,10 +4,9 @@
 
 #include <cstdio>
 #include <string>
-#include <vector>
-#include <future>
-#include <utility>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 using namespace hj;
 
@@ -33,14 +32,6 @@ class raw_sqlite_conn : public db_conn
     }
 
     bool is_open() const { return _db != nullptr; }
-
-    std::string id() const override { return "sqlite3_raw"; }
-
-    err_t begin() override { return exec_simple("BEGIN TRANSACTION;"); }
-
-    err_t commit() override { return exec_simple("COMMIT;"); }
-
-    err_t rollback() override { return exec_simple("ROLLBACK;"); }
 
   protected:
     exec_result exec_impl(std::string_view sql,
@@ -81,16 +72,6 @@ class raw_sqlite_conn : public db_conn
             res.ec = std::make_error_code(std::errc::io_error);
         }
         return res;
-    }
-
-    void exec_async_impl(exec_cb_t              cb,
-                         std::string            sql,
-                         std::vector<out_val_t> args) override
-    {
-        auto        in_args = to_in_args(args);
-        exec_result res     = exec_impl(sql, in_args.data(), in_args.size());
-        if(cb)
-            cb(res);
     }
 
     err_t query_impl(ret_t           &outs,
@@ -175,16 +156,11 @@ class raw_sqlite_conn : public db_conn
         return err_t{};
     }
 
-    void query_async_impl(query_cb_t             cb,
-                          std::string            sql,
-                          std::vector<out_val_t> args) override
-    {
-        auto  in_args = to_in_args(args);
-        ret_t outs;
-        err_t err = query_impl(outs, sql, in_args.data(), in_args.size());
-        if(cb)
-            cb(err, std::move(outs));
-    }
+    err_t begin_impl() override { return exec_simple("BEGIN TRANSACTION;"); }
+
+    err_t commit_impl() override { return exec_simple("COMMIT;"); }
+
+    err_t rollback_impl() override { return exec_simple("ROLLBACK;"); }
 
   private:
     err_t exec_simple(const char *sql)
@@ -235,31 +211,6 @@ class raw_sqlite_conn : public db_conn
                 },
                 args[i]);
         }
-    }
-
-    std::vector<val_in_t> to_in_args(const std::vector<out_val_t> &args)
-    {
-        std::vector<val_in_t> in_args;
-        in_args.reserve(args.size());
-        for(const auto &v : args)
-        {
-            std::visit(
-                [&in_args](auto &&arg) {
-                    using T = std::decay_t<decltype(arg)>;
-                    if constexpr(std::is_same_v<T, std::nullptr_t>)
-                        in_args.push_back(nullptr);
-                    else if constexpr(std::is_same_v<T, int64_t>)
-                        in_args.push_back(arg);
-                    else if constexpr(std::is_same_v<T, double>)
-                        in_args.push_back(arg);
-                    else if constexpr(std::is_same_v<T, std::string>)
-                        in_args.push_back(std::string_view(arg));
-                    else if constexpr(std::is_same_v<T, blob_t>)
-                        in_args.push_back(blob_view{arg.data(), arg.size()});
-                },
-                v);
-        }
-        return in_args;
     }
 
     sqlite3 *_db{nullptr};
@@ -410,48 +361,41 @@ TEST(db_conn, transaction)
     std::remove("ConnTransTest.db");
 }
 
-TEST(db_conn, async_operations)
+TEST(db_conn, trans_guard)
 {
     if(!_is_sqlite_conn_valid())
         GTEST_SKIP() << "sqlite not available";
 
     raw_sqlite_conn db;
-    ASSERT_TRUE(db.open("ConnAsyncTest.db"));
+    ASSERT_TRUE(db.open("ConnTransGuardTest.db"));
     db_conn &conn = db;
 
-    conn.exec("DROP TABLE IF EXISTS t_async;");
-    conn.exec("CREATE TABLE t_async (id INTEGER PRIMARY KEY, val TEXT);");
+    conn.exec("DROP TABLE IF EXISTS t_guard;");
+    conn.exec("CREATE TABLE t_guard (id INTEGER PRIMARY KEY, val TEXT);");
 
-    std::promise<db_conn::exec_result> exec_prom;
-    auto                               exec_fut = exec_prom.get_future();
+    // 测试 1: 未显式 commit，作用域结束时 RAII 自动回滚
+    {
+        db_conn::trans_guard guard(conn);
+        conn.exec("INSERT INTO t_guard (val) VALUES ('should_rollback');");
+    }
 
-    conn.exec_async(
-        [&exec_prom](db_conn::exec_result res) { exec_prom.set_value(res); },
-        "INSERT INTO t_async (id, val) VALUES (?, ?);",
-        200LL,
-        "async_value");
+    db_conn::ret_t outs;
+    conn.query(outs, "SELECT * FROM t_guard;");
+    EXPECT_TRUE(outs.empty());
 
-    auto exec_res = exec_fut.get();
-    EXPECT_FALSE(exec_res.ec);
-    EXPECT_EQ(exec_res.affected_rows, 1);
+    // 测试 2: 显式调用 commit，数据成功提交
+    {
+        db_conn::trans_guard guard(conn);
+        conn.exec("INSERT INTO t_guard (val) VALUES ('should_commit');");
+        EXPECT_FALSE(guard.commit());
+    }
 
-    std::promise<std::pair<db_conn::err_t, db_conn::ret_t>> query_prom;
-    auto query_fut = query_prom.get_future();
-
-    conn.query_async(
-        [&query_prom](db_conn::err_t ec, db_conn::ret_t outs) {
-            query_prom.set_value({ec, std::move(outs)});
-        },
-        "SELECT val FROM t_async WHERE id = ?;",
-        200LL);
-
-    auto [q_err, q_outs] = query_fut.get();
-    EXPECT_FALSE(q_err);
-    ASSERT_EQ(q_outs.rows(), 1u);
-    EXPECT_EQ(q_outs.get_or<std::string>(0, 0, ""), "async_value");
+    conn.query(outs, "SELECT val FROM t_guard;");
+    ASSERT_EQ(outs.rows(), 1u);
+    EXPECT_EQ(outs.get_or<std::string>(0, 0, ""), "should_commit");
 
     db.close();
-    std::remove("ConnAsyncTest.db");
+    std::remove("ConnTransGuardTest.db");
 }
 
 TEST(db_conn, error_handling)

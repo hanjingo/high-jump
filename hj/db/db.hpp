@@ -6,6 +6,7 @@
 #endif
 
 #include <hj/db/db_conn_pool.hpp>
+#include <hj/db/db_conn.hpp>
 
 #ifdef HJ_ENABLE_REDIS
 #include <hj/db/redis.hpp>

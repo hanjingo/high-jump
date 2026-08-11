@@ -20,17 +20,15 @@
 #define DB_CONN_HPP
 
 #include <cassert>
-#include <variant>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
-#include <vector>
-#include <cstdint>
-#include <cstddef>
-#include <utility>
-#include <type_traits>
-#include <tuple>
-#include <functional>
 #include <system_error>
+#include <tuple>
+#include <type_traits>
+#include <variant>
+#include <vector>
 
 namespace hj
 {
@@ -94,11 +92,11 @@ class db_conn
             return row_view(&_data[row * _cols], _cols);
         }
 
-        inline std::size_t rows() const { return _rows; }
-        inline std::size_t cols() const { return _cols; }
-        inline bool        empty() const { return _data.empty(); }
+        inline std::size_t rows() const noexcept { return _rows; }
+        inline std::size_t cols() const noexcept { return _cols; }
+        inline bool        empty() const noexcept { return _data.empty(); }
 
-        inline void set_dim(std::size_t rows, std::size_t cols)
+        inline void set_dim(std::size_t rows, std::size_t cols) noexcept
         {
             _rows = rows;
             _cols = cols;
@@ -142,30 +140,59 @@ class db_conn
         std::vector<out_val_t> _data;
     };
 
-    using exec_cb_t  = std::function<void(exec_result res)>;
-    using query_cb_t = std::function<void(err_t ec, ret_t outs)>;
+    class trans_guard
+    {
+      public:
+        explicit trans_guard(db_conn &conn)
+            : _conn(conn)
+        {
+            if(auto ec = _conn.begin(); !ec)
+                _is_active = true;
+        }
+
+        ~trans_guard()
+        {
+            if(_is_active)
+                _conn.rollback();
+        }
+
+        db_conn::err_t commit()
+        {
+            if(!_is_active)
+                return {};
+
+            auto ec = _conn.commit();
+            if(!ec)
+                _is_active = false;
+
+            return ec;
+        }
+
+      private:
+        trans_guard(const trans_guard &other)       = delete;
+        trans_guard &operator=(const trans_guard &) = delete;
+        trans_guard(trans_guard &&other)            = delete;
+        trans_guard &operator=(trans_guard &&other) = delete;
+
+        db_conn &_conn;
+        bool     _is_active{false};
+    };
 
     template <typename... Args>
     static constexpr bool is_first_arg_special = [] {
         if constexpr(sizeof...(Args) == 0)
+        {
             return false;
-        else
+        } else
         {
             using First = std::decay_t<
                 std::tuple_element_t<0, std::tuple<Args..., void>>>;
-            return std::is_convertible_v<First, const val_in_t *>
-                   || std::is_convertible_v<First, const out_val_t *>
-                   || std::is_same_v<First, std::vector<out_val_t>>;
+            return std::is_convertible_v<First, const val_in_t *>;
         }
     }();
 
   public:
     virtual ~db_conn() = default;
-
-    virtual std::string id() const = 0;
-    virtual err_t       begin()    = 0;
-    virtual err_t       commit()   = 0;
-    virtual err_t       rollback() = 0;
 
     exec_result
     exec(std::string_view sql, const val_in_t *args, std::size_t count)
@@ -211,85 +238,23 @@ class db_conn
         }
     }
 
-    void exec_async(exec_cb_t cb, std::string sql, std::vector<out_val_t> args)
-    {
-        exec_async_impl(std::move(cb), std::move(sql), std::move(args));
-    }
-
-    template <typename... Args,
-              typename = std::enable_if_t<!is_first_arg_special<Args...>>>
-    void exec_async(exec_cb_t cb, std::string sql, Args &&...args)
-    {
-        if constexpr(sizeof...(Args) == 0)
-        {
-            exec_async_impl(std::move(cb), std::move(sql), {});
-        } else
-        {
-            std::vector<out_val_t> heap_args;
-            heap_args.reserve(sizeof...(Args));
-            (heap_args.emplace_back(to_out_val(std::forward<Args>(args))), ...);
-            exec_async_impl(std::move(cb),
-                            std::move(sql),
-                            std::move(heap_args));
-        }
-    }
-
-    void
-    query_async(query_cb_t cb, std::string sql, std::vector<out_val_t> args)
-    {
-        query_async_impl(std::move(cb), std::move(sql), std::move(args));
-    }
-
-    template <typename... Args,
-              typename = std::enable_if_t<!is_first_arg_special<Args...>>>
-    void query_async(query_cb_t cb, std::string sql, Args &&...args)
-    {
-        if constexpr(sizeof...(Args) == 0)
-        {
-            query_async_impl(std::move(cb), std::move(sql), {});
-        } else
-        {
-            std::vector<out_val_t> heap_args;
-            heap_args.reserve(sizeof...(Args));
-            (heap_args.emplace_back(to_out_val(std::forward<Args>(args))), ...);
-            query_async_impl(std::move(cb),
-                             std::move(sql),
-                             std::move(heap_args));
-        }
-    }
+    err_t begin() { return begin_impl(); }
+    err_t commit() { return commit_impl(); }
+    err_t rollback() { return rollback_impl(); }
 
   protected:
     virtual exec_result exec_impl(std::string_view sql,
                                   const val_in_t  *args,
-                                  std::size_t      count)            = 0;
-    virtual void        exec_async_impl(exec_cb_t              cb,
-                                        std::string            sql,
-                                        std::vector<out_val_t> args) = 0;
+                                  std::size_t      count) = 0;
 
     virtual err_t query_impl(ret_t           &outs,
                              std::string_view sql,
                              const val_in_t  *args,
-                             std::size_t      count)            = 0;
-    virtual void  query_async_impl(query_cb_t             cb,
-                                   std::string            sql,
-                                   std::vector<out_val_t> args) = 0;
+                             std::size_t      count) = 0;
 
-  private:
-    template <typename T>
-    static out_val_t to_out_val(T &&arg)
-    {
-        using Decayed = std::decay_t<T>;
-        if constexpr(std::is_convertible_v<Decayed, std::string_view>)
-        {
-            return std::string(arg);
-        } else if constexpr(std::is_same_v<Decayed, blob_view>)
-        {
-            return blob_t(arg.data, arg.data + arg.size);
-        } else
-        {
-            return out_val_t(std::forward<T>(arg));
-        }
-    }
+    virtual err_t begin_impl()    = 0;
+    virtual err_t commit_impl()   = 0;
+    virtual err_t rollback_impl() = 0;
 };
 
 } // namespace hj

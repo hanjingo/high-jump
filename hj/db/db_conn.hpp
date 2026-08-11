@@ -96,10 +96,18 @@ class db_conn
         inline std::size_t cols() const noexcept { return _cols; }
         inline bool        empty() const noexcept { return _data.empty(); }
 
+        inline void clear() noexcept
+        {
+            _rows = 0;
+            _cols = 0;
+            _data.clear();
+        }
+
         inline void set_dim(std::size_t rows, std::size_t cols) noexcept
         {
             _rows = rows;
             _cols = cols;
+            _data.clear();
         }
 
         inline void reserve(std::size_t capacity) { _data.reserve(capacity); }

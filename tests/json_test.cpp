@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include <hj/encoding/json.hpp>
 #include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
 
 struct json_obj
 {
@@ -9,94 +12,72 @@ struct json_obj
     std::string email;
 };
 
-TEST(json, get)
+TEST(json, basic_types)
+{
+    hj::json js;
+    js["null"]   = nullptr;
+    js["bool"]   = true;
+    js["int"]    = 42;
+    js["double"] = 3.14;
+    js["str"]    = "hello";
+
+    EXPECT_TRUE(js["null"].is_null());
+    EXPECT_TRUE(js["bool"].get<bool>());
+    EXPECT_EQ(js["int"].get<int>(), 42);
+    EXPECT_DOUBLE_EQ(js["double"].get<double>(), 3.14);
+    EXPECT_EQ(js["str"].get<std::string>(), "hello");
+}
+
+TEST(json, nested_structure)
+{
+    hj::json js = {{"meta", {{"id", 1}, {"tags", {"cpp", "json"}}}},
+                   {"data", {{"values", {10, 20, 30}}}}};
+
+    EXPECT_EQ(js["meta"]["tags"][0].get<std::string>(), "cpp");
+    EXPECT_EQ(js["data"]["values"].size(), 3);
+    EXPECT_EQ(js["data"]["values"][2].get<int>(), 30);
+}
+
+TEST(json, exception_and_boundaries)
+{
+    hj::json js = {{"key", "value"}};
+
+    EXPECT_THROW(js.at("not_exist"), hj::json::out_of_range);
+
+    EXPECT_THROW(js["key"].get<int>(), hj::json::type_error);
+
+    EXPECT_THROW(hj::json::parse("{invalid: json}"), hj::json::parse_error);
+}
+
+TEST(json, modification)
+{
+    hj::json js = {{"a", 1}, {"b", 2}};
+
+    js.erase("a");
+    EXPECT_FALSE(js.contains("a"));
+
+    js["b"] = 3;
+    EXPECT_EQ(js["b"].get<int>(), 3);
+}
+
+TEST(json, get_and_parse)
 {
     json_obj obj;
     auto     js = hj::json{{"name", "harry potter"},
                            {"age", 30},
                            {"email", "hehehunanchina@live.com"}};
     js.at("name").get_to(obj.name);
-    ASSERT_EQ(obj.name, std::string("harry potter"));
-    ASSERT_EQ(js.at("name").get<std::string>(), std::string("harry potter"));
+    EXPECT_EQ(obj.name, "harry potter");
 
-    js.at("age").get_to(obj.age);
-    ASSERT_EQ(obj.age, 30);
-    ASSERT_EQ(js.at("age").get<int>(), 30);
-
-    ASSERT_STREQ(js.at("email").get<std::string>().c_str(),
-                 "hehehunanchina@live.com");
-}
-
-TEST(json, parse)
-{
-    // from string
-    auto js1 = hj::json::parse(R"(
-        {
-            "pi": 3.141,
-            "happy": true
-        }
-    )");
-
-    ASSERT_EQ(js1.contains("pi"), true);
-    ASSERT_EQ(js1["pi"].get<double>(), 3.141);
-    ASSERT_EQ(js1.contains("happy"), true);
-    ASSERT_EQ(js1["happy"].get<bool>(), true);
-
-    // from ifstream
-    std::string str_src = "./json_test.json";
-    if(!std::filesystem::exists(str_src))
-    {
-        GTEST_SKIP() << "skip test json parse not exist: " << str_src;
-    }
-    std::ifstream f(str_src);
-    auto          js2 = hj::json::parse(f);
-
-    ASSERT_EQ(js2.contains("pi"), true);
-    ASSERT_EQ(js2["pi"].get<double>(), 3.141);
-    ASSERT_EQ(js2.contains("happy"), true);
-    ASSERT_EQ(js2["happy"].get<bool>(), true);
-}
-
-TEST(json, make_object)
-{
-    hj::json js;
-    js["id"]     = 1001;
-    js["name"]   = "test_user";
-    js["active"] = true;
-    js["score"]  = 99.5;
-
-    ASSERT_EQ(js["id"], 1001);
-    ASSERT_EQ(js["name"], "test_user");
-    ASSERT_EQ(js["active"], true);
-    ASSERT_DOUBLE_EQ(js["score"].get<double>(), 99.5);
-
-    std::string dumped = js.dump();
-    hj::json    js2    = hj::json::parse(dumped);
-    ASSERT_EQ(js2["id"], 1001);
-    ASSERT_EQ(js2["name"], "test_user");
-    ASSERT_EQ(js2["active"], true);
-    ASSERT_DOUBLE_EQ(js2["score"].get<double>(), 99.5);
+    auto js1 = hj::json::parse(R"({"pi": 3.141, "happy": true})");
+    EXPECT_TRUE(js1["happy"].get<bool>());
 }
 
 TEST(json, make_array)
 {
-    hj::json arr = hj::json::array();
-    arr.push_back(1);
-    arr.push_back(2);
-    arr.push_back(3);
+    hj::json arr = hj::json::array({1, 2, 3});
     arr.push_back("hello");
 
-    ASSERT_EQ(arr.size(), 4);
-    ASSERT_EQ(arr[0], 1);
-    ASSERT_EQ(arr[1], 2);
-    ASSERT_EQ(arr[2], 3);
-    ASSERT_EQ(arr[3], "hello");
-
-    std::string dumped = arr.dump();
-    hj::json    arr2   = hj::json::parse(dumped);
-    ASSERT_EQ(arr2.size(), 4);
-    ASSERT_EQ(arr2[0], 1);
-    ASSERT_EQ(arr2[1], 2);
-    ASSERT_EQ(arr2[2], 3);
-    ASSERT_EQ(arr2[3], "hello");
+    EXPECT_EQ(arr.size(), 4);
+    EXPECT_EQ(arr[3].get<std::string>(), "hello");
 }

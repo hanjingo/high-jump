@@ -22,19 +22,103 @@
 #ifndef ASTAR_HPP
 #define ASTAR_HPP
 
-#include <iostream>
 #include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <limits>
+#include <queue>
+#include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
-#include <queue>
-#include <cstdlib>
-#include <functional>
-#include <cmath>
+#include <utility>
+#include <vector>
 
 namespace hj::astar
 {
+
+using cost_t = double;
+
 namespace detail
 {
+template <typename Location>
+inline cost_t manhattan_heuristic(const Location &a, const Location &b)
+{
+    const auto dx = a.x >= b.x ? a.x - b.x : b.x - a.x;
+    const auto dy = a.y >= b.y ? a.y - b.y : b.y - a.y;
+
+    return static_cast<cost_t>(dx) + static_cast<cost_t>(dy);
+}
+
+template <typename Location>
+inline cost_t euclidean_heuristic(const Location &a, const Location &b)
+{
+    const long double dx =
+        static_cast<long double>(a.x) - static_cast<long double>(b.x);
+    const long double dy =
+        static_cast<long double>(a.y) - static_cast<long double>(b.y);
+
+    return static_cast<cost_t>(std::sqrt(dx * dx + dy * dy));
+}
+
+template <typename Location>
+std::vector<Location> smooth(const std::vector<Location> &path)
+{
+    if(path.size() <= 2)
+        return path;
+
+    std::vector<Location> smoothed_path;
+    smoothed_path.reserve(path.size());
+    smoothed_path.push_back(path.front()); // Always keep the start point
+
+    for(size_t i = 1; i < path.size() - 1; ++i)
+    {
+        const auto &prev = path[i - 1];
+        const auto &curr = path[i];
+        const auto &next = path[i + 1];
+
+        const long double dx1 =
+            static_cast<long double>(curr.x) - static_cast<long double>(prev.x);
+        const long double dy1 =
+            static_cast<long double>(curr.y) - static_cast<long double>(prev.y);
+        const long double dx2 =
+            static_cast<long double>(next.x) - static_cast<long double>(curr.x);
+        const long double dy2 =
+            static_cast<long double>(next.y) - static_cast<long double>(curr.y);
+
+        if(dx1 * dy2 != dy1 * dx2)
+            smoothed_path.push_back(curr);
+    }
+
+    smoothed_path.push_back(path.back()); // Always keep the end point
+    return smoothed_path;
+}
+
+template <typename Grid, typename Location, typename = void>
+struct has_is_walkable : std::false_type
+{
+};
+
+template <typename Grid, typename Location>
+struct has_is_walkable<
+    Grid,
+    Location,
+    std::void_t<decltype(std::declval<const Grid &>().is_walkable(
+        std::declval<const Location &>()))>> : std::true_type
+{
+};
+
+template <typename Grid, typename Location>
+bool is_walkable(const Grid &grid, const Location &location)
+{
+    if constexpr(has_is_walkable<Grid, Location>::value)
+        return static_cast<bool>(grid.is_walkable(location));
+    else
+        return true;
+}
+
 template <typename T, typename Priority>
 struct priority_queue
 {
@@ -57,47 +141,6 @@ struct priority_queue
     }
 };
 
-template <typename Location>
-inline double manhattan_heuristic(const Location &a, const Location &b)
-{
-    return std::abs(a.x - b.x) + std::abs(a.y - b.y);
-}
-
-template <typename Location>
-inline double euclidean_heuristic(const Location &a, const Location &b)
-{
-    double dx = a.x - b.x;
-    double dy = a.y - b.y;
-    return std::sqrt(dx * dx + dy * dy);
-}
-
-template <typename Location>
-std::vector<Location> smooth(const std::vector<Location> &path)
-{
-    if(path.size() <= 2)
-        return path;
-
-    std::vector<Location> smoothed_path;
-    smoothed_path.push_back(path[0]); // Always keep the start point
-
-    for(size_t i = 1; i < path.size() - 1; ++i)
-    {
-        const Location &prev = path[i - 1];
-        const Location &curr = path[i];
-        const Location &next = path[i + 1];
-
-        int dx1 = curr.x - prev.x;
-        int dy1 = curr.y - prev.y;
-        int dx2 = next.x - curr.x;
-        int dy2 = next.y - curr.y;
-
-        if(dx1 * dy2 != dy1 * dx2)
-            smoothed_path.push_back(curr);
-    }
-
-    smoothed_path.push_back(path.back()); // Always keep the end point
-    return smoothed_path;
-}
 } // namespace detail
 } // namespace hj::astar
 
@@ -137,56 +180,57 @@ struct location
         std::size_t operator()(const location &loc) const
         {
             std::size_t seed = 0;
-            seed ^=
-                std::hash<T>()(loc.x) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            seed ^=
-                std::hash<T>()(loc.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= std::hash<T>()(loc.x) + 0x9e3779b97f4a7c15ULL + (seed << 6)
+                    + (seed >> 2);
+            seed ^= std::hash<T>()(loc.y) + 0x9e3779b97f4a7c15ULL + (seed << 6)
+                    + (seed >> 2);
             return seed;
         }
     };
 };
 } // namespace hj::astar
 
+namespace hj::astar
+{
 // support for std::pair<location, location> as key in unordered_map
-namespace std
+template <typename Location>
+struct edge_hash
 {
-template <typename T>
-struct hash<std::pair<hj::astar::location<T>, hj::astar::location<T>>>
-{
-    std::size_t operator()(
-        const std::pair<hj::astar::location<T>, hj::astar::location<T>> &p)
-        const noexcept
+    std::size_t
+    operator()(const std::pair<Location, Location> &edge) const noexcept
     {
-        std::size_t h1 = typename hj::astar::location<T>::hash{}(p.first);
-        std::size_t h2 = typename hj::astar::location<T>::hash{}(p.second);
+        const typename Location::hash hasher{};
+        const std::size_t             h1 = hasher(edge.first);
+        const std::size_t             h2 = hasher(edge.second);
         return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
     }
 };
-}
 
-namespace hj::astar
-{
 template <typename Location>
 struct grid
 {
     std::unordered_map<Location, std::vector<Location>, typename Location::hash>
-                                                              adjacency_list;
-    std::unordered_map<std::pair<Location, Location>, double> edge_weights;
-    std::unordered_set<Location, typename Location::hash>     obstacles;
+        adjacency_list;
+
+    std::unordered_map<std::pair<Location, Location>,
+                       cost_t,
+                       edge_hash<Location>>
+        edge_weights;
+
+    std::unordered_set<Location, typename Location::hash> obstacles;
 
     grid() = default;
     grid(int width, int height)
     {
-        assert(width > 0 && height > 0);
+        if(width <= 0 || height <= 0)
+            throw std::invalid_argument("invalid grid dimensions");
+
         for(int y = 0; y < height; y++)
-        {
             for(int x = 0; x < width; x++)
-            {
-                Location loc{x, y};
-                adjacency_list[loc] = std::vector<Location>();
-            }
-        }
+                adjacency_list[Location{x, y}];
     }
+
+    virtual ~grid() = default;
 
     void add_location(const Location              &loc,
                       const std::vector<Location> &neighbors)
@@ -200,9 +244,19 @@ struct grid
             obstacles.insert(o);
     }
 
-    void set_edge_weight(const Location &from, const Location &to, double w)
+    bool is_walkable(const Location &loc) const
     {
+        return adjacency_list.find(loc) != adjacency_list.end()
+               && obstacles.find(loc) == obstacles.end();
+    }
+
+    bool set_edge_weight(const Location &from, const Location &to, cost_t w)
+    {
+        if(!std::isfinite(w) || w < 0.0)
+            return false;
+
         edge_weights[{from, to}] = w;
+        return true;
     }
 
     virtual const std::vector<Location> &neighbors(const Location &loc) const
@@ -210,17 +264,15 @@ struct grid
         return adjacency_list.at(loc);
     }
 
-    virtual double cost(const Location &from, const Location &to) const
+    virtual cost_t cost(const Location &from, const Location &to) const
     {
         if(obstacles.count(to))
-            return std::numeric_limits<double>::infinity();
+            return std::numeric_limits<cost_t>::infinity();
 
         auto it = edge_weights.find({from, to});
         return it != edge_weights.end() ? it->second : 1.0;
     }
 };
-
-using cost_t = double;
 
 template <typename Location>
 using heuristic_fn = std::function<cost_t(const Location &, const Location &)>;
@@ -229,18 +281,65 @@ enum class search_result
 {
     found,
     not_found,
-    error
+    invalid_start,
+    invalid_goal,
+    invalid_graph,
+    invalid_cost,
+    invalid_heuristic,
+    resource_limit_exceeded,
+    cancelled
 };
 
+inline const char *to_string(search_result r) noexcept
+{
+    switch(r)
+    {
+        case search_result::found:
+            return "found";
+        case search_result::not_found:
+            return "not_found";
+        case search_result::invalid_start:
+            return "invalid_start";
+        case search_result::invalid_goal:
+            return "invalid_goal";
+        case search_result::invalid_graph:
+            return "invalid_graph";
+        case search_result::invalid_cost:
+            return "invalid_cost";
+        case search_result::invalid_heuristic:
+            return "invalid_heuristic";
+        case search_result::resource_limit_exceeded:
+            return "resource_limit_exceeded";
+        case search_result::cancelled:
+            return "cancelled";
+    }
+    return "unknown";
+}
+
+template <typename Location>
+struct search_options
+{
+    heuristic_fn<Location> heuristic = detail::manhattan_heuristic<Location>;
+    std::size_t            max_expansions = 0;
+    std::function<bool()>  should_cancel  = []() -> bool { return false; };
+};
+
+// For optimal-path guarantees, the supplied heuristic must be admissible and
+//  consistent for the graph's edge-cost model.
 template <typename Grid, typename Location>
-search_result
-search(std::vector<Location> &path,
-       const Grid            &grid,
-       const Location        &start,
-       const Location        &goal,
-       heuristic_fn<Location> heuristic = detail::manhattan_heuristic<Location>)
+search_result search(std::vector<Location>          &path,
+                     const Grid                     &grid,
+                     const Location                 &start,
+                     const Location                 &goal,
+                     const search_options<Location> &options = {})
 {
     path.clear();
+
+    if(!detail::is_walkable(grid, start))
+        return search_result::invalid_start;
+
+    if(!detail::is_walkable(grid, goal))
+        return search_result::invalid_goal;
 
     if(start == goal)
     {
@@ -253,50 +352,69 @@ search(std::vector<Location> &path,
 
     std::unordered_map<Location, Location, typename Location::hash> came_from;
     std::unordered_map<Location, cost_t, typename Location::hash>   cost_so_far;
+    std::unordered_set<Location, typename Location::hash>           closed;
     came_from[start]   = start;
     cost_so_far[start] = 0;
 
+    std::size_t expansions = 0;
     while(!frontier.empty())
     {
         Location current = frontier.get();
+        if(closed.count(current) != 0)
+            continue;
+
+        closed.insert(current);
         if(current == goal)
             break;
 
-        try
-        {
-            auto locations = grid.neighbors(current);
-            for(const Location &next : locations)
-            {
-                cost_t new_cost =
-                    cost_so_far[current] + grid.cost(current, next);
+        if(options.should_cancel && options.should_cancel())
+            return search_result::cancelled;
 
-                if(cost_so_far.find(next) == cost_so_far.end()
-                   || new_cost < cost_so_far[next])
-                {
-                    cost_so_far[next] = new_cost;
-                    cost_t priority   = new_cost + heuristic(next, goal);
-                    frontier.put(next, priority);
-                    came_from[next] = current;
-                }
-            }
-        }
-        catch(const std::exception &e)
+        if(options.max_expansions != 0 && ++expansions > options.max_expansions)
+            return search_result::resource_limit_exceeded;
+
+        for(const Location &next : grid.neighbors(current))
         {
-            std::cerr << "[astar] Exception: " << e.what() << std::endl;
-            continue;
+            if(!detail::is_walkable(grid, next))
+                continue;
+
+            cost_t edge_cost = grid.cost(current, next);
+            if(!std::isfinite(edge_cost))
+                continue; // impassable (e.g. obstacle)
+
+            cost_t new_cost = cost_so_far[current] + edge_cost;
+            if(!std::isfinite(new_cost) || new_cost < 0.0)
+                return search_result::invalid_cost;
+
+            auto found_it = cost_so_far.find(next);
+            if(found_it == cost_so_far.end() || new_cost < found_it->second)
+            {
+                cost_so_far[next] = new_cost;
+                came_from[next]   = current;
+                const cost_t h    = options.heuristic(next, goal);
+                if(!std::isfinite(h) || h < 0.0)
+                    return search_result::invalid_heuristic;
+
+                frontier.put(next, new_cost + h);
+            }
         }
     }
 
     if(came_from.find(goal) == came_from.end())
         return search_result::not_found;
 
-    Location current = goal;
+    Location    current  = goal;
+    std::size_t max_hops = came_from.size() + 1;
+    std::size_t hops     = 0;
     while(current != start)
     {
         path.push_back(current);
+        if(++hops > max_hops)
+            return search_result::invalid_graph;
+
         auto it = came_from.find(current);
         if(it == came_from.end())
-            return search_result::error;
+            return search_result::invalid_graph;
 
         current = it->second;
     }

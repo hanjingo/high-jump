@@ -16,145 +16,108 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// for more information, see:
-// https://github.com/redis/redis/blob/unstable/src/t_zset.c
-
 #ifndef SKIPLIST_HPP
 #define SKIPLIST_HPP
 
-#include <random>
-#include <vector>
-#include <functional>
-#include <memory>
 #include <cassert>
+#include <cstddef>
+#include <functional>
+#include <iterator>
+#include <memory>
+#include <random>
 #include <type_traits>
-
-#define SKIPLIST_MAXLEVEL 32
-
-#define SKIPLIST_P 0.25
+#include <utility>
+#include <vector>
+#include <unordered_map>
 
 namespace hj
 {
-template <typename T>
+
+template <typename T,
+          typename Score        = double,
+          typename Compare      = std::less<T>,
+          typename ScoreCompare = std::less<Score>,
+          typename Allocator    = std::allocator<T>>
 class skiplist
 {
-  public:
-    using comparable = std::function<bool(const T &, const T &)>;
+  private:
+    struct node_t;
+
+    struct level_t
+    {
+        node_t     *forward{nullptr};
+        std::size_t span{0};
+    };
 
     struct node_t
     {
-        T              obj;
-        double         score;
-        struct node_t *backward;
+        alignas(alignof(T)) std::byte obj_buf[sizeof(T)];
+        alignas(alignof(Score)) std::byte score_buf[sizeof(Score)];
+        node_t *backward{nullptr};
+        int     level_count{0};
 
-        struct level
+        level_t *levels() noexcept
         {
-            struct node_t *forward;
-            unsigned long  span;
-        } _level[];
-
-        node_t() = delete;
-        node_t(int _level, double score, const T &obj)
-            : obj(obj)
-            , score(score)
-            , backward(nullptr)
-        {
+            return reinterpret_cast<level_t *>(this + 1);
         }
+
+        const level_t *levels() const noexcept
+        {
+            return reinterpret_cast<const level_t *>(this + 1);
+        }
+
+        T       *value_ptr() noexcept { return reinterpret_cast<T *>(obj_buf); }
+        const T *value_ptr() const noexcept
+        {
+            return reinterpret_cast<const T *>(obj_buf);
+        }
+        T       &value() noexcept { return *value_ptr(); }
+        const T &value() const noexcept { return *value_ptr(); }
+
+        Score *score_ptr() noexcept
+        {
+            return reinterpret_cast<Score *>(score_buf);
+        }
+        const Score *score_ptr() const noexcept
+        {
+            return reinterpret_cast<const Score *>(score_buf);
+        }
+        Score       &score() noexcept { return *score_ptr(); }
+        const Score &score() const noexcept { return *score_ptr(); }
     };
 
-    class iterator
-    {
-      public:
-        using iterator_category = std::forward_iterator_tag;
-        using value_type        = T;
-        using difference_type   = std::ptrdiff_t;
-        using pointer           = T *;
-        using reference         = T &;
+    static_assert(alignof(node_t) >= alignof(level_t),
+                  "node_t must be at least as aligned as level_t for trailing "
+                  "array layout.");
 
-      public:
-        iterator(node_t *node)
-            : current(node)
-        {
-        }
-
-        T       &operator*() { return current->obj; }
-        const T &operator*() const { return current->obj; }
-
-        T       *operator->() { return &current->obj; }
-        const T *operator->() const { return &current->obj; }
-
-        iterator &operator++()
-        {
-            if(current)
-                current = current->_level[0].forward;
-            return *this;
-        }
-
-        iterator operator++(int)
-        {
-            iterator temp = *this;
-            ++(*this);
-            return temp;
-        }
-
-        iterator &operator--()
-        {
-            if(current)
-                current = current->backward;
-            return *this;
-        }
-
-        iterator operator--(int)
-        {
-            iterator temp = *this;
-            --(*this);
-            return temp;
-        }
-
-        bool operator==(const iterator &other) const
-        {
-            return current == other.current;
-        }
-
-        bool operator!=(const iterator &other) const
-        {
-            return current != other.current;
-        }
-
-        inline double  score() const { return current ? current->score : 0.0; }
-        inline node_t *node() const { return current; }
-
-      private:
-        node_t *current;
-    };
+  public:
+    static constexpr int         kMaxLevel    = 32;
+    static constexpr double      kProbability = 0.25;
+    static constexpr std::size_t npos         = static_cast<std::size_t>(-1);
 
     class const_iterator
     {
       public:
-        using iterator_category = std::forward_iterator_tag;
+        using iterator_category = std::bidirectional_iterator_tag;
         using value_type        = T;
         using difference_type   = std::ptrdiff_t;
-        using pointer           = T *;
-        using reference         = T &;
+        using pointer           = const T *;
+        using reference         = const T &;
 
       public:
-        const_iterator(const node_t *node)
-            : current(node)
+        const_iterator()
+            : current(nullptr)
+            , list_ptr(nullptr)
         {
         }
 
-        const_iterator(const iterator &it)
-            : current(it.node())
-        {
-        }
-
-        const T &operator*() const { return current->obj; }
-        const T *operator->() const { return &current->obj; }
+        reference operator*() const { return current->value(); }
+        pointer   operator->() const { return current->value_ptr(); }
 
         const_iterator &operator++()
         {
             if(current)
-                current = current->_level[0].forward;
+                current = current->levels()[0].forward;
             return *this;
         }
 
@@ -168,7 +131,12 @@ class skiplist
         const_iterator &operator--()
         {
             if(current)
+            {
                 current = current->backward;
+            } else if(list_ptr)
+            {
+                current = list_ptr->_tail;
+            }
             return *this;
         }
 
@@ -189,249 +157,395 @@ class skiplist
             return current != other.current;
         }
 
-        bool operator==(const iterator &other) const
+        const Score &score() const
         {
-            return current == other.node();
+            assert(current != nullptr
+                   && "Cannot call score() on end() iterator");
+            return current->score();
         }
-
-        bool operator!=(const iterator &other) const
-        {
-            return current != other.node();
-        }
-
-        inline double score() const { return current ? current->score : 0.0; }
-        inline const node_t *node() const { return current; }
 
       private:
-        const node_t *current;
+        friend class skiplist;
+
+        explicit const_iterator(const node_t   *node,
+                                const skiplist *sl = nullptr)
+            : current(node)
+            , list_ptr(sl)
+        {
+        }
+
+        const node_t *node() const { return current; }
+
+      private:
+        const node_t   *current{nullptr};
+        const skiplist *list_ptr{nullptr};
     };
 
+    using iterator = const_iterator;
+
   public:
-    explicit skiplist(comparable cmp = std::less<T>())
-        : _tail(nullptr)
+    explicit skiplist(const Compare      &cmp       = Compare(),
+                      const ScoreCompare &score_cmp = ScoreCompare(),
+                      const Allocator    &alloc     = Allocator())
+        : _header(nullptr)
+        , _tail(nullptr)
         , _length(0)
         , _level(1)
-        , _gen(_rd())
-        , _dis(0.0, 1.0)
         , _compare(cmp)
+        , _score_compare(score_cmp)
+        , _alloc(alloc)
     {
-        _header = _create_node(SKIPLIST_MAXLEVEL, 0, T{});
-        for(int j = 0; j < SKIPLIST_MAXLEVEL; j++)
-        {
-            _header->_level[j].forward = nullptr;
-            _header->_level[j].span    = 0;
-        }
-        _header->backward = nullptr;
+        _init_empty();
     }
 
-    ~skiplist() { release(); }
+    ~skiplist() { _clear_and_release_header(); }
 
-    skiplist(const skiplist &)            = delete;
-    skiplist &operator=(const skiplist &) = delete;
-    skiplist(skiplist &&)                 = delete;
-    skiplist &operator=(skiplist &&)      = delete;
-
-    inline unsigned long  size() const { return _length; }
-    inline bool           empty() const { return _length == 0; }
-    inline node_t        *first() const { return _header->_level[0].forward; }
-    inline node_t        *last() const { return _tail; }
-    inline iterator       begin() { return iterator(first()); }
-    inline iterator       end() { return iterator(nullptr); }
-    inline const_iterator begin() const { return const_iterator(first()); }
-    inline const_iterator end() const { return const_iterator(nullptr); }
-    inline const_iterator cbegin() const { return const_iterator(first()); }
-    inline const_iterator cend() const { return const_iterator(nullptr); }
-
-    // Insert element with score
-    node_t *insert(double score, const T &obj)
+    skiplist(const skiplist &other)
+        : _header(nullptr)
+        , _tail(nullptr)
+        , _length(0)
+        , _level(1)
+        , _compare(other._compare)
+        , _score_compare(other._score_compare)
+        , _alloc(std::allocator_traits<Allocator>::
+                     select_on_container_copy_construction(other._alloc))
     {
-        node_t       *update[SKIPLIST_MAXLEVEL];
-        unsigned long rank[SKIPLIST_MAXLEVEL];
-        node_t       *x = _header;
-
-        for(int i = _level - 1; i >= 0; i--)
+        try
         {
-            rank[i] = (i == (_level - 1)) ? 0 : rank[i + 1];
-            while(x->_level[i].forward
-                  && (x->_level[i].forward->score < score
-                      || (x->_level[i].forward->score == score
-                          && _compare(x->_level[i].forward->obj, obj))))
-            {
-                rank[i] += x->_level[i].span;
-                x = x->_level[i].forward;
-            }
-            update[i] = x;
+            _init_empty();
+            _copy_from(other);
         }
+        catch(...)
+        {
+            _clear_and_release_header();
+            throw;
+        }
+    }
 
-        int new_level = _random_level();
+    skiplist &operator=(const skiplist &other)
+    {
+        if(this != &other)
+        {
+            skiplist tmp(other);
+            _swap(tmp);
+        }
+        return *this;
+    }
+
+    skiplist(skiplist &&other) noexcept
+        : _header(other._header)
+        , _tail(other._tail)
+        , _length(other._length)
+        , _level(other._level)
+        , _compare(std::move(other._compare))
+        , _score_compare(std::move(other._score_compare))
+        , _alloc(std::move(other._alloc))
+    {
+        other._header = nullptr;
+        other._tail   = nullptr;
+        other._length = 0;
+        other._level  = 1;
+    }
+
+    skiplist &operator=(skiplist &&other) noexcept
+    {
+        if(this != &other)
+        {
+            _clear_and_release_header();
+            _header        = other._header;
+            _tail          = other._tail;
+            _length        = other._length;
+            _level         = other._level;
+            _compare       = std::move(other._compare);
+            _score_compare = std::move(other._score_compare);
+            _alloc         = std::move(other._alloc);
+
+            other._header = nullptr;
+            other._tail   = nullptr;
+            other._length = 0;
+            other._level  = 1;
+        }
+        return *this;
+    }
+
+    std::size_t size() const noexcept { return _length; }
+    bool        empty() const noexcept { return _length == 0; }
+
+    iterator first() const noexcept
+    {
+        return iterator(_header ? _header->levels()[0].forward : nullptr, this);
+    }
+    iterator last() const noexcept { return iterator(_tail, this); }
+
+    const_iterator begin() const noexcept
+    {
+        return const_iterator(_header ? _header->levels()[0].forward : nullptr,
+                              this);
+    }
+    const_iterator end() const noexcept
+    {
+        return const_iterator(nullptr, this);
+    }
+
+    const_iterator cbegin() const noexcept
+    {
+        return const_iterator(_header ? _header->levels()[0].forward : nullptr,
+                              this);
+    }
+    const_iterator cend() const noexcept
+    {
+        return const_iterator(nullptr, this);
+    }
+
+    const Compare      &key_comp() const noexcept { return _compare; }
+    const ScoreCompare &score_comp() const noexcept { return _score_compare; }
+
+    template <typename... Args>
+    iterator emplace(Score score, Args &&...args)
+    {
+        if(!_header)
+            _init_empty();
+
+        node_t     *update[kMaxLevel];
+        std::size_t rank[kMaxLevel];
+        int         new_level = _random_level();
+
+        node_t *new_node =
+            _create_node(new_level, score, std::forward<Args>(args)...);
+        bool dismissed = false;
+        auto guard     = [this, new_node, &dismissed]() {
+            if(!dismissed)
+            {
+                this->_free_node(new_node, false);
+            }
+        };
+
+        struct ScopeExit
+        {
+            decltype(guard) &f;
+            ~ScopeExit() { f(); }
+        } cleanup{guard};
+
+        _find_predecessors(score, new_node->value(), update, rank);
+
         if(new_level > _level)
         {
             for(int i = _level; i < new_level; i++)
             {
-                rank[i]                   = 0;
-                update[i]                 = _header;
-                update[i]->_level[i].span = _length;
+                rank[i]                     = 0;
+                update[i]                   = _header;
+                update[i]->levels()[i].span = _length;
             }
             _level = new_level;
         }
 
-        x = _create_node(new_level, score, obj);
+        node_t *x = new_node;
         for(int i = 0; i < new_level; i++)
         {
-            x->_level[i].forward         = update[i]->_level[i].forward;
-            update[i]->_level[i].forward = x;
+            x->levels()[i].forward         = update[i]->levels()[i].forward;
+            update[i]->levels()[i].forward = x;
 
-            x->_level[i].span = update[i]->_level[i].span - (rank[0] - rank[i]);
-            update[i]->_level[i].span = (rank[0] - rank[i]) + 1;
+            x->levels()[i].span =
+                update[i]->levels()[i].span - (rank[0] - rank[i]);
+            update[i]->levels()[i].span = (rank[0] - rank[i]) + 1;
         }
 
         for(int i = new_level; i < _level; i++)
-            update[i]->_level[i].span++;
+        {
+            update[i]->levels()[i].span++;
+        }
 
         x->backward = (update[0] == _header) ? nullptr : update[0];
-        if(x->_level[0].forward)
-            x->_level[0].forward->backward = x;
+        if(x->levels()[0].forward)
+            x->levels()[0].forward->backward = x;
         else
             _tail = x;
 
         _length++;
-        return x;
+        dismissed = true;
+        return iterator(x, this);
     }
 
-    bool delete_node(double score, const T &obj)
-    {
-        node_t *update[SKIPLIST_MAXLEVEL];
-        node_t *x = _header;
-        for(int i = _level - 1; i >= 0; i--)
-        {
-            while(x->_level[i].forward
-                  && (x->_level[i].forward->score < score
-                      || (x->_level[i].forward->score == score
-                          && _compare(x->_level[i].forward->obj, obj))))
-            {
-                x = x->_level[i].forward;
-            }
-            update[i] = x;
-        }
+    iterator insert(Score score, const T &obj) { return emplace(score, obj); }
 
-        x = x->_level[0].forward;
-        if(x && x->score == score && !_compare(x->obj, obj)
-           && !_compare(obj, x->obj))
+    iterator insert(Score score, T &&obj)
+    {
+        return emplace(score, std::move(obj));
+    }
+
+    bool erase(Score score, const T &obj)
+    {
+        node_t *update[kMaxLevel];
+        _find_predecessors(score, obj, update, nullptr);
+
+        node_t *x = update[0]->levels()[0].forward;
+        if(x && _score_eq(x->score(), score) && !_compare(x->value(), obj)
+           && !_compare(obj, x->value()))
         {
-            _delete_node_internal(x, update);
+            _erase_internal(x, update);
             return true;
         }
 
         return false;
     }
 
-    node_t *get_element_by_rank(unsigned long rank) const
+    bool contains(Score score, const T &obj) const
     {
-        if(rank >= _length)
-            return nullptr;
-
-        node_t       *x         = _header;
-        unsigned long traversed = 0;
-
-        for(int i = _level - 1; i >= 0; i--)
-        {
-            while(x->_level[i].forward
-                  && (traversed + x->_level[i].span - 1) < rank)
-            {
-                traversed += x->_level[i].span;
-                x = x->_level[i].forward;
-            }
-        }
-
-        x = x->_level[0].forward;
-        return x;
+        return _find_node(score, obj) != nullptr;
     }
 
-    unsigned long get_rank(double score, const T &obj) const
+    iterator find(Score score, const T &obj) const
     {
-        node_t       *x    = _header;
-        unsigned long rank = 0;
+        return iterator(_find_node(score, obj), this);
+    }
+
+    iterator get_element_by_rank(std::size_t rank) const
+    {
+        return iterator(_element_by_rank(rank), this);
+    }
+
+    std::size_t get_rank(Score score, const T &obj) const
+    {
+        if(!_header)
+            return npos;
+
+        node_t     *x    = _header;
+        std::size_t rank = 0;
         for(int i = _level - 1; i >= 0; i--)
         {
-            while(x->_level[i].forward
-                  && (x->_level[i].forward->score < score
-                      || (x->_level[i].forward->score == score
-                          && _compare(x->_level[i].forward->obj, obj))))
+            while(x->levels()[i].forward
+                  && _precedes(x->levels()[i].forward, score, obj))
             {
-                rank += x->_level[i].span;
-                x = x->_level[i].forward;
+                rank += x->levels()[i].span;
+                x = x->levels()[i].forward;
             }
 
-            if(x->_level[i].forward && x->_level[i].forward->score == score
-               && !_compare(x->_level[i].forward->obj, obj)
-               && !_compare(obj, x->_level[i].forward->obj))
+            if(x->levels()[i].forward
+               && _score_eq(x->levels()[i].forward->score(), score)
+               && !_compare(x->levels()[i].forward->value(), obj)
+               && !_compare(obj, x->levels()[i].forward->value()))
             {
-                rank += x->_level[i].span;
+                rank += x->levels()[i].span;
                 return rank - 1;
             }
         }
 
-        return _length; // Not found
+        return npos;
     }
 
-    node_t *first_in_range(double min_score, double max_score) const
+    std::size_t get_node_rank(const_iterator target_it) const
+    {
+        const node_t *target = target_it.node();
+        if(!target)
+            return npos;
+        node_t     *x    = _header;
+        std::size_t rank = 0;
+        for(int i = _level - 1; i >= 0; i--)
+        {
+            while(x->levels()[i].forward
+                  && _precedes(x->levels()[i].forward,
+                               target->score(),
+                               target->value()))
+            {
+                rank += x->levels()[i].span;
+                x = x->levels()[i].forward;
+            }
+
+            if(x->levels()[i].forward == target)
+            {
+                rank += x->levels()[i].span;
+                return rank - 1;
+            }
+        }
+        return npos;
+    }
+
+    std::pair<iterator, std::size_t>
+    first_in_range_with_rank(Score min_score, Score max_score) const
     {
         if(!_is_in_range(min_score, max_score))
-            return nullptr;
+            return {end(), npos};
 
-        node_t *x = _header;
+        node_t     *x    = _header;
+        std::size_t rank = 0;
         for(int i = _level - 1; i >= 0; i--)
         {
-            while(x->_level[i].forward
-                  && x->_level[i].forward->score < min_score)
-                x = x->_level[i].forward;
+            while(x->levels()[i].forward
+                  && _score_less(x->levels()[i].forward->score(), min_score))
+            {
+                rank += x->levels()[i].span;
+                x = x->levels()[i].forward;
+            }
         }
 
-        x = x->_level[0].forward;
-        if(!x || x->score > max_score)
-            return nullptr;
+        x = x->levels()[0].forward;
+        if(!x || _score_less(max_score, x->score()))
+            return {end(), npos};
 
-        return x;
+        return {iterator(x, this), rank};
     }
 
-    node_t *last_in_range(double min_score, double max_score) const
+    std::pair<iterator, std::size_t>
+    last_in_range_with_rank(Score min_score, Score max_score) const
     {
         if(!_is_in_range(min_score, max_score))
-            return nullptr;
+            return {end(), npos};
 
-        node_t *x = _header;
+        node_t     *x    = _header;
+        std::size_t rank = 0;
         for(int i = _level - 1; i >= 0; i--)
         {
-            while(x->_level[i].forward
-                  && x->_level[i].forward->score <= max_score)
-                x = x->_level[i].forward;
+            while(x->levels()[i].forward
+                  && _score_le(x->levels()[i].forward->score(), max_score))
+            {
+                rank += x->levels()[i].span;
+                x = x->levels()[i].forward;
+            }
         }
 
-        if(!x || x->score < min_score)
-            return nullptr;
+        if(!x || x == _header || _score_less(x->score(), min_score))
+            return {end(), npos};
 
-        return x;
+        return {iterator(x, this), rank - 1};
     }
 
-    unsigned long delete_range_by_score(double min_score, double max_score)
+    std::size_t get_rank(const_iterator target_it) const
     {
-        node_t       *update[SKIPLIST_MAXLEVEL];
-        node_t       *x       = _header;
-        unsigned long removed = 0;
+        return get_node_rank(target_it);
+    }
+
+    iterator first_in_range(Score min_score, Score max_score) const
+    {
+        return iterator(_first_in_range(min_score, max_score), this);
+    }
+
+    iterator last_in_range(Score min_score, Score max_score) const
+    {
+        return iterator(_last_in_range(min_score, max_score), this);
+    }
+
+    std::size_t delete_range_by_score(Score min_score, Score max_score)
+    {
+        if(_score_less(max_score, min_score))
+            return 0;
+
+        node_t     *update[kMaxLevel];
+        node_t     *x       = _header;
+        std::size_t removed = 0;
         for(int i = _level - 1; i >= 0; i--)
         {
-            while(x->_level[i].forward
-                  && x->_level[i].forward->score < min_score)
-                x = x->_level[i].forward;
+            while(x->levels()[i].forward
+                  && _score_less(x->levels()[i].forward->score(), min_score))
+                x = x->levels()[i].forward;
 
             update[i] = x;
         }
 
-        x = x->_level[0].forward;
-        while(x && x->score <= max_score)
+        x = x->levels()[0].forward;
+        while(x && _score_le(x->score(), max_score))
         {
-            node_t *next = x->_level[0].forward;
-            _delete_node_internal(x, update);
+            node_t *next = x->levels()[0].forward;
+            _erase_internal(x, update);
             removed++;
             x = next;
         }
@@ -439,7 +553,7 @@ class skiplist
         return removed;
     }
 
-    unsigned long delete_range_by_rank(unsigned long start, unsigned long end)
+    std::size_t delete_range_by_rank(std::size_t start, std::size_t end)
     {
         if(start > end || start >= _length)
             return 0;
@@ -447,27 +561,27 @@ class skiplist
         if(end >= _length)
             end = _length - 1;
 
-        node_t       *update[SKIPLIST_MAXLEVEL];
-        node_t       *x         = _header;
-        unsigned long traversed = 0;
-        unsigned long removed   = 0;
+        node_t     *update[kMaxLevel];
+        node_t     *x         = _header;
+        std::size_t traversed = 0;
+        std::size_t removed   = 0;
         for(int i = _level - 1; i >= 0; i--)
         {
-            while(x->_level[i].forward
-                  && traversed + x->_level[i].span <= start)
+            while(x->levels()[i].forward
+                  && traversed + x->levels()[i].span <= start)
             {
-                traversed += x->_level[i].span;
-                x = x->_level[i].forward;
+                traversed += x->levels()[i].span;
+                x = x->levels()[i].forward;
             }
             update[i] = x;
         }
 
-        x                          = x->_level[0].forward;
-        unsigned long current_rank = start;
+        x                        = x->levels()[0].forward;
+        std::size_t current_rank = start;
         while(x && current_rank <= end)
         {
-            node_t *next = x->_level[0].forward;
-            _delete_node_internal(x, update);
+            node_t *next = x->levels()[0].forward;
+            _erase_internal(x, update);
             removed++;
             current_rank++;
             x = next;
@@ -478,207 +592,602 @@ class skiplist
 
     bool validate() const
     {
-        node_t       *x     = _header;
-        unsigned long count = 0;
-        x                   = _header->_level[0].forward;
-        while(x)
-        {
-            count++;
-            if(x->_level[0].forward && x->score > x->_level[0].forward->score)
-                return false;
-
-            x = x->_level[0].forward;
-        }
-
-        return count == _length;
-    }
-
-    void release()
-    {
-        node_t *forward = _header->_level[0].forward;
-        while(forward)
-        {
-            node_t *next = forward->_level[0].forward;
-            _free_node(forward);
-            forward = next;
-        }
-        _free_node(_header);
-    }
-
-  private:
-    node_t *_create_node(int _level, double score, const T &obj)
-    {
-        size_t  size = sizeof(node_t) + _level * sizeof(typename node_t::level);
-        void   *raw  = ::operator new(size);
-        node_t *new_node = new(raw) node_t(_level, score, obj);
-        return new_node;
-    }
-
-    void _free_node(node_t *node)
-    {
-        node->~node_t();
-        ::operator delete(node);
-    }
-
-    int _random_level() const
-    {
-        int _level = 1;
-        while(_dis(_gen) < SKIPLIST_P && _level < SKIPLIST_MAXLEVEL)
-            _level++;
-
-        return _level;
-    }
-
-    void _delete_node_internal(node_t *x, node_t **update)
-    {
-        for(int i = 0; i < _level; i++)
-        {
-            if(update[i]->_level[i].forward == x)
-            {
-                update[i]->_level[i].span += x->_level[i].span - 1;
-                update[i]->_level[i].forward = x->_level[i].forward;
-            } else
-            {
-                update[i]->_level[i].span -= 1;
-            }
-        }
-
-        if(x->_level[0].forward)
-            x->_level[0].forward->backward = x->backward;
-        else
-            _tail = x->backward;
-
-        _free_node(x);
-        while(_level > 1 && _header->_level[_level - 1].forward == nullptr)
-            _level--;
-
-        _length--;
-    }
-
-    bool _is_in_range(double min_score, double max_score) const
-    {
-        if(min_score > max_score)
+        if(!_header)
+            return true;
+        if(_level < 1 || _level > kMaxLevel)
             return false;
+        if(_length == 0)
+            return _validate_empty();
 
-        node_t *x = _tail;
-        if(x == nullptr || x->score < min_score)
+        std::unordered_map<const node_t *, std::size_t> node_ranks;
+
+        if(!_validate_level0_and_build_ranks(node_ranks))
             return false;
-
-        x = _header->_level[0].forward;
-        if(x == nullptr || x->score > max_score)
+        if(!_validate_active_levels(node_ranks))
+            return false;
+        if(!_validate_unused_levels())
             return false;
 
         return true;
     }
 
-  private:
-    struct level
+    void clear()
     {
-        node_t       *forward;
-        unsigned long span;
-    };
+        _clear_and_release_header();
+        _init_empty();
+    }
 
-    node_t                                        *_header;
-    node_t                                        *_tail;
-    unsigned long                                  _length;
-    int                                            _level;
-    mutable std::random_device                     _rd;
-    mutable std::mt19937                           _gen;
-    mutable std::uniform_real_distribution<double> _dis;
-    comparable                                     _compare;
+    void swap(skiplist &other) noexcept { _swap(other); }
+
+  private:
+    using NodeAlloc = typename std::allocator_traits<
+        Allocator>::template rebind_alloc<node_t>;
+
+    static constexpr std::size_t _calc_node_count(int level) noexcept
+    {
+        std::size_t total_bytes = sizeof(node_t) + level * sizeof(level_t);
+        return (total_bytes + sizeof(node_t) - 1) / sizeof(node_t);
+    }
+
+    bool _score_less(const Score &a, const Score &b) const
+    {
+        return _score_compare(a, b);
+    }
+
+    bool _score_eq(const Score &a, const Score &b) const
+    {
+        return !_score_compare(a, b) && !_score_compare(b, a);
+    }
+
+    bool _score_le(const Score &a, const Score &b) const
+    {
+        return !_score_compare(b, a);
+    }
+
+    void _init_empty()
+    {
+        _header = _create_header_node(kMaxLevel);
+        _tail   = nullptr;
+        _length = 0;
+        _level  = 1;
+    }
+
+    node_t *_create_header_node(int level)
+    {
+        std::size_t count = _calc_node_count(level);
+        NodeAlloc   node_alloc(_alloc);
+        node_t     *raw =
+            std::allocator_traits<NodeAlloc>::allocate(node_alloc, count);
+
+        node_t *node      = ::new(static_cast<void *>(raw)) node_t;
+        node->backward    = nullptr;
+        node->level_count = level;
+
+        for(int i = 0; i < level; ++i)
+        {
+            ::new(static_cast<void *>(node->levels() + i)) level_t();
+        }
+        return node;
+    }
+
+    void _clear_and_release_header()
+    {
+        if(!_header)
+            return;
+        node_t *forward = _header->levels()[0].forward;
+        while(forward)
+        {
+            node_t *next = forward->levels()[0].forward;
+            _free_node(forward, false);
+            forward = next;
+        }
+        _free_node(_header, true);
+        _header = nullptr;
+        _tail   = nullptr;
+        _length = 0;
+        _level  = 1;
+    }
+
+    void _copy_from(const skiplist &other)
+    {
+        for(auto it = other.begin(); it != other.end(); ++it)
+            emplace(it.score(), *it);
+    }
+
+    void _swap(skiplist &other) noexcept
+    {
+        using std::swap;
+        swap(_header, other._header);
+        swap(_tail, other._tail);
+        swap(_length, other._length);
+        swap(_level, other._level);
+        swap(_compare, other._compare);
+        swap(_score_compare, other._score_compare);
+        swap(_alloc, other._alloc);
+    }
+
+    bool _precedes(const node_t *node, Score score, const T &obj) const
+    {
+        if(_score_less(node->score(), score))
+            return true;
+        if(_score_less(score, node->score()))
+            return false;
+        return _compare(node->value(), obj);
+    }
+
+    void _find_predecessors(Score        score,
+                            const T     &obj,
+                            node_t     **update,
+                            std::size_t *rank) const
+    {
+        node_t *x = _header;
+        for(int i = _level - 1; i >= 0; i--)
+        {
+            if(rank)
+                rank[i] = (i == (_level - 1)) ? 0 : rank[i + 1];
+            while(x->levels()[i].forward
+                  && _precedes(x->levels()[i].forward, score, obj))
+            {
+                if(rank)
+                    rank[i] += x->levels()[i].span;
+                x = x->levels()[i].forward;
+            }
+            update[i] = x;
+        }
+    }
+
+    const node_t *_find_node(Score score, const T &obj) const
+    {
+        node_t *update[kMaxLevel];
+        _find_predecessors(score, obj, update, nullptr);
+        node_t *x = update[0]->levels()[0].forward;
+        if(x && _score_eq(x->score(), score) && !_compare(x->value(), obj)
+           && !_compare(obj, x->value()))
+            return x;
+        return nullptr;
+    }
+
+    const node_t *_element_by_rank(std::size_t rank) const
+    {
+        if(rank >= _length)
+            return nullptr;
+
+        node_t     *x         = _header;
+        std::size_t traversed = 0;
+
+        for(int i = _level - 1; i >= 0; i--)
+        {
+            while(x->levels()[i].forward
+                  && (traversed + x->levels()[i].span - 1) < rank)
+            {
+                traversed += x->levels()[i].span;
+                x = x->levels()[i].forward;
+            }
+        }
+
+        return x->levels()[0].forward;
+    }
+
+    template <bool IsHeader = false, typename ScoreArg, typename... Args>
+    node_t *_create_node(int level, ScoreArg &&score_val, Args &&...args)
+    {
+        std::size_t count = _calc_node_count(level);
+        NodeAlloc   node_alloc(_alloc);
+        node_t     *raw =
+            std::allocator_traits<NodeAlloc>::allocate(node_alloc, count);
+
+        node_t *node      = ::new(static_cast<void *>(raw)) node_t;
+        node->backward    = nullptr;
+        node->level_count = level;
+
+        for(int i = 0; i < level; ++i)
+        {
+            ::new(static_cast<void *>(node->levels() + i)) level_t();
+        }
+
+        ::new(static_cast<void *>(node->score_ptr()))
+            Score(std::forward<ScoreArg>(score_val));
+
+        try
+        {
+            std::allocator_traits<Allocator>::construct(
+                _alloc,
+                node->value_ptr(),
+                std::forward<Args>(args)...);
+        }
+        catch(...)
+        {
+            node->score_ptr()->~Score();
+            for(int i = 0; i < level; ++i)
+            {
+                node->levels()[i].~level_t();
+            }
+            node->~node_t();
+            std::allocator_traits<NodeAlloc>::deallocate(node_alloc,
+                                                         raw,
+                                                         count);
+            throw;
+        }
+
+        return node;
+    }
+
+    void _free_node(node_t *node, bool is_header)
+    {
+        if(!node)
+            return;
+
+        if(!is_header)
+        {
+            std::allocator_traits<Allocator>::destroy(_alloc,
+                                                      node->value_ptr());
+            node->score_ptr()->~Score();
+        }
+        for(int i = 0; i < node->level_count; ++i)
+        {
+            node->levels()[i].~level_t();
+        }
+        std::size_t count = _calc_node_count(node->level_count);
+        node->~node_t();
+
+        NodeAlloc node_alloc(_alloc);
+        std::allocator_traits<NodeAlloc>::deallocate(node_alloc, node, count);
+    }
+
+    static int _random_level()
+    {
+        thread_local std::mt19937 gen(std::random_device{}());
+        thread_local std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+        int level = 1;
+        while(dis(gen) < kProbability && level < kMaxLevel)
+            level++;
+
+        return level;
+    }
+
+    void _erase_internal(node_t *x, node_t **update)
+    {
+        for(int i = 0; i < _level; i++)
+        {
+            if(update[i]->levels()[i].forward == x)
+            {
+                update[i]->levels()[i].span += x->levels()[i].span - 1;
+                update[i]->levels()[i].forward = x->levels()[i].forward;
+            } else
+            {
+                update[i]->levels()[i].span -= 1;
+            }
+        }
+
+        if(x->levels()[0].forward)
+            x->levels()[0].forward->backward = x->backward;
+        else
+            _tail = x->backward;
+
+        _free_node(x, false);
+        while(_level > 1 && _header->levels()[_level - 1].forward == nullptr)
+        {
+            _header->levels()[_level - 1].span = 0;
+            _level--;
+        }
+
+        _length--;
+    }
+
+    bool _is_in_range(Score min_score, Score max_score) const
+    {
+        if(!_header || _score_less(max_score, min_score))
+            return false;
+
+        node_t *x = _tail;
+        if(x == nullptr || _score_less(x->score(), min_score))
+            return false;
+
+        x = _header->levels()[0].forward;
+        if(x == nullptr || _score_less(max_score, x->score()))
+            return false;
+
+        return true;
+    }
+
+    const node_t *_first_in_range(Score min_score, Score max_score) const
+    {
+        if(!_is_in_range(min_score, max_score))
+            return nullptr;
+
+        node_t *x = _header;
+        for(int i = _level - 1; i >= 0; i--)
+        {
+            while(x->levels()[i].forward
+                  && _score_less(x->levels()[i].forward->score(), min_score))
+                x = x->levels()[i].forward;
+        }
+
+        x = x->levels()[0].forward;
+        if(!x || _score_less(max_score, x->score()))
+            return nullptr;
+
+        return x;
+    }
+
+    const node_t *_last_in_range(Score min_score, Score max_score) const
+    {
+        if(!_is_in_range(min_score, max_score))
+            return nullptr;
+
+        node_t *x = _header;
+        for(int i = _level - 1; i >= 0; i--)
+        {
+            while(x->levels()[i].forward
+                  && _score_le(x->levels()[i].forward->score(), max_score))
+                x = x->levels()[i].forward;
+        }
+
+        if(!x || x == _header || _score_less(x->score(), min_score))
+            return nullptr;
+
+        return x;
+    }
+
+    bool _validate_empty() const
+    {
+        if(_tail != nullptr)
+            return false;
+        for(int i = 0; i < kMaxLevel; ++i)
+        {
+            if(_header->levels()[i].forward != nullptr
+               || _header->levels()[i].span != 0)
+                return false;
+        }
+        return true;
+    }
+
+    bool _validate_level0_and_build_ranks(
+        std::unordered_map<const node_t *, std::size_t> &node_ranks) const
+    {
+        if(_header->levels()[0].span != 1)
+            return false;
+
+        const node_t *curr  = _header->levels()[0].forward;
+        const node_t *prev  = nullptr;
+        std::size_t   count = 0;
+        while(curr)
+        {
+            if(curr->level_count < 1 || curr->level_count > kMaxLevel)
+                return false;
+
+            if(curr->backward != prev)
+                return false;
+
+            if(prev)
+            {
+                if(_score_less(curr->score(), prev->score()))
+                    return false;
+                if(_score_eq(curr->score(), prev->score())
+                   && _compare(curr->value(), prev->value()))
+                    return false;
+            }
+
+            std::size_t expected_span =
+                (curr->levels()[0].forward != nullptr) ? 1 : 0;
+            if(curr->levels()[0].span != expected_span)
+                return false;
+
+            node_ranks[curr] = count++;
+            prev             = curr;
+            curr             = curr->levels()[0].forward;
+        }
+
+        return count == _length && prev == _tail;
+    }
+
+    bool _validate_active_levels(
+        const std::unordered_map<const node_t *, std::size_t> &node_ranks) const
+    {
+        auto get_rank = [&](const node_t *node) -> std::ptrdiff_t {
+            if(node == _header)
+                return -1;
+
+            auto it = node_ranks.find(node);
+            return (it != node_ranks.end())
+                       ? static_cast<std::ptrdiff_t>(it->second)
+                       : -2;
+        };
+        for(int i = 0; i < _level; ++i)
+        {
+            const node_t *x          = _header;
+            std::size_t   total_span = 0;
+            while(x)
+            {
+                const node_t *next = x->levels()[i].forward;
+                std::size_t   span = x->levels()[i].span;
+                total_span += span;
+                std::ptrdiff_t x_idx = get_rank(x);
+                if(x_idx == -2)
+                    return false;
+
+                if(next)
+                {
+                    if(next->level_count <= i)
+                        return false;
+
+                    std::ptrdiff_t next_idx = get_rank(next);
+                    if(next_idx == -2 || next_idx <= x_idx)
+                        return false;
+
+                    if(span != static_cast<std::size_t>(next_idx - x_idx))
+                        return false;
+                } else
+                {
+                    if(x == _header)
+                        return false;
+
+                    std::size_t expected_span =
+                        _length - 1 - static_cast<std::size_t>(x_idx);
+                    if(span != expected_span)
+                        return false;
+                }
+
+                x = next;
+            }
+
+            if(total_span != _length)
+                return false;
+        }
+
+        return true;
+    }
+
+    bool _validate_unused_levels() const
+    {
+        for(int i = _level; i < kMaxLevel; ++i)
+        {
+            if(_header->levels()[i].forward != nullptr
+               || _header->levels()[i].span != 0)
+                return false;
+        }
+        return true;
+    }
+
+  private:
+    node_t      *_header{nullptr};
+    node_t      *_tail{nullptr};
+    std::size_t  _length{0};
+    int          _level{1};
+    Compare      _compare;
+    ScoreCompare _score_compare;
+    Allocator    _alloc;
 };
 
-// Range result for range queries
-template <typename T>
+template <typename T,
+          typename Score,
+          typename Compare,
+          typename ScoreCompare,
+          typename Allocator>
+inline void
+swap(skiplist<T, Score, Compare, ScoreCompare, Allocator> &a,
+     skiplist<T, Score, Compare, ScoreCompare, Allocator> &b) noexcept
+{
+    a.swap(b);
+}
+
+template <typename T,
+          typename Score        = double,
+          typename Compare      = std::less<T>,
+          typename ScoreCompare = std::less<Score>,
+          typename Allocator    = std::allocator<T>>
 struct range_result
 {
-    std::vector<typename skiplist<T>::node_t *> nodes;
-    unsigned long                               total_in_range;
-
-    range_result()
-        : total_in_range(0)
-    {
-    }
+    using iterator =
+        typename skiplist<T, Score, Compare, ScoreCompare, Allocator>::iterator;
+    std::vector<iterator> iterators;
+    std::size_t           total_in_range{0};
 };
 
-template <typename T>
-inline range_result<T> range_by_score(const skiplist<T>  &sl,
-                                      const double        min_score,
-                                      const double        max_score,
-                                      const unsigned long offset = 0,
-                                      const long          limit  = -1)
+template <typename T,
+          typename Score        = double,
+          typename Compare      = std::less<T>,
+          typename ScoreCompare = std::less<Score>,
+          typename Alloc        = std::allocator<T>>
+inline range_result<T, Score, Compare, ScoreCompare, Alloc>
+range_by_score(const skiplist<T, Score, Compare, ScoreCompare, Alloc> &sl,
+               const Score          min_score,
+               const Score          max_score,
+               const std::size_t    offset     = 0,
+               const std::ptrdiff_t limit      = -1,
+               const bool           with_total = true)
 {
-    range_result<T> result;
+    range_result<T, Score, Compare, ScoreCompare, Alloc> result;
 
-    auto *x = sl.first_in_range(min_score, max_score);
-    if(!x)
-        return result;
+    typename skiplist<T, Score, Compare, ScoreCompare, Alloc>::iterator
+        first_it;
 
-    // Skip offset nodes
-    for(unsigned long i = 0; i < offset && x && x->score <= max_score; i++)
+    if(with_total)
     {
-        x = x->_level[0].forward;
-        result.total_in_range++;
+        auto [fit, rank_first] =
+            sl.first_in_range_with_rank(min_score, max_score);
+        if(fit == sl.end())
+            return result;
+
+        auto [lit, rank_last] =
+            sl.last_in_range_with_rank(min_score, max_score);
+        if(rank_last != skiplist<T, Score, Compare, ScoreCompare, Alloc>::npos
+           && rank_last >= rank_first)
+        {
+            result.total_in_range = rank_last - rank_first + 1;
+        }
+
+        first_it = fit;
+    } else
+    {
+        first_it = sl.first_in_range(min_score, max_score);
+        if(first_it == sl.end())
+            return result;
+
+        result.total_in_range = 0;
     }
 
-    // Collect nodes up to limit
-    long collected = 0;
-    while(x && x->score <= max_score && (limit == -1 || collected < limit))
+    auto score_cmp = sl.score_comp();
+    auto is_le_max = [&](const Score &s) { return !score_cmp(max_score, s); };
+    auto x         = first_it;
+    for(std::size_t i = 0; i < offset && x != sl.end() && is_le_max(x.score());
+        i++)
+        ++x;
+
+    std::ptrdiff_t collected = 0;
+    while(x != sl.end() && is_le_max(x.score())
+          && (limit == -1 || collected < limit))
     {
-        result.nodes.push_back(x);
-        result.total_in_range++;
+        result.iterators.push_back(x);
         collected++;
-        x = x->_level[0].forward;
-    }
-
-    // Count remaining nodes in range
-    while(x && x->score <= max_score)
-    {
-        result.total_in_range++;
-        x = x->_level[0].forward;
+        ++x;
     }
 
     return result;
 }
 
-template <typename T>
-inline range_result<T> range_by_rank(const skiplist<T>  &sl,
-                                     const unsigned long start,
-                                     const unsigned long end_param,
-                                     const bool          reverse = false)
+template <typename T,
+          typename Score        = double,
+          typename Compare      = std::less<T>,
+          typename ScoreCompare = std::less<Score>,
+          typename Alloc        = std::allocator<T>>
+inline range_result<T, Score, Compare, ScoreCompare, Alloc>
+range_by_rank(const skiplist<T, Score, Compare, ScoreCompare, Alloc> &sl,
+              const std::size_t                                       start,
+              const std::size_t                                       end_param,
+              const bool reverse = false)
 {
-    range_result<T> result;
+    range_result<T, Score, Compare, ScoreCompare, Alloc> result;
 
     if(start > end_param || start >= sl.size())
         return result;
 
-    unsigned long end = end_param;
+    std::size_t end = end_param;
     if(end >= sl.size())
         end = sl.size() - 1;
 
+    result.total_in_range = end - start + 1;
+
     if(!reverse)
     {
-        // Forward iteration
-        for(unsigned long i = start; i <= end; i++)
+        auto        x     = sl.get_element_by_rank(start);
+        std::size_t count = end - start + 1;
+        while(x != sl.end() && count > 0)
         {
-            auto *node = sl.get_element_by_rank(i);
-            if(node)
-            {
-                result.nodes.push_back(node);
-                result.total_in_range++;
-            }
+            result.iterators.push_back(x);
+            ++x;
+            count--;
         }
     } else
     {
-        // Reverse iteration
-        for(unsigned long i = end + 1; i > start; i--)
+        auto        x     = sl.get_element_by_rank(end);
+        std::size_t count = end - start + 1;
+        while(x != sl.end() && count > 0)
         {
-            auto *node = sl.get_element_by_rank(i - 1);
-            if(node)
-            {
-                result.nodes.push_back(node);
-                result.total_in_range++;
-            }
+            result.iterators.push_back(x);
+            --x;
+            count--;
         }
     }
 

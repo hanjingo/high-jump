@@ -24,21 +24,39 @@
 #include <string>
 #include <fstream>
 #include <memory>
-#include <stdexcept>
 #include <cstring>
 #include <limits>
 #include <algorithm>
+#include <cstdint>
 
 namespace hj
 {
 
-static constexpr int GZIP_WINDOW_BITS =
-    15 + 16; // 15 for window size, 16 for gzip format
-static constexpr size_t GZIP_MAX_SAFE_SZ =
-    (std::numeric_limits<size_t>::max()) - 1000;
+static constexpr int GZIP_WINDOW_BITS = 15 + 16;
 
 class gzip
 {
+  private:
+    struct z_stream_guard
+    {
+        z_stream &strm;
+        bool      is_deflate;
+        z_stream_guard(z_stream &s, bool deflate)
+            : strm(s)
+            , is_deflate(deflate)
+        {
+        }
+        ~z_stream_guard()
+        {
+            if(is_deflate)
+                deflateEnd(&strm);
+            else
+                inflateEnd(&strm);
+        }
+        z_stream_guard(const z_stream_guard &)            = delete;
+        z_stream_guard &operator=(const z_stream_guard &) = delete;
+    };
+
   public:
     enum class err : int
     {
@@ -90,6 +108,20 @@ class gzip
         lvl9          = 9
     };
 
+    struct compression_options
+    {
+        compression_lvl level      = compression_lvl::default_compression;
+        mem_lvl         mem        = mem_lvl::default_level;
+        strategy        strat      = strategy::default_strategy;
+        std::size_t     chunk_size = 16 * 1024; // 16KB
+    };
+
+    struct decompression_options
+    {
+        std::size_t max_output_sz = 0;
+        std::size_t chunk_size    = 16 * 1024; // 16KB
+    };
+
     static_assert(ZLIB_VERNUM >= 0x1230,
                   "zlib version too old, require >= 1.2.3");
 
@@ -111,57 +143,58 @@ class gzip
 
         size_t estimated =
             (src_sz <= MAX_SAFE_ALLOC / 4) ? src_sz * 4 : MAX_SAFE_ALLOC;
-
         return (std::max) (MIN_ALLOC, (std::min) (estimated, MAX_SAFE_ALLOC));
     }
 
-    static err compress(
-        std::vector<unsigned char> &dst,
-        const void                 *src,
-        const size_t                src_sz,
-        const compression_lvl compr_lvl = compression_lvl::default_compression,
-        const mem_lvl         mem_level = mem_lvl::default_level)
+    static err compress(std::vector<unsigned char> &dst,
+                        const void                 *src,
+                        const size_t                src_sz,
+                        const compression_options &opts = compression_options{})
     {
-        if(!src || src_sz == 0)
+        if(!src || src_sz == 0 || opts.chunk_size == 0
+           || opts.chunk_size > (std::numeric_limits<uInt>::max)())
             return err::input_invalid;
+
+        if(src_sz > static_cast<size_t>((std::numeric_limits<uInt>::max)()))
+            return err::overflow_error;
 
         z_stream stream;
         std::memset(&stream, 0, sizeof(stream));
-        int ret = deflateInit2(
-            &stream,
-            static_cast<int>(compr_lvl), // level
-            Z_DEFLATED,                  // method
-            GZIP_WINDOW_BITS,            // windowBits (15+16 for gzip)
-            static_cast<int>(mem_level), // memLevel
-            static_cast<int>(strategy::default_strategy)); // strategy
+        int ret = deflateInit2(&stream,
+                               static_cast<int>(opts.level),
+                               Z_DEFLATED,
+                               GZIP_WINDOW_BITS,
+                               static_cast<int>(opts.mem),
+                               static_cast<int>(opts.strat));
 
         if(ret != Z_OK)
             return static_cast<err>(ret);
 
+        z_stream_guard guard(stream, true);
+
         stream.avail_in = static_cast<uInt>(src_sz);
         stream.next_in  = static_cast<Bytef *>(const_cast<void *>(src));
+
         dst.clear();
         dst.reserve(compress_reserve_sz(src_sz));
-        const size_t               chunk_size = 16384; // 16KB chunks
-        std::vector<unsigned char> chunk(chunk_size);
+
+        std::vector<unsigned char> chunk(opts.chunk_size);
+
         do
         {
-            stream.avail_out = static_cast<uInt>(chunk_size);
+            stream.avail_out = static_cast<uInt>(opts.chunk_size);
             stream.next_out  = chunk.data();
             ret              = deflate(&stream, Z_FINISH);
             if(ret == Z_STREAM_ERROR)
             {
-                deflateEnd(&stream);
                 dst.clear();
                 return static_cast<err>(ret);
             }
 
-            size_t have = chunk_size - stream.avail_out;
+            size_t have = opts.chunk_size - stream.avail_out;
             dst.insert(dst.end(), chunk.begin(), chunk.begin() + have);
 
         } while(stream.avail_out == 0);
-
-        deflateEnd(&stream);
 
         if(ret != Z_STREAM_END)
         {
@@ -173,81 +206,85 @@ class gzip
         return err::ok;
     }
 
-    static err compress(
-        std::ostream         &out,
-        std::istream         &in,
-        const compression_lvl compr_lvl  = compression_lvl::default_compression,
-        const mem_lvl         mem_level  = mem_lvl::default_level,
-        const size_t          chunk_size = 16384)
+    static err compress(std::ostream              &out,
+                        std::istream              &in,
+                        const compression_options &opts = compression_options{})
     {
-        if(!in || !out)
+        if(!in || !out || opts.chunk_size == 0
+           || opts.chunk_size > (std::numeric_limits<uInt>::max)())
             return err::input_invalid;
 
         z_stream stream;
         std::memset(&stream, 0, sizeof(stream));
         int ret = deflateInit2(&stream,
-                               static_cast<int>(compr_lvl),
+                               static_cast<int>(opts.level),
                                Z_DEFLATED,
                                GZIP_WINDOW_BITS,
-                               static_cast<int>(mem_level),
-                               static_cast<int>(strategy::default_strategy));
+                               static_cast<int>(opts.mem),
+                               static_cast<int>(opts.strat));
         if(ret != Z_OK)
             return static_cast<err>(ret);
 
-        std::vector<unsigned char> inbuf(chunk_size), outbuf(chunk_size);
-        err                        result = err::ok;
-        while(in)
+        z_stream_guard guard(stream, true);
+
+        std::vector<unsigned char> inbuf(opts.chunk_size),
+            outbuf(opts.chunk_size);
+        bool is_eof = false;
+
+        while(!is_eof)
         {
-            in.read(reinterpret_cast<char *>(inbuf.data()), chunk_size);
+            in.read(reinterpret_cast<char *>(inbuf.data()), opts.chunk_size);
+            if(in.bad())
+                return err::read_buffer_error;
+
             std::streamsize read_sz = in.gcount();
-            if(read_sz <= 0)
-                break;
+            if(in.eof()
+               || read_sz < static_cast<std::streamsize>(opts.chunk_size))
+                is_eof = true;
+
+            if(read_sz < 0)
+                return err::read_buffer_error;
 
             stream.avail_in = static_cast<uInt>(read_sz);
             stream.next_in  = inbuf.data();
+            int flush       = is_eof ? Z_FINISH : Z_NO_FLUSH;
             do
             {
-                stream.avail_out = static_cast<uInt>(chunk_size);
+                stream.avail_out = static_cast<uInt>(opts.chunk_size);
                 stream.next_out  = outbuf.data();
-                ret = deflate(&stream, in.eof() ? Z_FINISH : Z_NO_FLUSH);
+                ret              = deflate(&stream, flush);
                 if(ret == Z_STREAM_ERROR)
+                    return err::stream_error;
+
+                size_t have = opts.chunk_size - stream.avail_out;
+                if(have > 0)
                 {
-                    result = err::stream_error;
-                    deflateEnd(&stream);
-                    return result;
-                }
-                size_t have = chunk_size - stream.avail_out;
-                out.write(reinterpret_cast<const char *>(outbuf.data()), have);
-                if(!out)
-                {
-                    result = err::write_buffer_error;
-                    deflateEnd(&stream);
-                    return result;
+                    out.write(reinterpret_cast<const char *>(outbuf.data()),
+                              have);
+                    if(!out)
+                        return err::write_buffer_error;
                 }
             } while(stream.avail_out == 0);
         }
 
-        // end up compression
-        do
-        {
-            stream.avail_out = static_cast<uInt>(chunk_size);
-            stream.next_out  = outbuf.data();
-            ret              = deflate(&stream, Z_FINISH);
-            size_t have      = chunk_size - stream.avail_out;
-            out.write(reinterpret_cast<const char *>(outbuf.data()), have);
-        } while(ret != Z_STREAM_END);
+        if(ret != Z_STREAM_END)
+            return err::data_error;
 
-        deflateEnd(&stream);
-        return result;
+        return err::ok;
     }
 
-    static err decompress(std::vector<unsigned char> &dst,
-                          const void                 *src,
-                          const size_t                src_sz,
-                          const size_t                max_output_sz = 0)
+    static err
+    decompress(std::vector<unsigned char>  &dst,
+               const void                  *src,
+               const size_t                 src_sz,
+               const decompression_options &opts = decompression_options{})
     {
-        if(!src || src_sz == 0)
+        if(!src || src_sz == 0 || opts.chunk_size == 0
+           || opts.chunk_size > (std::numeric_limits<uInt>::max)())
             return err::input_invalid;
+
+        if(src_sz > static_cast<size_t>((std::numeric_limits<uInt>::max)()))
+            return err::overflow_error;
 
         z_stream stream;
         std::memset(&stream, 0, sizeof(stream));
@@ -255,14 +292,15 @@ class gzip
         if(ret != Z_OK)
             return static_cast<err>(ret);
 
+        z_stream_guard guard(stream, false);
         stream.avail_in = static_cast<uInt>(src_sz);
         stream.next_in  = static_cast<Bytef *>(const_cast<void *>(src));
         dst.clear();
-        const size_t               chunk_size = 16384; // 16KB chunks
-        std::vector<unsigned char> chunk(chunk_size);
+        dst.reserve(decompress_reserve_sz(src_sz, opts.max_output_sz));
+        std::vector<unsigned char> chunk(opts.chunk_size);
         do
         {
-            stream.avail_out = static_cast<uInt>(chunk_size);
+            stream.avail_out = static_cast<uInt>(opts.chunk_size);
             stream.next_out  = chunk.data();
             ret              = inflate(&stream, Z_NO_FLUSH);
             switch(ret)
@@ -270,17 +308,16 @@ class gzip
                 case Z_NEED_DICT:
                 case Z_DATA_ERROR:
                 case Z_MEM_ERROR:
-                    inflateEnd(&stream);
+                case Z_STREAM_ERROR:
                     dst.clear();
                     return static_cast<err>(ret);
                 default:
                     break;
             }
 
-            size_t have = chunk_size - stream.avail_out;
-            if(max_output_sz > 0 && dst.size() + have > max_output_sz)
+            size_t have = opts.chunk_size - stream.avail_out;
+            if(opts.max_output_sz > 0 && have > opts.max_output_sz - dst.size())
             {
-                inflateEnd(&stream);
                 dst.clear();
                 return err::max_output_sz_exceeded;
             }
@@ -288,7 +325,6 @@ class gzip
             dst.insert(dst.end(), chunk.begin(), chunk.begin() + have);
         } while(stream.avail_out == 0);
 
-        inflateEnd(&stream);
         if(ret != Z_STREAM_END)
         {
             dst.clear();
@@ -298,12 +334,13 @@ class gzip
         return err::ok;
     }
 
-    static err decompress(std::ostream &out,
-                          std::istream &in,
-                          const size_t  max_output_sz = 0,
-                          const size_t  chunk_size    = 16384)
+    static err
+    decompress(std::ostream                &out,
+               std::istream                &in,
+               const decompression_options &opts = decompression_options{})
     {
-        if(!in || !out)
+        if(!in || !out || opts.chunk_size == 0
+           || opts.chunk_size > (std::numeric_limits<uInt>::max)())
             return err::input_invalid;
 
         z_stream stream;
@@ -312,12 +349,17 @@ class gzip
         if(ret != Z_OK)
             return static_cast<err>(ret);
 
-        std::vector<unsigned char> inbuf(chunk_size), outbuf(chunk_size);
-        err                        result    = err::ok;
-        size_t                     total_out = 0;
-        while(in)
+        z_stream_guard             guard(stream, false);
+        std::vector<unsigned char> inbuf(opts.chunk_size),
+            outbuf(opts.chunk_size);
+        size_t total_out = 0;
+
+        while(in && ret != Z_STREAM_END)
         {
-            in.read(reinterpret_cast<char *>(inbuf.data()), chunk_size);
+            in.read(reinterpret_cast<char *>(inbuf.data()), opts.chunk_size);
+            if(in.bad())
+                return err::read_buffer_error;
+
             std::streamsize read_sz = in.gcount();
             if(read_sz <= 0)
                 break;
@@ -326,55 +368,69 @@ class gzip
             stream.next_in  = inbuf.data();
             do
             {
-                stream.avail_out = static_cast<uInt>(chunk_size);
+                stream.avail_out = static_cast<uInt>(opts.chunk_size);
                 stream.next_out  = outbuf.data();
                 ret              = inflate(&stream, Z_NO_FLUSH);
                 switch(ret)
                 {
                     case Z_NEED_DICT:
                     case Z_DATA_ERROR:
-                    case Z_MEM_ERROR: {
-                        result = static_cast<err>(ret);
-                        inflateEnd(&stream);
-                        return result;
-                    }
+                    case Z_MEM_ERROR:
+                    case Z_STREAM_ERROR:
+                        return static_cast<err>(ret);
                     default:
                         break;
                 }
-                size_t have = chunk_size - stream.avail_out;
+                size_t have = opts.chunk_size - stream.avail_out;
                 total_out += have;
-                if(max_output_sz > 0 && total_out > max_output_sz)
+                if(opts.max_output_sz > 0 && total_out > opts.max_output_sz)
+                    return err::max_output_sz_exceeded;
+
+                if(have > 0)
                 {
-                    result = err::max_output_sz_exceeded;
-                    inflateEnd(&stream);
-                    return result;
+                    out.write(reinterpret_cast<const char *>(outbuf.data()),
+                              have);
+                    if(!out)
+                        return err::write_buffer_error;
                 }
 
-                out.write(reinterpret_cast<const char *>(outbuf.data()), have);
-                if(!out)
-                {
-                    result = err::write_buffer_error;
-                    inflateEnd(&stream);
-                    return result;
-                }
-
-            } while(stream.avail_out == 0);
+            } while(stream.avail_out == 0 && ret != Z_STREAM_END);
         }
-        if(ret != Z_STREAM_END)
-            result = static_cast<err>(ret);
 
-        inflateEnd(&stream);
-        return result;
+        if(ret != Z_STREAM_END)
+            return err::data_error;
+
+        return err::ok;
     }
 
-    static unsigned long crc32_checksum(const void *data, const size_t size)
+    static std::uint32_t crc32_checksum(const void *data, const size_t size)
     {
         if(!data || size == 0)
             return 0;
 
-        return crc32(0L,
-                     static_cast<const Bytef *>(data),
-                     static_cast<uInt>(size));
+        if(size > static_cast<size_t>((std::numeric_limits<uInt>::max)()))
+        {
+            std::uint32_t crc =
+                static_cast<std::uint32_t>(crc32(0L, Z_NULL, 0));
+            const auto *ptr       = static_cast<const Bytef *>(data);
+            size_t      remaining = size;
+            while(remaining > 0)
+            {
+                uInt chunk = static_cast<uInt>(
+                    (std::min) (remaining,
+                                static_cast<size_t>(
+                                    (std::numeric_limits<uInt>::max)())));
+                crc = static_cast<std::uint32_t>(crc32(crc, ptr, chunk));
+                ptr += chunk;
+                remaining -= chunk;
+            }
+            return crc;
+        }
+
+        return static_cast<std::uint32_t>(
+            crc32(0L,
+                  static_cast<const Bytef *>(data),
+                  static_cast<uInt>(size)));
     }
 
     static double compression_ratio(const size_t original_sz,

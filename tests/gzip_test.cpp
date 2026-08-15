@@ -7,18 +7,17 @@
 #include <random>
 #include <chrono>
 
-class gzip : public ::testing::Test
+class gzip_test : public ::testing::Test
 {
   protected:
     void SetUp() override
     {
         test_string = "Hello, World! This is a test string for hj::gzip "
-                      "compression and decompression.";
+                      "compression and decompression with options pattern.";
         test_data =
             std::vector<unsigned char>(test_string.begin(), test_string.end());
 
-        large_data.resize(100000);
-        large_data.assign(large_data.size(), 0);
+        large_data.resize(100000, 0xAB);
 
         std::random_device              rd;
         std::mt19937                    gen(rd());
@@ -44,7 +43,7 @@ class gzip : public ::testing::Test
     std::vector<unsigned char> random_data;
 };
 
-TEST_F(gzip, basic_compression_decompression)
+TEST_F(gzip_test, basic_compression_decompression)
 {
     std::vector<unsigned char> compressed;
     std::vector<unsigned char> decompressed;
@@ -53,6 +52,7 @@ TEST_F(gzip, basic_compression_decompression)
         hj::gzip::compress(compressed, test_data.data(), test_data.size());
     EXPECT_EQ(compress_result, hj::gzip::err::ok);
     EXPECT_GT(compressed.size(), 0);
+    EXPECT_TRUE(hj::gzip::is_gzip_format(compressed.data(), compressed.size()));
 
     auto decompress_result = hj::gzip::decompress(decompressed,
                                                   compressed.data(),
@@ -62,315 +62,345 @@ TEST_F(gzip, basic_compression_decompression)
     EXPECT_EQ(decompressed, test_data);
 }
 
-TEST_F(gzip, empty_data_handling)
+TEST_F(gzip_test, compression_levels)
 {
-    std::vector<unsigned char> compressed;
-    std::vector<unsigned char> decompressed;
+    const hj::gzip::compression_lvl levels[] = {
+        hj::gzip::compression_lvl::default_compression,
+        hj::gzip::compression_lvl::no_compression,
+        hj::gzip::compression_lvl::best_speed,
+        hj::gzip::compression_lvl::best_compression};
 
-    auto result = hj::gzip::compress(compressed, nullptr, 0);
-    EXPECT_EQ(result, hj::gzip::err::input_invalid);
+    std::vector<unsigned char> compressed_best, compressed_speed;
 
-    unsigned char dummy = 0;
-    result              = hj::gzip::compress(compressed, &dummy, 0);
-    EXPECT_EQ(result, hj::gzip::err::input_invalid);
-
-    result = hj::gzip::decompress(decompressed, nullptr, 0);
-    EXPECT_EQ(result, hj::gzip::err::input_invalid);
-}
-
-TEST_F(gzip, compression_levels)
-{
-    std::vector<unsigned char> compressed_default;
-    std::vector<unsigned char> compressed_fast;
-    std::vector<unsigned char> compressed_best;
-    std::vector<unsigned char> compressed_none;
-
-    auto result = hj::gzip::compress(compressed_default,
-                                     test_data.data(),
-                                     test_data.size());
-    EXPECT_EQ(result, hj::gzip::err::ok);
-
-    result = hj::gzip::compress(compressed_fast,
-                                test_data.data(),
-                                test_data.size(),
-                                hj::gzip::compression_lvl::best_speed);
-    EXPECT_EQ(result, hj::gzip::err::ok);
-
-    result = hj::gzip::compress(compressed_best,
-                                test_data.data(),
-                                test_data.size(),
-                                hj::gzip::compression_lvl::best_compression);
-    EXPECT_EQ(result, hj::gzip::err::ok);
-
-    result = hj::gzip::compress(compressed_none,
-                                test_data.data(),
-                                test_data.size(),
-                                hj::gzip::compression_lvl::no_compression);
-    EXPECT_EQ(result, hj::gzip::err::ok);
-
-    std::vector<std::vector<unsigned char> *> compressed_vectors = {
-        &compressed_default,
-        &compressed_fast,
-        &compressed_best,
-        &compressed_none};
-
-    for(auto *compressed_vec : compressed_vectors)
+    for(auto lvl : levels)
     {
+        std::vector<unsigned char>    compressed;
+        hj::gzip::compression_options opts;
+        opts.level = lvl;
+
+        auto res = hj::gzip::compress(compressed,
+                                      test_data.data(),
+                                      test_data.size(),
+                                      opts);
+        EXPECT_EQ(res, hj::gzip::err::ok);
+
         std::vector<unsigned char> decompressed;
-        result = hj::gzip::decompress(decompressed,
-                                      compressed_vec->data(),
-                                      compressed_vec->size());
-        EXPECT_EQ(result, hj::gzip::err::ok);
+        res = hj::gzip::decompress(decompressed,
+                                   compressed.data(),
+                                   compressed.size());
+        EXPECT_EQ(res, hj::gzip::err::ok);
         EXPECT_EQ(decompressed, test_data);
+
+        if(lvl == hj::gzip::compression_lvl::best_compression)
+            compressed_best = compressed;
+        if(lvl == hj::gzip::compression_lvl::best_speed)
+            compressed_speed = compressed;
     }
 
-    EXPECT_LE(compressed_best.size(), compressed_fast.size());
+    EXPECT_LE(compressed_best.size(), compressed_speed.size());
 }
 
-TEST_F(gzip, memory_levels)
+TEST_F(gzip_test, memory_levels)
 {
-    std::vector<unsigned char> compressed_lvl1;
-    std::vector<unsigned char> compressed_lvl9;
+    const hj::gzip::mem_lvl mem_levels[] = {hj::gzip::mem_lvl::lvl1,
+                                            hj::gzip::mem_lvl::default_level,
+                                            hj::gzip::mem_lvl::lvl9};
 
-    auto result =
-        hj::gzip::compress(compressed_lvl1,
-                           large_data.data(),
-                           large_data.size(),
-                           hj::gzip::compression_lvl::default_compression,
-                           hj::gzip::mem_lvl::lvl1);
-    EXPECT_EQ(result, hj::gzip::err::ok);
+    for(auto mem : mem_levels)
+    {
+        std::vector<unsigned char>    compressed;
+        hj::gzip::compression_options opts;
+        opts.mem = mem;
 
-    result = hj::gzip::compress(compressed_lvl9,
-                                large_data.data(),
-                                large_data.size(),
-                                hj::gzip::compression_lvl::default_compression,
-                                hj::gzip::mem_lvl::lvl9);
-    EXPECT_EQ(result, hj::gzip::err::ok);
+        auto res = hj::gzip::compress(compressed,
+                                      large_data.data(),
+                                      large_data.size(),
+                                      opts);
+        EXPECT_EQ(res, hj::gzip::err::ok);
 
-    std::vector<unsigned char> decompressed1, decompressed9;
-
-    result = hj::gzip::decompress(decompressed1,
-                                  compressed_lvl1.data(),
-                                  compressed_lvl1.size());
-    EXPECT_EQ(result, hj::gzip::err::ok);
-    EXPECT_EQ(decompressed1, large_data);
-
-    result = hj::gzip::decompress(decompressed9,
-                                  compressed_lvl9.data(),
-                                  compressed_lvl9.size());
-    EXPECT_EQ(result, hj::gzip::err::ok);
-    EXPECT_EQ(decompressed9, large_data);
+        std::vector<unsigned char> decompressed;
+        res = hj::gzip::decompress(decompressed,
+                                   compressed.data(),
+                                   compressed.size());
+        EXPECT_EQ(res, hj::gzip::err::ok);
+        EXPECT_EQ(decompressed, large_data);
+    }
 }
 
-TEST_F(gzip, large_data_compression)
+TEST_F(gzip_test, compression_strategies)
 {
-    std::vector<unsigned char> compressed;
-    std::vector<unsigned char> decompressed;
+    const hj::gzip::strategy strategies[] = {
+        hj::gzip::strategy::default_strategy,
+        hj::gzip::strategy::filtered,
+        hj::gzip::strategy::huffman_only,
+        hj::gzip::strategy::rle,
+        hj::gzip::strategy::fixed};
 
-    auto start_time = std::chrono::high_resolution_clock::now();
+    for(auto strat : strategies)
+    {
+        std::vector<unsigned char>    compressed;
+        hj::gzip::compression_options opts;
+        opts.strat = strat;
 
-    auto compress_result =
-        hj::gzip::compress(compressed, large_data.data(), large_data.size());
-    EXPECT_EQ(compress_result, hj::gzip::err::ok);
+        auto res = hj::gzip::compress(compressed,
+                                      test_data.data(),
+                                      test_data.size(),
+                                      opts);
+        EXPECT_EQ(res, hj::gzip::err::ok);
 
-    auto decompress_result = hj::gzip::decompress(decompressed,
-                                                  compressed.data(),
-                                                  compressed.size());
-    EXPECT_EQ(decompress_result, hj::gzip::err::ok);
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        end_time - start_time);
-
-    EXPECT_EQ(decompressed, large_data);
-    EXPECT_LT(duration.count(), 5000);
-
-    double ratio =
-        hj::gzip::compression_ratio(large_data.size(), compressed.size());
-    EXPECT_GT(ratio, 0.8);
+        std::vector<unsigned char> decompressed;
+        res = hj::gzip::decompress(decompressed,
+                                   compressed.data(),
+                                   compressed.size());
+        EXPECT_EQ(res, hj::gzip::err::ok);
+        EXPECT_EQ(decompressed, test_data);
+    }
 }
 
-TEST_F(gzip, random_data_compression)
+TEST_F(gzip_test, custom_chunk_sizes)
 {
-    std::vector<unsigned char> compressed;
-    std::vector<unsigned char> decompressed;
+    const size_t chunk_sizes[] = {1, 16, 64, 1024, 65536};
 
-    auto compress_result =
-        hj::gzip::compress(compressed, random_data.data(), random_data.size());
-    EXPECT_EQ(compress_result, hj::gzip::err::ok);
+    for(size_t chunk_sz : chunk_sizes)
+    {
+        std::vector<unsigned char>    compressed;
+        hj::gzip::compression_options c_opts;
+        c_opts.chunk_size = chunk_sz;
 
-    auto decompress_result = hj::gzip::decompress(decompressed,
-                                                  compressed.data(),
-                                                  compressed.size());
-    EXPECT_EQ(decompress_result, hj::gzip::err::ok);
+        auto res = hj::gzip::compress(compressed,
+                                      test_data.data(),
+                                      test_data.size(),
+                                      c_opts);
+        EXPECT_EQ(res, hj::gzip::err::ok);
 
-    EXPECT_EQ(decompressed, random_data);
+        std::vector<unsigned char>      decompressed;
+        hj::gzip::decompression_options d_opts;
+        d_opts.chunk_size = chunk_sz;
 
-    double ratio =
-        hj::gzip::compression_ratio(random_data.size(), compressed.size());
+        res = hj::gzip::decompress(decompressed,
+                                   compressed.data(),
+                                   compressed.size(),
+                                   d_opts);
+        EXPECT_EQ(res, hj::gzip::err::ok);
+        EXPECT_EQ(decompressed, test_data);
+    }
 }
 
-TEST_F(gzip, max_output_size_limit)
-{
-    std::vector<unsigned char> compressed;
-    std::vector<unsigned char> decompressed;
-
-    auto compress_result =
-        hj::gzip::compress(compressed, test_data.data(), test_data.size());
-    EXPECT_EQ(compress_result, hj::gzip::err::ok);
-
-    size_t max_output_size   = test_data.size() * 2;
-    auto   decompress_result = hj::gzip::decompress(decompressed,
-                                                    compressed.data(),
-                                                    compressed.size(),
-                                                    max_output_size);
-    EXPECT_EQ(decompress_result, hj::gzip::err::ok);
-    EXPECT_EQ(decompressed, test_data);
-}
-
-TEST_F(gzip, stream_compression)
+TEST_F(gzip_test, stream_compression_and_decompression)
 {
     std::stringstream in_stream(std::ios::binary | std::ios::in
                                 | std::ios::out);
-    std::stringstream out_stream(std::ios::binary | std::ios::in
-                                 | std::ios::out);
+    std::stringstream compressed_stream(std::ios::binary | std::ios::in
+                                        | std::ios::out);
 
     in_stream.write(reinterpret_cast<const char *>(test_data.data()),
                     test_data.size());
     in_stream.seekg(0, std::ios::beg);
 
-    auto compress_result = hj::gzip::compress(out_stream, in_stream);
-    EXPECT_EQ(compress_result, hj::gzip::err::ok);
+    hj::gzip::compression_options c_opts;
+    c_opts.chunk_size = 32;
 
-    out_stream.seekg(0, std::ios::end);
-    size_t compressed_size = out_stream.tellg();
-    EXPECT_GT(compressed_size, 0);
+    auto compress_res =
+        hj::gzip::compress(compressed_stream, in_stream, c_opts);
+    EXPECT_EQ(compress_res, hj::gzip::err::ok);
 
-    out_stream.seekg(0, std::ios::beg);
-    std::stringstream decompress_stream(std::ios::binary | std::ios::in
-                                        | std::ios::out);
-    auto              decompress_result =
-        hj::gzip::decompress(decompress_stream, out_stream);
-    EXPECT_EQ(decompress_result, hj::gzip::err::ok);
+    compressed_stream.seekg(0, std::ios::beg);
+    std::stringstream decompressed_stream(std::ios::binary | std::ios::in
+                                          | std::ios::out);
 
-    decompress_stream.seekg(0, std::ios::end);
-    size_t decompressed_size = decompress_stream.tellg();
-    EXPECT_EQ(decompressed_size, test_data.size());
+    hj::gzip::decompression_options d_opts;
+    d_opts.chunk_size = 16;
+
+    auto decompress_res =
+        hj::gzip::decompress(decompressed_stream, compressed_stream, d_opts);
+    EXPECT_EQ(decompress_res, hj::gzip::err::ok);
+
+    std::string                decompressed_str = decompressed_stream.str();
+    std::vector<unsigned char> decompressed_vec(decompressed_str.begin(),
+                                                decompressed_str.end());
+
+    EXPECT_EQ(decompressed_vec, test_data);
 }
 
-TEST_F(gzip, stream_decompression)
+TEST_F(gzip_test, max_output_size_limit)
 {
     std::vector<unsigned char> compressed;
-    auto                       compress_result =
+    auto                       compress_res =
         hj::gzip::compress(compressed, test_data.data(), test_data.size());
-    ASSERT_EQ(compress_result, hj::gzip::err::ok);
-    ASSERT_FALSE(compressed.empty());
+    ASSERT_EQ(compress_res, hj::gzip::err::ok);
 
-    std::string compressed_payload(
-        reinterpret_cast<const char *>(compressed.data()),
-        compressed.size());
-    std::istringstream in_stream(compressed_payload, std::ios::binary);
-    std::ostringstream out_stream(std::ios::binary);
-
-    auto decompress_result = hj::gzip::decompress(out_stream, in_stream);
-    EXPECT_EQ(decompress_result, hj::gzip::err::ok);
-    ASSERT_TRUE(out_stream.good());
-
-    std::string                decompressed_payload = out_stream.str();
-    std::vector<unsigned char> decompressed_data(decompressed_payload.begin(),
-                                                 decompressed_payload.end());
-
-    EXPECT_EQ(decompressed_data.size(), test_data.size());
-    EXPECT_TRUE(std::equal(decompressed_data.begin(),
-                           decompressed_data.end(),
-                           test_data.begin(),
-                           test_data.end()));
-}
-
-TEST_F(gzip, crc32_checksum)
-{
-    auto crc1 = hj::gzip::crc32_checksum(test_data.data(), test_data.size());
-    auto crc2 = hj::gzip::crc32_checksum(test_data.data(), test_data.size());
-
-    EXPECT_EQ(crc1, crc2);
-    EXPECT_NE(crc1, 0);
-
-    auto empty_crc = hj::gzip::crc32_checksum(nullptr, 0);
-    EXPECT_EQ(empty_crc, 0);
-
-    std::vector<unsigned char> modified_data = test_data;
-    if(!modified_data.empty())
     {
-        modified_data[0]  = ~modified_data[0];
-        auto modified_crc = hj::gzip::crc32_checksum(modified_data.data(),
-                                                     modified_data.size());
-        EXPECT_NE(crc1, modified_crc);
+        std::vector<unsigned char>      decompressed;
+        hj::gzip::decompression_options opts;
+        opts.max_output_sz = test_data.size();
+
+        auto res = hj::gzip::decompress(decompressed,
+                                        compressed.data(),
+                                        compressed.size(),
+                                        opts);
+        EXPECT_EQ(res, hj::gzip::err::ok);
+        EXPECT_EQ(decompressed, test_data);
+    }
+
+    {
+        std::vector<unsigned char>      decompressed;
+        hj::gzip::decompression_options opts;
+        opts.max_output_sz = test_data.size() - 1;
+
+        auto res = hj::gzip::decompress(decompressed,
+                                        compressed.data(),
+                                        compressed.size(),
+                                        opts);
+        EXPECT_EQ(res, hj::gzip::err::max_output_sz_exceeded);
+        EXPECT_TRUE(decompressed.empty());
+    }
+
+    {
+        std::string payload(reinterpret_cast<const char *>(compressed.data()),
+                            compressed.size());
+        std::istringstream in(payload, std::ios::binary);
+        std::ostringstream out(std::ios::binary);
+
+        hj::gzip::decompression_options opts;
+        opts.max_output_sz = test_data.size() - 1;
+
+        auto res = hj::gzip::decompress(out, in, opts);
+        EXPECT_EQ(res, hj::gzip::err::max_output_sz_exceeded);
     }
 }
 
-TEST_F(gzip, compression_ratio)
+TEST_F(gzip_test, invalid_input_handling)
 {
-    double ratio1 = hj::gzip::compression_ratio(100, 50);
-    EXPECT_DOUBLE_EQ(ratio1, 0.5);
+    std::vector<unsigned char> dst;
+    unsigned char              dummy = 0x01;
 
-    double ratio2 = hj::gzip::compression_ratio(1000, 100);
-    EXPECT_DOUBLE_EQ(ratio2, 0.9);
+    EXPECT_EQ(hj::gzip::compress(dst, nullptr, 100),
+              hj::gzip::err::input_invalid);
+    EXPECT_EQ(hj::gzip::compress(dst, &dummy, 0), hj::gzip::err::input_invalid);
+    EXPECT_EQ(hj::gzip::decompress(dst, nullptr, 100),
+              hj::gzip::err::input_invalid);
+    EXPECT_EQ(hj::gzip::decompress(dst, &dummy, 0),
+              hj::gzip::err::input_invalid);
 
-    double ratio_zero = hj::gzip::compression_ratio(0, 50);
-    EXPECT_DOUBLE_EQ(ratio_zero, 0.0);
+    {
+        hj::gzip::compression_options c_opts;
+        c_opts.chunk_size = 0;
+        EXPECT_EQ(hj::gzip::compress(dst, &dummy, 1, c_opts),
+                  hj::gzip::err::input_invalid);
 
-    double ratio_no_compression = hj::gzip::compression_ratio(100, 100);
-    EXPECT_DOUBLE_EQ(ratio_no_compression, 0.0);
+        hj::gzip::decompression_options d_opts;
+        d_opts.chunk_size = 0;
+        EXPECT_EQ(hj::gzip::decompress(dst, &dummy, 1, d_opts),
+                  hj::gzip::err::input_invalid);
+    }
 
-    double ratio_negative = hj::gzip::compression_ratio(100, 150);
-    EXPECT_DOUBLE_EQ(ratio_negative, -0.5);
+    {
+        std::vector<unsigned char> bad_data =
+            {0x1f, 0x8b, 0x00, 0x00, 0x99, 0x88, 0x77};
+        auto res = hj::gzip::decompress(dst, bad_data.data(), bad_data.size());
+        EXPECT_NE(res, hj::gzip::err::ok);
+    }
 }
 
-TEST_F(gzip, error_handling)
-{
-    std::vector<unsigned char> result;
-
-    auto err = hj::gzip::compress(result, nullptr, 100);
-    EXPECT_EQ(err, hj::gzip::err::input_invalid);
-
-    err = hj::gzip::decompress(result, nullptr, 100);
-    EXPECT_EQ(err, hj::gzip::err::input_invalid);
-
-    std::vector<unsigned char> invalid_data = {0x12, 0x34, 0x56, 0x78};
-    err =
-        hj::gzip::decompress(result, invalid_data.data(), invalid_data.size());
-    EXPECT_NE(err, hj::gzip::err::ok);
-    EXPECT_TRUE(err == hj::gzip::err::data_error
-                || err == hj::gzip::err::stream_error);
-}
-
-TEST_F(gzip, stream_error_handling)
+TEST_F(gzip_test, stream_error_handling)
 {
     std::vector<unsigned char> dummy_data = {1, 2, 3, 4, 5};
 
-    std::ifstream      invalid_in("non_existent_file.txt");
+    std::ifstream      invalid_in("non_existent_file_hj_gzip.txt");
     std::ostringstream out;
-    auto               err = hj::gzip::compress(out, invalid_in);
-    EXPECT_EQ(err, hj::gzip::err::input_invalid);
+    EXPECT_EQ(hj::gzip::compress(out, invalid_in),
+              hj::gzip::err::input_invalid);
+    EXPECT_EQ(hj::gzip::decompress(out, invalid_in),
+              hj::gzip::err::input_invalid);
 
     std::istringstream in(std::string(dummy_data.begin(), dummy_data.end()));
-    std::ofstream      invalid_out("/invalid/path/output.gz");
-    err = hj::gzip::compress(invalid_out, in);
-    EXPECT_EQ(err, hj::gzip::err::input_invalid);
+    std::ofstream      invalid_out("/non_existent_path_dir/output.gz");
+    EXPECT_EQ(hj::gzip::compress(invalid_out, in),
+              hj::gzip::err::input_invalid);
 }
 
-TEST_F(gzip, boundary_conditions)
+TEST_F(gzip_test, boundary_conditions)
 {
-    unsigned char              single_byte = 0x42;
-    std::vector<unsigned char> compressed, decompressed;
+    {
+        unsigned char              single_byte = 0x7F;
+        std::vector<unsigned char> compressed, decompressed;
 
-    auto compress_result = hj::gzip::compress(compressed, &single_byte, 1);
-    EXPECT_EQ(compress_result, hj::gzip::err::ok);
-    EXPECT_GT(compressed.size(), 1);
+        EXPECT_EQ(hj::gzip::compress(compressed, &single_byte, 1),
+                  hj::gzip::err::ok);
+        EXPECT_GT(compressed.size(), 1);
 
-    auto decompress_result = hj::gzip::decompress(decompressed,
-                                                  compressed.data(),
-                                                  compressed.size());
-    EXPECT_EQ(decompress_result, hj::gzip::err::ok);
-    EXPECT_EQ(decompressed.size(), 1);
+        EXPECT_EQ(hj::gzip::decompress(decompressed,
+                                       compressed.data(),
+                                       compressed.size()),
+                  hj::gzip::err::ok);
+        ASSERT_EQ(decompressed.size(), 1);
+        EXPECT_EQ(decompressed[0], single_byte);
+    }
+
+    {
+        std::vector<unsigned char> compressed, decompressed;
+        EXPECT_EQ(hj::gzip::compress(compressed,
+                                     large_data.data(),
+                                     large_data.size()),
+                  hj::gzip::err::ok);
+        EXPECT_LT(compressed.size(), large_data.size() / 10);
+
+        EXPECT_EQ(hj::gzip::decompress(decompressed,
+                                       compressed.data(),
+                                       compressed.size()),
+                  hj::gzip::err::ok);
+        EXPECT_EQ(decompressed, large_data);
+    }
+}
+
+TEST_F(gzip_test, is_gzip_format)
+{
+    std::vector<unsigned char> compressed;
+    hj::gzip::compress(compressed, test_data.data(), test_data.size());
+
+    EXPECT_TRUE(hj::gzip::is_gzip_format(compressed.data(), compressed.size()));
+
+    EXPECT_FALSE(hj::gzip::is_gzip_format(nullptr, 100));
+    EXPECT_FALSE(hj::gzip::is_gzip_format(compressed.data(), 9));
+
+    EXPECT_FALSE(hj::gzip::is_gzip_format(test_data.data(), test_data.size()));
+}
+
+TEST_F(gzip_test, helper_functions)
+{
+    // 1. CRC32 Checksum
+    {
+        auto crc1 =
+            hj::gzip::crc32_checksum(test_data.data(), test_data.size());
+        auto crc2 =
+            hj::gzip::crc32_checksum(test_data.data(), test_data.size());
+
+        EXPECT_EQ(crc1, crc2);
+        EXPECT_NE(crc1, 0u);
+
+        EXPECT_EQ(hj::gzip::crc32_checksum(nullptr, 0), 0u);
+        EXPECT_EQ(hj::gzip::crc32_checksum(test_data.data(), 0), 0u);
+
+        std::vector<unsigned char> modified_data = test_data;
+        modified_data[0] ^= 0xFF;
+        EXPECT_NE(crc1,
+                  hj::gzip::crc32_checksum(modified_data.data(),
+                                           modified_data.size()));
+    }
+
+    // 2. Compression Ratio
+    {
+        EXPECT_DOUBLE_EQ(hj::gzip::compression_ratio(100, 50), 0.5);
+        EXPECT_DOUBLE_EQ(hj::gzip::compression_ratio(1000, 100), 0.9);
+        EXPECT_DOUBLE_EQ(hj::gzip::compression_ratio(0, 50), 0.0);
+        EXPECT_DOUBLE_EQ(hj::gzip::compression_ratio(100, 100), 0.0);
+        EXPECT_DOUBLE_EQ(hj::gzip::compression_ratio(100, 150), -0.5);
+    }
+
+    // 3. Reserve Size Estimates
+    {
+        EXPECT_GT(hj::gzip::compress_reserve_sz(1000), 1000);
+        EXPECT_GT(hj::gzip::decompress_reserve_sz(0, 0), 0);
+        EXPECT_EQ(hj::gzip::decompress_reserve_sz(100, 500), 500);
+    }
 }

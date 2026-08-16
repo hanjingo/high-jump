@@ -1,11 +1,16 @@
 #include <gtest/gtest.h>
 #include <hj/crypto/des.hpp>
-#include <hj/crypto/md5.hpp>
 
-#include <iostream>
-#include <sstream>
-#include <iomanip>
+#include <openssl/evp.h>
+
+#include <array>
+#include <fstream>
 #include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
 
 std::string calc_file_md5(const std::string &file_path)
 {
@@ -13,11 +18,39 @@ std::string calc_file_md5(const std::string &file_path)
     if(!ifs.is_open())
         return "";
 
-    std::string md5_bin;
-    hj::md5::encode(md5_bin, ifs);
-    return hj::md5::to_hex(md5_bin);
-}
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> ctx(
+        EVP_MD_CTX_new(),
+        EVP_MD_CTX_free);
+    if(!ctx)
+        return "";
 
+    if(EVP_DigestInit_ex(ctx.get(), EVP_md5(), nullptr) != 1)
+        return "";
+
+    char buffer[8192];
+    while(ifs.read(buffer, sizeof(buffer)) || ifs.gcount() > 0)
+    {
+        if(EVP_DigestUpdate(ctx.get(),
+                            buffer,
+                            static_cast<std::size_t>(ifs.gcount()))
+           != 1)
+            return "";
+    }
+
+    std::array<unsigned char, EVP_MAX_MD_SIZE> hash{};
+    unsigned int                               hash_len = 0;
+    if(EVP_DigestFinal_ex(ctx.get(), hash.data(), &hash_len) != 1)
+        return "";
+
+    std::ostringstream oss;
+    for(unsigned int i = 0; i < hash_len; ++i)
+    {
+        oss << std::hex << std::setw(2) << std::setfill('0')
+            << static_cast<int>(hash[i]);
+    }
+
+    return oss.str();
+}
 std::string to_hex(const std::string &src)
 {
     std::stringstream ss;

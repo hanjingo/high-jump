@@ -28,7 +28,7 @@ extern "C" {
 #endif
 
 #ifndef HJ_BLUETOOTH_API
-#if defined(HJ_BLUETOOTH_STATIC) || defined(HJ_BLUETOOTH_IMPL)
+#if defined(HJ_BLUETOOTH_STATIC)
 #define HJ_BLUETOOTH_API static inline
 #else
 #define HJ_BLUETOOTH_API extern
@@ -73,7 +73,8 @@ hj_bluetooth_device_count(hj_bluetooth_device_filter_fn filter);
 // This section uses STB-style single-header implementation.
 // To include implementation, define HJ_BLUETOOTH_IMPL before including
 // this header in ONE C/C++ source file.
-#if defined(HJ_BLUETOOTH_IMPL) && !defined(HJ_BLUETOOTH_IMPL_DONE)
+#if (defined(HJ_BLUETOOTH_IMPL) || defined(HJ_BLUETOOTH_STATIC))               \
+    && !defined(HJ_BLUETOOTH_IMPL_DONE)
 #define HJ_BLUETOOTH_IMPL_DONE
 
 #ifdef __cplusplus

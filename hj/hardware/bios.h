@@ -38,7 +38,7 @@ extern "C" {
 #define HJ_MAX_SERIAL_LENGTH 127
 
 #ifndef HJ_BIOS_API
-#if defined(HJ_BIOS_STATIC) || defined(HJ_BIOS_IMPL)
+#if defined(HJ_BIOS_STATIC)
 #define HJ_BIOS_API static inline
 #else
 #define HJ_BIOS_API extern
@@ -90,7 +90,8 @@ HJ_BIOS_API hj_bios_err_t hj_bios_info(hj_bios_info_t *info);
 // This section is using STB-style implementation. To include the
 // implementation, define HJ_BIOS_IMPL before including
 // this header in one source file.
-#if defined(HJ_BIOS_IMPL) && !defined(HJ_BIOS_IMPL_DONE)
+#if (defined(HJ_BIOS_IMPL) || defined(HJ_BIOS_STATIC))                         \
+    && !defined(HJ_BIOS_IMPL_DONE)
 #define HJ_BIOS_IMPL_DONE
 
 #include <stdio.h>

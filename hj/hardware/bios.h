@@ -90,7 +90,8 @@ HJ_BIOS_API hj_bios_err_t hj_bios_info(hj_bios_info_t *info);
 // This section is using STB-style implementation. To include the
 // implementation, define HJ_BIOS_IMPL before including
 // this header in one source file.
-#ifdef HJ_BIOS_IMPL
+#if defined(HJ_BIOS_IMPL) && !defined(HJ_BIOS_IMPL_DONE)
+#define HJ_BIOS_IMPL_DONE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -648,4 +649,4 @@ HJ_BIOS_API hj_bios_err_t hj_bios_info(hj_bios_info_t *info)
 }
 #endif
 
-#endif // HJ_BIOS_IMPL
+#endif // HJ_BIOS_IMPL && !HJ_BIOS_IMPL_DONE

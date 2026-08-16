@@ -18,38 +18,48 @@
 #ifndef DISK_H
 #define DISK_H
 
+// ------------------- API Macro Definition ----------------------
+#ifndef HJ_DISK_API
+#if defined(HJ_DISK_STATIC)
+#define HJ_DISK_API static inline
+#else
+#define HJ_DISK_API extern
+#endif
+#endif
+
 // ------------------ Platform Detection ---------------------
 #if defined(_WIN32) || defined(_WIN64)
-#define DISK_PLATFORM_WINDOWS 1
+#define HJ_DISK_PLATFORM_WINDOWS 1
 #include <windows.h>
 #include <setupapi.h>
 #include <winioctl.h>
 
 #elif defined(__linux__)
-#define DISK_PLATFORM_LINUX 1
+#define HJ_DISK_PLATFORM_LINUX 1
+#include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <linux/fs.h>
 #include <mntent.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <unistd.h>
-#include <errno.h>
 #include <time.h>
+#include <unistd.h>
 #elif defined(__APPLE__)
-#define DISK_PLATFORM_MACOS 1
+#define HJ_DISK_PLATFORM_MACOS 1
 #include <CoreFoundation/CoreFoundation.h>
-#include <IOKit/IOKitLib.h>
-#include <IOKit/storage/IOMedia.h>
-#include <IOKit/storage/IOBlockStorageDriver.h>
 #include <IOKit/IOBSD.h>
+#include <IOKit/IOKitLib.h>
+#include <IOKit/storage/IOBlockStorageDriver.h>
+#include <IOKit/storage/IOMedia.h>
+#include <errno.h>
 #include <sys/disk.h>
 #include <sys/mount.h>
-#include <errno.h>
 #include <time.h>
 #include <unistd.h>
 #else
-#define DISK_PLATFORM_UNKNOWN 1
+#define HJ_DISK_PLATFORM_UNKNOWN 1
 #endif
 
 #include <stdbool.h>
@@ -60,13 +70,13 @@
 #include <string.h>
 
 // ------------------- Constants and Limits ----------------------
-#define DISK_MAX_PATH_LENGTH 4096
-#define DISK_MAX_DEVICE_NAME 256
-#define DISK_MAX_FILESYSTEM_NAME 64
-#define DISK_MAX_VOLUME_LABEL 256
-#define DISK_SECTOR_SIZE_DEFAULT 512
-#define DISK_MAX_DISKS 64
-#define DISK_MAX_PARTITIONS 128
+#define HJ_DISK_MAX_PATH_LENGTH 4096
+#define HJ_DISK_MAX_DEVICE_NAME 256
+#define HJ_DISK_MAX_FILESYSTEM_NAME 64
+#define HJ_DISK_MAX_VOLUME_LABEL 256
+#define HJ_DISK_SECTOR_SIZE_DEFAULT 512
+#define HJ_DISK_MAX_DISKS 64
+#define HJ_DISK_MAX_PARTITIONS 128
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,91 +85,91 @@ extern "C" {
 // ------------------------ disk defines -------------------------
 typedef enum
 {
-    DISK_OK                       = 0,
-    DISK_ERROR_NULL_POINTER       = -1,
-    DISK_ERROR_INVALID_PARAMETER  = -2,
-    DISK_ERROR_BUFFER_TOO_SMALL   = -3,
-    DISK_ERROR_NOT_FOUND          = -4,
-    DISK_ERROR_ACCESS_DENIED      = -5,
-    DISK_ERROR_DEVICE_BUSY        = -6,
-    DISK_ERROR_IO_ERROR           = -7,
-    DISK_ERROR_NOT_SUPPORTED      = -8,
-    DISK_ERROR_MEMORY_ALLOCATION  = -9,
-    DISK_ERROR_TIMEOUT            = -10,
-    DISK_ERROR_INVALID_FILESYSTEM = -11,
-    DISK_ERROR_DEVICE_OFFLINE     = -12,
-    DISK_ERROR_QUOTA_EXCEEDED     = -13,
-    DISK_ERROR_READ_ONLY          = -14,
-    DISK_ERROR_CORRUPTED_DATA     = -15
-} disk_err_t;
+    HJ_DISK_OK                       = 0,
+    HJ_DISK_ERROR_NULL_POINTER       = -1,
+    HJ_DISK_ERROR_INVALID_PARAMETER  = -2,
+    HJ_DISK_ERROR_BUFFER_TOO_SMALL   = -3,
+    HJ_DISK_ERROR_NOT_FOUND          = -4,
+    HJ_DISK_ERROR_ACCESS_DENIED      = -5,
+    HJ_DISK_ERROR_DEVICE_BUSY        = -6,
+    HJ_DISK_ERROR_IO_ERROR           = -7,
+    HJ_DISK_ERROR_NOT_SUPPORTED      = -8,
+    HJ_DISK_ERROR_MEMORY_ALLOCATION  = -9,
+    HJ_DISK_ERROR_TIMEOUT            = -10,
+    HJ_DISK_ERROR_INVALID_FILESYSTEM = -11,
+    HJ_DISK_ERROR_DEVICE_OFFLINE     = -12,
+    HJ_DISK_ERROR_QUOTA_EXCEEDED     = -13,
+    HJ_DISK_ERROR_READ_ONLY          = -14,
+    HJ_DISK_ERROR_CORRUPTED_DATA     = -15
+} hj_disk_err_t;
 
 typedef enum
 {
-    DISK_TYPE_UNKNOWN   = 0,
-    DISK_TYPE_HDD       = 1,
-    DISK_TYPE_SSD       = 2,
-    DISK_TYPE_OPTICAL   = 3,
-    DISK_TYPE_REMOVABLE = 4,
-    DISK_TYPE_NETWORK   = 5,
-    DISK_TYPE_RAM       = 6
-} disk_type_t;
+    HJ_DISK_TYPE_UNKNOWN   = 0,
+    HJ_DISK_TYPE_HDD       = 1,
+    HJ_DISK_TYPE_SSD       = 2,
+    HJ_DISK_TYPE_OPTICAL   = 3,
+    HJ_DISK_TYPE_REMOVABLE = 4,
+    HJ_DISK_TYPE_NETWORK   = 5,
+    HJ_DISK_TYPE_RAM       = 6
+} hj_disk_type_t;
 
 typedef enum
 {
-    FILESYSTEM_UNKNOWN  = 0,
-    FILESYSTEM_NTFS     = 1,
-    FILESYSTEM_FAT16    = 2,
-    FILESYSTEM_FAT32    = 3,
-    FILESYSTEM_EXFAT    = 4,
-    FILESYSTEM_EXT2     = 5,
-    FILESYSTEM_EXT3     = 6,
-    FILESYSTEM_EXT4     = 7,
-    FILESYSTEM_XFS      = 8,
-    FILESYSTEM_BTRFS    = 9,
-    FILESYSTEM_ZFS      = 10,
-    FILESYSTEM_F2FS     = 11,
-    FILESYSTEM_HFS_PLUS = 12,
-    FILESYSTEM_APFS     = 13,
-    FILESYSTEM_UFS      = 14,
-    FILESYSTEM_JFS      = 15,
-    FILESYSTEM_REISERFS = 16,
-    FILESYSTEM_ISO9660  = 17,
-    FILESYSTEM_UDF      = 18,
-    FILESYSTEM_SWAP     = 19,
-    FILESYSTEM_TMPFS    = 20,
-    FILESYSTEM_PROCFS   = 21,
-    FILESYSTEM_SYSFS    = 22
-} filesystem_type_t;
+    HJ_FILESYSTEM_UNKNOWN  = 0,
+    HJ_FILESYSTEM_NTFS     = 1,
+    HJ_FILESYSTEM_FAT16    = 2,
+    HJ_FILESYSTEM_FAT32    = 3,
+    HJ_FILESYSTEM_EXFAT    = 4,
+    HJ_FILESYSTEM_EXT2     = 5,
+    HJ_FILESYSTEM_EXT3     = 6,
+    HJ_FILESYSTEM_EXT4     = 7,
+    HJ_FILESYSTEM_XFS      = 8,
+    HJ_FILESYSTEM_BTRFS    = 9,
+    HJ_FILESYSTEM_ZFS      = 10,
+    HJ_FILESYSTEM_F2FS     = 11,
+    HJ_FILESYSTEM_HFS_PLUS = 12,
+    HJ_FILESYSTEM_APFS     = 13,
+    HJ_FILESYSTEM_UFS      = 14,
+    HJ_FILESYSTEM_JFS      = 15,
+    HJ_FILESYSTEM_REISERFS = 16,
+    HJ_FILESYSTEM_ISO9660  = 17,
+    HJ_FILESYSTEM_UDF      = 18,
+    HJ_FILESYSTEM_SWAP     = 19,
+    HJ_FILESYSTEM_TMPFS    = 20,
+    HJ_FILESYSTEM_PROCFS   = 21,
+    HJ_FILESYSTEM_SYSFS    = 22
+} hj_filesystem_type_t;
 
 typedef struct
 {
-    char        device_name[DISK_MAX_DEVICE_NAME]; // (e.g., "/dev/sda", "C:")
-    char        model[DISK_MAX_DEVICE_NAME];
-    char        serial[DISK_MAX_DEVICE_NAME];
-    disk_type_t type;
-    uint64_t    total_size;
-    uint64_t    sector_size;
-    uint64_t    sector_count;
-    bool        removable;
-    bool        read_only;
-    uint32_t    rpm;
-    double      temperature;
-} disk_info_t;
+    char           device_name[HJ_DISK_MAX_DEVICE_NAME];
+    char           model[HJ_DISK_MAX_DEVICE_NAME];
+    char           serial[HJ_DISK_MAX_DEVICE_NAME];
+    hj_disk_type_t type;
+    uint64_t       total_size;
+    uint64_t       sector_size;
+    uint64_t       sector_count;
+    bool           removable;
+    bool           read_only;
+    uint32_t       rpm;
+    double         temperature;
+} hj_disk_info_t;
 
 typedef struct
 {
-    char              device_name[DISK_MAX_DEVICE_NAME];
-    char              mount_point[DISK_MAX_PATH_LENGTH];
-    char              volume_label[DISK_MAX_VOLUME_LABEL];
-    filesystem_type_t filesystem;
-    uint64_t          start_sector;
-    uint64_t          sector_count;
-    uint64_t          total_size;
-    uint64_t          used_size;
-    uint64_t          available_size;
-    bool              bootable;
-    bool              read_only;
-} partition_info_t;
+    char                 device_name[HJ_DISK_MAX_DEVICE_NAME];
+    char                 mount_point[HJ_DISK_MAX_PATH_LENGTH];
+    char                 volume_label[HJ_DISK_MAX_VOLUME_LABEL];
+    hj_filesystem_type_t filesystem;
+    uint64_t             start_sector;
+    uint64_t             sector_count;
+    uint64_t             total_size;
+    uint64_t             used_size;
+    uint64_t             available_size;
+    bool                 bootable;
+    bool                 read_only;
+} hj_partition_info_t;
 
 typedef struct
 {
@@ -170,32 +180,108 @@ typedef struct
     double   read_time_ms;
     double   write_time_ms;
     uint32_t queue_depth;
-} disk_stats_t;
+} hj_disk_stats_t;
 
 static const struct
 {
-    filesystem_type_t type;
-    const char       *name;
-} filesystem_names[] = {
-    {FILESYSTEM_NTFS, "NTFS"},       {FILESYSTEM_FAT16, "FAT16"},
-    {FILESYSTEM_FAT32, "FAT32"},     {FILESYSTEM_EXFAT, "exFAT"},
-    {FILESYSTEM_EXT2, "ext2"},       {FILESYSTEM_EXT3, "ext3"},
-    {FILESYSTEM_EXT4, "ext4"},       {FILESYSTEM_XFS, "XFS"},
-    {FILESYSTEM_BTRFS, "Btrfs"},     {FILESYSTEM_ZFS, "ZFS"},
-    {FILESYSTEM_F2FS, "F2FS"},       {FILESYSTEM_HFS_PLUS, "HFS+"},
-    {FILESYSTEM_APFS, "APFS"},       {FILESYSTEM_UFS, "UFS"},
-    {FILESYSTEM_JFS, "JFS"},         {FILESYSTEM_REISERFS, "ReiserFS"},
-    {FILESYSTEM_ISO9660, "ISO9660"}, {FILESYSTEM_UDF, "UDF"},
-    {FILESYSTEM_SWAP, "Linux swap"}, {FILESYSTEM_TMPFS, "tmpfs"},
-    {FILESYSTEM_PROCFS, "proc"},     {FILESYSTEM_SYSFS, "sysfs"},
-    {FILESYSTEM_UNKNOWN, "Unknown"}};
+    hj_filesystem_type_t type;
+    const char          *name;
+} hj_filesystem_names[] = {
+    {HJ_FILESYSTEM_NTFS, "NTFS"},       {HJ_FILESYSTEM_FAT16, "FAT16"},
+    {HJ_FILESYSTEM_FAT32, "FAT32"},     {HJ_FILESYSTEM_EXFAT, "exFAT"},
+    {HJ_FILESYSTEM_EXT2, "ext2"},       {HJ_FILESYSTEM_EXT3, "ext3"},
+    {HJ_FILESYSTEM_EXT4, "ext4"},       {HJ_FILESYSTEM_XFS, "XFS"},
+    {HJ_FILESYSTEM_BTRFS, "Btrfs"},     {HJ_FILESYSTEM_ZFS, "ZFS"},
+    {HJ_FILESYSTEM_F2FS, "F2FS"},       {HJ_FILESYSTEM_HFS_PLUS, "HFS+"},
+    {HJ_FILESYSTEM_APFS, "APFS"},       {HJ_FILESYSTEM_UFS, "UFS"},
+    {HJ_FILESYSTEM_JFS, "JFS"},         {HJ_FILESYSTEM_REISERFS, "ReiserFS"},
+    {HJ_FILESYSTEM_ISO9660, "ISO9660"}, {HJ_FILESYSTEM_UDF, "UDF"},
+    {HJ_FILESYSTEM_SWAP, "Linux swap"}, {HJ_FILESYSTEM_TMPFS, "tmpfs"},
+    {HJ_FILESYSTEM_PROCFS, "proc"},     {HJ_FILESYSTEM_SYSFS, "sysfs"},
+    {HJ_FILESYSTEM_UNKNOWN, "Unknown"}};
 
-// -------------------------- disk API -----------------------------
-inline disk_err_t
-disk_format_size(uint64_t bytes, char *buffer, size_t buffer_size)
+HJ_DISK_API hj_disk_err_t hj_disk_init(void);
+HJ_DISK_API hj_disk_err_t hj_disk_format_size(uint64_t bytes,
+                                              char    *buffer,
+                                              size_t   buffer_size);
+HJ_DISK_API int32_t       hj_disk_count(void);
+HJ_DISK_API hj_filesystem_type_t
+hj_disk_filesystem_type_from_string(const char *fs_name);
+HJ_DISK_API const char *
+hj_disk_filesystem_type_to_string(hj_filesystem_type_t fs_type);
+HJ_DISK_API hj_disk_err_t hj_disk_info(const char     *device_name,
+                                       hj_disk_info_t *info);
+HJ_DISK_API hj_disk_err_t hj_disk_enumerate(hj_disk_info_t *disks,
+                                            uint32_t        max_disks,
+                                            uint32_t       *actual_count);
+HJ_DISK_API bool          hj_disk_is_ready(const char *device_name);
+HJ_DISK_API hj_disk_err_t hj_disk_get_partition_by_mount(
+    const char *mount_point, hj_partition_info_t *info);
+HJ_DISK_API hj_disk_err_t hj_disk_read_speed_test(const char *device_name,
+                                                  uint32_t    test_size_mb,
+                                                  double     *read_speed_mbps);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // DISK_H
+
+// --------------------- Implementation -------------------------
+#if (defined(HJ_DISK_IMPL) || defined(HJ_DISK_STATIC))                         \
+    && !defined(HJ_DISK_IMPL_DONE)
+#define HJ_DISK_IMPL_DONE
+
+static inline int _hj_stricmp(const char *s1, const char *s2)
+{
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
+    return _stricmp(s1, s2);
+#else
+    return strcasecmp(s1, s2);
+#endif
+}
+
+#if defined(HJ_DISK_PLATFORM_LINUX)
+static inline bool _hj_is_valid_disk(const char *device_name)
+{
+    size_t name_len = strlen(device_name);
+    if((strncmp(device_name, "sd", 2) == 0 && name_len == 3)
+       || (strncmp(device_name, "nvme", 4) == 0
+           && strstr(device_name, "p") == NULL)
+       || (strncmp(device_name, "hd", 2) == 0 && name_len == 3)
+       || (strncmp(device_name, "mmcblk", 6) == 0
+           && strstr(device_name, "p") == NULL)
+       || (strncmp(device_name, "vd", 2) == 0 && name_len == 3))
+    {
+        char path[512];
+        snprintf(path, sizeof(path), "/sys/block/%s/size", device_name);
+        FILE *fp = fopen(path, "r");
+        if(fp)
+        {
+            unsigned long long sectors = 0;
+            if(fscanf(fp, "%llu", &sectors) == 1)
+            {
+                fclose(fp);
+                if(sectors >= 2048) // 至少 1MB (2048 * 512 bytes)
+                {
+                    return true;
+                }
+            } else
+            {
+                fclose(fp);
+            }
+        }
+    }
+    return false;
+}
+#endif
+
+HJ_DISK_API hj_disk_err_t hj_disk_format_size(uint64_t bytes,
+                                              char    *buffer,
+                                              size_t   buffer_size)
 {
     if(!buffer || buffer_size == 0)
-        return DISK_ERROR_INVALID_PARAMETER;
+        return HJ_DISK_ERROR_INVALID_PARAMETER;
 
     const char  *units[]    = {"B", "KB", "MB", "GB", "TB", "PB"};
     const size_t num_units  = sizeof(units) / sizeof(units[0]);
@@ -216,33 +302,29 @@ disk_format_size(uint64_t bytes, char *buffer, size_t buffer_size)
             snprintf(buffer, buffer_size, "%.2f %s", size, units[unit_index]);
 
     if(result < 0 || (size_t) result >= buffer_size)
-        return DISK_ERROR_BUFFER_TOO_SMALL;
+        return HJ_DISK_ERROR_BUFFER_TOO_SMALL;
 
-    return DISK_OK;
+    return HJ_DISK_OK;
 }
 
-inline disk_err_t disk_init(void)
+HJ_DISK_API hj_disk_err_t hj_disk_init(void)
 {
-#if defined(DISK_PLATFORM_WINDOWS)
-    return DISK_OK;
-
-#elif defined(DISK_PLATFORM_LINUX)
-    return DISK_OK;
-
-#elif defined(DISK_PLATFORM_MACOS)
-    return DISK_OK;
-
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
+    return HJ_DISK_OK;
+#elif defined(HJ_DISK_PLATFORM_LINUX)
+    return HJ_DISK_OK;
+#elif defined(HJ_DISK_PLATFORM_MACOS)
+    return HJ_DISK_OK;
 #else
-    return DISK_ERROR_NOT_SUPPORTED;
-
+    return HJ_DISK_ERROR_NOT_SUPPORTED;
 #endif
 }
 
-inline uint32_t disk_count(void)
+HJ_DISK_API int32_t hj_disk_count(void)
 {
-#if defined(DISK_PLATFORM_WINDOWS)
-    uint32_t disk_count = 0;
-    DWORD    drives     = GetLogicalDrives();
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
+    uint32_t disk_cnt = 0;
+    DWORD    drives   = GetLogicalDrives();
     for(int i = 0; i < 26; i++)
     {
         if(!(drives & (1 << i)))
@@ -251,67 +333,32 @@ inline uint32_t disk_count(void)
         char drive_path[4] = {(char) ('A' + i), ':', '\\', '\0'};
         UINT drive_type    = GetDriveTypeA(drive_path);
         if(drive_type == DRIVE_FIXED || drive_type == DRIVE_REMOVABLE)
-            disk_count++;
+            disk_cnt++;
     }
+    return (int32_t) disk_cnt;
 
-    return disk_count;
-
-#elif defined(DISK_PLATFORM_LINUX)
-    FILE *fp = fopen("/proc/partitions", "r");
-    if(!fp)
+#elif defined(HJ_DISK_PLATFORM_LINUX)
+    DIR *dir = opendir("/sys/block");
+    if(!dir)
         return 0;
 
-    char     line[256];
-    uint32_t disk_count = 0;
-    if(!fgets(line, sizeof(line), fp) || !fgets(line, sizeof(line), fp))
+    uint32_t       disk_cnt = 0;
+    struct dirent *entry;
+    while((entry = readdir(dir)) != NULL)
     {
-        fclose(fp);
-        return 0;
-    }
-
-    while(fgets(line, sizeof(line), fp))
-    {
-        char          device_name[64];
-        unsigned long major, minor, blocks;
-        if(sscanf(line,
-                  "%lu %lu %lu %63s",
-                  &major,
-                  &minor,
-                  &blocks,
-                  device_name)
-           != 4)
+        if(entry->d_name[0] == '.')
             continue;
-
-        size_t name_len = strlen(device_name);
-        // SCSI/SATA: sda, sdb, sdc, ...
-        if(strncmp(device_name, "sd", 2) == 0 && name_len == 3)
-            disk_count++;
-        // NVMe: nvme0n1, nvme1n1, ...
-        else if(strncmp(device_name, "nvme", 4) == 0
-                && strstr(device_name, "p") == NULL)
-            disk_count++;
-        // IDE: hda, hdb, hdc, hdd
-        else if(strncmp(device_name, "hd", 2) == 0 && name_len == 3)
-            disk_count++;
-        // MMC/eMMC: mmcblk0, mmcblk1, ...
-        else if(strncmp(device_name, "mmcblk", 6) == 0
-                && strstr(device_name, "p") == NULL)
-            disk_count++;
-        // Virtual Disk: vda, vdb, ...
-        else if(strncmp(device_name, "vd", 2) == 0 && name_len == 3)
-            disk_count++;
-
-        if(blocks < 1024) // pass the disk size less than 512 KB
-            continue;
+        if(_hj_is_valid_disk(entry->d_name))
+        {
+            disk_cnt++;
+        }
     }
+    closedir(dir);
+    return (int32_t) disk_cnt;
 
-    fclose(fp);
-    return disk_count;
-
-#elif defined(DISK_PLATFORM_MACOS)
+#elif defined(HJ_DISK_PLATFORM_MACOS)
     io_iterator_t          disk_list;
-    CFMutableDictionaryRef matching;
-    matching = IOServiceMatching("IOMedia");
+    CFMutableDictionaryRef matching = IOServiceMatching("IOMedia");
     if(!matching)
         return 0;
 
@@ -322,7 +369,7 @@ inline uint32_t disk_count(void)
     if(result != KERN_SUCCESS)
         return 0;
 
-    uint32_t    disk_count = 0;
+    uint32_t    disk_cnt = 0;
     io_object_t disk_obj;
     while((disk_obj = IOIteratorNext(disk_list)) != 0)
     {
@@ -338,99 +385,98 @@ inline uint32_t disk_count(void)
                              kCFNumberSInt64Type,
                              &size);
             CFRelease(size_ref);
-
-            // > 1MB
             if(size > 1024 * 1024)
-                disk_count++;
+                disk_cnt++;
         }
-
         IOObjectRelease(disk_obj);
     }
 
     IOObjectRelease(disk_list);
-    return disk_count;
+    return (int32_t) disk_cnt;
 
 #else
-    return 0;
+    return HJ_DISK_ERROR_NOT_SUPPORTED;
 
 #endif
 }
 
-inline filesystem_type_t disk_filesystem_type_from_string(const char *fs_name)
+HJ_DISK_API hj_filesystem_type_t
+hj_disk_filesystem_type_from_string(const char *fs_name)
 {
     if(!fs_name)
-        return FILESYSTEM_UNKNOWN;
-    if(strcmp(fs_name, "ntfs") == 0 || strcmp(fs_name, "NTFS") == 0)
-        return FILESYSTEM_NTFS;
-    if(strcmp(fs_name, "fat16") == 0 || strcmp(fs_name, "FAT16") == 0)
-        return FILESYSTEM_FAT16;
-    if(strcmp(fs_name, "fat32") == 0 || strcmp(fs_name, "FAT32") == 0)
-        return FILESYSTEM_FAT32;
-    if(strcmp(fs_name, "exfat") == 0 || strcmp(fs_name, "exFAT") == 0)
-        return FILESYSTEM_EXFAT;
+        return HJ_FILESYSTEM_UNKNOWN;
+    if(_hj_stricmp(fs_name, "ntfs") == 0)
+        return HJ_FILESYSTEM_NTFS;
+    if(_hj_stricmp(fs_name, "fat16") == 0)
+        return HJ_FILESYSTEM_FAT16;
+    if(_hj_stricmp(fs_name, "fat32") == 0)
+        return HJ_FILESYSTEM_FAT32;
+    if(_hj_stricmp(fs_name, "exfat") == 0)
+        return HJ_FILESYSTEM_EXFAT;
     if(strcmp(fs_name, "ext2") == 0)
-        return FILESYSTEM_EXT2;
+        return HJ_FILESYSTEM_EXT2;
     if(strcmp(fs_name, "ext3") == 0)
-        return FILESYSTEM_EXT3;
+        return HJ_FILESYSTEM_EXT3;
     if(strcmp(fs_name, "ext4") == 0)
-        return FILESYSTEM_EXT4;
-    if(strcmp(fs_name, "xfs") == 0 || strcmp(fs_name, "XFS") == 0)
-        return FILESYSTEM_XFS;
+        return HJ_FILESYSTEM_EXT4;
+    if(_hj_stricmp(fs_name, "xfs") == 0)
+        return HJ_FILESYSTEM_XFS;
     if(strcmp(fs_name, "btrfs") == 0)
-        return FILESYSTEM_BTRFS;
-    if(strcmp(fs_name, "zfs") == 0 || strcmp(fs_name, "ZFS") == 0)
-        return FILESYSTEM_ZFS;
-    if(strcmp(fs_name, "f2fs") == 0 || strcmp(fs_name, "F2FS") == 0)
-        return FILESYSTEM_F2FS;
-    if(strcmp(fs_name, "hfs+") == 0 || strcmp(fs_name, "HFS+") == 0)
-        return FILESYSTEM_HFS_PLUS;
-    if(strcmp(fs_name, "apfs") == 0 || strcmp(fs_name, "APFS") == 0)
-        return FILESYSTEM_APFS;
-    if(strcmp(fs_name, "ufs") == 0 || strcmp(fs_name, "UFS") == 0)
-        return FILESYSTEM_UFS;
-    if(strcmp(fs_name, "jfs") == 0 || strcmp(fs_name, "JFS") == 0)
-        return FILESYSTEM_JFS;
-    if(strcmp(fs_name, "reiserfs") == 0 || strcmp(fs_name, "REISERFS") == 0)
-        return FILESYSTEM_REISERFS;
-    if(strcmp(fs_name, "iso9660") == 0 || strcmp(fs_name, "ISO9660") == 0)
-        return FILESYSTEM_ISO9660;
-    if(strcmp(fs_name, "udf") == 0 || strcmp(fs_name, "UDF") == 0)
-        return FILESYSTEM_UDF;
-    if(strcmp(fs_name, "swap") == 0 || strcmp(fs_name, "SWAP") == 0)
-        return FILESYSTEM_SWAP;
-    if(strcmp(fs_name, "tmpfs") == 0 || strcmp(fs_name, "TMPFS") == 0)
-        return FILESYSTEM_TMPFS;
-    if(strcmp(fs_name, "procfs") == 0 || strcmp(fs_name, "PROCFS") == 0)
-        return FILESYSTEM_PROCFS;
-    if(strcmp(fs_name, "sysfs") == 0 || strcmp(fs_name, "SYSFS") == 0)
-        return FILESYSTEM_SYSFS;
+        return HJ_FILESYSTEM_BTRFS;
+    if(_hj_stricmp(fs_name, "zfs") == 0)
+        return HJ_FILESYSTEM_ZFS;
+    if(_hj_stricmp(fs_name, "f2fs") == 0)
+        return HJ_FILESYSTEM_F2FS;
+    if(_hj_stricmp(fs_name, "hfs+") == 0 || _hj_stricmp(fs_name, "hfs") == 0)
+        return HJ_FILESYSTEM_HFS_PLUS;
+    if(_hj_stricmp(fs_name, "apfs") == 0)
+        return HJ_FILESYSTEM_APFS;
+    if(_hj_stricmp(fs_name, "ufs") == 0)
+        return HJ_FILESYSTEM_UFS;
+    if(_hj_stricmp(fs_name, "jfs") == 0)
+        return HJ_FILESYSTEM_JFS;
+    if(_hj_stricmp(fs_name, "reiserfs") == 0)
+        return HJ_FILESYSTEM_REISERFS;
+    if(_hj_stricmp(fs_name, "iso9660") == 0)
+        return HJ_FILESYSTEM_ISO9660;
+    if(_hj_stricmp(fs_name, "udf") == 0)
+        return HJ_FILESYSTEM_UDF;
+    if(_hj_stricmp(fs_name, "swap") == 0)
+        return HJ_FILESYSTEM_SWAP;
+    if(_hj_stricmp(fs_name, "tmpfs") == 0)
+        return HJ_FILESYSTEM_TMPFS;
+    if(_hj_stricmp(fs_name, "proc") == 0 || _hj_stricmp(fs_name, "procfs") == 0)
+        return HJ_FILESYSTEM_PROCFS;
+    if(_hj_stricmp(fs_name, "sysfs") == 0)
+        return HJ_FILESYSTEM_SYSFS;
 
-    return FILESYSTEM_UNKNOWN;
+    return HJ_FILESYSTEM_UNKNOWN;
 }
 
-inline const char *disk_filesystem_type_to_string(filesystem_type_t fs_type)
+HJ_DISK_API const char *
+hj_disk_filesystem_type_to_string(hj_filesystem_type_t fs_type)
 {
     for(size_t i = 0;
-        i < sizeof(filesystem_names) / sizeof(filesystem_names[0]);
+        i < sizeof(hj_filesystem_names) / sizeof(hj_filesystem_names[0]);
         i++)
     {
-        if(filesystem_names[i].type == fs_type)
-            return filesystem_names[i].name;
+        if(hj_filesystem_names[i].type == fs_type)
+            return hj_filesystem_names[i].name;
     }
-
-    return "UNKNOWN";
+    return "Unknown";
 }
 
-inline disk_err_t disk_info(const char *device_name, disk_info_t *info)
+HJ_DISK_API hj_disk_err_t hj_disk_info(const char     *device_name,
+                                       hj_disk_info_t *info)
 {
     if(!device_name || !info)
-        return DISK_ERROR_INVALID_PARAMETER;
+        return HJ_DISK_ERROR_INVALID_PARAMETER;
 
-    memset(info, 0, sizeof(disk_info_t));
+    memset(info, 0, sizeof(hj_disk_info_t));
     strncpy(info->device_name, device_name, sizeof(info->device_name) - 1);
     info->temperature = -1.0;
 
-#if defined(DISK_PLATFORM_WINDOWS)
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
     char full_path[MAX_PATH];
     snprintf(full_path, sizeof(full_path), "\\\\.\\%s", device_name);
     HANDLE hDevice = CreateFileA(full_path,
@@ -442,7 +488,7 @@ inline disk_err_t disk_info(const char *device_name, disk_info_t *info)
                                  NULL);
 
     if(hDevice == INVALID_HANDLE_VALUE)
-        return DISK_ERROR_ACCESS_DENIED;
+        return HJ_DISK_ERROR_ACCESS_DENIED;
 
     DISK_GEOMETRY_EX geometry;
     DWORD            bytes_returned;
@@ -464,30 +510,29 @@ inline disk_err_t disk_info(const char *device_name, disk_info_t *info)
     switch(drive_type)
     {
         case DRIVE_FIXED:
-            info->type =
-                DISK_TYPE_HDD; // Could be SSD, but can't determine easily
+            info->type = HJ_DISK_TYPE_HDD;
             break;
         case DRIVE_REMOVABLE:
-            info->type      = DISK_TYPE_REMOVABLE;
+            info->type      = HJ_DISK_TYPE_REMOVABLE;
             info->removable = true;
             break;
         case DRIVE_CDROM:
-            info->type      = DISK_TYPE_OPTICAL;
+            info->type      = HJ_DISK_TYPE_OPTICAL;
             info->removable = true;
             break;
         case DRIVE_REMOTE:
-            info->type = DISK_TYPE_NETWORK;
+            info->type = HJ_DISK_TYPE_NETWORK;
             break;
         case DRIVE_RAMDISK:
-            info->type = DISK_TYPE_RAM;
+            info->type = HJ_DISK_TYPE_RAM;
             break;
         default:
-            info->type = DISK_TYPE_UNKNOWN;
+            info->type = HJ_DISK_TYPE_UNKNOWN;
             break;
     }
     CloseHandle(hDevice);
 
-#elif defined(DISK_PLATFORM_LINUX)
+#elif defined(HJ_DISK_PLATFORM_LINUX)
     char full_path[256];
     if(strncmp(device_name, "/dev/", 5) == 0)
         strncpy(full_path, device_name, sizeof(full_path) - 1);
@@ -496,13 +541,12 @@ inline disk_err_t disk_info(const char *device_name, disk_info_t *info)
 
     int fd = open(full_path, O_RDONLY);
     if(fd < 0)
-        return DISK_ERROR_ACCESS_DENIED;
+        return HJ_DISK_ERROR_ACCESS_DENIED;
 
     uint64_t size_in_bytes;
     if(ioctl(fd, BLKGETSIZE64, &size_in_bytes) == 0)
         info->total_size = size_in_bytes;
 
-    // Get sector size
     int sector_size;
     if(ioctl(fd, BLKSSZGET, &sector_size) == 0)
     {
@@ -510,63 +554,67 @@ inline disk_err_t disk_info(const char *device_name, disk_info_t *info)
         info->sector_count = info->total_size / info->sector_size;
     } else
     {
-        info->sector_size  = DISK_SECTOR_SIZE_DEFAULT;
-        info->sector_count = info->total_size / DISK_SECTOR_SIZE_DEFAULT;
+        info->sector_size  = HJ_DISK_SECTOR_SIZE_DEFAULT;
+        info->sector_count = info->total_size / HJ_DISK_SECTOR_SIZE_DEFAULT;
     }
 
-    // Try to determine if it's SSD
-    char sys_path[512];
-    char rotational[16];
+    char        sys_path[512];
+    char        rotational[16];
+    const char *basename_dev = strrchr(device_name, '/');
+    basename_dev             = basename_dev ? basename_dev + 1 : device_name;
     snprintf(sys_path,
              sizeof(sys_path),
              "/sys/block/%s/queue/rotational",
-             strrchr(device_name, '/') ? strrchr(device_name, '/') + 1
-                                       : device_name);
+             basename_dev);
 
     FILE *fp = fopen(sys_path, "r");
     if(fp && fgets(rotational, sizeof(rotational), fp))
     {
         if(rotational[0] == '0')
         {
-            info->type = DISK_TYPE_SSD;
+            info->type = HJ_DISK_TYPE_SSD;
             info->rpm  = 0;
         } else
         {
-            info->type = DISK_TYPE_HDD;
-            info->rpm  = 7200; /* Default assumption */
+            info->type = HJ_DISK_TYPE_HDD;
+            info->rpm  = 7200;
         }
         fclose(fp);
     } else
     {
-        info->type = DISK_TYPE_UNKNOWN;
+        info->type = HJ_DISK_TYPE_UNKNOWN;
     }
     close(fd);
 
-#elif defined(DISK_PLATFORM_MACOS)
-    info->type        = DISK_TYPE_UNKNOWN;
-    info->sector_size = DISK_SECTOR_SIZE_DEFAULT;
+#elif defined(HJ_DISK_PLATFORM_MACOS)
+    info->type        = HJ_DISK_TYPE_UNKNOWN;
+    info->sector_size = HJ_DISK_SECTOR_SIZE_DEFAULT;
 
 #else
-    return DISK_ERROR_NOT_SUPPORTED;
-
+    return HJ_DISK_ERROR_NOT_SUPPORTED;
 #endif
+
     if(info->sector_size == 0)
-        info->sector_size = DISK_SECTOR_SIZE_DEFAULT;
+        info->sector_size = HJ_DISK_SECTOR_SIZE_DEFAULT;
+
+    if(info->sector_count == 0 && info->total_size > 0)
+        info->sector_count = info->total_size / info->sector_size;
 
     strncpy(info->model, "Generic Disk", sizeof(info->model) - 1);
     strncpy(info->serial, "Unknown", sizeof(info->serial) - 1);
-    return DISK_OK;
+    return HJ_DISK_OK;
 }
 
-inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
-                                              partition_info_t *info)
+HJ_DISK_API hj_disk_err_t hj_disk_get_partition_by_mount(
+    const char *mount_point, hj_partition_info_t *info)
 {
     if(!mount_point || !info)
-        return DISK_ERROR_INVALID_PARAMETER;
+        return HJ_DISK_ERROR_INVALID_PARAMETER;
 
-    memset(info, 0, sizeof(partition_info_t));
+    memset(info, 0, sizeof(hj_partition_info_t));
     strncpy(info->mount_point, mount_point, sizeof(info->mount_point) - 1);
-#if defined(DISK_PLATFORM_WINDOWS)
+
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
     ULARGE_INTEGER free_bytes, total_bytes, total_free_bytes;
     if(GetDiskFreeSpaceExA(mount_point,
                            &free_bytes,
@@ -593,7 +641,7 @@ inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
         strncpy(info->volume_label,
                 volume_name,
                 sizeof(info->volume_label) - 1);
-        info->filesystem = disk_filesystem_type_from_string(filesystem_name);
+        info->filesystem = hj_disk_filesystem_type_from_string(filesystem_name);
         info->read_only  = (filesystem_flags & FILE_READ_ONLY_VOLUME) != 0;
     }
 
@@ -601,9 +649,9 @@ inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
     if(QueryDosDeviceA(&mount_point[0], device_path, sizeof(device_path)))
         strncpy(info->device_name, device_path, sizeof(info->device_name) - 1);
 
-    return DISK_OK;
+    return HJ_DISK_OK;
 
-#elif defined(DISK_PLATFORM_LINUX)
+#elif defined(HJ_DISK_PLATFORM_LINUX)
     struct statvfs vfs;
     if(statvfs(mount_point, &vfs) == 0)
     {
@@ -616,25 +664,26 @@ inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
 
     FILE *fp = fopen("/proc/mounts", "r");
     if(!fp)
-        return DISK_ERROR_NOT_FOUND;
+        return HJ_DISK_ERROR_NOT_FOUND;
 
     char line[1024];
     while(fgets(line, sizeof(line), fp))
     {
         char device[256], mountpoint[256], fstype[64];
-        if(!sscanf(line, "%s %s %s", device, mountpoint, fstype) == 3)
+        if(sscanf(line, "%255s %255s %63s", device, mountpoint, fstype) != 3)
             continue;
 
         if(strcmp(mountpoint, mount_point) == 0)
         {
             strncpy(info->device_name, device, sizeof(info->device_name) - 1);
-            info->filesystem = disk_filesystem_type_from_string(fstype);
+            info->filesystem = hj_disk_filesystem_type_from_string(fstype);
             break;
         }
     }
     fclose(fp);
+    return HJ_DISK_OK;
 
-#elif defined(DISK_PLATFORM_MACOS)
+#elif defined(HJ_DISK_PLATFORM_MACOS)
     struct statfs fs;
     if(statfs(mount_point, &fs) == 0)
     {
@@ -647,25 +696,23 @@ inline disk_err_t disk_get_partition_by_mount(const char       *mount_point,
         strncpy(info->device_name,
                 fs.f_mntfromname,
                 sizeof(info->device_name) - 1);
-        info->filesystem = disk_filesystem_type_from_string(fs.f_fstypename);
+        info->filesystem = hj_disk_filesystem_type_from_string(fs.f_fstypename);
     }
+    return HJ_DISK_OK;
 
 #else
-    return DISK_ERROR_NOT_SUPPORTED;
-
+    return HJ_DISK_ERROR_NOT_SUPPORTED;
 #endif
-
-    return DISK_OK;
 }
 
-inline bool disk_is_ready(const char *device_name)
+HJ_DISK_API bool hj_disk_is_ready(const char *device_name)
 {
     if(!device_name || strlen(device_name) == 0)
         return false;
 
     bool ready = false;
 
-#if defined(DISK_PLATFORM_WINDOWS)
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
     char full_path[MAX_PATH];
     snprintf(full_path, sizeof(full_path), "\\\\.\\%s", device_name);
     HANDLE hDevice = CreateFileA(full_path,
@@ -698,7 +745,7 @@ inline bool disk_is_ready(const char *device_name)
         CloseHandle(hDevice);
     }
 
-#elif defined(DISK_PLATFORM_LINUX)
+#elif defined(HJ_DISK_PLATFORM_LINUX)
     char full_path[256];
     if(strncmp(device_name, "/dev/", 5) == 0)
         strncpy(full_path, device_name, sizeof(full_path) - 1);
@@ -716,10 +763,8 @@ inline bool disk_is_ready(const char *device_name)
     int fd = open(full_path, O_RDONLY | O_NONBLOCK);
     if(fd >= 0)
     {
-        uint64_t size;
+        uint64_t size = 0;
         if(ioctl(fd, BLKGETSIZE64, &size) == 0 && size > 0)
-            ready = true;
-        else
             ready = true;
 
         close(fd);
@@ -729,10 +774,9 @@ inline bool disk_is_ready(const char *device_name)
             ready = true;
     }
 
-#elif defined(DISK_PLATFORM_MACOS)
+#elif defined(HJ_DISK_PLATFORM_MACOS)
     io_iterator_t          disk_list;
-    CFMutableDictionaryRef matching;
-    matching = IOServiceMatching("IOMedia");
+    CFMutableDictionaryRef matching = IOServiceMatching("IOMedia");
     if(!matching)
         return false;
 
@@ -751,7 +795,6 @@ inline bool disk_is_ready(const char *device_name)
                                             CFSTR("BSD Name"),
                                             kCFAllocatorDefault,
                                             0);
-
         if(path_ref)
         {
             char bsd_name[256];
@@ -760,6 +803,7 @@ inline bool disk_is_ready(const char *device_name)
                                sizeof(bsd_name),
                                kCFStringEncodingUTF8);
             CFRelease(path_ref);
+
             char full_device_path[256];
             snprintf(full_device_path,
                      sizeof(full_device_path),
@@ -777,7 +821,6 @@ inline bool disk_is_ready(const char *device_name)
                                                 CFSTR(kIOMediaSizeKey),
                                                 kCFAllocatorDefault,
                                                 0);
-
             if(size_ref)
             {
                 uint64_t size = 0;
@@ -785,35 +828,33 @@ inline bool disk_is_ready(const char *device_name)
                                  kCFNumberSInt64Type,
                                  &size);
                 CFRelease(size_ref);
-
                 if(size > 0)
                     ready = true;
             }
             IOObjectRelease(disk_obj);
             break;
         }
-
         IOObjectRelease(disk_obj);
     }
-
     IOObjectRelease(disk_list);
 
 #else
     ready = false;
-
 #endif
 
     return ready;
 }
 
-inline disk_err_t
-disk_enumerate(disk_info_t *disks, uint32_t max_disks, uint32_t *actual_count)
+HJ_DISK_API hj_disk_err_t hj_disk_enumerate(hj_disk_info_t *disks,
+                                            uint32_t        max_disks,
+                                            uint32_t       *actual_count)
 {
     if(!disks || !actual_count || max_disks == 0)
-        return DISK_ERROR_INVALID_PARAMETER;
+        return HJ_DISK_ERROR_INVALID_PARAMETER;
 
     *actual_count = 0;
-#if defined(DISK_PLATFORM_WINDOWS)
+
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
     DWORD drives = GetLogicalDrives();
     for(int i = 0; i < 26 && *actual_count < max_disks; i++)
     {
@@ -826,57 +867,59 @@ disk_enumerate(disk_info_t *disks, uint32_t max_disks, uint32_t *actual_count)
         if(drive_type != DRIVE_FIXED && drive_type != DRIVE_REMOVABLE)
             continue;
 
-        disk_err_t result = disk_info(drive_letter, &disks[*actual_count]);
-        if(result == DISK_OK)
+        hj_disk_err_t result =
+            hj_disk_info(drive_letter, &disks[*actual_count]);
+        if(result == HJ_DISK_OK)
             (*actual_count)++;
     }
 
-#elif defined(DISK_PLATFORM_LINUX)
-    const char *disk_patterns[] = {"/dev/sda",
-                                   "/dev/sdb",
-                                   "/dev/sdc",
-                                   "/dev/sdd",
-                                   "/dev/nvme0n1",
-                                   "/dev/nvme1n1",
-                                   "/dev/nvme2n1",
-                                   "/dev/hda",
-                                   "/dev/hdb",
-                                   "/dev/hdc",
-                                   "/dev/hdd"};
-    for(size_t i = 0; i < sizeof(disk_patterns) / sizeof(disk_patterns[0])
-                      && *actual_count < max_disks;
-        i++)
+#elif defined(HJ_DISK_PLATFORM_LINUX)
+    DIR *dir = opendir("/sys/block");
+    if(!dir)
+        return HJ_DISK_ERROR_NOT_FOUND;
+
+    struct dirent *entry;
+    while((entry = readdir(dir)) != NULL && *actual_count < max_disks)
     {
-        if(access(disk_patterns[i], F_OK) != 0)
+        if(entry->d_name[0] == '.')
             continue;
 
-        disk_err_t result = disk_info(disk_patterns[i], &disks[*actual_count]);
-        if(result == DISK_OK)
-            (*actual_count)++;
-    }
+        if(_hj_is_valid_disk(entry->d_name))
+        {
+            char dev_path[256];
+            snprintf(dev_path, sizeof(dev_path), "/dev/%s", entry->d_name);
 
-#elif defined(DISK_PLATFORM_MACOS)
+            hj_disk_err_t result =
+                hj_disk_info(dev_path, &disks[*actual_count]);
+            if(result == HJ_DISK_OK)
+            {
+                (*actual_count)++;
+            }
+        }
+    }
+    closedir(dir);
+
+#elif defined(HJ_DISK_PLATFORM_MACOS)
     if(max_disks > 0)
     {
-        disk_err_t result = disk_info("/dev/disk0", &disks[0]);
-        if(result == DISK_OK)
+        hj_disk_err_t result = hj_disk_info("/dev/disk0", &disks[0]);
+        if(result == HJ_DISK_OK)
             *actual_count = 1;
     }
 
 #else
-    return DISK_ERROR_NOT_SUPPORTED;
-
+    return HJ_DISK_ERROR_NOT_SUPPORTED;
 #endif
 
-    return DISK_OK;
+    return HJ_DISK_OK;
 }
 
-inline disk_err_t disk_read_speed_test(const char *device_name,
-                                       uint32_t    test_size_mb,
-                                       double     *read_speed_mbps)
+HJ_DISK_API hj_disk_err_t hj_disk_read_speed_test(const char *device_name,
+                                                  uint32_t    test_size_mb,
+                                                  double     *read_speed_mbps)
 {
     if(!device_name || !read_speed_mbps || test_size_mb == 0)
-        return DISK_ERROR_INVALID_PARAMETER;
+        return HJ_DISK_ERROR_INVALID_PARAMETER;
 
     if(test_size_mb > 1024)
         test_size_mb = 1024;
@@ -888,11 +931,11 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     const uint32_t iterations  = (uint32_t) (total_bytes / buffer_size);
 
     if(iterations == 0)
-        return DISK_ERROR_INVALID_PARAMETER;
+        return HJ_DISK_ERROR_INVALID_PARAMETER;
 
     void *buffer = NULL;
 
-#if defined(DISK_PLATFORM_WINDOWS)
+#if defined(HJ_DISK_PLATFORM_WINDOWS)
     char full_path[MAX_PATH];
     snprintf(full_path, sizeof(full_path), "\\\\.\\%s", device_name);
 
@@ -906,7 +949,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
                     NULL);
 
     if(hDevice == INVALID_HANDLE_VALUE)
-        return DISK_ERROR_ACCESS_DENIED;
+        return HJ_DISK_ERROR_ACCESS_DENIED;
 
     buffer = VirtualAlloc(NULL,
                           buffer_size,
@@ -915,7 +958,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     if(!buffer)
     {
         CloseHandle(hDevice);
-        return DISK_ERROR_BUFFER_TOO_SMALL;
+        return HJ_DISK_ERROR_BUFFER_TOO_SMALL;
     }
 
     DISK_GEOMETRY_EX geometry;
@@ -937,7 +980,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     {
         VirtualFree(buffer, 0, MEM_RELEASE);
         CloseHandle(hDevice);
-        return DISK_ERROR_INVALID_PARAMETER;
+        return HJ_DISK_ERROR_INVALID_PARAMETER;
     }
 
     LARGE_INTEGER frequency, start_time, end_time;
@@ -956,10 +999,9 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
 
             VirtualFree(buffer, 0, MEM_RELEASE);
             CloseHandle(hDevice);
-            return DISK_ERROR_IO_ERROR;
+            return HJ_DISK_ERROR_IO_ERROR;
         }
         total_read += bytes_read;
-
         if(bytes_read < buffer_size)
             break;
     }
@@ -967,6 +1009,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     QueryPerformanceCounter(&end_time);
     VirtualFree(buffer, 0, MEM_RELEASE);
     CloseHandle(hDevice);
+
     double elapsed_seconds =
         (double) (end_time.QuadPart - start_time.QuadPart) / frequency.QuadPart;
     if(elapsed_seconds > 0.0)
@@ -975,7 +1018,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
         *read_speed_mbps        = bytes_per_second / (1024.0 * 1024.0);
     }
 
-#elif defined(DISK_PLATFORM_LINUX)
+#elif defined(HJ_DISK_PLATFORM_LINUX)
     char full_path[256];
     if(strncmp(device_name, "/dev/", 5) == 0)
         strncpy(full_path, device_name, sizeof(full_path) - 1);
@@ -988,13 +1031,13 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     {
         fd = open(full_path, O_RDONLY);
         if(fd < 0)
-            return DISK_ERROR_ACCESS_DENIED;
+            return HJ_DISK_ERROR_ACCESS_DENIED;
     }
 
     if(posix_memalign(&buffer, 4096, buffer_size) != 0)
     {
         close(fd);
-        return DISK_ERROR_BUFFER_TOO_SMALL;
+        return HJ_DISK_ERROR_BUFFER_TOO_SMALL;
     }
 
     uint64_t device_size = 0;
@@ -1004,20 +1047,13 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
         {
             free(buffer);
             close(fd);
-            return DISK_ERROR_INVALID_PARAMETER;
+            return HJ_DISK_ERROR_INVALID_PARAMETER;
         }
-    }
-
-    sync();
-    int cache_fd = open("/proc/sys/vm/drop_caches", O_WRONLY);
-    if(cache_fd >= 0)
-    {
-        write(cache_fd, "3", 1);
-        close(cache_fd);
     }
 
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
+
     uint64_t total_read = 0;
     for(uint32_t i = 0; i < iterations; i++)
     {
@@ -1026,11 +1062,9 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
         {
             free(buffer);
             close(fd);
-            return DISK_ERROR_IO_ERROR;
+            return HJ_DISK_ERROR_IO_ERROR;
         }
-
         total_read += bytes_read;
-
         if((size_t) bytes_read < buffer_size)
             break;
     }
@@ -1038,6 +1072,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     clock_gettime(CLOCK_MONOTONIC, &end_time);
     free(buffer);
     close(fd);
+
     double elapsed_seconds = (end_time.tv_sec - start_time.tv_sec)
                              + (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
     if(elapsed_seconds > 0.0)
@@ -1046,7 +1081,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
         *read_speed_mbps        = bytes_per_second / (1024.0 * 1024.0);
     }
 
-#elif defined(DISK_PLATFORM_MACOS)
+#elif defined(HJ_DISK_PLATFORM_MACOS)
     char full_path[256];
     if(strncmp(device_name, "/dev/", 5) == 0)
         strncpy(full_path, device_name, sizeof(full_path) - 1);
@@ -1056,12 +1091,12 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     full_path[sizeof(full_path) - 1] = '\0';
     int fd                           = open(full_path, O_RDONLY);
     if(fd < 0)
-        return DISK_ERROR_ACCESS_DENIED;
+        return HJ_DISK_ERROR_ACCESS_DENIED;
 
     if(posix_memalign(&buffer, 4096, buffer_size) != 0)
     {
         close(fd);
-        return DISK_ERROR_BUFFER_TOO_SMALL;
+        return HJ_DISK_ERROR_BUFFER_TOO_SMALL;
     }
 
     uint64_t device_size = 0;
@@ -1075,14 +1110,14 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
             {
                 free(buffer);
                 close(fd);
-                return DISK_ERROR_INVALID_PARAMETER;
+                return HJ_DISK_ERROR_INVALID_PARAMETER;
             }
         }
     }
 
-    sync();
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
+
     uint64_t total_read = 0;
     for(uint32_t i = 0; i < iterations; i++)
     {
@@ -1091,11 +1126,9 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
         {
             free(buffer);
             close(fd);
-            return DISK_ERROR_IO_ERROR;
+            return HJ_DISK_ERROR_IO_ERROR;
         }
-
         total_read += bytes_read;
-
         if((size_t) bytes_read < buffer_size)
             break;
     }
@@ -1103,6 +1136,7 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     clock_gettime(CLOCK_MONOTONIC, &end_time);
     free(buffer);
     close(fd);
+
     double elapsed_seconds = (end_time.tv_sec - start_time.tv_sec)
                              + (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
     if(elapsed_seconds > 0.0)
@@ -1112,15 +1146,10 @@ inline disk_err_t disk_read_speed_test(const char *device_name,
     }
 
 #else
-    return DISK_ERROR_NOT_SUPPORTED;
-
+    return HJ_DISK_ERROR_NOT_SUPPORTED;
 #endif
 
-    return DISK_OK;
+    return HJ_DISK_OK;
 }
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif // DISK_H
+#endif // HJ_DISK_IMPL && !HJ_DISK_IMPL_DONE

@@ -19,359 +19,481 @@
 #ifndef SHA_HPP
 #define SHA_HPP
 
-// disable msvc safe check warning
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
+#include <openssl/evp.h>
+#include <openssl/crypto.h>
 
-// support deprecated api for low version openssl
-#ifndef OPENSSL_SUPPRESS_DEPRECATED
-#define OPENSSL_SUPPRESS_DEPRECATED
-#endif
-
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <string>
-#include <cstring>
 #include <array>
-#include <openssl/sha.h>
-
-#ifndef SHA_BUF_SIZE
-#define SHA_BUF_SIZE 131072 // 128 KiB
-#endif
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <system_error>
 
 namespace hj
 {
 template <std::size_t N>
 using hash_array = std::array<uint8_t, N>;
 
-class sha
+namespace sha
+{
+
+static constexpr std::size_t buf_sz = 65535; // 64KB
+
+enum class algorithm
+{
+    sha1,   // SHA-1
+    sha224, // SHA-224
+    sha256, // SHA-256
+    sha384, // SHA-384
+    sha512, // SHA-512
+};
+
+enum class error_code
+{
+    ok = 0,
+    invalid_input,
+    invalid_output,
+    buffer_too_small,
+    not_supported_algo,
+    openssl_internal_error,
+    unknown,
+};
+
+class sha_category_impl : public std::error_category
 {
   public:
-    enum class error_code
+    [[nodiscard]] const char *name() const noexcept override
     {
-        ok = 0,
-        invalid_input,
-        invalid_output,
-        buffer_too_small,
-        not_supported_algo,
-        unknown,
-    };
+        return "hj.sha";
+    }
 
-    enum class algorithm
+    [[nodiscard]] std::string message(int ev) const override
     {
-        sha1,   // SHA-1
-        sha224, // SHA-224
-        sha256, // SHA-256
-        sha384, // SHA-384
-        sha512, // SHA-512
-    };
-
-    static std::size_t get_digest_length(algorithm algo)
-    {
-        switch(algo)
+        switch(static_cast<error_code>(ev))
         {
-            case algorithm::sha1:
-                return SHA_DIGEST_LENGTH; // 20byte
-            case algorithm::sha224:
-                return SHA224_DIGEST_LENGTH; // 28byte
-            case algorithm::sha256:
-                return SHA256_DIGEST_LENGTH; // 32byte
-            case algorithm::sha384:
-                return SHA384_DIGEST_LENGTH; // 48byte
-            case algorithm::sha512:
-                return SHA512_DIGEST_LENGTH; // 64byte
+            case error_code::ok:
+                return "ok";
+            case error_code::invalid_input:
+                return "invalid input";
+            case error_code::invalid_output:
+                return "invalid output";
+            case error_code::buffer_too_small:
+                return "buffer too small";
+            case error_code::not_supported_algo:
+                return "not supported algorithm";
+            case error_code::openssl_internal_error:
+                return "openssl internal error";
+            case error_code::unknown:
             default:
-                return SHA256_DIGEST_LENGTH; // default SHA-256
+                return "unknown error";
+        }
+    }
+};
+
+[[nodiscard]] inline const std::error_category &sha_category() noexcept
+{
+    static const sha_category_impl instance;
+    return instance;
+}
+
+[[nodiscard]] inline std::error_code make_error_code(error_code e) noexcept
+{
+    return {static_cast<int>(e), sha_category()};
+}
+
+namespace detail
+{
+[[nodiscard]] inline const EVP_MD *get_evp_md(algorithm algo) noexcept
+{
+    switch(algo)
+    {
+        case algorithm::sha1:
+            return EVP_sha1();
+        case algorithm::sha224:
+            return EVP_sha224();
+        case algorithm::sha256:
+            return EVP_sha256();
+        case algorithm::sha384:
+            return EVP_sha384();
+        case algorithm::sha512:
+            return EVP_sha512();
+        default:
+            return nullptr;
+    }
+}
+} // namespace detail
+
+class hasher
+{
+  public:
+    explicit hasher(algorithm algo = algorithm::sha256)
+        : _ctx(EVP_MD_CTX_new())
+        , _algo(algo)
+    {
+        reset(_algo);
+    }
+
+    ~hasher()
+    {
+        if(_ctx)
+        {
+            EVP_MD_CTX_free(_ctx);
+            _ctx = nullptr;
         }
     }
 
-    static error_code encode(unsigned char       *dst,
-                             std::size_t         &dst_len,
-                             const unsigned char *src,
-                             const std::size_t    src_len,
-                             const algorithm      algo = algorithm::sha256)
+    hasher(const hasher &)            = delete;
+    hasher &operator=(const hasher &) = delete;
+
+    hasher(hasher &&other) noexcept
+        : _ctx(other._ctx)
+        , _algo(other._algo)
+        , _finished(other._finished)
     {
-        std::size_t required_len = get_digest_length(algo);
-        if(dst_len < required_len)
+        other._ctx      = nullptr;
+        other._finished = true;
+    }
+
+    hasher &operator=(hasher &&other) noexcept
+    {
+        if(this != &other)
+        {
+            if(_ctx)
+                EVP_MD_CTX_free(_ctx);
+            _ctx            = other._ctx;
+            _algo           = other._algo;
+            _finished       = other._finished;
+            other._ctx      = nullptr;
+            other._finished = true;
+        }
+        return *this;
+    }
+
+    [[nodiscard]] bool is_valid() const noexcept
+    {
+        return _ctx != nullptr && !_finished;
+    }
+
+    [[nodiscard]] bool is_finished() const noexcept { return _finished; }
+
+    [[nodiscard]] error_code reset(algorithm algo) noexcept
+    {
+        _algo = algo;
+        return reset();
+    }
+
+    [[nodiscard]] error_code reset() noexcept
+    {
+        if(!_ctx)
+        {
+            _ctx = EVP_MD_CTX_new();
+            if(!_ctx)
+            {
+                _finished = true;
+                return error_code::openssl_internal_error;
+            }
+        }
+
+        const EVP_MD *md = detail::get_evp_md(_algo);
+        if(!md || EVP_DigestInit_ex(_ctx, md, nullptr) != 1)
+        {
+            _finished = true;
+            return error_code::openssl_internal_error;
+        }
+
+        _finished = false;
+        return error_code::ok;
+    }
+
+    [[nodiscard]] error_code update(const void *data, std::size_t len) noexcept
+    {
+        if(!_ctx)
+            return error_code::openssl_internal_error;
+        if(_finished)
+            return error_code::invalid_input;
+        if(len > 0 && data == nullptr)
+            return error_code::invalid_input;
+
+        if(EVP_DigestUpdate(_ctx, data, len) != 1)
+            return error_code::openssl_internal_error;
+        return error_code::ok;
+    }
+
+    [[nodiscard]] error_code update(std::string_view data) noexcept
+    {
+        return update(data.data(), data.size());
+    }
+
+    [[nodiscard]] error_code final(unsigned char *out,
+                                   std::size_t   &out_len) noexcept
+    {
+        if(!_ctx)
+            return error_code::openssl_internal_error;
+        if(_finished)
+            return error_code::invalid_input;
+        if(out == nullptr)
+            return error_code::invalid_output;
+
+        std::size_t req_len = get_digest_length(_algo);
+        if(out_len < req_len)
             return error_code::buffer_too_small;
 
-        switch(algo)
+        unsigned int len = 0;
+        if(EVP_DigestFinal_ex(_ctx, out, &len) != 1)
         {
-            case algorithm::sha1:
-                SHA1(src, src_len, dst);
-                break;
-            case algorithm::sha224:
-                SHA224(src, src_len, dst);
-                break;
-            case algorithm::sha256:
-                SHA256(src, src_len, dst);
-                break;
-            case algorithm::sha384:
-                SHA384(src, src_len, dst);
-                break;
-            case algorithm::sha512:
-                SHA512(src, src_len, dst);
-                break;
-            default:
-                return error_code::not_supported_algo;
+            _finished = true;
+            return error_code::openssl_internal_error;
         }
 
-        dst_len = required_len;
+        out_len   = len;
+        _finished = true;
         return error_code::ok;
     }
 
-    static error_code encode(std::string       &dst,
-                             const std::string &src,
-                             const algorithm    algo = algorithm::sha256)
+    [[nodiscard]] error_code final(std::string &dst)
     {
-        std::size_t digest_len = get_digest_length(algo);
-        dst.resize(digest_len);
-        unsigned char *dst_ptr =
-            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data()));
-        const unsigned char *src_ptr =
-            reinterpret_cast<const unsigned char *>(src.c_str());
-        switch(algo)
-        {
-            case algorithm::sha1:
-                SHA1(src_ptr, src.size(), dst_ptr);
-                break;
-            case algorithm::sha224:
-                SHA224(src_ptr, src.size(), dst_ptr);
-                break;
-            case algorithm::sha256:
-                SHA256(src_ptr, src.size(), dst_ptr);
-                break;
-            case algorithm::sha384:
-                SHA384(src_ptr, src.size(), dst_ptr);
-                break;
-            case algorithm::sha512:
-                SHA512(src_ptr, src.size(), dst_ptr);
-                break;
-            default:
-                dst.clear();
-                return error_code::not_supported_algo;
-        }
-
-        return error_code::ok;
-    }
-
-    template <std::size_t N>
-    static error_code encode(hash_array<N>     &dst,
-                             const std::string &src,
-                             const algorithm    algo = algorithm::sha256)
-    {
-        std::size_t dst_len = dst.size();
-        auto        ec      = encode(dst.data(),
-                         dst_len,
-                         reinterpret_cast<const unsigned char *>(src.c_str()),
-                         src.size(),
-                         algo);
-        if(ec != error_code::ok)
-        {
-            dst.fill(0);
-            return ec;
-        }
-
-        return error_code::ok;
-    }
-
-    static error_code encode(std::string    &dst,
-                             std::istream   &in,
-                             const algorithm algo = algorithm::sha256)
-    {
-        if(!in.good())
+        if(_finished)
         {
             dst.clear();
-            return error_code::invalid_output;
-        }
-
-        std::size_t digest_len = get_digest_length(algo);
-        dst.resize(digest_len);
-        switch(algo)
-        {
-            case algorithm::sha1:
-                return _encode_stream_sha1(dst, in) ? error_code::ok
-                                                    : error_code::unknown;
-            case algorithm::sha224:
-                return _encode_stream_sha224(dst, in) ? error_code::ok
-                                                      : error_code::unknown;
-            case algorithm::sha256:
-                return _encode_stream_sha256(dst, in) ? error_code::ok
-                                                      : error_code::unknown;
-            case algorithm::sha384:
-                return _encode_stream_sha384(dst, in) ? error_code::ok
-                                                      : error_code::unknown;
-            case algorithm::sha512:
-                return _encode_stream_sha512(dst, in) ? error_code::ok
-                                                      : error_code::unknown;
-            default:
-                dst.clear();
-                return error_code::not_supported_algo;
-        }
-    }
-
-    static error_code encode(std::ostream   &out,
-                             std::istream   &in,
-                             const algorithm algo = algorithm::sha256)
-    {
-        if(!in.good())
             return error_code::invalid_input;
-        if(!out.good())
-            return error_code::invalid_output;
+        }
 
-        std::string hash_result;
-        auto        ec = encode(hash_result, in, algo);
+        std::size_t req_len = get_digest_length(_algo);
+        dst.resize(req_len);
+        std::size_t out_len = req_len;
+        auto ec = final(reinterpret_cast<unsigned char *>(dst.data()), out_len);
         if(ec != error_code::ok)
         {
-            hash_result.clear();
-            return ec;
+            dst.clear();
         }
-
-        out.write(hash_result.data(), hash_result.size());
-        out.flush();
-        std::fill(hash_result.begin(), hash_result.end(), 0);
-        return error_code::ok;
-    }
-
-    static error_code encode_file(const char     *dst_file_path,
-                                  const char     *src_file_path,
-                                  const algorithm algo = algorithm::sha256)
-    {
-        std::ifstream src_file(src_file_path, std::ios::binary);
-        if(!src_file.is_open())
-            return error_code::invalid_input;
-
-        std::ofstream dst_file(dst_file_path, std::ios::binary);
-        if(!dst_file.is_open())
-            return error_code::invalid_output;
-
-        auto ec = encode(dst_file, src_file, algo);
-        dst_file.close();
-        src_file.close();
         return ec;
     }
 
-    static error_code encode_file(const std::string &dst_file_path,
-                                  const std::string &src_file_path,
-                                  const algorithm    algo = algorithm::sha256)
+    [[nodiscard]] static std::size_t get_digest_length(algorithm algo) noexcept
     {
-        return encode_file(dst_file_path.c_str(), src_file_path.c_str(), algo);
-    }
-
-    static std::size_t
-    encode_len_reserve(const algorithm algo = algorithm::sha256)
-    {
-        return get_digest_length(algo);
-    }
-
-    static error_code sha1(std::string &dst, const std::string &src)
-    {
-        return encode(dst, src, algorithm::sha1);
-    }
-
-    static error_code sha224(std::string &dst, const std::string &src)
-    {
-        return encode(dst, src, algorithm::sha224);
-    }
-
-    static error_code sha256(std::string &dst, const std::string &src)
-    {
-        return encode(dst, src, algorithm::sha256);
-    }
-
-    static error_code sha384(std::string &dst, const std::string &src)
-    {
-        return encode(dst, src, algorithm::sha384);
-    }
-
-    static error_code sha512(std::string &dst, const std::string &src)
-    {
-        return encode(dst, src, algorithm::sha512);
+        const EVP_MD *md = detail::get_evp_md(algo);
+        return md ? static_cast<std::size_t>(EVP_MD_get_size(md)) : 0;
     }
 
   private:
-    static bool _encode_stream_sha1(std::string &dst, std::istream &in)
-    {
-        SHA_CTX ctx;
-        SHA1_Init(&ctx);
-        std::vector<char> buf(SHA_BUF_SIZE);
-        std::streamsize   sz;
-        while((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA1_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
-
-        SHA1_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
-        memset(&ctx, 0, sizeof(ctx));
-        return true;
-    }
-
-    static bool _encode_stream_sha224(std::string &dst, std::istream &in)
-    {
-        SHA256_CTX ctx;
-        SHA224_Init(&ctx);
-        std::vector<char> buf(SHA_BUF_SIZE);
-        std::streamsize   sz;
-        while((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA224_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
-
-        SHA224_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
-        memset(&ctx, 0, sizeof(ctx));
-        return true;
-    }
-
-    static bool _encode_stream_sha256(std::string &dst, std::istream &in)
-    {
-        SHA256_CTX ctx;
-        SHA256_Init(&ctx);
-        std::vector<char> buf(SHA_BUF_SIZE);
-        std::streamsize   sz;
-        while((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA256_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
-
-        SHA256_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
-        memset(&ctx, 0, sizeof(ctx));
-        return true;
-    }
-
-    static bool _encode_stream_sha384(std::string &dst, std::istream &in)
-    {
-        SHA512_CTX ctx;
-        SHA384_Init(&ctx);
-        std::vector<char> buf(SHA_BUF_SIZE);
-        std::streamsize   sz;
-        while((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA384_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
-
-        SHA384_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
-        memset(&ctx, 0, sizeof(ctx));
-        return true;
-    }
-
-    static bool _encode_stream_sha512(std::string &dst, std::istream &in)
-    {
-        SHA512_CTX ctx;
-        SHA512_Init(&ctx);
-        std::vector<char> buf(SHA_BUF_SIZE);
-        std::streamsize   sz;
-        while((sz = in.read(buf.data(), SHA_BUF_SIZE).gcount()) > 0)
-            SHA512_Update(&ctx, buf.data(), static_cast<std::size_t>(sz));
-
-        SHA512_Final(reinterpret_cast<unsigned char *>(&dst[0]), &ctx);
-        memset(&ctx, 0, sizeof(ctx));
-        return true;
-    }
-
-  private:
-    sha()                       = default;
-    ~sha()                      = default;
-    sha(const sha &)            = delete;
-    sha &operator=(const sha &) = delete;
-    sha(sha &&)                 = delete;
-    sha &operator=(sha &&)      = delete;
+    EVP_MD_CTX *_ctx{nullptr};
+    algorithm   _algo;
+    bool        _finished{true};
 };
 
+[[nodiscard]] inline std::size_t get_digest_length(algorithm algo) noexcept
+{
+    return hasher::get_digest_length(algo);
 }
 
-#endif
+[[nodiscard]] inline error_code
+encode(unsigned char       *dst,
+       std::size_t         &dst_len,
+       const unsigned char *src,
+       const std::size_t    src_len,
+       const algorithm      algo = algorithm::sha256) noexcept
+{
+    if(dst == nullptr)
+        return error_code::invalid_output;
+    if(src_len > 0 && src == nullptr)
+        return error_code::invalid_input;
+
+    hasher h(algo);
+    if(!h.is_valid())
+        return error_code::openssl_internal_error;
+
+    auto ec = h.update(src, src_len);
+    if(ec != error_code::ok)
+        return ec;
+
+    return h.final(dst, dst_len);
+}
+
+[[nodiscard]] inline error_code encode(std::string     &dst,
+                                       std::string_view src,
+                                       const algorithm algo = algorithm::sha256)
+{
+    hasher h(algo);
+    if(!h.is_valid())
+    {
+        dst.clear();
+        return error_code::openssl_internal_error;
+    }
+
+    auto ec = h.update(src);
+    if(ec != error_code::ok)
+    {
+        dst.clear();
+        return ec;
+    }
+
+    return h.final(dst);
+}
+
+template <std::size_t N>
+[[nodiscard]] inline error_code
+encode(hash_array<N>   &dst,
+       std::string_view src,
+       const algorithm  algo = algorithm::sha256) noexcept
+{
+    std::size_t required_len = get_digest_length(algo);
+    static_assert(N >= 20, "hash_array buffer size is too small for SHA hash.");
+    if(N < required_len)
+    {
+        dst.fill(0);
+        return error_code::buffer_too_small;
+    }
+
+    std::size_t dst_len = N;
+    auto        ec = encode(dst.data(),
+                            dst_len,
+                            reinterpret_cast<const unsigned char *>(src.data()),
+                            src.size(),
+                            algo);
+    if(ec != error_code::ok)
+    {
+        dst.fill(0);
+    }
+    return ec;
+}
+
+[[nodiscard]] inline error_code encode(std::string    &dst,
+                                       std::istream   &in,
+                                       const algorithm algo = algorithm::sha256)
+{
+    if(!in.good())
+    {
+        dst.clear();
+        return error_code::invalid_input;
+    }
+
+    hasher h(algo);
+    if(!h.is_valid())
+    {
+        dst.clear();
+        return error_code::openssl_internal_error;
+    }
+
+    std::array<char, buf_sz> buf;
+    while(in.good())
+    {
+        in.read(buf.data(), buf.size());
+        std::streamsize bytes_read = in.gcount();
+        if(bytes_read > 0)
+        {
+            auto ec =
+                h.update(buf.data(), static_cast<std::size_t>(bytes_read));
+            if(ec != error_code::ok)
+            {
+                dst.clear();
+                return ec;
+            }
+        }
+    }
+
+    if(in.bad())
+    {
+        dst.clear();
+        return error_code::invalid_input;
+    }
+
+    return h.final(dst);
+}
+
+[[nodiscard]] inline error_code encode(std::ostream   &out,
+                                       std::istream   &in,
+                                       const algorithm algo = algorithm::sha256)
+{
+    if(!in.good())
+        return error_code::invalid_input;
+    if(!out.good())
+        return error_code::invalid_output;
+
+    std::string hash_result;
+    auto        ec = encode(hash_result, in, algo);
+    if(ec != error_code::ok)
+    {
+        return ec;
+    }
+
+    out.write(hash_result.data(),
+              static_cast<std::streamsize>(hash_result.size()));
+    out.flush();
+
+    OPENSSL_cleanse(hash_result.data(), hash_result.size());
+    return out.good() ? error_code::ok : error_code::invalid_output;
+}
+
+[[nodiscard]] inline error_code
+encode_file(const char     *dst_file_path,
+            const char     *src_file_path,
+            const algorithm algo = algorithm::sha256)
+{
+    if(!dst_file_path || !src_file_path)
+        return error_code::invalid_input;
+
+    std::ifstream src_file(src_file_path, std::ios::binary);
+    if(!src_file.is_open())
+        return error_code::invalid_input;
+
+    std::ofstream dst_file(dst_file_path, std::ios::binary);
+    if(!dst_file.is_open())
+        return error_code::invalid_output;
+
+    return encode(dst_file, src_file, algo);
+}
+
+[[nodiscard]] inline error_code
+encode_file(const std::string &dst_file_path,
+            const std::string &src_file_path,
+            const algorithm    algo = algorithm::sha256)
+{
+    return encode_file(dst_file_path.c_str(), src_file_path.c_str(), algo);
+}
+
+[[nodiscard]] inline std::size_t
+encode_len_reserve(const algorithm algo = algorithm::sha256) noexcept
+{
+    return get_digest_length(algo);
+}
+
+[[nodiscard]] inline error_code sha1(std::string &dst, std::string_view src)
+{
+    return encode(dst, src, algorithm::sha1);
+}
+
+[[nodiscard]] inline error_code sha224(std::string &dst, std::string_view src)
+{
+    return encode(dst, src, algorithm::sha224);
+}
+
+[[nodiscard]] inline error_code sha256(std::string &dst, std::string_view src)
+{
+    return encode(dst, src, algorithm::sha256);
+}
+
+[[nodiscard]] inline error_code sha384(std::string &dst, std::string_view src)
+{
+    return encode(dst, src, algorithm::sha384);
+}
+
+[[nodiscard]] inline error_code sha512(std::string &dst, std::string_view src)
+{
+    return encode(dst, src, algorithm::sha512);
+}
+
+} // namespace sha
+} // namespace hj
+
+namespace std
+{
+template <>
+struct is_error_code_enum<hj::sha::error_code> : true_type
+{
+};
+} // namespace std
+
+#endif // SHA_HPP

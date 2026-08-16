@@ -19,25 +19,13 @@
 #ifndef BASE64_HPP
 #define BASE64_HPP
 
-// disable msvc safe check warning
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-
-// support deprecated api for low version openssl
-#ifndef OPENSSL_SUPPRESS_DEPRECATED
-#define OPENSSL_SUPPRESS_DEPRECATED
-#endif
-
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
 #include <iostream>
 #include <string>
-#include <fstream>
 #include <vector>
-#include <cstring>
-
-#include <openssl/bio.h>
-#include <openssl/evp.h>
-#include <openssl/buffer.h>
 
 #ifndef BASE64_BUF_SIZE
 #define BASE64_BUF_SIZE 16384 // 16KB
@@ -61,104 +49,174 @@ class base64
         file_write_failed
     };
 
+    inline const char *to_string(error_code r) noexcept
+    {
+        switch(r)
+        {
+            case error_code::ok:
+                return "ok";
+            case error_code::invalid_input:
+                return "invalid input";
+            case error_code::buffer_overflow:
+                return "buffer overflow";
+            case error_code::encode_failed:
+                return "encode failed";
+            case error_code::decode_failed:
+                return "decode failed";
+            case error_code::file_open_failed:
+                return "file open failed";
+            case error_code::file_read_failed:
+                return "file read failed";
+            case error_code::file_write_failed:
+                return "file write failed";
+        }
+        return "unknown";
+    }
+
+  private:
+    static inline constexpr char enc_table[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    static inline constexpr int8_t dec_table[256] = {
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63, 52, 53, 54, 55, 56, 57,
+        58, 59, 60, 61, -1, -1, -1, -2, -1, -1, -1, 0,  1,  2,  3,  4,  5,  6,
+        7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25, -1, -1, -1, -1, -1, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+        37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1};
+
   public:
+    static constexpr std::size_t
+    encode_len_reserve(const std::size_t src_len) noexcept
+    {
+        return src_len / 3 * 4 + (src_len % 3 == 0 ? 0 : 4);
+    }
+
+    static constexpr std::size_t
+    decode_len_reserve(const std::size_t src_len) noexcept
+    {
+        return (src_len / 4) * 3;
+    }
+
     // bytes -> base64 bytes
     static error_code encode(unsigned char       *dst,
                              std::size_t         &dst_len,
                              const unsigned char *src,
                              const std::size_t    src_len)
     {
-        if(src_len == 0 || dst_len == 0)
-            return error_code::invalid_input; // Invalid input or output length
-
-        BUF_MEM *buffer_ptr;
-        BIO     *bio = BIO_new(BIO_s_mem());
-        if(!bio)
-            return error_code::
-                encode_failed; // Failed to create BIO from memory buffer
-
-        BIO *b64 = BIO_new(BIO_f_base64());
-        if(!b64)
+        if(src_len == 0)
         {
-            BIO_free(bio);
-            return error_code::encode_failed; // Failed to create base64 BIO
+            dst_len = 0;
+            return error_code::ok;
+        }
+        if(!dst || !src)
+            return error_code::invalid_input;
+
+        std::size_t req_len = encode_len_reserve(src_len);
+        if(dst_len < req_len)
+            return error_code::buffer_overflow;
+
+        std::size_t i = 0;
+        std::size_t j = 0;
+        for(; i + 2 < src_len; i += 3)
+        {
+            uint32_t val = (static_cast<uint32_t>(src[i]) << 16)
+                           | (static_cast<uint32_t>(src[i + 1]) << 8)
+                           | static_cast<uint32_t>(src[i + 2]);
+            dst[j++]     = enc_table[(val >> 18) & 0x3F];
+            dst[j++]     = enc_table[(val >> 12) & 0x3F];
+            dst[j++]     = enc_table[(val >> 6) & 0x3F];
+            dst[j++]     = enc_table[val & 0x3F];
         }
 
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        BIO_push(b64, bio);
-        BIO_write(b64, src, static_cast<int>(src_len));
-        BIO_flush(b64);
-        BIO_get_mem_ptr(b64, &buffer_ptr);
-        if(buffer_ptr->length > dst_len)
+        if(i < src_len)
         {
-            BIO_free_all(b64);
-            return error_code::
-                buffer_overflow; // Not enough space in destination buffer
+            uint32_t val = static_cast<uint32_t>(src[i]) << 16;
+            if(i + 1 < src_len)
+                val |= static_cast<uint32_t>(src[i + 1]) << 8;
+
+            dst[j++] = enc_table[(val >> 18) & 0x3F];
+            dst[j++] = enc_table[(val >> 12) & 0x3F];
+            dst[j++] = (i + 1 < src_len) ? enc_table[(val >> 6) & 0x3F] : '=';
+            dst[j++] = '=';
         }
 
-        memcpy(dst, buffer_ptr->data, buffer_ptr->length);
-        dst_len = buffer_ptr->length;
-        BIO_free_all(b64);
+        dst_len = j;
         return error_code::ok;
     }
 
     // string -> base64 string
     static error_code encode(std::string &dst, const std::string &src)
     {
+        if(src.empty())
+        {
+            dst.clear();
+            return error_code::ok;
+        }
+
         std::size_t dst_len = encode_len_reserve(src.size());
-        dst.resize(dst_len); // Base64 encoding increases size by ~33%
-        auto ec = encode(
-            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
-            dst_len,
-            reinterpret_cast<const unsigned char *>(src.c_str()),
-            src.size());
+        dst.resize(dst_len);
+        auto ec = encode(reinterpret_cast<unsigned char *>(dst.data()),
+                         dst_len,
+                         reinterpret_cast<const unsigned char *>(src.data()),
+                         src.size());
         if(ec != error_code::ok)
         {
             dst.clear();
             return ec;
         }
 
-        dst.resize(dst_len); // Resize to actual length
+        dst.resize(dst_len);
         return error_code::ok;
     }
 
-    // base64 stream -> stream
+    // stream -> base64 stream
     static error_code encode(std::ostream &out, std::istream &in)
     {
         if(!in || !out)
             return error_code::invalid_input;
 
-        BIO *b64 = BIO_new(BIO_f_base64());
-        if(!b64)
-            return error_code::encode_failed;
-
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        BIO *bio_out = BIO_new(BIO_s_mem());
-        if(!bio_out)
+        constexpr std::size_t      in_buf_size  = (BASE64_BUF_SIZE / 3) * 3;
+        constexpr std::size_t      out_buf_size = (in_buf_size / 3) * 4;
+        std::vector<unsigned char> in_buf(in_buf_size);
+        std::vector<unsigned char> out_buf(out_buf_size);
+        while(true)
         {
-            BIO_free(b64);
-            return error_code::encode_failed;
-        }
-
-        BIO_push(b64, bio_out);
-        char buffer[BASE64_BUF_SIZE];
-        while(in.read(buffer, sizeof(buffer)) || in.gcount() > 0)
-        {
+            in.read(reinterpret_cast<char *>(in_buf.data()), in_buf_size);
             std::streamsize n = in.gcount();
-            if(BIO_write(b64, buffer, static_cast<int>(n)) != n)
+
+            if(n > 0)
             {
-                BIO_free_all(b64);
-                return error_code::encode_failed;
+                std::size_t out_len = out_buf.size();
+                auto        ec      = encode(out_buf.data(),
+                                             out_len,
+                                             in_buf.data(),
+                                             static_cast<std::size_t>(n));
+                if(ec != error_code::ok)
+                    return ec;
+
+                out.write(reinterpret_cast<const char *>(out_buf.data()),
+                          out_len);
+                if(!out)
+                    return error_code::file_write_failed;
             }
+
+            if(in.eof())
+                break;
+
+            if(in.fail())
+                return error_code::file_read_failed;
         }
 
-        BIO_flush(b64);
-        BUF_MEM *mem_ptr = nullptr;
-        BIO_get_mem_ptr(b64, &mem_ptr);
-        if(mem_ptr && mem_ptr->length > 0)
-            out.write(mem_ptr->data, mem_ptr->length);
-
-        BIO_free_all(b64);
         return error_code::ok;
     }
 
@@ -166,48 +224,19 @@ class base64
     static error_code encode_file(const char *dst_file_path,
                                   const char *src_file_path)
     {
-        FILE *in = fopen(src_file_path, "rb");
-        if(!in)
+        if(!dst_file_path || !src_file_path
+           || std::string(dst_file_path) == std::string(src_file_path))
+            return error_code::invalid_input;
+
+        std::ifstream in(src_file_path, std::ios::binary);
+        if(!in.is_open())
             return error_code::file_open_failed;
 
-        FILE *out = fopen(dst_file_path, "wb");
-        if(!out)
-        {
-            fclose(in);
+        std::ofstream out(dst_file_path, std::ios::binary);
+        if(!out.is_open())
             return error_code::file_open_failed;
-        }
 
-        BIO *bio_out = BIO_new_fp(out, BIO_NOCLOSE);
-        BIO *b64     = BIO_new(BIO_f_base64());
-        if(!b64)
-        {
-            BIO_free(bio_out);
-            fclose(in);
-            fclose(out);
-            return error_code::encode_failed;
-        }
-
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        BIO_push(b64, bio_out);
-
-        char        buffer[BASE64_BUF_SIZE];
-        std::size_t n;
-        while((n = fread(buffer, 1, sizeof(buffer), in)) > 0)
-        {
-            if(BIO_write(b64, buffer, static_cast<int>(n)) == (int) n)
-                continue;
-
-            BIO_free_all(b64);
-            fclose(in);
-            fclose(out);
-            return error_code::encode_failed;
-        }
-
-        BIO_flush(b64);
-        BIO_free_all(b64);
-        fclose(in);
-        fclose(out);
-        return error_code::ok;
+        return encode(out, in);
     }
 
     // file -> base64 file
@@ -223,48 +252,96 @@ class base64
                              const unsigned char *src,
                              const std::size_t    src_len)
     {
-        if(src_len % 4 != 0)
-            return error_code::invalid_input; // Invalid base64 input length
-
-        BIO *bio = BIO_new_mem_buf(src, static_cast<int>(src_len));
-        if(!bio)
-            return error_code::
-                decode_failed; // Failed to create BIO from memory buffer
-
-        BIO *b64 = BIO_new(BIO_f_base64());
-        if(!b64)
+        if(src_len == 0)
         {
-            BIO_free(bio);
-            return error_code::decode_failed; // Failed to create base64 BIO
+            dst_len = 0;
+            return error_code::ok;
+        }
+        if(!dst || !src || src_len % 4 != 0)
+            return error_code::invalid_input;
+
+        std::size_t req_len = decode_len_reserve(src_len);
+        if(dst_len < req_len)
+            return error_code::buffer_overflow;
+
+        std::size_t out_idx = 0;
+        for(std::size_t i = 0; i < src_len; i += 4)
+        {
+            int8_t b0 = dec_table[src[i]];
+            int8_t b1 = dec_table[src[i + 1]];
+            int8_t b2 = dec_table[src[i + 2]];
+            int8_t b3 = dec_table[src[i + 3]];
+
+            if(b0 < 0 || b1 < 0)
+                return error_code::decode_failed;
+
+            uint32_t val = (static_cast<uint32_t>(b0) << 18)
+                           | (static_cast<uint32_t>(b1) << 12);
+
+            if(b2 >= 0)
+            {
+                val |= (static_cast<uint32_t>(b2) << 6);
+                if(b3 >= 0)
+                {
+                    val |= static_cast<uint32_t>(b3);
+                    dst[out_idx++] = (val >> 16) & 0xFF;
+                    dst[out_idx++] = (val >> 8) & 0xFF;
+                    dst[out_idx++] = val & 0xFF;
+                } else if(b3 == -2)
+                {
+                    if(i + 4 != src_len)
+                        return error_code::decode_failed;
+
+                    if((b2 & 0x03) != 0)
+                        return error_code::decode_failed;
+
+                    dst[out_idx++] = (val >> 16) & 0xFF;
+                    dst[out_idx++] = (val >> 8) & 0xFF;
+                } else
+                {
+                    return error_code::decode_failed;
+                }
+            } else if(b2 == -2)
+            {
+                if(b3 != -2 || i + 4 != src_len)
+                    return error_code::decode_failed;
+
+                if((b1 & 0x0F) != 0)
+                    return error_code::decode_failed;
+
+                dst[out_idx++] = (val >> 16) & 0xFF;
+            } else
+            {
+                return error_code::decode_failed;
+            }
         }
 
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        BIO_push(b64, bio);
-        int decoded_length = BIO_read(b64, dst, static_cast<int>(dst_len));
-        if(decoded_length < 0)
-        {
-            BIO_free_all(b64);
-            return error_code::decode_failed;
-        }
-
-        dst_len = static_cast<std::size_t>(decoded_length);
-        BIO_free_all(b64);
+        dst_len = out_idx;
         return error_code::ok;
     }
 
     // base64 string -> string
     static error_code decode(std::string &dst, const std::string &src)
     {
-        dst.resize(decode_len_reserve(src.size()));
-        std::size_t dst_len = dst.size();
-        auto        ec      = decode(
-            reinterpret_cast<unsigned char *>(const_cast<char *>(dst.data())),
-            dst_len,
-            reinterpret_cast<const unsigned char *>(src.c_str()),
-            src.size());
+        if(src.empty())
+        {
+            dst.clear();
+            return error_code::ok;
+        }
+
+        if(src.size() % 4 != 0)
+            return error_code::invalid_input;
+
+        std::size_t dst_len = decode_len_reserve(src.size());
+        dst.resize(dst_len);
+        auto ec = decode(reinterpret_cast<unsigned char *>(dst.data()),
+                         dst_len,
+                         reinterpret_cast<const unsigned char *>(src.data()),
+                         src.size());
+
         if(ec != error_code::ok)
         {
-            dst.clear(); // Clear the string if decoding fails
+            dst.clear();
             return ec;
         }
 
@@ -272,34 +349,69 @@ class base64
         return error_code::ok;
     }
 
-    // base64 stream -> stream
     static error_code decode(std::ostream &out, std::istream &in)
     {
-        BIO *b64 = BIO_new(BIO_f_base64());
-        if(!b64)
-            return error_code::decode_failed;
+        if(!in || !out)
+            return error_code::invalid_input;
 
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        std::string input_buf;
-        char        buffer[BASE64_BUF_SIZE];
-        while(in.read(buffer, sizeof(buffer)) || in.gcount() > 0)
-            input_buf.append(buffer, static_cast<size_t>(in.gcount()));
+        constexpr std::size_t      in_buf_size  = (BASE64_BUF_SIZE / 4) * 4;
+        constexpr std::size_t      out_buf_size = (in_buf_size / 4) * 3;
+        std::vector<unsigned char> in_buf(in_buf_size);
+        std::vector<unsigned char> out_buf(out_buf_size);
+        std::size_t                leftover = 0;
+        bool                       has_eof  = false;
 
-        BIO *bio_in = BIO_new_mem_buf(input_buf.data(),
-                                      static_cast<int>(input_buf.size()));
-        if(!bio_in)
+        while(!has_eof || leftover > 0)
         {
-            BIO_free(b64);
-            return error_code::decode_failed;
+            if(!has_eof)
+            {
+                in.read(reinterpret_cast<char *>(in_buf.data() + leftover),
+                        in_buf_size - leftover);
+                std::streamsize n = in.gcount();
+                if(n > 0)
+                    leftover += static_cast<std::size_t>(n);
+
+                if(in.eof())
+                    has_eof = true;
+                else if(in.fail())
+                    return error_code::file_read_failed;
+            }
+
+            if(leftover == 0)
+                break;
+
+            std::size_t decode_bytes = (leftover / 4) * 4;
+            if(has_eof && leftover % 4 != 0)
+                return error_code::invalid_input;
+
+            if(decode_bytes > 0)
+            {
+                std::size_t out_len = out_buf.size();
+                auto        ec      = decode(out_buf.data(),
+                                             out_len,
+                                             in_buf.data(),
+                                             decode_bytes);
+                if(ec != error_code::ok)
+                    return ec;
+
+                out.write(reinterpret_cast<const char *>(out_buf.data()),
+                          out_len);
+                if(!out)
+                    return error_code::file_write_failed;
+
+                leftover -= decode_bytes;
+                if(leftover > 0)
+                {
+                    std::memmove(in_buf.data(),
+                                 in_buf.data() + decode_bytes,
+                                 leftover);
+                }
+            } else if(has_eof)
+            {
+                break;
+            }
         }
 
-        BIO_push(b64, bio_in);
-        char outbuf[BASE64_BUF_SIZE];
-        int  n;
-        while((n = BIO_read(b64, outbuf, sizeof(outbuf))) > 0)
-            out.write(outbuf, n);
-
-        BIO_free_all(b64);
         return error_code::ok;
     }
 
@@ -307,46 +419,19 @@ class base64
     static error_code decode_file(const char *dst_file_path,
                                   const char *src_file_path)
     {
-        FILE *in = fopen(src_file_path, "rb");
-        if(!in)
+        if(!dst_file_path || !src_file_path
+           || std::string(dst_file_path) == std::string(src_file_path))
+            return error_code::invalid_input;
+
+        std::ifstream in(src_file_path, std::ios::binary);
+        if(!in.is_open())
             return error_code::file_open_failed;
 
-        FILE *out = fopen(dst_file_path, "wb");
-        if(!out)
-        {
-            fclose(in);
+        std::ofstream out(dst_file_path, std::ios::binary);
+        if(!out.is_open())
             return error_code::file_open_failed;
-        }
 
-        BIO *bio_in = BIO_new_fp(in, BIO_NOCLOSE);
-        BIO *b64    = BIO_new(BIO_f_base64());
-        if(!b64)
-        {
-            BIO_free(bio_in);
-            fclose(in);
-            fclose(out);
-            return error_code::decode_failed;
-        }
-
-        BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-        BIO_push(b64, bio_in);
-        char buffer[4096];
-        int  n;
-        while((n = BIO_read(b64, buffer, sizeof(buffer))) > 0)
-        {
-            if(fwrite(buffer, 1, n, out) == (size_t) n)
-                continue;
-
-            BIO_free_all(b64);
-            fclose(in);
-            fclose(out);
-            return error_code::file_write_failed;
-        }
-
-        BIO_free_all(b64);
-        fclose(in);
-        fclose(out);
-        return error_code::ok;
+        return decode(out, in);
     }
 
     // base64 file -> file
@@ -356,58 +441,48 @@ class base64
         return decode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
 
-    // reserve encode dst buf size
-    static std::size_t encode_len_reserve(const std::size_t src_len)
-    {
-        return (src_len + 2) / 3 * 4;
-    }
-
-    // reserve decode dst buf size
-    static std::size_t decode_len_reserve(const std::size_t src_len)
-    {
-        return (src_len / 4) * 3;
-    }
-
     static bool is_valid(const unsigned char *buf, const std::size_t len)
     {
-        if(len == 0 || buf == nullptr)
-            return false;
-
-        if(len % 4 != 0)
+        if(len == 0 || buf == nullptr || len % 4 != 0)
             return false;
 
         std::size_t pad = 0;
         for(std::size_t i = 0; i < len; ++i)
         {
-            char c = buf[i];
-            if((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
-               || (c >= '0' && c <= '9') || c == '+' || c == '/')
+            int8_t val = dec_table[buf[i]];
+            if(val >= 0)
             {
                 if(pad > 0)
                     return false;
-
-                continue;
-            }
-
-            if(c == '=')
+            } else if(val == -2)
             {
                 ++pad;
                 if(pad > 2)
-                    return false;
-
-                if(i < len - 2)
                     return false;
             } else
             {
                 return false;
             }
         }
+
+        if(pad == 1)
+        {
+            int8_t b2 = dec_table[buf[len - 2]];
+            if(b2 < 0 || (b2 & 0x03) != 0)
+                return false;
+        } else if(pad == 2)
+        {
+            int8_t b1 = dec_table[buf[len - 3]];
+            if(b1 < 0 || (b1 & 0x0F) != 0)
+                return false;
+        }
+
         return true;
     }
 
     static bool is_valid(const std::string &str)
     {
-        return is_valid(reinterpret_cast<const unsigned char *>(str.c_str()),
+        return is_valid(reinterpret_cast<const unsigned char *>(str.data()),
                         str.length());
     }
 
@@ -416,26 +491,87 @@ class base64
         if(!in.is_open())
             return false;
 
-        unsigned char           buf[BASE64_BUF_SIZE];
-        std::size_t             total_len = 0;
         std::ifstream::pos_type start_pos = in.tellg();
-        std::streamsize         n;
-        while(in)
+        if(start_pos == std::ifstream::pos_type(-1))
+            return false;
+
+        unsigned char buf[BASE64_BUF_SIZE];
+        std::size_t   total_len = 0;
+        std::size_t   pad_count = 0;
+
+        unsigned char last_four[4] = {0};
+
+        while(true)
         {
             in.read(reinterpret_cast<char *>(buf), BASE64_BUF_SIZE);
-            n = in.gcount();
-            if(n == 0)
+            std::streamsize n = in.gcount();
+
+            if(n > 0)
+            {
+                for(std::streamsize i = 0; i < n; ++i)
+                {
+                    int8_t val = dec_table[buf[i]];
+                    if(val >= 0)
+                    {
+                        if(pad_count > 0)
+                        {
+                            in.clear();
+                            in.seekg(start_pos);
+                            return false;
+                        }
+                    } else if(val == -2)
+                    {
+                        pad_count++;
+                        if(pad_count > 2)
+                        {
+                            in.clear();
+                            in.seekg(start_pos);
+                            return false;
+                        }
+                    } else
+                    {
+                        in.clear();
+                        in.seekg(start_pos);
+                        return false;
+                    }
+
+                    last_four[0] = last_four[1];
+                    last_four[1] = last_four[2];
+                    last_four[2] = last_four[3];
+                    last_four[3] = buf[i];
+
+                    total_len++;
+                }
+            }
+
+            if(in.eof())
                 break;
 
-            total_len += n;
-            if(!is_valid(buf, n))
+            if(in.fail())
+            {
+                in.clear();
+                in.seekg(start_pos);
                 return false;
+            }
         }
 
         in.clear();
         in.seekg(start_pos);
+
         if(total_len == 0 || total_len % 4 != 0)
             return false;
+
+        if(pad_count == 1)
+        {
+            int8_t b2 = dec_table[last_four[2]];
+            if(b2 < 0 || (b2 & 0x03) != 0)
+                return false;
+        } else if(pad_count == 2)
+        {
+            int8_t b1 = dec_table[last_four[1]];
+            if(b1 < 0 || (b1 & 0x0F) != 0)
+                return false;
+        }
 
         return true;
     }
@@ -450,14 +586,14 @@ class base64
     }
 
   private:
-    base64()                          = default;
-    ~base64()                         = default;
+    base64()                          = delete;
+    ~base64()                         = delete;
     base64(const base64 &)            = delete;
     base64 &operator=(const base64 &) = delete;
     base64(base64 &&)                 = delete;
     base64 &operator=(base64 &&)      = delete;
 };
 
-}
+} // namespace hj
 
 #endif

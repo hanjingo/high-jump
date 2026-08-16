@@ -110,16 +110,30 @@ class gzip
 
     struct compression_options
     {
-        compression_lvl level      = compression_lvl::default_compression;
-        mem_lvl         mem        = mem_lvl::default_level;
-        strategy        strat      = strategy::default_strategy;
-        std::size_t     chunk_size = 16 * 1024; // 16KB
+        compression_lvl level;
+        mem_lvl         mem;
+        strategy        strat;
+        std::size_t     chunk_size;
+
+        compression_options()
+            : level(compression_lvl::default_compression)
+            , mem(mem_lvl::default_level)
+            , strat(strategy::default_strategy)
+            , chunk_size(16 * 1024)
+        {
+        }
     };
 
     struct decompression_options
     {
-        std::size_t max_output_sz = 0;
-        std::size_t chunk_size    = 16 * 1024; // 16KB
+        std::size_t max_output_sz;
+        std::size_t chunk_size;
+
+        decompression_options()
+            : max_output_sz(0)
+            , chunk_size(16 * 1024)
+        {
+        }
     };
 
     static_assert(ZLIB_VERNUM >= 0x1230,

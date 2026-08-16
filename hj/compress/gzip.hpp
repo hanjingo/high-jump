@@ -28,6 +28,7 @@
 #include <limits>
 #include <algorithm>
 #include <cstdint>
+#include <system_error>
 
 namespace hj
 {
@@ -58,7 +59,7 @@ class gzip
     };
 
   public:
-    enum class err : int
+    enum class [[nodiscard]] err : int
     {
         ok            = Z_OK,
         stream_error  = Z_STREAM_ERROR,
@@ -68,7 +69,7 @@ class gzip
         need_dict     = Z_NEED_DICT,
         stream_end    = Z_STREAM_END,
 
-        input_invalid,
+        input_invalid = Z_BEST_COMPRESSION + 1000,
         buffer_too_small,
         max_output_sz_exceeded,
         read_buffer_error,
@@ -139,13 +140,13 @@ class gzip
     static_assert(ZLIB_VERNUM >= 0x1230,
                   "zlib version too old, require >= 1.2.3");
 
-    static size_t compress_reserve_sz(const size_t src_sz)
+    [[nodiscard]] static size_t compress_reserve_sz(const size_t src_sz)
     {
         return src_sz + (src_sz / 1000) + 12 + 18;
     }
 
-    static size_t decompress_reserve_sz(const size_t src_sz,
-                                        const size_t max_output_sz)
+    [[nodiscard]] static size_t
+    decompress_reserve_sz(const size_t src_sz, const size_t max_output_sz)
     {
         const size_t MIN_ALLOC      = 4096;              // 4KB
         const size_t MAX_SAFE_ALLOC = 1024 * 1024 * 256; // 256MB
@@ -160,10 +161,11 @@ class gzip
         return (std::max) (MIN_ALLOC, (std::min) (estimated, MAX_SAFE_ALLOC));
     }
 
-    static err compress(std::vector<unsigned char> &dst,
-                        const void                 *src,
-                        const size_t                src_sz,
-                        const compression_options &opts = compression_options{})
+    [[nodiscard]] static err
+    compress(std::vector<unsigned char> &dst,
+             const void                 *src,
+             const size_t                src_sz,
+             const compression_options  &opts = compression_options{})
     {
         if(!src || src_sz == 0 || opts.chunk_size == 0
            || opts.chunk_size > (std::numeric_limits<uInt>::max)())
@@ -220,9 +222,10 @@ class gzip
         return err::ok;
     }
 
-    static err compress(std::ostream              &out,
-                        std::istream              &in,
-                        const compression_options &opts = compression_options{})
+    [[nodiscard]] static err
+    compress(std::ostream              &out,
+             std::istream              &in,
+             const compression_options &opts = compression_options{})
     {
         if(!in || !out || opts.chunk_size == 0
            || opts.chunk_size > (std::numeric_limits<uInt>::max)())
@@ -287,7 +290,7 @@ class gzip
         return err::ok;
     }
 
-    static err
+    [[nodiscard]] static err
     decompress(std::vector<unsigned char>  &dst,
                const void                  *src,
                const size_t                 src_sz,
@@ -348,7 +351,7 @@ class gzip
         return err::ok;
     }
 
-    static err
+    [[nodiscard]] static err
     decompress(std::ostream                &out,
                std::istream                &in,
                const decompression_options &opts = decompression_options{})
@@ -417,7 +420,8 @@ class gzip
         return err::ok;
     }
 
-    static std::uint32_t crc32_checksum(const void *data, const size_t size)
+    [[nodiscard]] static std::uint32_t crc32_checksum(const void  *data,
+                                                      const size_t size)
     {
         if(!data || size == 0)
             return 0;
@@ -447,8 +451,8 @@ class gzip
                   static_cast<uInt>(size)));
     }
 
-    static double compression_ratio(const size_t original_sz,
-                                    const size_t compressed_sz)
+    [[nodiscard]] static double compression_ratio(const size_t original_sz,
+                                                  const size_t compressed_sz)
     {
         if(original_sz == 0)
             return 0.0;
@@ -458,7 +462,7 @@ class gzip
                   / static_cast<double>(original_sz));
     }
 
-    static bool is_gzip_format(const void *data, size_t size)
+    [[nodiscard]] static bool is_gzip_format(const void *data, size_t size)
     {
         if(!data || size < 10)
             return false;
@@ -468,6 +472,71 @@ class gzip
     }
 };
 
+class gzip_error_category_impl : public std::error_category
+{
+  public:
+    [[nodiscard]] const char *name() const noexcept override
+    {
+        return "hj::gzip";
+    }
+
+    [[nodiscard]] std::string message(int ev) const override
+    {
+        switch(static_cast<gzip::err>(ev))
+        {
+            case gzip::err::ok:
+                return "ok";
+            case gzip::err::stream_error:
+                return "stream error";
+            case gzip::err::data_error:
+                return "data error";
+            case gzip::err::mem_error:
+                return "memory error";
+            case gzip::err::version_error:
+                return "version error";
+            case gzip::err::need_dict:
+                return "need dictionary";
+            case gzip::err::stream_end:
+                return "stream end";
+            case gzip::err::input_invalid:
+                return "input invalid";
+            case gzip::err::buffer_too_small:
+                return "buffer too small";
+            case gzip::err::max_output_sz_exceeded:
+                return "max output size exceeded";
+            case gzip::err::read_buffer_error:
+                return "read buffer error";
+            case gzip::err::write_buffer_error:
+                return "write buffer error";
+            case gzip::err::overflow_error:
+                return "overflow error";
+            case gzip::err::zlib_version_mismatch:
+                return "zlib version mismatch";
+            default:
+                return "unknown gzip error";
+        }
+    }
+};
+
+[[nodiscard]] inline const std::error_category &gzip_category() noexcept
+{
+    static const gzip_error_category_impl instance;
+    return instance;
+}
+
+[[nodiscard]] inline std::error_code make_error_code(gzip::err e) noexcept
+{
+    return {static_cast<int>(e), gzip_category()};
+}
+
 } // namespace hj
+
+namespace std
+{
+template <>
+struct is_error_code_enum<hj::gzip::err> : std::true_type
+{
+};
+} // namespace std
 
 #endif // GZIP_HPP

@@ -13,7 +13,7 @@
 
 #include <hj/algo/crc32.h>
 
-#include <hj/algo/fill.hpp>
+#include <hj/algo/gen.hpp>
 
 #include <hj/algo/multi_index.hpp>
 

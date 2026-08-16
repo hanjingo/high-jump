@@ -25,11 +25,8 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <system_error>
 #include <vector>
-
-#ifndef BASE64_BUF_SIZE
-#define BASE64_BUF_SIZE 16384 // 16KB
-#endif
 
 namespace hj
 {
@@ -37,6 +34,8 @@ namespace hj
 class base64
 {
   public:
+    static constexpr std::size_t buf_sz = 16384; // 16KB
+
     enum class error_code
     {
         ok = 0,
@@ -49,7 +48,7 @@ class base64
         file_write_failed
     };
 
-    inline const char *to_string(error_code r) noexcept
+    [[nodiscard]] inline static const char *to_string(error_code r) noexcept
     {
         switch(r)
         {
@@ -95,23 +94,23 @@ class base64
         -1, -1, -1, -1};
 
   public:
-    static constexpr std::size_t
+    [[nodiscard]] static constexpr std::size_t
     encode_len_reserve(const std::size_t src_len) noexcept
     {
         return src_len / 3 * 4 + (src_len % 3 == 0 ? 0 : 4);
     }
 
-    static constexpr std::size_t
+    [[nodiscard]] static constexpr std::size_t
     decode_len_reserve(const std::size_t src_len) noexcept
     {
         return (src_len / 4) * 3;
     }
 
     // bytes -> base64 bytes
-    static error_code encode(unsigned char       *dst,
-                             std::size_t         &dst_len,
-                             const unsigned char *src,
-                             const std::size_t    src_len)
+    [[nodiscard]] static error_code encode(unsigned char       *dst,
+                                           std::size_t         &dst_len,
+                                           const unsigned char *src,
+                                           const std::size_t    src_len)
     {
         if(src_len == 0)
         {
@@ -155,7 +154,8 @@ class base64
     }
 
     // string -> base64 string
-    static error_code encode(std::string &dst, const std::string &src)
+    [[nodiscard]] static error_code encode(std::string       &dst,
+                                           const std::string &src)
     {
         if(src.empty())
         {
@@ -180,12 +180,12 @@ class base64
     }
 
     // stream -> base64 stream
-    static error_code encode(std::ostream &out, std::istream &in)
+    [[nodiscard]] static error_code encode(std::ostream &out, std::istream &in)
     {
         if(!in || !out)
             return error_code::invalid_input;
 
-        constexpr std::size_t      in_buf_size  = (BASE64_BUF_SIZE / 3) * 3;
+        constexpr std::size_t      in_buf_size  = (buf_sz / 3) * 3;
         constexpr std::size_t      out_buf_size = (in_buf_size / 3) * 4;
         std::vector<unsigned char> in_buf(in_buf_size);
         std::vector<unsigned char> out_buf(out_buf_size);
@@ -221,8 +221,8 @@ class base64
     }
 
     // file -> base64 file
-    static error_code encode_file(const char *dst_file_path,
-                                  const char *src_file_path)
+    [[nodiscard]] static error_code encode_file(const char *dst_file_path,
+                                                const char *src_file_path)
     {
         if(!dst_file_path || !src_file_path
            || std::string(dst_file_path) == std::string(src_file_path))
@@ -240,17 +240,18 @@ class base64
     }
 
     // file -> base64 file
-    static error_code encode_file(const std::string &dst_file_path,
-                                  const std::string &src_file_path)
+    [[nodiscard]] static error_code
+    encode_file(const std::string &dst_file_path,
+                const std::string &src_file_path)
     {
         return encode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
 
     // base64 bytes -> bytes
-    static error_code decode(unsigned char       *dst,
-                             std::size_t         &dst_len,
-                             const unsigned char *src,
-                             const std::size_t    src_len)
+    [[nodiscard]] static error_code decode(unsigned char       *dst,
+                                           std::size_t         &dst_len,
+                                           const unsigned char *src,
+                                           const std::size_t    src_len)
     {
         if(src_len == 0)
         {
@@ -321,7 +322,8 @@ class base64
     }
 
     // base64 string -> string
-    static error_code decode(std::string &dst, const std::string &src)
+    [[nodiscard]] static error_code decode(std::string       &dst,
+                                           const std::string &src)
     {
         if(src.empty())
         {
@@ -349,12 +351,12 @@ class base64
         return error_code::ok;
     }
 
-    static error_code decode(std::ostream &out, std::istream &in)
+    [[nodiscard]] static error_code decode(std::ostream &out, std::istream &in)
     {
         if(!in || !out)
             return error_code::invalid_input;
 
-        constexpr std::size_t      in_buf_size  = (BASE64_BUF_SIZE / 4) * 4;
+        constexpr std::size_t      in_buf_size  = (buf_sz / 4) * 4;
         constexpr std::size_t      out_buf_size = (in_buf_size / 4) * 3;
         std::vector<unsigned char> in_buf(in_buf_size);
         std::vector<unsigned char> out_buf(out_buf_size);
@@ -416,8 +418,8 @@ class base64
     }
 
     // base64 file -> file
-    static error_code decode_file(const char *dst_file_path,
-                                  const char *src_file_path)
+    [[nodiscard]] static error_code decode_file(const char *dst_file_path,
+                                                const char *src_file_path)
     {
         if(!dst_file_path || !src_file_path
            || std::string(dst_file_path) == std::string(src_file_path))
@@ -435,13 +437,15 @@ class base64
     }
 
     // base64 file -> file
-    static error_code decode_file(const std::string &dst_file_path,
-                                  const std::string &src_file_path)
+    [[nodiscard]] static error_code
+    decode_file(const std::string &dst_file_path,
+                const std::string &src_file_path)
     {
         return decode_file(dst_file_path.c_str(), src_file_path.c_str());
     }
 
-    static bool is_valid(const unsigned char *buf, const std::size_t len)
+    [[nodiscard]] static bool is_valid(const unsigned char *buf,
+                                       const std::size_t    len)
     {
         if(len == 0 || buf == nullptr || len % 4 != 0)
             return false;
@@ -480,13 +484,13 @@ class base64
         return true;
     }
 
-    static bool is_valid(const std::string &str)
+    [[nodiscard]] static bool is_valid(const std::string &str)
     {
         return is_valid(reinterpret_cast<const unsigned char *>(str.data()),
                         str.length());
     }
 
-    static bool is_valid(std::ifstream &in)
+    [[nodiscard]] static bool is_valid(std::ifstream &in)
     {
         if(!in.is_open())
             return false;
@@ -495,7 +499,7 @@ class base64
         if(start_pos == std::ifstream::pos_type(-1))
             return false;
 
-        unsigned char buf[BASE64_BUF_SIZE];
+        unsigned char buf[buf_sz];
         std::size_t   total_len = 0;
         std::size_t   pad_count = 0;
 
@@ -503,7 +507,7 @@ class base64
 
         while(true)
         {
-            in.read(reinterpret_cast<char *>(buf), BASE64_BUF_SIZE);
+            in.read(reinterpret_cast<char *>(buf), buf_sz);
             std::streamsize n = in.gcount();
 
             if(n > 0)
@@ -576,7 +580,7 @@ class base64
         return true;
     }
 
-    static bool is_valid_file(const std::string &file_path)
+    [[nodiscard]] static bool is_valid_file(const std::string &file_path)
     {
         std::ifstream file(file_path, std::ios::binary);
         if(!file.is_open())
@@ -594,6 +598,37 @@ class base64
     base64 &operator=(base64 &&)      = delete;
 };
 
+class base64_category_impl : public std::error_category
+{
+  public:
+    [[nodiscard]] const char *name() const noexcept override
+    {
+        return "hj::base64";
+    }
+
+    [[nodiscard]] std::string message(int ev) const override
+    {
+        return base64::to_string(static_cast<base64::error_code>(ev));
+    }
+};
+
+[[nodiscard]] inline const std::error_category &base64_category() noexcept
+{
+    static const base64_category_impl instance;
+    return instance;
+}
+
+[[nodiscard]] inline std::error_code
+make_error_code(base64::error_code e) noexcept
+{
+    return {static_cast<int>(e), base64_category()};
+}
+
 } // namespace hj
+
+template <>
+struct std::is_error_code_enum<hj::base64::error_code> : std::true_type
+{
+};
 
 #endif

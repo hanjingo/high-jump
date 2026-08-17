@@ -164,10 +164,7 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
         return HJ_KEYBOARD_ERR_INVALID_ARG;
 
     *out_count = 0;
-    if(!infos || max_count <= 0)
-        return HJ_KEYBOARD_ERR_INVALID_ARG;
-
-    int count = 0;
+    int count  = 0;
 
 #if defined(__linux__)
     DIR *dir = opendir("/dev/input");
@@ -175,7 +172,7 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
         return HJ_KEYBOARD_OK;
 
     struct dirent *entry;
-    while((entry = readdir(dir)) && count < max_count)
+    while((entry = readdir(dir)))
     {
         if(strncmp(entry->d_name, "event", 5) != 0)
             continue;
@@ -195,28 +192,31 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
             continue;
         }
 
-        struct input_id id;
-        memset(&infos[count], 0, sizeof(hj_keyboard_info_t));
-        ioctl(fd, EVIOCGID, &id);
+        if(infos && count < max_count)
+        {
+            struct input_id id;
+            memset(&infos[count], 0, sizeof(hj_keyboard_info_t));
+            ioctl(fd, EVIOCGID, &id);
 
-        hj_keyboard_safe_strcpy(infos[count].device_path,
-                                path,
-                                sizeof(infos[count].device_path));
+            hj_keyboard_safe_strcpy(infos[count].device_path,
+                                    path,
+                                    sizeof(infos[count].device_path));
 
-        char name[128] = "Unknown Keyboard";
-        ioctl(fd, EVIOCGNAME(sizeof(name)), name);
-        hj_keyboard_safe_strcpy(infos[count].product,
-                                name,
-                                sizeof(infos[count].product));
+            char name[128] = "Unknown Keyboard";
+            ioctl(fd, EVIOCGNAME(sizeof(name)), name);
+            hj_keyboard_safe_strcpy(infos[count].product,
+                                    name,
+                                    sizeof(infos[count].product));
 
-        snprintf(infos[count].manufacturer,
-                 sizeof(infos[count].manufacturer),
-                 "Vendor_0x%04x",
-                 id.vendor);
-        snprintf(infos[count].serial,
-                 sizeof(infos[count].serial),
-                 "Bus_0x%04x",
-                 id.bustype);
+            snprintf(infos[count].manufacturer,
+                     sizeof(infos[count].manufacturer),
+                     "Vendor_0x%04x",
+                     id.vendor);
+            snprintf(infos[count].serial,
+                     sizeof(infos[count].serial),
+                     "Bus_0x%04x",
+                     id.bustype);
+        }
 
         close(fd);
         count++;
@@ -238,8 +238,7 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
                                                  NULL,
                                                  &GUID_DEVINTERFACE_KEYBOARD,
                                                  i,
-                                                 &ifData)
-                     && count < max_count;
+                                                 &ifData);
         ++i)
     {
         DWORD reqSize = 0;
@@ -252,64 +251,67 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
         if(reqSize == 0)
             continue;
 
-        PSP_DEVICE_INTERFACE_DETAIL_DATA_A detail =
-            (PSP_DEVICE_INTERFACE_DETAIL_DATA_A) malloc(reqSize);
-        if(!detail)
-            continue;
-
-        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_A);
-        SP_DEVINFO_DATA devData;
-        devData.cbSize = sizeof(SP_DEVINFO_DATA);
-
-        if(SetupDiGetDeviceInterfaceDetailA(devs,
-                                            &ifData,
-                                            detail,
-                                            reqSize,
-                                            NULL,
-                                            &devData))
+        if(infos && count < max_count)
         {
-            memset(&infos[count], 0, sizeof(hj_keyboard_info_t));
-            hj_keyboard_safe_strcpy(infos[count].device_path,
-                                    detail->DevicePath,
-                                    sizeof(infos[count].device_path));
+            PSP_DEVICE_INTERFACE_DETAIL_DATA_A detail =
+                (PSP_DEVICE_INTERFACE_DETAIL_DATA_A) malloc(reqSize);
+            if(detail)
+            {
+                detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_A);
+                SP_DEVINFO_DATA devData;
+                devData.cbSize = sizeof(SP_DEVINFO_DATA);
 
-            char buf[256] = {0};
-            if(SetupDiGetDeviceRegistryPropertyA(devs,
-                                                 &devData,
-                                                 SPDRP_FRIENDLYNAME,
-                                                 NULL,
-                                                 (PBYTE) buf,
-                                                 sizeof(buf),
-                                                 NULL)
-               || SetupDiGetDeviceRegistryPropertyA(devs,
-                                                    &devData,
-                                                    SPDRP_DEVICEDESC,
+                if(SetupDiGetDeviceInterfaceDetailA(devs,
+                                                    &ifData,
+                                                    detail,
+                                                    reqSize,
                                                     NULL,
-                                                    (PBYTE) buf,
-                                                    sizeof(buf),
-                                                    NULL))
-            {
-                hj_keyboard_safe_strcpy(infos[count].product,
-                                        buf,
-                                        sizeof(infos[count].product));
-            }
+                                                    &devData))
+                {
+                    memset(&infos[count], 0, sizeof(hj_keyboard_info_t));
+                    hj_keyboard_safe_strcpy(infos[count].device_path,
+                                            detail->DevicePath,
+                                            sizeof(infos[count].device_path));
 
-            if(SetupDiGetDeviceRegistryPropertyA(devs,
-                                                 &devData,
-                                                 SPDRP_MFG,
-                                                 NULL,
-                                                 (PBYTE) buf,
-                                                 sizeof(buf),
-                                                 NULL))
-            {
-                hj_keyboard_safe_strcpy(infos[count].manufacturer,
-                                        buf,
-                                        sizeof(infos[count].manufacturer));
-            }
+                    char buf[256] = {0};
+                    if(SetupDiGetDeviceRegistryPropertyA(devs,
+                                                         &devData,
+                                                         SPDRP_FRIENDLYNAME,
+                                                         NULL,
+                                                         (PBYTE) buf,
+                                                         sizeof(buf),
+                                                         NULL)
+                       || SetupDiGetDeviceRegistryPropertyA(devs,
+                                                            &devData,
+                                                            SPDRP_DEVICEDESC,
+                                                            NULL,
+                                                            (PBYTE) buf,
+                                                            sizeof(buf),
+                                                            NULL))
+                    {
+                        hj_keyboard_safe_strcpy(infos[count].product,
+                                                buf,
+                                                sizeof(infos[count].product));
+                    }
 
-            count++;
+                    if(SetupDiGetDeviceRegistryPropertyA(devs,
+                                                         &devData,
+                                                         SPDRP_MFG,
+                                                         NULL,
+                                                         (PBYTE) buf,
+                                                         sizeof(buf),
+                                                         NULL))
+                    {
+                        hj_keyboard_safe_strcpy(
+                            infos[count].manufacturer,
+                            buf,
+                            sizeof(infos[count].manufacturer));
+                    }
+                }
+                free(detail);
+            }
         }
-        free(detail);
+        count++;
     }
     SetupDiDestroyDeviceInfoList(devs);
 
@@ -324,7 +326,7 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
                                   0,
                                   &kCFTypeDictionaryKeyCallBacks,
                                   &kCFTypeDictionaryValueCallBacks);
-    int         usagePage = 0x01, usage = 0x06; // Generic Desktop Keyboard
+    int         usagePage = 0x01, usage = 0x06;
     CFNumberRef pageNum =
         CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &usagePage);
     CFNumberRef usageNum =
@@ -349,44 +351,48 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
             if(devices)
             {
                 CFSetGetValues(device_set, (const void **) devices);
-                for(CFIndex i = 0; i < num && count < max_count; ++i)
+                for(CFIndex i = 0; i < num; ++i)
                 {
-                    memset(&infos[count], 0, sizeof(hj_keyboard_info_t));
+                    if(infos && count < max_count)
+                    {
+                        memset(&infos[count], 0, sizeof(hj_keyboard_info_t));
 
-                    // Use unique address as identifier string
-                    snprintf(infos[count].device_path,
-                             sizeof(infos[count].device_path),
-                             "iohid://%p",
-                             (void *) devices[i]);
+                        snprintf(infos[count].device_path,
+                                 sizeof(infos[count].device_path),
+                                 "iohid://%p",
+                                 (void *) devices[i]);
 
-                    CFTypeRef manuRef =
-                        IOHIDDeviceGetProperty(devices[i],
-                                               CFSTR(kIOHIDManufacturerKey));
-                    CFTypeRef prodRef =
-                        IOHIDDeviceGetProperty(devices[i],
-                                               CFSTR(kIOHIDProductKey));
-                    CFTypeRef serRef =
-                        IOHIDDeviceGetProperty(devices[i],
-                                               CFSTR(kIOHIDSerialNumberKey));
+                        CFTypeRef manuRef = IOHIDDeviceGetProperty(
+                            devices[i],
+                            CFSTR(kIOHIDManufacturerKey));
+                        CFTypeRef prodRef =
+                            IOHIDDeviceGetProperty(devices[i],
+                                                   CFSTR(kIOHIDProductKey));
+                        CFTypeRef serRef = IOHIDDeviceGetProperty(
+                            devices[i],
+                            CFSTR(kIOHIDSerialNumberKey));
 
-                    if(manuRef && CFGetTypeID(manuRef) == CFStringGetTypeID())
-                        CFStringGetCString((CFStringRef) manuRef,
-                                           infos[count].manufacturer,
-                                           sizeof(infos[count].manufacturer),
-                                           kCFStringEncodingUTF8);
+                        if(manuRef
+                           && CFGetTypeID(manuRef) == CFStringGetTypeID())
+                            CFStringGetCString(
+                                (CFStringRef) manuRef,
+                                infos[count].manufacturer,
+                                sizeof(infos[count].manufacturer),
+                                kCFStringEncodingUTF8);
 
-                    if(prodRef && CFGetTypeID(prodRef) == CFStringGetTypeID())
-                        CFStringGetCString((CFStringRef) prodRef,
-                                           infos[count].product,
-                                           sizeof(infos[count].product),
-                                           kCFStringEncodingUTF8);
+                        if(prodRef
+                           && CFGetTypeID(prodRef) == CFStringGetTypeID())
+                            CFStringGetCString((CFStringRef) prodRef,
+                                               infos[count].product,
+                                               sizeof(infos[count].product),
+                                               kCFStringEncodingUTF8);
 
-                    if(serRef && CFGetTypeID(serRef) == CFStringGetTypeID())
-                        CFStringGetCString((CFStringRef) serRef,
-                                           infos[count].serial,
-                                           sizeof(infos[count].serial),
-                                           kCFStringEncodingUTF8);
-
+                        if(serRef && CFGetTypeID(serRef) == CFStringGetTypeID())
+                            CFStringGetCString((CFStringRef) serRef,
+                                               infos[count].serial,
+                                               sizeof(infos[count].serial),
+                                               kCFStringEncodingUTF8);
+                    }
                     count++;
                 }
                 free(devices);

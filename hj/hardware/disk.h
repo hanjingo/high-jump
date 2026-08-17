@@ -232,7 +232,7 @@ HJ_DISK_API hj_disk_err_t hj_disk_read_speed_test(const char *device_name,
     && !defined(HJ_DISK_IMPL_DONE)
 #define HJ_DISK_IMPL_DONE
 
-static inline int _hj_stricmp(const char *s1, const char *s2)
+static inline int hj_stricmp(const char *s1, const char *s2)
 {
 #if defined(HJ_DISK_PLATFORM_WINDOWS)
     return _stricmp(s1, s2);
@@ -242,7 +242,7 @@ static inline int _hj_stricmp(const char *s1, const char *s2)
 }
 
 #if defined(HJ_DISK_PLATFORM_LINUX)
-static inline bool _hj_is_valid_disk(const char *device_name)
+static inline bool hj_is_valid_disk(const char *device_name)
 {
     size_t name_len = strlen(device_name);
     if((strncmp(device_name, "sd", 2) == 0 && name_len == 3)
@@ -348,7 +348,7 @@ HJ_DISK_API int32_t hj_disk_count(void)
     {
         if(entry->d_name[0] == '.')
             continue;
-        if(_hj_is_valid_disk(entry->d_name))
+        if(hj_is_valid_disk(entry->d_name))
         {
             disk_cnt++;
         }
@@ -405,13 +405,13 @@ hj_disk_filesystem_type_from_string(const char *fs_name)
 {
     if(!fs_name)
         return HJ_FILESYSTEM_UNKNOWN;
-    if(_hj_stricmp(fs_name, "ntfs") == 0)
+    if(hj_stricmp(fs_name, "ntfs") == 0)
         return HJ_FILESYSTEM_NTFS;
-    if(_hj_stricmp(fs_name, "fat16") == 0)
+    if(hj_stricmp(fs_name, "fat16") == 0)
         return HJ_FILESYSTEM_FAT16;
-    if(_hj_stricmp(fs_name, "fat32") == 0)
+    if(hj_stricmp(fs_name, "fat32") == 0)
         return HJ_FILESYSTEM_FAT32;
-    if(_hj_stricmp(fs_name, "exfat") == 0)
+    if(hj_stricmp(fs_name, "exfat") == 0)
         return HJ_FILESYSTEM_EXFAT;
     if(strcmp(fs_name, "ext2") == 0)
         return HJ_FILESYSTEM_EXT2;
@@ -419,35 +419,35 @@ hj_disk_filesystem_type_from_string(const char *fs_name)
         return HJ_FILESYSTEM_EXT3;
     if(strcmp(fs_name, "ext4") == 0)
         return HJ_FILESYSTEM_EXT4;
-    if(_hj_stricmp(fs_name, "xfs") == 0)
+    if(hj_stricmp(fs_name, "xfs") == 0)
         return HJ_FILESYSTEM_XFS;
     if(strcmp(fs_name, "btrfs") == 0)
         return HJ_FILESYSTEM_BTRFS;
-    if(_hj_stricmp(fs_name, "zfs") == 0)
+    if(hj_stricmp(fs_name, "zfs") == 0)
         return HJ_FILESYSTEM_ZFS;
-    if(_hj_stricmp(fs_name, "f2fs") == 0)
+    if(hj_stricmp(fs_name, "f2fs") == 0)
         return HJ_FILESYSTEM_F2FS;
-    if(_hj_stricmp(fs_name, "hfs+") == 0 || _hj_stricmp(fs_name, "hfs") == 0)
+    if(hj_stricmp(fs_name, "hfs+") == 0 || hj_stricmp(fs_name, "hfs") == 0)
         return HJ_FILESYSTEM_HFS_PLUS;
-    if(_hj_stricmp(fs_name, "apfs") == 0)
+    if(hj_stricmp(fs_name, "apfs") == 0)
         return HJ_FILESYSTEM_APFS;
-    if(_hj_stricmp(fs_name, "ufs") == 0)
+    if(hj_stricmp(fs_name, "ufs") == 0)
         return HJ_FILESYSTEM_UFS;
-    if(_hj_stricmp(fs_name, "jfs") == 0)
+    if(hj_stricmp(fs_name, "jfs") == 0)
         return HJ_FILESYSTEM_JFS;
-    if(_hj_stricmp(fs_name, "reiserfs") == 0)
+    if(hj_stricmp(fs_name, "reiserfs") == 0)
         return HJ_FILESYSTEM_REISERFS;
-    if(_hj_stricmp(fs_name, "iso9660") == 0)
+    if(hj_stricmp(fs_name, "iso9660") == 0)
         return HJ_FILESYSTEM_ISO9660;
-    if(_hj_stricmp(fs_name, "udf") == 0)
+    if(hj_stricmp(fs_name, "udf") == 0)
         return HJ_FILESYSTEM_UDF;
-    if(_hj_stricmp(fs_name, "swap") == 0)
+    if(hj_stricmp(fs_name, "swap") == 0)
         return HJ_FILESYSTEM_SWAP;
-    if(_hj_stricmp(fs_name, "tmpfs") == 0)
+    if(hj_stricmp(fs_name, "tmpfs") == 0)
         return HJ_FILESYSTEM_TMPFS;
-    if(_hj_stricmp(fs_name, "proc") == 0 || _hj_stricmp(fs_name, "procfs") == 0)
+    if(hj_stricmp(fs_name, "proc") == 0 || hj_stricmp(fs_name, "procfs") == 0)
         return HJ_FILESYSTEM_PROCFS;
-    if(_hj_stricmp(fs_name, "sysfs") == 0)
+    if(hj_stricmp(fs_name, "sysfs") == 0)
         return HJ_FILESYSTEM_SYSFS;
 
     return HJ_FILESYSTEM_UNKNOWN;
@@ -884,7 +884,7 @@ HJ_DISK_API hj_disk_err_t hj_disk_enumerate(hj_disk_info_t *disks,
         if(entry->d_name[0] == '.')
             continue;
 
-        if(_hj_is_valid_disk(entry->d_name))
+        if(hj_is_valid_disk(entry->d_name))
         {
             char dev_path[256];
             snprintf(dev_path, sizeof(dev_path), "/dev/%s", entry->d_name);

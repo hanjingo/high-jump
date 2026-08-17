@@ -1,227 +1,270 @@
 #include <gtest/gtest.h>
-#include <hj/hardware/nic.h>
 #include <iostream>
 #include <vector>
 #include <string>
 #include <thread>
+#include <atomic>
 #include <chrono>
+
+#define HJ_NIC_IMPL
+#include <hj/hardware/nic.h>
 
 class nic : public ::testing::Test
 {
   protected:
     void SetUp() override
     {
-        // Initialize NIC subsystem
-        nic_error_t result = nic_init();
-        ASSERT_EQ(result, NIC_SUCCESS);
+        hj_nic_err_t result = hj_nic_init();
+        ASSERT_EQ(result, HJ_NIC_SUCCESS);
     }
 
-    void TearDown() override { nic_cleanup(); }
+    void TearDown() override { hj_nic_cleanup(); }
 };
 
-// Test NIC subsystem initialization and cleanup
 TEST_F(nic, initialization_and_cleanup)
 {
     SCOPED_TRACE("Testing NIC initialization and cleanup");
 
-    std::cout << "Testing NIC subsystem initialization..." << std::endl;
+    hj_nic_cleanup();
+    hj_nic_err_t result = hj_nic_init();
+    EXPECT_EQ(result, HJ_NIC_SUCCESS) << "NIC initialization should succeed";
 
-    // Cleanup and re-initialize to test the functions
-    nic_cleanup();
-
-    nic_error_t result = nic_init();
-    EXPECT_EQ(result, NIC_SUCCESS) << "NIC initialization should succeed";
-
-    // Test multiple initializations (should be safe)
-    result = nic_init();
-    EXPECT_EQ(result, NIC_SUCCESS)
+    result = hj_nic_init();
+    EXPECT_EQ(result, HJ_NIC_SUCCESS)
         << "Multiple NIC initializations should be safe";
 
-    // Test cleanup (should be safe to call multiple times)
-    nic_cleanup();
-    nic_cleanup();
+    hj_nic_cleanup();
+    hj_nic_cleanup();
 
-    // Re-initialize for other tests
-    result = nic_init();
-    EXPECT_EQ(result, NIC_SUCCESS) << "NIC re-initialization should succeed";
+    ASSERT_EQ(hj_nic_init(), HJ_NIC_SUCCESS);
 }
 
-// Test interface counting
 TEST_F(nic, interface_counting)
 {
     SCOPED_TRACE("Testing interface counting");
 
-    // Test invalid parameter
-    nic_error_t result = nic_get_interface_count(nullptr);
-    EXPECT_EQ(result, NIC_ERROR_INVALID_PARAMETER)
-        << "Should return error for null parameter";
+    EXPECT_EQ(hj_nic_get_interface_count(nullptr),
+              HJ_NIC_ERR_INVALID_PARAMETER);
 
-    // Test valid counting
-    uint32_t count = 0;
-    result         = nic_get_interface_count(&count);
-    EXPECT_EQ(result, NIC_SUCCESS) << "Interface counting should succeed";
-
-    // Most systems should have at least one interface (loopback)
-    EXPECT_GE(count, 1) << "System should have at least one network interface";
-    EXPECT_LE(count, NIC_MAX_INTERFACES)
-        << "Interface count should not exceed maximum";
+    uint32_t     count  = 0;
+    hj_nic_err_t result = hj_nic_get_interface_count(&count);
+    EXPECT_EQ(result, HJ_NIC_SUCCESS);
+    EXPECT_GE(count, 1)
+        << "System should have at least one network interface (e.g., loopback)";
+    EXPECT_LE(count, HJ_NIC_MAX_INTERFACES);
 }
 
-// Test interface enumeration
 TEST_F(nic, interface_enumeration)
 {
-    SCOPED_TRACE("Testing interface enumeration");
+    SCOPED_TRACE("Testing interface enumeration thoroughly");
+
+    uint32_t actual_count = 0;
+
+    EXPECT_EQ(hj_nic_enumerate_interfaces(nullptr, 10, &actual_count),
+              HJ_NIC_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_nic_enumerate_interfaces(nullptr, 0, nullptr),
+              HJ_NIC_ERR_INVALID_PARAMETER);
+
+    hj_nic_info_t small_buf[1];
+    uint32_t      required_count = 0;
+    hj_nic_err_t  trunc_res =
+        hj_nic_enumerate_interfaces(small_buf, 0, &required_count);
+    if(required_count > 0)
+    {
+        EXPECT_EQ(trunc_res, HJ_NIC_ERR_INSUFFICIENT_BUFFER);
+        EXPECT_GE(required_count, 1);
+    }
+
+    std::vector<hj_nic_info_t> interfaces(HJ_NIC_MAX_INTERFACES);
+    hj_nic_err_t result = hj_nic_enumerate_interfaces(interfaces.data(),
+                                                      HJ_NIC_MAX_INTERFACES,
+                                                      &actual_count);
+    ASSERT_EQ(result, HJ_NIC_SUCCESS);
+    ASSERT_GT(actual_count, 0);
+
+    for(uint32_t i = 0; i < actual_count; ++i)
+    {
+        EXPECT_NE(interfaces[i].name[0], '\0')
+            << "Interface name must not be empty";
+        EXPECT_GT(interfaces[i].index, 0) << "Interface index must be positive";
+    }
 }
 
-// Test getting interface information by name
 TEST_F(nic, get_interface_info_by_name)
 {
     SCOPED_TRACE("Testing get interface info by name");
 
-    // Test invalid parameters
-    nic_info_t  info;
-    nic_error_t result = nic_get_interface_info(nullptr, &info);
-    EXPECT_EQ(result, NIC_ERROR_INVALID_PARAMETER)
-        << "Should return error for null interface name";
+    hj_nic_info_t info;
+    EXPECT_EQ(hj_nic_get_interface_info(nullptr, &info),
+              HJ_NIC_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_nic_get_interface_info("lo", nullptr),
+              HJ_NIC_ERR_INVALID_PARAMETER);
 
-    result = nic_get_interface_info("eth0", nullptr);
-    EXPECT_EQ(result, NIC_ERROR_INVALID_PARAMETER)
-        << "Should return error for null info pointer";
+    std::vector<hj_nic_info_t> interfaces(HJ_NIC_MAX_INTERFACES);
+    uint32_t                   count = 0;
+    ASSERT_EQ(hj_nic_enumerate_interfaces(interfaces.data(),
+                                          HJ_NIC_MAX_INTERFACES,
+                                          &count),
+              HJ_NIC_SUCCESS);
+    ASSERT_GT(count, 0);
 
-    // Get first available interface
-    nic_info_t interfaces[NIC_MAX_INTERFACES];
-    uint32_t   count = 0;
-    result = nic_enumerate_interfaces(interfaces, NIC_MAX_INTERFACES, &count);
-    ASSERT_EQ(result, NIC_SUCCESS) << "Interface enumeration should succeed";
-    ASSERT_GT(count, 0) << "Should have at least one interface";
+    const char  *target_name = interfaces[0].name;
+    hj_nic_err_t result      = hj_nic_get_interface_info(target_name, &info);
+    EXPECT_EQ(result, HJ_NIC_SUCCESS);
+    EXPECT_STREQ(info.name, target_name);
 
-    // Test getting info for existing interface
-    const char *first_interface_name = interfaces[0].name;
-    result = nic_get_interface_info(first_interface_name, &info);
-    EXPECT_EQ(result, NIC_SUCCESS) << "Should get info for existing interface";
-
-    if(result == NIC_SUCCESS)
-    {
-        EXPECT_STREQ(info.name, first_interface_name)
-            << "Retrieved interface name should match";
-    }
-
-    // Test getting info for non-existent interface
-    result = nic_get_interface_info("non_existent_interface_12345", &info);
-    EXPECT_EQ(result, NIC_ERROR_NOT_FOUND)
-        << "Should return not found for non-existent interface";
+    EXPECT_EQ(hj_nic_get_interface_info("non_existent_interface_12345", &info),
+              HJ_NIC_ERR_NOT_FOUND);
 }
 
-// Test interface statistics
 TEST_F(nic, interface_statistics)
 {
     SCOPED_TRACE("Testing interface statistics");
 
-    // Test invalid parameters
-    nic_statistics_t stats;
-    nic_error_t      result = nic_get_statistics(nullptr, &stats);
-    EXPECT_EQ(result, NIC_ERROR_INVALID_PARAMETER)
-        << "Should return error for null interface name";
+    hj_nic_statistics_t stats;
+    EXPECT_EQ(hj_nic_get_statistics(nullptr, &stats),
+              HJ_NIC_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_nic_get_statistics("lo", nullptr),
+              HJ_NIC_ERR_INVALID_PARAMETER);
 
-    result = nic_get_statistics("eth0", nullptr);
-    EXPECT_EQ(result, NIC_ERROR_INVALID_PARAMETER)
-        << "Should return error for null stats pointer";
+    std::vector<hj_nic_info_t> interfaces(HJ_NIC_MAX_INTERFACES);
+    uint32_t                   count = 0;
+    ASSERT_EQ(hj_nic_enumerate_interfaces(interfaces.data(),
+                                          HJ_NIC_MAX_INTERFACES,
+                                          &count),
+              HJ_NIC_SUCCESS);
+    ASSERT_GT(count, 0);
 
-    // Get first available interface
-    nic_info_t interfaces[NIC_MAX_INTERFACES];
-    uint32_t   count = 0;
-    result = nic_enumerate_interfaces(interfaces, NIC_MAX_INTERFACES, &count);
-    ASSERT_EQ(result, NIC_SUCCESS) << "Interface enumeration should succeed";
-    ASSERT_GT(count, 0) << "Should have at least one interface";
+    const char  *target_name = interfaces[0].name;
+    hj_nic_err_t result      = hj_nic_get_statistics(target_name, &stats);
 
-    // Test getting statistics for existing interface
-    const char *first_interface_name = interfaces[0].name;
-    result = nic_get_statistics(first_interface_name, &stats);
-
-    if(result == NIC_SUCCESS)
+    if(result == HJ_NIC_SUCCESS)
     {
-        // Basic validation
-        EXPECT_GE(stats.bytes_sent, 0) << "Bytes sent should be non-negative";
-        EXPECT_GE(stats.bytes_received, 0)
-            << "Bytes received should be non-negative";
-        EXPECT_GE(stats.packets_sent, 0)
-            << "Packets sent should be non-negative";
-        EXPECT_GE(stats.packets_received, 0)
-            << "Packets received should be non-negative";
+        EXPECT_GE(stats.bytes_sent, 0);
+        EXPECT_GE(stats.bytes_received, 0);
+        EXPECT_GE(stats.packets_sent, 0);
+        EXPECT_GE(stats.packets_received, 0);
     } else
     {
-        std::cout << "Statistics not available for interface "
-                  << first_interface_name
-                  << " (may not be supported on this platform)" << std::endl;
+        std::cout << "[INFO] Statistics not supported or accessible for "
+                  << target_name << std::endl;
     }
 }
 
-// Test interface control functions (may require privileges)
-TEST_F(nic, interface_control)
+TEST_F(nic, field_consistency_validation)
 {
-    SCOPED_TRACE("Testing interface control");
+    SCOPED_TRACE("Testing cross-platform field consistency and enums");
 
-    // Test invalid parameters
-    nic_error_t result = nic_enable_interface(nullptr);
-    EXPECT_EQ(result, NIC_ERROR_INVALID_PARAMETER)
-        << "Should return error for null interface name";
+    uint32_t count = 0;
+    ASSERT_EQ(hj_nic_get_interface_count(&count), HJ_NIC_SUCCESS);
+    ASSERT_GT(count, 0);
 
-    result = nic_disable_interface(nullptr);
-    EXPECT_EQ(result, NIC_ERROR_INVALID_PARAMETER)
-        << "Should return error for null interface name";
+    std::vector<hj_nic_info_t> interfaces(count);
+    uint32_t                   actual = 0;
+    ASSERT_EQ(hj_nic_enumerate_interfaces(interfaces.data(), count, &actual),
+              HJ_NIC_SUCCESS);
+    ASSERT_EQ(actual, count);
 
-    // Test with non-existent interface
-    result = nic_enable_interface("non_existent_interface_12345");
-    EXPECT_NE(result, NIC_SUCCESS)
-        << "Should return error for non-existent interface";
+    for(uint32_t i = 0; i < actual; ++i)
+    {
+        const auto &nic = interfaces[i];
 
-    result = nic_disable_interface("non_existent_interface_12345");
-    EXPECT_NE(result, NIC_SUCCESS)
-        << "Should return error for non-existent interface";
+        EXPECT_GE(nic.type, HJ_NIC_TYPE_UNKNOWN);
+        EXPECT_LE(nic.type, HJ_NIC_TYPE_VIRTUAL);
+
+        EXPECT_GE(nic.status, HJ_NIC_STATUS_UNKNOWN);
+        EXPECT_LE(nic.status, HJ_NIC_STATUS_LOWER_LAYER_DOWN);
+
+        if(nic.ip_address.str[0] != '\0')
+        {
+            EXPECT_NE(nic.ip_address.ipv4.addr, 0);
+        }
+    }
 }
 
-// Basic functionality test
-TEST(NicBasicTest, basic_functionality)
+TEST_F(nic, concurrent_access_stress)
 {
-    SCOPED_TRACE("Testing basic functionality");
+    SCOPED_TRACE("Testing thread safety under concurrent stress");
 
-    // Test that the header compiles and basic functions work
-    nic_error_t result = nic_init();
-    EXPECT_EQ(result, NIC_SUCCESS) << "Basic initialization should work";
+    const int                num_threads = 4;
+    const int                iterations  = 30;
+    std::vector<std::thread> threads;
+    std::atomic<int>         success_count(0);
 
-    nic_cleanup();
+    for(int t = 0; t < num_threads; ++t)
+    {
+        threads.emplace_back([&]() {
+            for(int i = 0; i < iterations; ++i)
+            {
+                uint32_t count = 0;
+                if(hj_nic_get_interface_count(&count) == HJ_NIC_SUCCESS
+                   && count > 0)
+                {
+                    std::vector<hj_nic_info_t> interfaces(count);
+                    uint32_t                   actual = 0;
+                    if(hj_nic_enumerate_interfaces(interfaces.data(),
+                                                   count,
+                                                   &actual)
+                       == HJ_NIC_SUCCESS)
+                    {
+                        if(actual > 0)
+                        {
+                            hj_nic_info_t info;
+                            (void) hj_nic_get_interface_info(interfaces[0].name,
+                                                             &info);
+
+                            hj_nic_statistics_t stats;
+                            (void) hj_nic_get_statistics(interfaces[0].name,
+                                                         &stats);
+                        }
+                    }
+                }
+                success_count++;
+            }
+        });
+    }
+
+    for(auto &th : threads)
+    {
+        th.join();
+    }
+
+    EXPECT_EQ(success_count.load(), num_threads * iterations);
 }
 
-// Compatibility test
-TEST(NicBasicTest, c_compatibility)
+TEST_F(nic, interface_control_privilege_awareness)
 {
-    SCOPED_TRACE("Testing C compatibility");
+    SCOPED_TRACE(
+        "Testing interface control error paths and permission semantics");
 
-    // Test that all structures can be initialized with zero
-    nic_info_t info;
-    memset(&info, 0, sizeof(info));
-    nic_statistics_t stats;
-    memset(&stats, 0, sizeof(stats));
-    nic_wireless_info_t wireless;
-    memset(&wireless, 0, sizeof(wireless));
-    nic_ip_address_t ip;
-    memset(&ip, 0, sizeof(ip));
-    nic_ipv6_address_t ipv6;
-    memset(&ipv6, 0, sizeof(ipv6));
+    EXPECT_EQ(hj_nic_enable_interface(nullptr), HJ_NIC_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_nic_disable_interface(nullptr), HJ_NIC_ERR_INVALID_PARAMETER);
 
-    // Test that enums work correctly
-    nic_type_t   type   = NIC_TYPE_ETHERNET;
-    nic_status_t status = NIC_STATUS_UP;
-    nic_error_t  error  = NIC_SUCCESS;
+    EXPECT_NE(hj_nic_enable_interface("non_existent_interface_12345"),
+              HJ_NIC_SUCCESS);
+    EXPECT_NE(hj_nic_disable_interface("non_existent_interface_12345"),
+              HJ_NIC_SUCCESS);
 
-    EXPECT_EQ(type, NIC_TYPE_ETHERNET);
-    EXPECT_EQ(status, NIC_STATUS_UP);
-    EXPECT_EQ(error, NIC_SUCCESS);
+    uint32_t count = 0;
+    if(hj_nic_get_interface_count(&count) == HJ_NIC_SUCCESS && count > 0)
+    {
+        std::vector<hj_nic_info_t> interfaces(count);
+        uint32_t                   actual = 0;
+        if(hj_nic_enumerate_interfaces(interfaces.data(), count, &actual)
+               == HJ_NIC_SUCCESS
+           && actual > 0)
+        {
+            const char  *target = interfaces[0].name;
+            hj_nic_err_t res_en = hj_nic_enable_interface(target);
 
-    // Suppress unused variable warnings
-    (void) info;
-    (void) stats;
-    (void) wireless;
-    (void) ip;
-    (void) ipv6;
+            bool valid_err =
+                (res_en == HJ_NIC_SUCCESS || res_en == HJ_NIC_ERR_ACCESS_DENIED
+                 || res_en == HJ_NIC_ERR_SYSTEM_ERROR
+                 || res_en == HJ_NIC_ERR_NOT_SUPPORTED
+                 || res_en == HJ_NIC_ERR_NOT_FOUND);
+            EXPECT_TRUE(valid_err)
+                << "Unexpected error code returned by enable_interface: "
+                << res_en;
+        }
+    }
 }

@@ -38,6 +38,14 @@
 extern "C" {
 #endif
 
+#ifndef HJ_GPU_API
+#if defined(HJ_GPU_STATIC)
+#define HJ_GPU_API static inline
+#else
+#define HJ_GPU_API extern
+#endif
+#endif
+
 typedef struct
 {
     void              *id; // （OpenCL: cl_device_id, CUDA: int)
@@ -47,14 +55,14 @@ typedef struct
     unsigned long long global_mem_sz;
     unsigned int       compute_units;
     unsigned int       work_group_sz;
-} gpu_device_info_t;
+} hj_gpu_device_info_t;
 
 typedef struct
 {
     void *context; // for OpenCL:
     void *queue;
     void *device;
-} gpu_context_t;
+} hj_gpu_context_t;
 
 typedef struct
 {
@@ -66,20 +74,114 @@ typedef struct
     int    param_count;
     int    param_capacity;
 #endif
-} gpu_program_t;
+} hj_gpu_program_t;
 
 typedef struct
 {
     void  *ptr;
     size_t size;
-} gpu_buffer_t;
+} hj_gpu_buffer_t;
 
-typedef bool (*gpu_device_callback_t)(const gpu_device_info_t *info,
+typedef bool (*hj_gpu_device_callback_t)(const hj_gpu_device_info_t *info,
+                                         void                       *user_data);
+typedef void (*hj_gpu_error_callback_t)(const char *error_msg, void *user_data);
+
+// ------------------------- GPU API Declarations ------------------------
+HJ_GPU_API int  hj_gpu_count(void);
+HJ_GPU_API bool hj_gpu_device_get(hj_gpu_device_info_t **infos, int *count);
+HJ_GPU_API bool hj_gpu_device_free(hj_gpu_device_info_t *infos, int count);
+HJ_GPU_API void hj_gpu_device_foreach(hj_gpu_device_callback_t callback,
                                       void                    *user_data);
-typedef void (*gpu_error_callback_t)(const char *error_msg, void *user_data);
 
-// ------------------------- GPU API ---------------------------------------
-inline int _gpu_get_devices_by_opencl(gpu_device_info_t **infos, int *count)
+HJ_GPU_API bool hj_gpu_context_create(hj_gpu_context_t           *ctx,
+                                      const hj_gpu_device_info_t *device_info);
+HJ_GPU_API bool hj_gpu_context_free(hj_gpu_context_t *ctx);
+
+HJ_GPU_API bool hj_gpu_program_create_from_source(hj_gpu_program_t *program,
+                                                  hj_gpu_context_t *ctx,
+                                                  char             *log,
+                                                  unsigned long    *log_sz,
+                                                  const char       *source);
+HJ_GPU_API bool hj_gpu_program_free(hj_gpu_program_t *program);
+HJ_GPU_API bool hj_gpu_kernel_create(hj_gpu_program_t *program,
+                                     const char       *kernel_name);
+
+HJ_GPU_API bool
+hj_gpu_malloc(hj_gpu_buffer_t *buffer, hj_gpu_context_t *ctx, size_t size);
+HJ_GPU_API bool hj_gpu_malloc_read_only(hj_gpu_buffer_t  *buffer,
+                                        hj_gpu_context_t *ctx,
+                                        size_t            size);
+HJ_GPU_API bool hj_gpu_malloc_write_only(hj_gpu_buffer_t  *buffer,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            size);
+HJ_GPU_API bool hj_gpu_malloc_pinned(hj_gpu_buffer_t *buffer, size_t size);
+HJ_GPU_API bool hj_gpu_malloc_unified(hj_gpu_buffer_t *buffer, size_t size);
+HJ_GPU_API bool hj_gpu_buffer_free(hj_gpu_buffer_t *buffer);
+
+HJ_GPU_API bool hj_gpu_memcpy_to_device(hj_gpu_buffer_t  *dst,
+                                        const void       *src,
+                                        size_t            size,
+                                        hj_gpu_context_t *ctx);
+HJ_GPU_API bool hj_gpu_memcpy_from_device(void                  *dst,
+                                          const hj_gpu_buffer_t *src,
+                                          size_t                 size,
+                                          hj_gpu_context_t      *ctx);
+HJ_GPU_API bool hj_gpu_memcpy_device_to_device(hj_gpu_buffer_t       *dst,
+                                               const hj_gpu_buffer_t *src,
+                                               size_t                 size,
+                                               hj_gpu_context_t      *ctx);
+
+HJ_GPU_API bool hj_gpu_memcpy_to_device_async(hj_gpu_buffer_t  *dst,
+                                              const void       *src,
+                                              size_t            size,
+                                              hj_gpu_context_t *ctx);
+HJ_GPU_API bool hj_gpu_memcpy_from_device_async(void                  *dst,
+                                                const hj_gpu_buffer_t *src,
+                                                size_t                 size,
+                                                hj_gpu_context_t      *ctx);
+HJ_GPU_API bool hj_gpu_memcpy_device_to_device_async(hj_gpu_buffer_t       *dst,
+                                                     const hj_gpu_buffer_t *src,
+                                                     size_t            size,
+                                                     hj_gpu_context_t *ctx);
+
+HJ_GPU_API bool hj_gpu_set_kernel_arg(hj_gpu_program_t *program,
+                                      int               arg_index,
+                                      size_t            arg_size,
+                                      const void       *arg_value);
+HJ_GPU_API bool hj_gpu_set_kernel_arg_buffer(hj_gpu_program_t      *program,
+                                             int                    arg_index,
+                                             const hj_gpu_buffer_t *buffer);
+
+HJ_GPU_API bool hj_gpu_execute_kernel_1d(hj_gpu_program_t *program,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            global_work_size,
+                                         size_t            local_work_size);
+HJ_GPU_API bool hj_gpu_execute_kernel_2d(hj_gpu_program_t *program,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            global_work_size[2],
+                                         size_t            local_work_size[2]);
+HJ_GPU_API bool hj_gpu_execute_kernel_3d(hj_gpu_program_t *program,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            global_work_size[3],
+                                         size_t            local_work_size[3]);
+
+HJ_GPU_API bool hj_gpu_sync(hj_gpu_context_t *ctx);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // GPU_H
+
+// --------------------- Implementation -------------------------
+// To include implementation, define HJ_GPU_IMPL before including
+// this header in ONE C/C++ source file.
+#if (defined(HJ_GPU_IMPL) || defined(HJ_GPU_STATIC))                           \
+    && !defined(HJ_GPU_IMPL_DONE)
+#define HJ_GPU_IMPL_DONE
+
+HJ_GPU_API int _gpu_get_devices_by_opencl(hj_gpu_device_info_t **infos,
+                                          int                   *count)
 {
 #ifdef OPENCL_ENABLE
     cl_uint num_platforms = 0;
@@ -117,8 +219,8 @@ inline int _gpu_get_devices_by_opencl(gpu_device_info_t **infos, int *count)
         return 0;
     }
 
-    *infos =
-        (gpu_device_info_t *) calloc(total_devices, sizeof(gpu_device_info_t));
+    *infos = (hj_gpu_device_info_t *) calloc(total_devices,
+                                             sizeof(hj_gpu_device_info_t));
     if(!*infos)
     {
         free(platforms);
@@ -146,8 +248,8 @@ inline int _gpu_get_devices_by_opencl(gpu_device_info_t **infos, int *count)
                        NULL);
         for(cl_uint j = 0; j < num_devices_in_platform; ++j)
         {
-            gpu_device_info_t *info = &(*infos)[device_index];
-            info->id                = malloc(sizeof(cl_device_id));
+            hj_gpu_device_info_t *info = &(*infos)[device_index];
+            info->id                   = malloc(sizeof(cl_device_id));
             memcpy(info->id, &devices[j], sizeof(cl_device_id));
 
             clGetDeviceInfo(devices[j],
@@ -202,7 +304,8 @@ inline int _gpu_get_devices_by_opencl(gpu_device_info_t **infos, int *count)
     return 0;
 }
 
-inline int _gpu_get_devices_by_cuda(gpu_device_info_t **infos, int *count)
+HJ_GPU_API int _gpu_get_devices_by_cuda(hj_gpu_device_info_t **infos,
+                                        int                   *count)
 {
 #ifdef CUDA_ENABLE
     int device_count = 0;
@@ -213,15 +316,15 @@ inline int _gpu_get_devices_by_cuda(gpu_device_info_t **infos, int *count)
         return 0;
     }
 
-    *infos =
-        (gpu_device_info_t *) calloc(device_count, sizeof(gpu_device_info_t));
+    *infos = (hj_gpu_device_info_t *) calloc(device_count,
+                                             sizeof(hj_gpu_device_info_t));
     if(!*infos)
         return -1;
 
     for(int i = 0; i < device_count; ++i)
     {
-        gpu_device_info_t *info = &(*infos)[i];
-        cudaDeviceProp     prop;
+        hj_gpu_device_info_t *info = &(*infos)[i];
+        cudaDeviceProp        prop;
 
         if(cudaGetDeviceProperties(&prop, i) != cudaSuccess)
             continue;
@@ -247,7 +350,7 @@ inline int _gpu_get_devices_by_cuda(gpu_device_info_t **infos, int *count)
     return 0;
 }
 
-inline bool is_opencl_available(void)
+HJ_GPU_API bool is_opencl_available(void)
 {
 #ifdef OPENCL_ENABLE
     cl_uint num_platforms = 0;
@@ -259,7 +362,7 @@ inline bool is_opencl_available(void)
     return false;
 }
 
-inline bool is_cuda_available(void)
+HJ_GPU_API bool is_cuda_available(void)
 {
 #ifdef CUDA_ENABLE
     int device_count = 0;
@@ -270,7 +373,7 @@ inline bool is_cuda_available(void)
     return false;
 }
 
-inline int gpu_count(void)
+HJ_GPU_API int hj_gpu_count(void)
 {
     int total_count = 0;
 
@@ -300,70 +403,68 @@ inline int gpu_count(void)
             total_count += (int) total_devices;
         }
     }
-#endif
 
-#ifdef CUDA_ENABLE
+#elif CUDA_ENABLE
     int device_count = 0;
     if(cudaGetDeviceCount(&device_count) == cudaSuccess)
         total_count += device_count;
-#endif
 
+#endif
     return total_count;
 }
 
-inline int gpu_device_get(gpu_device_info_t **infos, int *count)
+HJ_GPU_API bool hj_gpu_device_get(hj_gpu_device_info_t **infos, int *count)
 {
     if(!infos || !count)
-        return -1;
+        return false;
 
-    int total_count = gpu_count();
+    int total_count = hj_gpu_count();
     if(total_count == 0)
     {
         *infos = NULL;
         *count = 0;
-        return 0;
+        return true;
     }
 
-    *infos =
-        (gpu_device_info_t *) calloc(total_count, sizeof(gpu_device_info_t));
+    *infos = (hj_gpu_device_info_t *) calloc(total_count,
+                                             sizeof(hj_gpu_device_info_t));
     if(!(*infos))
-        return -1;
+        return false;
 
     int current_index = 0;
 #ifdef OPENCL_ENABLE
-    gpu_device_info_t *opencl_infos = NULL;
-    int                opencl_count = 0;
+    hj_gpu_device_info_t *opencl_infos = NULL;
+    int                   opencl_count = 0;
     if(_gpu_get_devices_by_opencl(&opencl_infos, &opencl_count) == 0)
     {
         memcpy(*infos + current_index,
                opencl_infos,
-               opencl_count * sizeof(gpu_device_info_t));
+               opencl_count * sizeof(hj_gpu_device_info_t));
         current_index += opencl_count;
         free(opencl_infos);
     }
-#endif
 
-#ifdef CUDA_ENABLE
-    gpu_device_info_t *cuda_infos = NULL;
-    int                cuda_count = 0;
+#elif CUDA_ENABLE
+    hj_gpu_device_info_t *cuda_infos = NULL;
+    int                   cuda_count = 0;
     if(_gpu_get_devices_by_cuda(&cuda_infos, &cuda_count) == 0)
     {
         memcpy(*infos + current_index,
                cuda_infos,
-               cuda_count * sizeof(gpu_device_info_t));
+               cuda_count * sizeof(hj_gpu_device_info_t));
         current_index += cuda_count;
         free(cuda_infos);
     }
-#endif
 
+#endif
     *count = current_index;
-    return 0;
+    return true;
 }
 
-inline int gpu_device_free(gpu_device_info_t *infos, int count)
+HJ_GPU_API bool hj_gpu_device_free(hj_gpu_device_info_t *infos, int count)
 {
     if(!infos)
-        return -1;
+        return false;
 
     for(int i = 0; i < count; i++)
     {
@@ -372,17 +473,18 @@ inline int gpu_device_free(gpu_device_info_t *infos, int count)
     }
 
     free(infos);
-    return 0;
+    return true;
 }
 
-inline void gpu_device_foreach(gpu_device_callback_t callback, void *user_data)
+HJ_GPU_API void hj_gpu_device_foreach(hj_gpu_device_callback_t callback,
+                                      void                    *user_data)
 {
     if(!callback)
         return;
 
-    gpu_device_info_t *infos = NULL;
-    int                count = 0;
-    if(gpu_device_get(&infos, &count) != 0 || infos == NULL || count == 0)
+    hj_gpu_device_info_t *infos = NULL;
+    int                   count = 0;
+    if(!hj_gpu_device_get(&infos, &count) || infos == NULL || count == 0)
         return;
 
     for(int i = 0; i < count; ++i)
@@ -391,16 +493,16 @@ inline void gpu_device_foreach(gpu_device_callback_t callback, void *user_data)
             break;
     }
 
-    gpu_device_free(infos, count);
+    hj_gpu_device_free(infos, count);
 }
 
-inline bool gpu_context_create(gpu_context_t           *ctx,
-                               const gpu_device_info_t *device_info)
+HJ_GPU_API bool hj_gpu_context_create(hj_gpu_context_t           *ctx,
+                                      const hj_gpu_device_info_t *device_info)
 {
     if(!ctx)
         return false;
 
-    memset(ctx, 0, sizeof(gpu_context_t));
+    memset(ctx, 0, sizeof(hj_gpu_context_t));
 #ifdef OPENCL_ENABLE
     cl_int       err;
     cl_device_id device;
@@ -410,13 +512,13 @@ inline bool gpu_context_create(gpu_context_t           *ctx,
         device = *((cl_device_id *) device_info->id);
     } else
     {
-        gpu_device_info_t *infos = NULL;
-        int                count = 0;
-        if(gpu_device_get(&infos, &count) != 0 || count == 0)
+        hj_gpu_device_info_t *infos = NULL;
+        int                   count = 0;
+        if(!hj_gpu_device_get(&infos, &count) || count == 0)
             return false;
 
         device = *((cl_device_id *) infos[0].id);
-        gpu_device_free(infos, count);
+        hj_gpu_device_free(infos, count);
     }
 
     cl_context context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
@@ -436,9 +538,8 @@ inline bool gpu_context_create(gpu_context_t           *ctx,
     ctx->device  = malloc(sizeof(cl_device_id));
     memcpy(ctx->device, &device, sizeof(cl_device_id));
     return true;
-#endif
 
-#ifdef CUDA_ENABLE
+#elif CUDA_ENABLE
     int device_id;
 
     if(device_info && device_info->id)
@@ -460,38 +561,50 @@ inline bool gpu_context_create(gpu_context_t           *ctx,
     ctx->device            = malloc(sizeof(int));
     *((int *) ctx->device) = device_id;
     return true;
-#endif
 
+#else
     return false;
+
+#endif
 }
 
-inline int gpu_buffer_free(gpu_buffer_t *buffer)
+HJ_GPU_API bool hj_gpu_buffer_free(hj_gpu_buffer_t *buffer)
 {
-    if(!buffer || !buffer->ptr)
-        return -1;
+    if(!buffer)
+        return false;
+
+    if(!buffer->ptr)
+        return true;
 
 #ifdef OPENCL_ENABLE
     cl_mem mem_obj = (cl_mem) buffer->ptr;
     cl_int err     = clReleaseMemObject(mem_obj);
     if(err != CL_SUCCESS)
-        return -1;
-#endif
-
-#ifdef CUDA_ENABLE
-    cudaError_t err = cudaFree(buffer->ptr);
-    if(err != cudaSuccess)
-        return -1;
-#endif
+        return false;
 
     buffer->ptr  = NULL;
     buffer->size = 0;
-    return 0;
+    return true;
+
+#elif CUDA_ENABLE
+    cudaError_t err = cudaFree(buffer->ptr);
+    if(err != cudaSuccess)
+        return false;
+
+    buffer->ptr  = NULL;
+    buffer->size = 0;
+    return true;
+
+#else
+    return false;
+
+#endif
 }
 
-inline int gpu_context_free(gpu_context_t *ctx)
+HJ_GPU_API bool hj_gpu_context_free(hj_gpu_context_t *ctx)
 {
     if(!ctx)
-        return -1;
+        return false;
 
 #ifdef OPENCL_ENABLE
     if(ctx->queue)
@@ -509,14 +622,14 @@ inline int gpu_context_free(gpu_context_t *ctx)
     if(ctx->device)
         free(ctx->device);
 
-    memset(ctx, 0, sizeof(gpu_context_t));
-    return 0;
+    memset(ctx, 0, sizeof(hj_gpu_context_t));
+    return true;
 }
 
-inline int gpu_program_free(gpu_program_t *program)
+HJ_GPU_API bool hj_gpu_program_free(hj_gpu_program_t *program)
 {
     if(!program)
-        return -1;
+        return false;
 
 #ifdef OPENCL_ENABLE
     if(program->kernel)
@@ -526,25 +639,33 @@ inline int gpu_program_free(gpu_program_t *program)
         clReleaseProgram((cl_program) program->program);
 
 #elif CUDA_ENABLE
+    if(program->kernel_params)
+    {
+        for(int i = 0; i < program->param_capacity; i++)
+            if(program->kernel_params[i])
+                free(program->kernel_params[i]);
+
+        free(program->kernel_params);
+    }
+
     if(program->program)
         cuModuleUnload((CUmodule) program->program);
-
 #endif
 
-    memset(program, 0, sizeof(gpu_program_t));
-    return 0;
+    memset(program, 0, sizeof(hj_gpu_program_t));
+    return true;
 }
 
-inline bool gpu_program_create_from_source(gpu_program_t *program,
-                                           gpu_context_t *ctx,
-                                           char          *log,
-                                           unsigned long *log_sz,
-                                           const char    *source)
+HJ_GPU_API bool hj_gpu_program_create_from_source(hj_gpu_program_t *program,
+                                                  hj_gpu_context_t *ctx,
+                                                  char             *log,
+                                                  unsigned long    *log_sz,
+                                                  const char       *source)
 {
     if(!program || !ctx || !source)
         return false;
 
-    memset(program, 0, sizeof(gpu_program_t));
+    memset(program, 0, sizeof(hj_gpu_program_t));
 #ifdef OPENCL_ENABLE
     cl_int       err;
     cl_context   context = (cl_context) ctx->context;
@@ -624,12 +745,13 @@ inline bool gpu_program_create_from_source(gpu_program_t *program,
     return false;
 }
 
-inline bool gpu_kernel_create(gpu_program_t *program, const char *kernel_name)
+HJ_GPU_API bool hj_gpu_kernel_create(hj_gpu_program_t *program,
+                                     const char       *kernel_name)
 {
     if(!program || !program->program || !kernel_name)
         return false;
 
-#ifdef GPU_ENABLE_OPENCL
+#ifdef OPENCL_ENABLE
     cl_int    err;
     cl_kernel kernel =
         clCreateKernel((cl_program) program->program, kernel_name, &err);
@@ -642,11 +764,11 @@ inline bool gpu_kernel_create(gpu_program_t *program, const char *kernel_name)
     program->kernel = kernel;
     return true;
 
-#elif GPU_ENABLE_CUDA
+#elif CUDA_ENABLE
     CUfunction function;
     CUresult   result = cuModuleGetFunction(&function,
-                                          (CUmodule) program->program,
-                                          kernel_name);
+                                            (CUmodule) program->program,
+                                            kernel_name);
     if(result != CUDA_SUCCESS)
         return false;
 
@@ -658,12 +780,13 @@ inline bool gpu_kernel_create(gpu_program_t *program, const char *kernel_name)
     return false;
 }
 
-inline bool gpu_malloc(gpu_buffer_t *buffer, gpu_context_t *ctx, size_t size)
+HJ_GPU_API bool
+hj_gpu_malloc(hj_gpu_buffer_t *buffer, hj_gpu_context_t *ctx, size_t size)
 {
     if(!buffer || !ctx || size == 0)
         return false;
 
-    memset(buffer, 0, sizeof(gpu_buffer_t));
+    memset(buffer, 0, sizeof(hj_gpu_buffer_t));
 
 #ifdef OPENCL_ENABLE
     cl_int     err;
@@ -693,13 +816,14 @@ inline bool gpu_malloc(gpu_buffer_t *buffer, gpu_context_t *ctx, size_t size)
     return false;
 }
 
-inline bool
-gpu_malloc_read_only(gpu_buffer_t *buffer, gpu_context_t *ctx, size_t size)
+HJ_GPU_API bool hj_gpu_malloc_read_only(hj_gpu_buffer_t  *buffer,
+                                        hj_gpu_context_t *ctx,
+                                        size_t            size)
 {
     if(!buffer || !ctx || size == 0)
         return false;
 
-    memset(buffer, 0, sizeof(gpu_buffer_t));
+    memset(buffer, 0, sizeof(hj_gpu_buffer_t));
 #ifdef OPENCL_ENABLE
     cl_int     err;
     cl_context context = (cl_context) ctx->context;
@@ -729,13 +853,14 @@ gpu_malloc_read_only(gpu_buffer_t *buffer, gpu_context_t *ctx, size_t size)
     return false;
 }
 
-inline bool
-gpu_malloc_write_only(gpu_buffer_t *buffer, gpu_context_t *ctx, size_t size)
+HJ_GPU_API bool hj_gpu_malloc_write_only(hj_gpu_buffer_t  *buffer,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            size)
 {
     if(!buffer || !ctx || size == 0)
         return false;
 
-    memset(buffer, 0, sizeof(gpu_buffer_t));
+    memset(buffer, 0, sizeof(hj_gpu_buffer_t));
 
 #ifdef OPENCL_ENABLE
     cl_int     err;
@@ -765,12 +890,12 @@ gpu_malloc_write_only(gpu_buffer_t *buffer, gpu_context_t *ctx, size_t size)
     return false;
 }
 
-inline bool gpu_malloc_pinned(gpu_buffer_t *buffer, size_t size)
+HJ_GPU_API bool hj_gpu_malloc_pinned(hj_gpu_buffer_t *buffer, size_t size)
 {
     if(!buffer || size == 0)
         return false;
 
-    memset(buffer, 0, sizeof(gpu_buffer_t));
+    memset(buffer, 0, sizeof(hj_gpu_buffer_t));
 #ifdef CUDA_ENABLE
     void       *host_ptr = NULL;
     cudaError_t err      = cudaMallocHost(&host_ptr, size);
@@ -780,17 +905,19 @@ inline bool gpu_malloc_pinned(gpu_buffer_t *buffer, size_t size)
     buffer->ptr  = host_ptr;
     buffer->size = size;
     return true;
-#endif
 
-    return true;
+#else
+    return false;
+
+#endif
 }
 
-inline bool gpu_malloc_unified(gpu_buffer_t *buffer, size_t size)
+HJ_GPU_API bool hj_gpu_malloc_unified(hj_gpu_buffer_t *buffer, size_t size)
 {
     if(!buffer || size == 0)
         return false;
 
-    memset(buffer, 0, sizeof(gpu_buffer_t));
+    memset(buffer, 0, sizeof(hj_gpu_buffer_t));
 #ifdef CUDA_ENABLE
     void       *unified_ptr = NULL;
     cudaError_t err         = cudaMallocManaged(&unified_ptr, size);
@@ -800,15 +927,17 @@ inline bool gpu_malloc_unified(gpu_buffer_t *buffer, size_t size)
     buffer->ptr  = unified_ptr;
     buffer->size = size;
     return true;
-#endif
 
-    return true;
+#else
+    return false;
+
+#endif
 }
 
-inline bool gpu_memcpy_to_device(gpu_buffer_t  *dst,
-                                 const void    *src,
-                                 size_t         size,
-                                 gpu_context_t *ctx)
+HJ_GPU_API bool hj_gpu_memcpy_to_device(hj_gpu_buffer_t  *dst,
+                                        const void       *src,
+                                        size_t            size,
+                                        hj_gpu_context_t *ctx)
 {
     if(!dst || !dst->ptr || !src || !ctx || size == 0)
         return false;
@@ -853,10 +982,10 @@ inline bool gpu_memcpy_to_device(gpu_buffer_t  *dst,
     return false;
 }
 
-inline bool gpu_memcpy_from_device(void               *dst,
-                                   const gpu_buffer_t *src,
-                                   size_t              size,
-                                   gpu_context_t      *ctx)
+HJ_GPU_API bool hj_gpu_memcpy_from_device(void                  *dst,
+                                          const hj_gpu_buffer_t *src,
+                                          size_t                 size,
+                                          hj_gpu_context_t      *ctx)
 {
     if(!dst || !src || !src->ptr || !ctx || size == 0)
         return false;
@@ -901,10 +1030,10 @@ inline bool gpu_memcpy_from_device(void               *dst,
     return false;
 }
 
-inline bool gpu_memcpy_device_to_device(gpu_buffer_t       *dst,
-                                        const gpu_buffer_t *src,
-                                        size_t              size,
-                                        gpu_context_t      *ctx)
+HJ_GPU_API bool hj_gpu_memcpy_device_to_device(hj_gpu_buffer_t       *dst,
+                                               const hj_gpu_buffer_t *src,
+                                               size_t                 size,
+                                               hj_gpu_context_t      *ctx)
 {
     if(!dst || !dst->ptr || !src || !src->ptr || !ctx || size == 0)
         return false;
@@ -950,10 +1079,10 @@ inline bool gpu_memcpy_device_to_device(gpu_buffer_t       *dst,
     return false;
 }
 
-inline bool gpu_memcpy_to_device_async(gpu_buffer_t  *dst,
-                                       const void    *src,
-                                       size_t         size,
-                                       gpu_context_t *ctx)
+HJ_GPU_API bool hj_gpu_memcpy_to_device_async(hj_gpu_buffer_t  *dst,
+                                              const void       *src,
+                                              size_t            size,
+                                              hj_gpu_context_t *ctx)
 {
     if(!dst || !dst->ptr || !src || !ctx || size == 0)
         return false;
@@ -988,10 +1117,10 @@ inline bool gpu_memcpy_to_device_async(gpu_buffer_t  *dst,
     return false;
 }
 
-inline bool gpu_memcpy_from_device_async(void               *dst,
-                                         const gpu_buffer_t *src,
-                                         size_t              size,
-                                         gpu_context_t      *ctx)
+HJ_GPU_API bool hj_gpu_memcpy_from_device_async(void                  *dst,
+                                                const hj_gpu_buffer_t *src,
+                                                size_t                 size,
+                                                hj_gpu_context_t      *ctx)
 {
     if(!dst || !src || !src->ptr || !ctx || size == 0)
         return false;
@@ -1026,10 +1155,10 @@ inline bool gpu_memcpy_from_device_async(void               *dst,
     return false;
 }
 
-inline bool gpu_memcpy_device_to_device_async(gpu_buffer_t       *dst,
-                                              const gpu_buffer_t *src,
-                                              size_t              size,
-                                              gpu_context_t      *ctx)
+HJ_GPU_API bool hj_gpu_memcpy_device_to_device_async(hj_gpu_buffer_t       *dst,
+                                                     const hj_gpu_buffer_t *src,
+                                                     size_t            size,
+                                                     hj_gpu_context_t *ctx)
 {
     if(!dst || !dst->ptr || !src || !src->ptr || !ctx || size == 0)
         return false;
@@ -1048,10 +1177,10 @@ inline bool gpu_memcpy_device_to_device_async(gpu_buffer_t       *dst,
 #elif CUDA_ENABLE
     cudaStream_t stream = (cudaStream_t) ctx->queue;
     cudaError_t  err    = cudaMemcpyAsync(dst->ptr,
-                                      src->ptr,
-                                      size,
-                                      cudaMemcpyDeviceToDevice,
-                                      stream);
+                                          src->ptr,
+                                          size,
+                                          cudaMemcpyDeviceToDevice,
+                                          stream);
     return (err == cudaSuccess);
 
 #endif
@@ -1059,10 +1188,10 @@ inline bool gpu_memcpy_device_to_device_async(gpu_buffer_t       *dst,
     return false;
 }
 
-inline bool gpu_set_kernel_arg(gpu_program_t *program,
-                               int            arg_index,
-                               size_t         arg_size,
-                               const void    *arg_value)
+HJ_GPU_API bool hj_gpu_set_kernel_arg(hj_gpu_program_t *program,
+                                      int               arg_index,
+                                      size_t            arg_size,
+                                      const void       *arg_value)
 {
     if(!program || !program->kernel || arg_index < 0)
         return false;
@@ -1078,7 +1207,7 @@ inline bool gpu_set_kernel_arg(gpu_program_t *program,
     {
         int    new_capacity = arg_index + 8;
         void **new_params   = (void **) realloc(program->kernel_params,
-                                              new_capacity * sizeof(void *));
+                                                new_capacity * sizeof(void *));
         if(!new_params)
             return false;
 
@@ -1108,9 +1237,9 @@ inline bool gpu_set_kernel_arg(gpu_program_t *program,
     return false;
 }
 
-inline bool gpu_set_kernel_arg_buffer(gpu_program_t      *program,
-                                      int                 arg_index,
-                                      const gpu_buffer_t *buffer)
+HJ_GPU_API bool hj_gpu_set_kernel_arg_buffer(hj_gpu_program_t      *program,
+                                             int                    arg_index,
+                                             const hj_gpu_buffer_t *buffer)
 {
     if(!program || !program->kernel || !buffer || !buffer->ptr || arg_index < 0)
         return false;
@@ -1124,17 +1253,20 @@ inline bool gpu_set_kernel_arg_buffer(gpu_program_t      *program,
     return (err == CL_SUCCESS);
 
 #elif CUDA_ENABLE
-    return gpu_set_kernel_arg(program, arg_index, sizeof(void *), &buffer->ptr);
+    return hj_gpu_set_kernel_arg(program,
+                                 arg_index,
+                                 sizeof(void *),
+                                 &buffer->ptr);
 
 #endif
 
     return false;
 }
 
-inline bool gpu_execute_kernel_1d(gpu_program_t *program,
-                                  gpu_context_t *ctx,
-                                  size_t         global_work_size,
-                                  size_t         local_work_size)
+HJ_GPU_API bool hj_gpu_execute_kernel_1d(hj_gpu_program_t *program,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            global_work_size,
+                                         size_t            local_work_size)
 {
     if(!program || !program->kernel || !ctx || global_work_size == 0)
         return false;
@@ -1186,10 +1318,10 @@ inline bool gpu_execute_kernel_1d(gpu_program_t *program,
     return false;
 }
 
-inline bool gpu_execute_kernel_2d(gpu_program_t *program,
-                                  gpu_context_t *ctx,
-                                  size_t         global_work_size[2],
-                                  size_t         local_work_size[2])
+HJ_GPU_API bool hj_gpu_execute_kernel_2d(hj_gpu_program_t *program,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            global_work_size[2],
+                                         size_t            local_work_size[2])
 {
     if(!program || !program->kernel || !ctx || !global_work_size
        || global_work_size[0] == 0 || global_work_size[1] == 0)
@@ -1252,10 +1384,10 @@ inline bool gpu_execute_kernel_2d(gpu_program_t *program,
     return false;
 }
 
-inline bool gpu_execute_kernel_3d(gpu_program_t *program,
-                                  gpu_context_t *ctx,
-                                  size_t         global_work_size[3],
-                                  size_t         local_work_size[3])
+HJ_GPU_API bool hj_gpu_execute_kernel_3d(hj_gpu_program_t *program,
+                                         hj_gpu_context_t *ctx,
+                                         size_t            global_work_size[3],
+                                         size_t            local_work_size[3])
 {
     if(!program || !program->kernel || !ctx || !global_work_size
        || global_work_size[0] == 0 || global_work_size[1] == 0
@@ -1325,7 +1457,7 @@ inline bool gpu_execute_kernel_3d(gpu_program_t *program,
     return false;
 }
 
-inline bool gpu_sync(gpu_context_t *ctx)
+HJ_GPU_API bool hj_gpu_sync(hj_gpu_context_t *ctx)
 {
     if(!ctx)
         return false;
@@ -1345,8 +1477,4 @@ inline bool gpu_sync(gpu_context_t *ctx)
     return false;
 }
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* GPU_H */
+#endif // HJ_GPU_IMPL && !HJ_GPU_IMPL_DONE

@@ -280,17 +280,25 @@ hj_bios_sys_file_read(const char *path, char *buffer, size_t buffer_size)
     if(!fp)
         return HJ_BIOS_ERROR_NOT_FOUND;
 
-    if(!fgets(buffer, buffer_size, fp))
+    char temp[512] = {0};
+    if(!fgets(temp, sizeof(temp), fp))
     {
         fclose(fp);
         return HJ_BIOS_ERROR_SYSTEM_CALL_FAILED;
     }
 
     fclose(fp);
-    size_t len = strlen(buffer);
-    if(len > 0 && buffer[len - 1] == '\n')
-        buffer[len - 1] = '\0';
 
+    size_t len = strlen(temp);
+    while(len > 0 && (temp[len - 1] == '\n' || temp[len - 1] == '\r'))
+    {
+        temp[--len] = '\0';
+    }
+
+    if(len >= buffer_size)
+        return HJ_BIOS_ERROR_BUFFER_TOO_SMALL;
+
+    memcpy(buffer, temp, len + 1);
     return HJ_BIOS_OK;
 }
 

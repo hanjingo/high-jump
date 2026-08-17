@@ -136,12 +136,8 @@ hj_bluetooth_device_range(hj_bluetooth_device_range_fn  fn,
     hj_bluetooth_info_t *head = hid_enumerate(0x00, 0x00);
     if(!head)
     {
-        const wchar_t     *err_str = hid_error(NULL);
-        hj_bluetooth_err_t ret     = (err_str && *err_str != L'\0')
-                                         ? HJ_BLUETOOTH_ERROR_ENUM_FAILED
-                                         : HJ_BLUETOOTH_OK;
         hid_exit();
-        return ret;
+        return HJ_BLUETOOTH_OK;
     }
 
     hj_bluetooth_device_filter_fn target_filter =
@@ -170,10 +166,8 @@ hj_bluetooth_device_count(hj_bluetooth_device_filter_fn filter)
     hj_bluetooth_info_t *head = hid_enumerate(0x00, 0x00);
     if(!head)
     {
-        const wchar_t *err_str = hid_error(NULL);
-        int            ret     = (err_str && *err_str != L'\0') ? -1 : 0;
         hid_exit();
-        return ret;
+        return 0;
     }
 
     hj_bluetooth_device_filter_fn target_filter =

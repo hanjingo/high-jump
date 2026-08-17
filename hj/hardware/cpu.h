@@ -115,7 +115,7 @@ HJ_CPU_API uint64_t     hj_cpu_pmu_cycle_counter_read(void);
 extern "C" {
 #endif
 
-HJ_CPU_API hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
+static inline hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -213,7 +213,7 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
 #endif
 }
 
-HJ_CPU_API hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
+static inline hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -300,7 +300,7 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
 #endif
 }
 
-HJ_CPU_API hj_cpu_err_t hj_cpu_core_num(unsigned int *num)
+static inline hj_cpu_err_t hj_cpu_core_num(unsigned int *num)
 {
     if(!num)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -349,7 +349,7 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_core_num(unsigned int *num)
 #endif
 }
 
-HJ_CPU_API hj_cpu_err_t hj_cpu_core_bind(const unsigned int core)
+static inline hj_cpu_err_t hj_cpu_core_bind(const unsigned int core)
 {
 #if defined(_WIN32) || defined(_WIN64)
     WORD         group_count   = GetActiveProcessorGroupCount();
@@ -404,7 +404,8 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_core_bind(const unsigned int core)
 #endif
 }
 
-HJ_CPU_API hj_cpu_err_t hj_cpu_core_list(unsigned int *buf, unsigned int *len)
+static inline hj_cpu_err_t hj_cpu_core_list(unsigned int *buf,
+                                            unsigned int *len)
 {
     if(!buf || !len)
     {
@@ -509,7 +510,7 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_core_list(unsigned int *buf, unsigned int *len)
 #endif
 }
 
-HJ_CPU_API hj_cpu_err_t hj_cpu_id(uint32_t *cpu_id)
+static inline hj_cpu_err_t hj_cpu_id(uint32_t *cpu_id)
 {
     if(!cpu_id)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -571,7 +572,7 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_id(uint32_t *cpu_id)
 #endif
 }
 
-HJ_CPU_API void hj_cpu_pause(void)
+static inline void hj_cpu_pause(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -597,7 +598,7 @@ HJ_CPU_API void hj_cpu_pause(void)
 #endif
 }
 
-HJ_CPU_API void hj_cpu_nop(void)
+static inline void hj_cpu_nop(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -623,7 +624,7 @@ HJ_CPU_API void hj_cpu_nop(void)
 #endif
 }
 
-HJ_CPU_API void hj_cpu_delay(uint64_t cycles)
+static inline void hj_cpu_delay(uint64_t cycles)
 {
     if(cycles == 0)
         return;
@@ -665,7 +666,7 @@ HJ_CPU_API void hj_cpu_delay(uint64_t cycles)
 #endif
 }
 
-HJ_CPU_API void hj_cpu_cache_flush(const void *addr)
+static inline void hj_cpu_cache_flush(const void *addr)
 {
     if(!addr)
         return;
@@ -707,7 +708,7 @@ HJ_CPU_API void hj_cpu_cache_flush(const void *addr)
 #endif
 }
 
-HJ_CPU_API void hj_cpu_prefetch_read(const void *addr)
+static inline void hj_cpu_prefetch_read(const void *addr)
 {
     if(!addr)
         return;
@@ -728,7 +729,7 @@ HJ_CPU_API void hj_cpu_prefetch_read(const void *addr)
 #endif
 }
 
-HJ_CPU_API void hj_cpu_prefetch_write(const void *addr)
+static inline void hj_cpu_prefetch_write(const void *addr)
 {
     if(!addr)
         return;
@@ -750,7 +751,7 @@ HJ_CPU_API void hj_cpu_prefetch_write(const void *addr)
 #endif
 }
 
-HJ_CPU_API uint64_t hj_cpu_tsc_read(void)
+static inline uint64_t hj_cpu_tsc_read(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -792,7 +793,7 @@ HJ_CPU_API uint64_t hj_cpu_tsc_read(void)
 #endif
 }
 
-HJ_CPU_API uint64_t hj_cpu_tscp_read(uint32_t *aux)
+static inline uint64_t hj_cpu_tscp_read(uint32_t *aux)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -870,7 +871,7 @@ HJ_CPU_API uint64_t hj_cpu_tscp_read(uint32_t *aux)
 #endif
 }
 
-HJ_CPU_API uint64_t hj_cpu_pmu_cycle_counter_read(void)
+static inline uint64_t hj_cpu_pmu_cycle_counter_read(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)

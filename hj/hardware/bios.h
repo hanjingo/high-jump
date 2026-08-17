@@ -112,9 +112,8 @@ HJ_BIOS_API hj_bios_err_t hj_bios_info(hj_bios_info_t *info);
 extern "C" {
 #endif
 
-HJ_BIOS_API hj_bios_err_t hj_bios_safe_string_copy(char       *dst,
-                                                   size_t      dst_size,
-                                                   const char *src)
+static inline hj_bios_err_t
+hj_bios_safe_string_copy(char *dst, size_t dst_size, const char *src)
 {
     if(!dst || !src || dst_size == 0)
         return HJ_BIOS_ERROR_NULL_POINTER;
@@ -353,7 +352,7 @@ static inline hj_bios_err_t hj_bios_read_apple_iokit_prop(const char *prop_name,
 
 #endif
 
-HJ_BIOS_API hj_bios_err_t hj_bios_vendor(char *vendor, size_t *length)
+static inline hj_bios_err_t hj_bios_vendor(char *vendor, size_t *length)
 {
     if(!vendor || !length || *length == 0)
         return HJ_BIOS_ERROR_NULL_POINTER;
@@ -384,7 +383,7 @@ HJ_BIOS_API hj_bios_err_t hj_bios_vendor(char *vendor, size_t *length)
 #endif
 }
 
-HJ_BIOS_API hj_bios_err_t hj_bios_version(char *version, size_t *length)
+static inline hj_bios_err_t hj_bios_version(char *version, size_t *length)
 {
     if(!version || !length || *length == 0)
         return HJ_BIOS_ERROR_NULL_POINTER;
@@ -417,7 +416,7 @@ HJ_BIOS_API hj_bios_err_t hj_bios_version(char *version, size_t *length)
 #endif
 }
 
-HJ_BIOS_API hj_bios_err_t hj_bios_release_date(char *date_str, size_t *length)
+static inline hj_bios_err_t hj_bios_release_date(char *date_str, size_t *length)
 {
     if(!date_str || !length || *length == 0)
         return HJ_BIOS_ERROR_NULL_POINTER;
@@ -444,7 +443,7 @@ HJ_BIOS_API hj_bios_err_t hj_bios_release_date(char *date_str, size_t *length)
 #endif
 }
 
-HJ_BIOS_API hj_bios_err_t hj_bios_starting_segment(uint16_t *segment)
+static inline hj_bios_err_t hj_bios_starting_segment(uint16_t *segment)
 {
     if(!segment)
         return HJ_BIOS_ERROR_NULL_POINTER;
@@ -496,7 +495,7 @@ HJ_BIOS_API hj_bios_err_t hj_bios_starting_segment(uint16_t *segment)
 #endif
 }
 
-HJ_BIOS_API hj_bios_err_t hj_bios_serial_num(char *serial_num, size_t *length)
+static inline hj_bios_err_t hj_bios_serial_num(char *serial_num, size_t *length)
 {
     if(!serial_num || !length || *length == 0)
         return HJ_BIOS_ERROR_NULL_POINTER;
@@ -531,7 +530,7 @@ HJ_BIOS_API hj_bios_err_t hj_bios_serial_num(char *serial_num, size_t *length)
 #endif
 }
 
-HJ_BIOS_API hj_bios_err_t hj_bios_rom_size(size_t *rom_size)
+static inline hj_bios_err_t hj_bios_rom_size(size_t *rom_size)
 {
     if(!rom_size)
         return HJ_BIOS_ERROR_NULL_POINTER;
@@ -613,7 +612,7 @@ HJ_BIOS_API hj_bios_err_t hj_bios_rom_size(size_t *rom_size)
 #endif
 }
 
-HJ_BIOS_API hj_bios_err_t hj_bios_info(hj_bios_info_t *info)
+static inline hj_bios_err_t hj_bios_info(hj_bios_info_t *info)
 {
     if(!info)
         return HJ_BIOS_ERROR_NULL_POINTER;

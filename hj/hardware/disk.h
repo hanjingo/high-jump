@@ -276,9 +276,8 @@ static inline bool hj_is_valid_disk(const char *device_name)
 }
 #endif
 
-HJ_DISK_API hj_disk_err_t hj_disk_format_size(uint64_t bytes,
-                                              char    *buffer,
-                                              size_t   buffer_size)
+static inline hj_disk_err_t
+hj_disk_format_size(uint64_t bytes, char *buffer, size_t buffer_size)
 {
     if(!buffer || buffer_size == 0)
         return HJ_DISK_ERROR_INVALID_PARAMETER;
@@ -307,7 +306,7 @@ HJ_DISK_API hj_disk_err_t hj_disk_format_size(uint64_t bytes,
     return HJ_DISK_OK;
 }
 
-HJ_DISK_API hj_disk_err_t hj_disk_init(void)
+static inline hj_disk_err_t hj_disk_init(void)
 {
 #if defined(HJ_DISK_PLATFORM_WINDOWS)
     return HJ_DISK_OK;
@@ -320,7 +319,7 @@ HJ_DISK_API hj_disk_err_t hj_disk_init(void)
 #endif
 }
 
-HJ_DISK_API int32_t hj_disk_count(void)
+static inline int32_t hj_disk_count(void)
 {
 #if defined(HJ_DISK_PLATFORM_WINDOWS)
     uint32_t disk_cnt = 0;
@@ -400,7 +399,7 @@ HJ_DISK_API int32_t hj_disk_count(void)
 #endif
 }
 
-HJ_DISK_API hj_filesystem_type_t
+static inline hj_filesystem_type_t
 hj_disk_filesystem_type_from_string(const char *fs_name)
 {
     if(!fs_name)
@@ -453,7 +452,7 @@ hj_disk_filesystem_type_from_string(const char *fs_name)
     return HJ_FILESYSTEM_UNKNOWN;
 }
 
-HJ_DISK_API const char *
+static inline const char *
 hj_disk_filesystem_type_to_string(hj_filesystem_type_t fs_type)
 {
     for(size_t i = 0;
@@ -466,8 +465,8 @@ hj_disk_filesystem_type_to_string(hj_filesystem_type_t fs_type)
     return "Unknown";
 }
 
-HJ_DISK_API hj_disk_err_t hj_disk_info(const char     *device_name,
-                                       hj_disk_info_t *info)
+static inline hj_disk_err_t hj_disk_info(const char     *device_name,
+                                         hj_disk_info_t *info)
 {
     if(!device_name || !info)
         return HJ_DISK_ERROR_INVALID_PARAMETER;
@@ -605,8 +604,9 @@ HJ_DISK_API hj_disk_err_t hj_disk_info(const char     *device_name,
     return HJ_DISK_OK;
 }
 
-HJ_DISK_API hj_disk_err_t hj_disk_get_partition_by_mount(
-    const char *mount_point, hj_partition_info_t *info)
+static inline hj_disk_err_t
+hj_disk_get_partition_by_mount(const char          *mount_point,
+                               hj_partition_info_t *info)
 {
     if(!mount_point || !info)
         return HJ_DISK_ERROR_INVALID_PARAMETER;
@@ -705,7 +705,7 @@ HJ_DISK_API hj_disk_err_t hj_disk_get_partition_by_mount(
 #endif
 }
 
-HJ_DISK_API bool hj_disk_is_ready(const char *device_name)
+static inline bool hj_disk_is_ready(const char *device_name)
 {
     if(!device_name || strlen(device_name) == 0)
         return false;
@@ -845,9 +845,9 @@ HJ_DISK_API bool hj_disk_is_ready(const char *device_name)
     return ready;
 }
 
-HJ_DISK_API hj_disk_err_t hj_disk_enumerate(hj_disk_info_t *disks,
-                                            uint32_t        max_disks,
-                                            uint32_t       *actual_count)
+static inline hj_disk_err_t hj_disk_enumerate(hj_disk_info_t *disks,
+                                              uint32_t        max_disks,
+                                              uint32_t       *actual_count)
 {
     if(!disks || !actual_count || max_disks == 0)
         return HJ_DISK_ERROR_INVALID_PARAMETER;
@@ -914,9 +914,9 @@ HJ_DISK_API hj_disk_err_t hj_disk_enumerate(hj_disk_info_t *disks,
     return HJ_DISK_OK;
 }
 
-HJ_DISK_API hj_disk_err_t hj_disk_read_speed_test(const char *device_name,
-                                                  uint32_t    test_size_mb,
-                                                  double     *read_speed_mbps)
+static inline hj_disk_err_t hj_disk_read_speed_test(const char *device_name,
+                                                    uint32_t    test_size_mb,
+                                                    double     *read_speed_mbps)
 {
     if(!device_name || !read_speed_mbps || test_size_mb == 0)
         return HJ_DISK_ERROR_INVALID_PARAMETER;

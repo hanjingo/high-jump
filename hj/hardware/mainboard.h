@@ -447,7 +447,7 @@ static inline int hj_sysctl_string(const char *name, char *buf, size_t size)
 
 // ------------------------ API Implementations ------------------------
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_model(char *buf, size_t size)
+static inline hj_mainboard_err_t hj_mainboard_model(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -470,7 +470,7 @@ HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_model(char *buf, size_t size)
 #endif
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_vendor(char *buf, size_t size)
+static inline hj_mainboard_err_t hj_mainboard_vendor(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -495,8 +495,7 @@ HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_vendor(char *buf, size_t size)
 #endif
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_serial_num(char  *buf,
-                                                            size_t size)
+static inline hj_mainboard_err_t hj_mainboard_serial_num(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -539,8 +538,8 @@ HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_serial_num(char  *buf,
 #endif
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_bios_version(char  *buf,
-                                                              size_t size)
+static inline hj_mainboard_err_t hj_mainboard_bios_version(char  *buf,
+                                                           size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -592,7 +591,7 @@ HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_bios_version(char  *buf,
 #endif
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_chipset(char *buf, size_t size)
+static inline hj_mainboard_err_t hj_mainboard_chipset(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -617,8 +616,7 @@ HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_chipset(char *buf, size_t size)
     return HJ_MAINBOARD_OK;
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t
-hj_mainboard_memory_slots(unsigned int *slots)
+static inline hj_mainboard_err_t hj_mainboard_memory_slots(unsigned int *slots)
 {
     if(!slots)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -651,7 +649,7 @@ hj_mainboard_memory_slots(unsigned int *slots)
 #endif
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t
+static inline hj_mainboard_err_t
 hj_mainboard_expansion_slots(unsigned int *slots)
 {
     if(!slots)
@@ -671,21 +669,20 @@ hj_mainboard_expansion_slots(unsigned int *slots)
 #endif
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_manufacturer_name(char  *buf,
-                                                                   size_t size)
+static inline hj_mainboard_err_t hj_mainboard_manufacturer_name(char  *buf,
+                                                                size_t size)
 {
     return hj_mainboard_vendor(buf, size);
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_product_name(char  *buf,
-                                                              size_t size)
+static inline hj_mainboard_err_t hj_mainboard_product_name(char  *buf,
+                                                           size_t size)
 {
     return hj_mainboard_model(buf, size);
 }
 
-HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_version(uint8_t *major,
-                                                         uint8_t *minor,
-                                                         uint8_t *patch)
+static inline hj_mainboard_err_t
+hj_mainboard_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
 {
     if(!major || !minor || !patch)
         return HJ_MAINBOARD_ERR_INVALID_ARG;

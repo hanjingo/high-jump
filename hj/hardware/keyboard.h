@@ -144,7 +144,7 @@ DEFINE_GUID(GUID_DEVINTERFACE_KEYBOARD,
 extern "C" {
 #endif
 
-HJ_KEYBOARD_API void
+static inline void
 hj_keyboard_safe_strcpy(char *dest, const char *src, size_t dest_size)
 {
     if(!dest || dest_size == 0)
@@ -157,7 +157,7 @@ hj_keyboard_safe_strcpy(char *dest, const char *src, size_t dest_size)
     snprintf(dest, dest_size, "%s", src);
 }
 
-HJ_KEYBOARD_API hj_keyboard_err_t
+static inline hj_keyboard_err_t
 hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
 {
     if(!out_count)
@@ -407,7 +407,7 @@ hj_keyboard_enumerate(hj_keyboard_info_t *infos, int max_count, int *out_count)
     return HJ_KEYBOARD_OK;
 }
 
-HJ_KEYBOARD_API hj_keyboard_err_t
+static inline hj_keyboard_err_t
 hj_keyboard_open(const char *device_path, hj_keyboard_handle_t *out_handle)
 {
     if(!out_handle)
@@ -516,7 +516,7 @@ hj_keyboard_open(const char *device_path, hj_keyboard_handle_t *out_handle)
 #endif
 }
 
-HJ_KEYBOARD_API hj_keyboard_err_t hj_keyboard_close(hj_keyboard_handle_t handle)
+static inline hj_keyboard_err_t hj_keyboard_close(hj_keyboard_handle_t handle)
 {
     if(handle == HJ_INVALID_HANDLE)
         return HJ_KEYBOARD_ERR_INVALID_ARG;
@@ -545,7 +545,7 @@ HJ_KEYBOARD_API hj_keyboard_err_t hj_keyboard_close(hj_keyboard_handle_t handle)
     return HJ_KEYBOARD_OK;
 }
 
-HJ_KEYBOARD_API hj_keyboard_err_t
+static inline hj_keyboard_err_t
 hj_keyboard_read_event(hj_keyboard_handle_t handle, hj_key_event_t *event)
 {
     if(!event || handle == HJ_INVALID_HANDLE)
@@ -601,7 +601,7 @@ hj_keyboard_read_event(hj_keyboard_handle_t handle, hj_key_event_t *event)
 #endif
 }
 
-HJ_KEYBOARD_API hj_keyboard_err_t
+static inline hj_keyboard_err_t
 hj_keyboard_set_repeat(hj_keyboard_handle_t handle, int delay_ms, int rate_ms)
 {
     if(handle == HJ_INVALID_HANDLE || delay_ms < 0 || rate_ms <= 0)

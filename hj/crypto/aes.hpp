@@ -57,6 +57,7 @@ class aes
         param_invalid,
         passwd_invalid,
         pbkdf2_derive_failed,
+        rand_generate_failed,
 
         encrypt_failed,
         encrypt_init_failed,
@@ -172,9 +173,11 @@ class aes
             return error_code::ctx_alloc_failed;
 
         const EVP_CIPHER *cipher = _select_cipher(opts.mod, opts.key_len);
-        if(!cipher
-           || EVP_EncryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
-                  != 1)
+        if(!cipher)
+            return error_code::encrypt_init_failed;
+
+        if(EVP_EncryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
+           != 1)
             return error_code::encrypt_init_failed;
 
         EVP_CIPHER_CTX_set_padding(ctx.get(), 0);
@@ -221,9 +224,11 @@ class aes
             return error_code::ctx_alloc_failed;
 
         const EVP_CIPHER *cipher = _select_cipher(opts.mod, opts.key_len);
-        if(!cipher
-           || EVP_DecryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
-                  != 1)
+        if(!cipher)
+            return error_code::decrypt_init_failed;
+
+        if(EVP_DecryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
+           != 1)
             return error_code::decrypt_init_failed;
 
         EVP_CIPHER_CTX_set_padding(ctx.get(), 0);
@@ -240,15 +245,13 @@ class aes
         if(EVP_DecryptFinal_ex(ctx.get(), dst + outlen1, &outlen2) != 1)
             return error_code::decrypt_final_failed;
 
-        std::size_t unpad_len = static_cast<std::size_t>(outlen1 + outlen2);
-        _unpadding_block(dst,
-                         dst_len,
-                         unpad_len,
-                         opts.mod,
-                         opts.key_len,
-                         opts.pad_style);
-
-        return error_code::ok;
+        std::size_t raw_dec_len = static_cast<std::size_t>(outlen1 + outlen2);
+        return _unpadding_block(dst,
+                                dst_len,
+                                raw_dec_len,
+                                opts.mod,
+                                opts.key_len,
+                                opts.pad_style);
     }
 
     static inline error_code
@@ -319,12 +322,15 @@ class aes
                   != 1)
             return error_code::encrypt_init_failed;
 
-        if(EVP_CIPHER_CTX_ctrl(ctx.get(),
-                               EVP_CTRL_AEAD_SET_IVLEN,
-                               static_cast<int>(opts.iv_len),
-                               nullptr)
-           != 1)
-            return error_code::cipher_ctl_failed;
+        if(opts.iv_len != 12)
+        {
+            if(EVP_CIPHER_CTX_ctrl(ctx.get(),
+                                   EVP_CTRL_AEAD_SET_IVLEN,
+                                   static_cast<int>(opts.iv_len),
+                                   nullptr)
+               != 1)
+                return error_code::cipher_ctl_failed;
+        }
 
         if(EVP_EncryptInit_ex(ctx.get(), nullptr, nullptr, opts.key, opts.iv)
            != 1)
@@ -392,12 +398,15 @@ class aes
                   != 1)
             return error_code::decrypt_init_failed;
 
-        if(EVP_CIPHER_CTX_ctrl(ctx.get(),
-                               EVP_CTRL_AEAD_SET_IVLEN,
-                               static_cast<int>(opts.iv_len),
-                               nullptr)
-           != 1)
-            return error_code::cipher_ctl_failed;
+        if(opts.iv_len != 12)
+        {
+            if(EVP_CIPHER_CTX_ctrl(ctx.get(),
+                                   EVP_CTRL_AEAD_SET_IVLEN,
+                                   static_cast<int>(opts.iv_len),
+                                   nullptr)
+               != 1)
+                return error_code::cipher_ctl_failed;
+        }
 
         if(EVP_DecryptInit_ex(ctx.get(), nullptr, nullptr, opts.key, opts.iv)
            != 1)
@@ -479,7 +488,7 @@ class aes
                                           const std::string &aad,
                                           const options     &opts)
     {
-        std::vector<unsigned char> dst_plain_buf(src_cipher.size());
+        std::vector<unsigned char> dst_plain_buf(src_cipher.size() + 16);
         std::size_t                dst_plain_len = 0;
         const auto                *cipher_ptr =
             src_cipher.empty()
@@ -529,29 +538,73 @@ class aes
             return error_code::ctx_alloc_failed;
 
         const EVP_CIPHER *cipher = _select_cipher(opts.mod, opts.key_len);
-        if(!cipher
-           || EVP_EncryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
-                  != 1)
+        if(!cipher)
+            return error_code::encrypt_init_failed;
+
+        if(EVP_EncryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
+           != 1)
             return error_code::encrypt_init_failed;
 
         EVP_CIPHER_CTX_set_padding(ctx.get(), 0);
 
-        std::vector<unsigned char> inbuf(buf_sz);
-        std::vector<unsigned char> outbuf(buf_sz + 16);
+        constexpr std::size_t      block_size = 16;
+        std::vector<unsigned char> read_buf(buf_sz);
+        std::vector<unsigned char> accum_buf;
+        accum_buf.reserve(buf_sz + block_size);
+
+        std::vector<unsigned char> outbuf(buf_sz + block_size);
         int                        outlen = 0;
 
         while(in.good())
         {
-            in.read(reinterpret_cast<char *>(inbuf.data()), inbuf.size());
+            in.read(reinterpret_cast<char *>(read_buf.data()), read_buf.size());
             std::streamsize readlen = in.gcount();
             if(readlen <= 0)
                 break;
 
+            accum_buf.insert(accum_buf.end(),
+                             read_buf.data(),
+                             read_buf.data() + readlen);
+
+            if(accum_buf.size() > block_size)
+            {
+                std::size_t process_len =
+                    ((accum_buf.size() - 1) / block_size) * block_size;
+                if(process_len > 0)
+                {
+                    if(EVP_EncryptUpdate(ctx.get(),
+                                         outbuf.data(),
+                                         &outlen,
+                                         accum_buf.data(),
+                                         static_cast<int>(process_len))
+                       != 1)
+                        return error_code::encrypt_update_failed;
+
+                    out.write(reinterpret_cast<const char *>(outbuf.data()),
+                              outlen);
+                    accum_buf.erase(accum_buf.begin(),
+                                    accum_buf.begin() + process_len);
+                }
+            }
+        }
+
+        std::vector<unsigned char> padded_tail;
+        std::size_t                padded_tail_len = 0;
+        _padding_block(padded_tail,
+                       padded_tail_len,
+                       opts.mod,
+                       opts.key_len,
+                       opts.pad_style,
+                       accum_buf.data(),
+                       accum_buf.size());
+
+        if(padded_tail_len > 0)
+        {
             if(EVP_EncryptUpdate(ctx.get(),
                                  outbuf.data(),
                                  &outlen,
-                                 inbuf.data(),
-                                 static_cast<int>(readlen))
+                                 padded_tail.data(),
+                                 static_cast<int>(padded_tail_len))
                != 1)
                 return error_code::encrypt_update_failed;
 
@@ -560,7 +613,9 @@ class aes
 
         if(EVP_EncryptFinal_ex(ctx.get(), outbuf.data(), &outlen) != 1)
             return error_code::encrypt_final_failed;
-        out.write(reinterpret_cast<const char *>(outbuf.data()), outlen);
+
+        if(outlen > 0)
+            out.write(reinterpret_cast<const char *>(outbuf.data()), outlen);
 
         return error_code::ok;
     }
@@ -581,17 +636,21 @@ class aes
             return error_code::ctx_alloc_failed;
 
         const EVP_CIPHER *cipher = _select_cipher(opts.mod, opts.key_len);
-        if(!cipher
-           || EVP_DecryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
-                  != 1)
+        if(!cipher)
+            return error_code::decrypt_init_failed;
+
+        if(EVP_DecryptInit_ex(ctx.get(), cipher, nullptr, opts.key, opts.iv)
+           != 1)
             return error_code::decrypt_init_failed;
 
         EVP_CIPHER_CTX_set_padding(ctx.get(), 0);
 
+        constexpr std::size_t      block_size = 16;
         std::vector<unsigned char> inbuf(buf_sz);
-        std::vector<unsigned char> outbuf(buf_sz + 16);
+        std::vector<unsigned char> dec_accum;
+        dec_accum.reserve(buf_sz + block_size);
+        std::vector<unsigned char> outbuf(buf_sz + block_size);
         int                        outlen = 0;
-
         while(in.good())
         {
             in.read(reinterpret_cast<char *>(inbuf.data()), inbuf.size());
@@ -607,12 +666,44 @@ class aes
                != 1)
                 return error_code::decrypt_update_failed;
 
-            out.write(reinterpret_cast<const char *>(outbuf.data()), outlen);
+            dec_accum.insert(dec_accum.end(),
+                             outbuf.data(),
+                             outbuf.data() + outlen);
+
+            if(dec_accum.size() > block_size)
+            {
+                std::size_t write_len = dec_accum.size() - block_size;
+                out.write(reinterpret_cast<const char *>(dec_accum.data()),
+                          write_len);
+                dec_accum.erase(dec_accum.begin(),
+                                dec_accum.begin() + write_len);
+            }
         }
 
         if(EVP_DecryptFinal_ex(ctx.get(), outbuf.data(), &outlen) != 1)
             return error_code::decrypt_final_failed;
-        out.write(reinterpret_cast<const char *>(outbuf.data()), outlen);
+
+        if(outlen > 0)
+            dec_accum.insert(dec_accum.end(),
+                             outbuf.data(),
+                             outbuf.data() + outlen);
+
+        if(!dec_accum.empty())
+        {
+            std::size_t unpadded_len = 0;
+            error_code  ec           = _unpadding_block(dec_accum.data(),
+                                                        unpadded_len,
+                                                        dec_accum.size(),
+                                                        opts.mod,
+                                                        opts.key_len,
+                                                        opts.pad_style);
+            if(ec != error_code::ok)
+                return ec;
+
+            if(unpadded_len > 0)
+                out.write(reinterpret_cast<const char *>(dec_accum.data()),
+                          unpadded_len);
+        }
 
         return error_code::ok;
     }
@@ -633,7 +724,7 @@ class aes
                                           const char    *src_file_path,
                                           const options &opts)
     {
-        std::ifstream in(src_file_path, std::ios::binary | std::ios::ate);
+        std::ifstream in(src_file_path, std::ios::binary);
         if(!in.is_open())
             return error_code::file_open_failed;
         std::ofstream out(dst_file_path, std::ios::binary);
@@ -663,16 +754,16 @@ class aes
         if(password == nullptr || password_len == 0)
             return RAND_bytes(key, static_cast<int>(key_len)) == 1
                        ? error_code::ok
-                       : error_code::passwd_invalid;
+                       : error_code::rand_generate_failed;
 
         // Use PBKDF2 to derive the key from the password
         return PKCS5_PBKDF2_HMAC(reinterpret_cast<const char *>(password),
-                                 password_len,
+                                 static_cast<int>(password_len),
                                  salt,
-                                 salt_len,
+                                 static_cast<int>(salt_len),
                                  iterations,
                                  EVP_sha256(),
-                                 key_len,
+                                 static_cast<int>(key_len),
                                  key)
                        == 1
                    ? error_code::ok
@@ -805,6 +896,7 @@ class aes
         padded_src.resize(padded_len);
         std::memcpy(padded_src.data(), src, src_len);
         unsigned char *pad_ptr = padded_src.data() + src_len;
+
         switch(pad_style)
         {
             case padding::pkcs5:
@@ -836,85 +928,121 @@ class aes
         }
     }
 
-    static inline void _unpadding_block(unsigned char    *dst,
-                                        std::size_t      &dst_len,
-                                        std::size_t       unpad_len,
-                                        const mode        mod,
-                                        const std::size_t key_len,
-                                        const padding     pad_style)
+    static inline unsigned char _ct_is_eq(unsigned char a, unsigned char b)
+    {
+        unsigned int diff =
+            static_cast<unsigned int>(a) ^ static_cast<unsigned int>(b);
+        return static_cast<unsigned char>(~((diff | -diff) >> 31));
+    }
+
+    static inline unsigned char _ct_is_lt(std::size_t a, std::size_t b)
+    {
+        std::size_t diff = a - b;
+        return static_cast<unsigned char>(~((diff ^ ((a ^ b) & (a ^ diff)))
+                                            >> (sizeof(std::size_t) * 8 - 1)));
+    }
+
+    static inline error_code _unpadding_block(unsigned char    *dst,
+                                              std::size_t      &dst_len,
+                                              std::size_t       unpad_len,
+                                              const mode        mod,
+                                              const std::size_t key_len,
+                                              const padding     pad_style)
     {
         dst_len = unpad_len;
         if(is_aead_mode(mod) || pad_style == padding::no_padding
            || unpad_len == 0)
-            return;
+            return error_code::ok;
 
-        std::size_t   block_size = 16;
-        unsigned char pad_val    = dst[unpad_len - 1];
+        constexpr std::size_t block_size = 16;
+        if(unpad_len < block_size || (unpad_len % block_size != 0))
+            return error_code::padding_style_invalid;
+
+        unsigned char pad_val = dst[unpad_len - 1];
+        unsigned char pad_val_valid =
+            _ct_is_lt(static_cast<std::size_t>(pad_val - 1), block_size);
 
         switch(pad_style)
         {
             case padding::pkcs5:
             case padding::pkcs7: {
-                if(pad_val > 0 && pad_val <= block_size && pad_val <= unpad_len)
+                unsigned char bad         = 0;
+                std::size_t   block_start = unpad_len - block_size;
+
+                for(std::size_t i = 0; i < block_size; ++i)
                 {
-                    bool valid = true;
-                    for(std::size_t i = unpad_len - pad_val; i < unpad_len; ++i)
-                    {
-                        if(dst[i] != pad_val)
-                        {
-                            valid = false;
-                            break;
-                        }
-                    }
-                    if(valid)
-                        dst_len = unpad_len - pad_val;
+                    std::size_t   idx      = block_start + i;
+                    unsigned char byte_val = dst[idx];
+                    unsigned char in_pad_zone =
+                        ~_ct_is_lt(i, block_size - pad_val);
+                    bad |= in_pad_zone & (byte_val ^ pad_val);
                 }
-                break;
+
+                if(pad_val_valid && bad == 0)
+                {
+                    dst_len = unpad_len - pad_val;
+                    return error_code::ok;
+                }
+                return error_code::padding_style_invalid;
             }
+
+            case padding::ansix923: {
+                unsigned char bad         = 0;
+                std::size_t   block_start = unpad_len - block_size;
+
+                for(std::size_t i = 0; i < block_size - 1; ++i)
+                {
+                    std::size_t   idx      = block_start + i;
+                    unsigned char byte_val = dst[idx];
+                    unsigned char in_pad_zone =
+                        ~_ct_is_lt(i, block_size - pad_val);
+
+                    bad |= in_pad_zone & byte_val;
+                }
+
+                if(pad_val_valid && bad == 0)
+                {
+                    dst_len = unpad_len - pad_val;
+                    return error_code::ok;
+                }
+                return error_code::padding_style_invalid;
+            }
+
+            case padding::iso10126: {
+                if(pad_val_valid)
+                {
+                    dst_len = unpad_len - pad_val;
+                    return error_code::ok;
+                }
+                return error_code::padding_style_invalid;
+            }
+
             case padding::zero: {
                 std::size_t i = unpad_len;
                 while(i > 0 && dst[i - 1] == 0)
                     --i;
-
                 dst_len = i;
-                break;
+                return error_code::ok;
             }
-            case padding::ansix923: {
-                if(pad_val > 0 && pad_val <= block_size && pad_val <= unpad_len)
-                {
-                    bool valid = true;
-                    for(std::size_t i = unpad_len - pad_val; i < unpad_len - 1;
-                        ++i)
-                    {
-                        if(dst[i] != 0)
-                        {
-                            valid = false;
-                            break;
-                        }
-                    }
-                    if(valid)
-                        dst_len = unpad_len - pad_val;
-                }
-                break;
-            }
+
             case padding::iso_iec_7816_4: {
                 std::size_t i = unpad_len;
                 while(i > 0 && dst[i - 1] == 0)
                     --i;
 
                 if(i > 0 && dst[i - 1] == 0x80)
+                {
                     dst_len = i - 1;
+                    return error_code::ok;
+                }
+                return error_code::padding_style_invalid;
+            }
 
-                break;
-            }
-            case padding::iso10126: {
-                if(pad_val > 0 && pad_val <= block_size && pad_val <= unpad_len)
-                    dst_len = unpad_len - pad_val;
-                break;
-            }
             default:
                 break;
         }
+
+        return error_code::ok;
     }
 
   private:

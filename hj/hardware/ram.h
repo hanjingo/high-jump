@@ -375,23 +375,60 @@ HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
 #endif
 }
 
+static ram_type_t smbios_parse_memory_type(uint8_t smbios_type)
+{
+    switch(smbios_type)
+    {
+        case 0x14:
+            return RAM_TYPE_DDR;
+        case 0x15:
+            return RAM_TYPE_DDR2;
+        case 0x18:
+            return RAM_TYPE_DDR3;
+        case 0x19:
+            return RAM_TYPE_DDR4;
+        case 0x22:
+            return RAM_TYPE_DDR5;
+        case 0x03:
+            return RAM_TYPE_SDRAM;
+        case 0x13:
+            return RAM_TYPE_RDRAM;
+        default:
+            return RAM_TYPE_UNKNOWN;
+    }
+}
+
 static const char *smbios_get_string(const uint8_t *struct_ptr,
+                                     uint8_t        length,
+                                     const uint8_t *end,
                                      uint8_t        string_index)
 {
-    if(string_index == 0)
+    if(string_index == 0 || !struct_ptr || !end || struct_ptr >= end)
         return "Unknown";
-    const uint8_t *p             = struct_ptr + struct_ptr[1];
-    int            current_index = 1;
-    while(*p)
+
+    const uint8_t *p = struct_ptr + length;
+    if(p >= end)
+        return "Unknown";
+
+    int current_index = 1;
+    while(p < end && *p != '\0')
     {
         if(current_index == string_index)
         {
-            return (const char *) p;
+            const uint8_t *q = p;
+            while(q < end && *q != '\0')
+                q++;
+            if(q < end)
+                return (const char *) p;
+            return "Unknown";
         }
-        while(*p)
+
+        while(p < end && *p != '\0')
             p++;
 
-        p++;
+        if(p < end)
+            p++;
+
         current_index++;
     }
     return "Unknown";
@@ -419,11 +456,15 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
                 uint8_t *p   = smbios_buffer + 8;
                 uint8_t *end = smbios_buffer + smbios_size;
 
-                while(p < end && *actual_count < max_modules)
+                while(p + 2 <= end && *actual_count < max_modules)
                 {
                     uint8_t type   = p[0];
                     uint8_t length = p[1];
-                    if(type == 127 || length < 4)
+
+                    if(type == 127)
+                        break;
+
+                    if(length < 4 || p + length > end)
                         break;
 
                     if(type == 17)
@@ -431,23 +472,69 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
                         ram_module_info_t *mod = &modules[*actual_count];
                         memset(mod, 0, sizeof(ram_module_info_t));
 
-                        uint16_t size_field = *((uint16_t *) (p + 0x0C));
-                        if(size_field != 0 && size_field != 0xFFFF)
+                        // Capacity (Offset 0x0C)
+                        if(length >= 0x0E)
                         {
-                            if(size_field & 0x8000)
+                            uint16_t size_field = *((uint16_t *) (p + 0x0C));
+                            if(size_field != 0 && size_field != 0xFFFF)
                             {
-                                mod->capacity =
-                                    (uint64_t) (size_field & 0x7FFF) * 1024ULL;
-                            } else
-                            {
-                                mod->capacity =
-                                    (uint64_t) size_field * 1024ULL * 1024ULL;
+                                if(size_field & 0x8000)
+                                    mod->capacity =
+                                        (uint64_t) (size_field & 0x7FFF)
+                                        * 1024ULL;
+                                else
+                                    mod->capacity = (uint64_t) size_field
+                                                    * 1024ULL * 1024ULL;
                             }
                         }
 
-                        const char *mfr  = smbios_get_string(p, p[0x0E]);
-                        const char *sn   = smbios_get_string(p, p[0x10]);
-                        const char *part = smbios_get_string(p, p[0x11]);
+                        // Extended Size (Offset 0x1C) for capacity >= 32GB
+                        if(length >= 0x20)
+                        {
+                            uint32_t ext_size = *((uint32_t *) (p + 0x1C));
+                            if(ext_size != 0 && ext_size != 0xFFFFFFFF)
+                            {
+                                if(ext_size & 0x80000000)
+                                    mod->capacity =
+                                        (uint64_t) (ext_size & 0x7FFFFFFF)
+                                        * 1024ULL;
+                                else
+                                    mod->capacity =
+                                        (uint64_t) ext_size * 1024ULL * 1024ULL;
+                            }
+                        }
+
+                        if(length >= 0x0C)
+                        {
+                            uint16_t total_width = *((uint16_t *) (p + 0x08));
+                            uint16_t data_width  = *((uint16_t *) (p + 0x0A));
+                            if(total_width != 0xFFFF && data_width != 0xFFFF
+                               && total_width > data_width)
+                                mod->is_ecc = true;
+                        }
+
+                        if(length >= 0x13)
+                            mod->type = smbios_parse_memory_type(p[0x12]);
+
+                        if(length >= 0x15)
+                        {
+                            uint16_t type_detail = *((uint16_t *) (p + 0x13));
+                            if(type_detail & 0x0008)
+                                mod->is_registered = true;
+                        }
+
+                        const char *mfr =
+                            (length >= 0x0F)
+                                ? smbios_get_string(p, length, end, p[0x0E])
+                                : "Unknown";
+                        const char *sn =
+                            (length >= 0x11)
+                                ? smbios_get_string(p, length, end, p[0x10])
+                                : "Unknown";
+                        const char *part =
+                            (length >= 0x12)
+                                ? smbios_get_string(p, length, end, p[0x11])
+                                : "Unknown";
 
                         strcpy_s(mod->manufacturer,
                                  sizeof(mod->manufacturer),
@@ -459,13 +546,28 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
                                  sizeof(mod->part_number),
                                  part);
 
-                        if(length >= 0x16)
+                        // Speed (Offset 0x15)
+                        if(length >= 0x17)
                         {
                             mod->speed = *((uint16_t *) (p + 0x15));
                         }
 
+                        // Configured Clock Speed (Offset 0x20)
+                        if(length >= 0x22)
+                        {
+                            uint16_t cfg_speed = *((uint16_t *) (p + 0x20));
+                            if(cfg_speed != 0 && cfg_speed != 0xFFFF)
+                                mod->speed = cfg_speed;
+                        }
+
+                        if(length >= 0x28)
+                        {
+                            uint16_t voltage = *((uint16_t *) (p + 0x26));
+                            if(voltage != 0 && voltage != 0xFFFF)
+                                mod->voltage = voltage;
+                        }
+
                         mod->slot_number = *actual_count + 1;
-                        mod->type        = RAM_TYPE_DDR4;
                         (*actual_count)++;
                     }
 
@@ -475,6 +577,8 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
                         next++;
                     }
                     next += 2;
+                    if(next > end)
+                        break;
                     p = next;
                 }
             }
@@ -512,74 +616,152 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
         fseek(f, 0, SEEK_END);
         long fsize = ftell(f);
         fseek(f, 0, SEEK_SET);
-        if(fsize > 0)
+        if(fsize <= 0)
         {
-            uint8_t *dmi_buffer = (uint8_t *) malloc(fsize);
-            if(dmi_buffer)
+            fclose(f);
+            return RAM_ERR_NOT_FOUND;
+        }
+
+        uint8_t *dmi_buffer = (uint8_t *) malloc(fsize);
+        if(!dmi_buffer)
+        {
+            fclose(f);
+            return RAM_ERR_INSUFFICIENT_MEMORY;
+        }
+
+        if(fread(dmi_buffer, 1, fsize, f) == (size_t) fsize)
+        {
+            uint8_t *p   = dmi_buffer;
+            uint8_t *end = dmi_buffer + fsize;
+            while(p + 2 <= end && *actual_count < max_modules)
             {
-                if(fread(dmi_buffer, 1, fsize, f) == (size_t) fsize)
+                uint8_t type   = p[0];
+                uint8_t length = p[1];
+
+                if(type == 127)
+                    break;
+
+                if(length < 4 || p + length > end)
+                    break;
+
+                if(type == 17)
                 {
-                    uint8_t *p   = dmi_buffer;
-                    uint8_t *end = dmi_buffer + fsize;
-                    while(p < end && *actual_count < max_modules)
+                    ram_module_info_t *mod = &modules[*actual_count];
+                    memset(mod, 0, sizeof(ram_module_info_t));
+
+                    // Capacity (Offset 0x0C)
+                    if(length >= 0x0E)
                     {
-                        uint8_t type   = p[0];
-                        uint8_t length = p[1];
-                        if(type == 127 || length < 4)
-                            break;
-
-                        if(type == 17)
+                        uint16_t size_field = *((uint16_t *) (p + 0x0C));
+                        if(size_field != 0 && size_field != 0xFFFF)
                         {
-                            ram_module_info_t *mod = &modules[*actual_count];
-                            memset(mod, 0, sizeof(ram_module_info_t));
-
-                            uint16_t size_field = *((uint16_t *) (p + 0x0C));
-                            if(size_field != 0 && size_field != 0xFFFF)
-                            {
-                                if(size_field & 0x8000)
-                                {
-                                    mod->capacity =
-                                        (uint64_t) (size_field & 0x7FFF)
-                                        * 1024ULL;
-                                } else
-                                {
-                                    mod->capacity = (uint64_t) size_field
-                                                    * 1024ULL * 1024ULL;
-                                }
-                            }
-
-                            const char *mfr  = smbios_get_string(p, p[0x0E]);
-                            const char *sn   = smbios_get_string(p, p[0x10]);
-                            const char *part = smbios_get_string(p, p[0x11]);
-
-                            strncpy(mod->manufacturer,
-                                    mfr,
-                                    sizeof(mod->manufacturer) - 1);
-                            strncpy(mod->serial_number,
-                                    sn,
-                                    sizeof(mod->serial_number) - 1);
-                            strncpy(mod->part_number,
-                                    part,
-                                    sizeof(mod->part_number) - 1);
-
-                            if(length >= 0x16)
-                            {
-                                mod->speed = *((uint16_t *) (p + 0x15));
-                            }
-                            mod->slot_number = *actual_count + 1;
-                            (*actual_count)++;
+                            if(size_field & 0x8000)
+                                mod->capacity =
+                                    (uint64_t) (size_field & 0x7FFF) * 1024ULL;
+                            else
+                                mod->capacity =
+                                    (uint64_t) size_field * 1024ULL * 1024ULL;
                         }
-
-                        uint8_t *next = p + length;
-                        while(next < end - 1 && !(next[0] == 0 && next[1] == 0))
-                            next++;
-                        next += 2;
-                        p = next;
                     }
+
+                    // Extended Size (Offset 0x1C)
+                    if(length >= 0x20)
+                    {
+                        uint32_t ext_size = *((uint32_t *) (p + 0x1C));
+                        if(ext_size != 0 && ext_size != 0xFFFFFFFF)
+                        {
+                            if(ext_size & 0x80000000)
+                                mod->capacity =
+                                    (uint64_t) (ext_size & 0x7FFFFFFF)
+                                    * 1024ULL;
+                            else
+                                mod->capacity =
+                                    (uint64_t) ext_size * 1024ULL * 1024ULL;
+                        }
+                    }
+
+                    if(length >= 0x0C)
+                    {
+                        uint16_t total_width = *((uint16_t *) (p + 0x08));
+                        uint16_t data_width  = *((uint16_t *) (p + 0x0A));
+                        if(total_width != 0xFFFF && data_width != 0xFFFF
+                           && total_width > data_width)
+                        {
+                            mod->is_ecc = true;
+                        }
+                    }
+
+                    if(length >= 0x13)
+                        mod->type = smbios_parse_memory_type(p[0x12]);
+
+                    if(length >= 0x15)
+                    {
+                        uint16_t type_detail = *((uint16_t *) (p + 0x13));
+                        if(type_detail & 0x0008)
+                            mod->is_registered = true;
+                    }
+
+                    const char *mfr =
+                        (length >= 0x0F)
+                            ? smbios_get_string(p, length, end, p[0x0E])
+                            : "Unknown";
+                    const char *sn =
+                        (length >= 0x11)
+                            ? smbios_get_string(p, length, end, p[0x10])
+                            : "Unknown";
+                    const char *part =
+                        (length >= 0x12)
+                            ? smbios_get_string(p, length, end, p[0x11])
+                            : "Unknown";
+
+                    strncpy(mod->manufacturer,
+                            mfr,
+                            sizeof(mod->manufacturer) - 1);
+                    strncpy(mod->serial_number,
+                            sn,
+                            sizeof(mod->serial_number) - 1);
+                    strncpy(mod->part_number,
+                            part,
+                            sizeof(mod->part_number) - 1);
+
+                    // Speed (Offset 0x15)
+                    if(length >= 0x17)
+                    {
+                        mod->speed = *((uint16_t *) (p + 0x15));
+                    }
+
+                    // Configured Clock Speed (Offset 0x20)
+                    if(length >= 0x22)
+                    {
+                        uint16_t cfg_speed = *((uint16_t *) (p + 0x20));
+                        if(cfg_speed != 0 && cfg_speed != 0xFFFF)
+                            mod->speed = cfg_speed;
+                    }
+
+                    if(length >= 0x28)
+                    {
+                        uint16_t voltage = *((uint16_t *) (p + 0x26));
+                        if(voltage != 0 && voltage != 0xFFFF)
+                            mod->voltage = voltage;
+                    }
+
+                    mod->slot_number = *actual_count + 1;
+                    (*actual_count)++;
                 }
-                free(dmi_buffer);
+
+                uint8_t *next = p + length;
+                while(next < end - 1 && !(next[0] == 0 && next[1] == 0))
+                    next++;
+
+                next += 2;
+                if(next > end)
+                    break;
+
+                p = next;
             }
         }
+
+        free(dmi_buffer);
         fclose(f);
     }
 

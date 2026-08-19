@@ -6,6 +6,7 @@
 #include <chrono>
 #include <algorithm>
 #include <memory>
+#include <atomic>
 
 #define HJ_RAM_IMPL
 #include <hj/hardware/ram.h>
@@ -508,10 +509,10 @@ TEST(ram, utility_functions)
     // Test RAM size formatting (matched to actual implementation behavior)
     char buffer[64];
     EXPECT_EQ(ram_format_size(0, buffer, sizeof(buffer)), RAM_SUCCESS);
-    EXPECT_STREQ(buffer, "0 bytes");
+    EXPECT_STREQ(buffer, "0 byte");
 
     EXPECT_EQ(ram_format_size(1, buffer, sizeof(buffer)), RAM_SUCCESS);
-    EXPECT_STREQ(buffer, "1 bytes");
+    EXPECT_STREQ(buffer, "1 byte");
 
     EXPECT_EQ(ram_format_size(1024, buffer, sizeof(buffer)), RAM_SUCCESS);
     EXPECT_STREQ(buffer, "1.00 KB");

@@ -137,6 +137,30 @@ class aes
             , pad_style(p)
         {
         }
+
+        options &operator=(const options &other)
+        {
+            if(this != &other)
+            {
+                key       = other.key;
+                key_len   = other.key_len;
+                iv        = other.iv;
+                iv_len    = other.iv_len;
+                mod       = other.mod;
+                pad_style = other.pad_style;
+            }
+            return *this;
+        }
+
+        void reset()
+        {
+            key       = nullptr;
+            key_len   = 0;
+            iv        = nullptr;
+            iv_len    = 0;
+            mod       = mode::gcm;
+            pad_style = padding::pkcs7;
+        }
     };
 
     using safe_evp_ctx = std::unique_ptr<EVP_CIPHER_CTX, evp_ctx_deleter>;

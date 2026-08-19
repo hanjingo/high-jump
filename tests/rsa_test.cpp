@@ -27,30 +27,35 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     std::string plain = "hello world";
 
     // PKCS1 padding test
-    unsigned char encrypted1[4096];
-    std::size_t   encrypted1_len = 4096;
+    unsigned char    encrypted1[4096];
+    std::size_t      encrypted1_len = 4096;
+    hj::rsa::options opt;
+    opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
     ASSERT_EQ(
         hj::rsa::encrypt(encrypted1,
                          encrypted1_len,
                          reinterpret_cast<const unsigned char *>(plain.c_str()),
                          plain.size(),
-                         reinterpret_cast<unsigned char *>(pubkey.data()),
-                         pubkey.size(),
-                         hj::rsa::padding::pkcs1),
+                         opt),
         ok);
     unsigned char decrypted1[4096];
     std::size_t   decrypted1_len = 4096;
+    opt.reset();
+    opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
+    opt.prikey_pem_len = prikey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
     ASSERT_EQ(hj::rsa::decrypt(decrypted1,
                                decrypted1_len,
                                encrypted1,
                                encrypted1_len,
-                               reinterpret_cast<unsigned char *>(prikey.data()),
-                               prikey.size(),
-                               hj::rsa::padding::pkcs1),
+                               opt),
               ok);
     std::string decrypted1_str;
     decrypted1_str.assign(reinterpret_cast<char *>(decrypted1), decrypted1_len);
     ASSERT_STREQ(decrypted1_str.c_str(), plain.c_str());
+
 
     // NOPADDING padding test
     const int                  key_size = 64;
@@ -59,23 +64,27 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     memcpy(plain_data.data(), original_msg.data(), original_msg.size());
     unsigned char encrypted[4096];
     std::size_t   encrypted_len = 4096;
+    opt.reset();
+    opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::no_padding;
     ASSERT_EQ(hj::rsa::encrypt(encrypted,
                                encrypted_len,
                                plain_data.data(),
                                plain_data.size(),
-                               reinterpret_cast<unsigned char *>(pubkey.data()),
-                               pubkey.size(),
-                               hj::rsa::padding::no_padding),
+                               opt),
               ok);
     unsigned char decrypted[4096];
     std::size_t   decrypted_len = 4096;
+    opt.reset();
+    opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
+    opt.prikey_pem_len = prikey.size();
+    opt.pad_style      = hj::rsa::padding::no_padding;
     ASSERT_EQ(hj::rsa::decrypt(decrypted,
                                decrypted_len,
                                encrypted,
                                encrypted_len,
-                               reinterpret_cast<unsigned char *>(prikey.data()),
-                               prikey.size(),
-                               hj::rsa::padding::no_padding),
+                               opt),
               ok);
     ASSERT_EQ(decrypted_len, key_size);
     ASSERT_EQ(memcmp(decrypted, plain_data.data(), key_size), 0);
@@ -84,24 +93,24 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     // for stream test
     std::istringstream in(plain);
     std::ostringstream out;
-    ASSERT_EQ(
-        hj::rsa::encrypt(out,
-                         in,
-                         reinterpret_cast<const unsigned char *>(pubkey.data()),
-                         pubkey.size(),
-                         hj::rsa::padding::pkcs1),
-        ok);
+    opt.reset();
+    opt.pubkey_pem     = reinterpret_cast<const unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
+    ASSERT_EQ(hj::rsa::encrypt(out, in, opt), ok);
     std::string   encrypted_stream_str = out.str();
     unsigned char decrypted_stream[4096];
     std::size_t   decrypted_stream_len = 4096;
+    opt.reset();
+    opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
+    opt.prikey_pem_len = prikey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
     ASSERT_EQ(hj::rsa::decrypt(decrypted_stream,
                                decrypted_stream_len,
                                reinterpret_cast<const unsigned char *>(
                                    encrypted_stream_str.c_str()),
                                encrypted_stream_str.size(),
-                               reinterpret_cast<unsigned char *>(prikey.data()),
-                               prikey.size(),
-                               hj::rsa::padding::pkcs1),
+                               opt),
               ok);
     std::string decrypted_stream_str;
     decrypted_stream_str.assign(reinterpret_cast<char *>(decrypted_stream),
@@ -121,26 +130,32 @@ MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9
 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==
 -----END PUBLIC KEY-----)";
 
-    std::string   plain = "hehehunanchina@live.com";
-    unsigned char encrypted[4096];
-    std::size_t   encrypted_len = 4096;
+    std::string      plain = "hehehunanchina@live.com";
+    unsigned char    encrypted[4096];
+    std::size_t      encrypted_len = 4096;
+    hj::rsa::options opt;
+    opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
     ASSERT_EQ(
         hj::rsa::encrypt(encrypted,
                          encrypted_len,
                          reinterpret_cast<const unsigned char *>(plain.c_str()),
                          plain.size(),
-                         reinterpret_cast<unsigned char *>(pubkey.data()),
-                         pubkey.size()),
+                         opt),
         ok);
 
     unsigned char decrypted[4096];
     std::size_t   decrypted_len = 4096;
+    opt.reset();
+    opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
+    opt.prikey_pem_len = prikey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
     ASSERT_EQ(hj::rsa::decrypt(decrypted,
                                decrypted_len,
                                encrypted,
                                encrypted_len,
-                               reinterpret_cast<unsigned char *>(prikey.data()),
-                               prikey.size()),
+                               opt),
               ok);
 
     std::string decrypted_str;
@@ -150,13 +165,16 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     // for stream test
     unsigned char encrypted_stream[4096];
     std::size_t   encrypted_stream_len = 4096;
+    opt.reset();
+    opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
     ASSERT_EQ(
         hj::rsa::encrypt(encrypted_stream,
                          encrypted_stream_len,
                          reinterpret_cast<const unsigned char *>(plain.c_str()),
                          plain.size(),
-                         reinterpret_cast<const unsigned char *>(pubkey.data()),
-                         pubkey.size()),
+                         opt),
         ok);
 
     std::string encrypt_stream_str;
@@ -164,11 +182,11 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
                               encrypted_stream_len);
     std::istringstream in(encrypt_stream_str);
     std::ostringstream out;
-    ASSERT_EQ(hj::rsa::decrypt(out,
-                               in,
-                               reinterpret_cast<unsigned char *>(prikey.data()),
-                               prikey.size()),
-              ok);
+    opt.reset();
+    opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
+    opt.prikey_pem_len = prikey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
+    ASSERT_EQ(hj::rsa::decrypt(out, in, opt), ok);
     ASSERT_STREQ(out.str().c_str(), plain.c_str());
 }
 
@@ -179,6 +197,10 @@ TEST(rsa, encrypt_file)
 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==
 -----END PUBLIC KEY-----)";
 
+    hj::rsa::options opt;
+    opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+
     // file -> rsa file
     std::string str_src = "./crypto.log";
     std::string str_dst = "./rsa_file_test_encrypt.log";
@@ -186,7 +208,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     {
         GTEST_SKIP() << "skip test rsa encrypt_file not exist: " << str_src;
     }
-    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, pubkey), ok);
+    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, opt), ok);
 }
 
 TEST(rsa, decrypt_file)
@@ -196,6 +218,10 @@ TEST(rsa, decrypt_file)
 MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYRr7Pl8R3kwOkfLzyqiMpGYDYKdLCbCVxziijbQ50CAwEAAQ==
 -----END PUBLIC KEY-----)";
 
+    hj::rsa::options opt;
+    opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+
     // file -> rsa file
     std::string str_src = "./crypto.log";
     std::string str_dst = "./rsa_file_test_encrypt1.log";
@@ -203,58 +229,64 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     {
         GTEST_SKIP() << "skip test rsa decrypt_file not exist: " << str_src;
     }
-    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, pubkey), ok);
+    ASSERT_EQ(hj::rsa::encrypt_file(str_dst, str_src, opt), ok);
 
     std::string prikey = R"(-----BEGIN RSA PRIVATE KEY-----
 MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9/CJtqi8S07DgthGvs+XxHeTA6R8vPKqIykZgNgp0sJsJXHOKKNtDnQIDAQABAkAGmXeWJvr3ynnQTWWRvF09hCKSeZFmOkOHz8D/JOXONAxYOPkpNVu3sShS/ccyGMQKjSHEa5Zyo0S9k/vwl+7xAiEAz6bkXHsaut7Sk2Ze4/MZZuRhR6LqE7Q9Y/ecyGyTDFECIQC2F7HqA0RB2PhuD37Gb3JkB1HNUdro9Fj6wVYATXYLjQIgSOP/k0sPRfuDlYRA2OlzyD9wunHAkywYxKednGkocRECIGsm1F31YCQzbjUtzxcsG687E2rz4RK2PuoH/PienHk9AiBIE54w2swcy1YcaL3MnZDN6eWVFYRTZXeue74hbpZ27A==
 -----END RSA PRIVATE KEY-----)";
+    opt.reset();
+    opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
+    opt.prikey_pem_len = prikey.size();
 
     // rsa file -> file
     ASSERT_EQ(hj::rsa::decrypt_file(std::string("./rsa_file_test_decrypt.log"),
                                     std::string("./rsa_file_test_encrypt1.log"),
-                                    prikey),
+                                    opt),
               ok);
 }
 
 TEST(rsa, keygen)
 {
-    auto        ok = hj::rsa::error_code::ok;
-    std::string prikey;
-    std::string pubkey;
-    std::string passwd = "test123456";
-    std::string plain  = "hello world";
-    ASSERT_EQ(hj::rsa::keygen(pubkey,
-                              prikey,
-                              2048,
-                              hj::rsa::key_format::x509,
-                              hj::rsa::mode::aes_256_cbc,
-                              passwd),
-              ok);
+    auto                    ok = hj::rsa::error_code::ok;
+    std::string             prikey;
+    std::string             pubkey;
+    std::string             passwd = "test123456";
+    std::string             plain  = "hello world";
+    hj::rsa::keygen_options opt;
+    opt.bits         = 2048;
+    opt.format       = hj::rsa::key_format::x509;
+    opt.mod          = hj::rsa::mode::aes_256_cbc;
+    opt.password     = reinterpret_cast<const unsigned char *>(passwd.c_str());
+    opt.password_len = passwd.size();
+    ASSERT_EQ(hj::rsa::keygen(pubkey, prikey, opt), ok);
 
-    unsigned char encrypted[4096];
-    std::size_t   encrypted_len = 4096;
+    unsigned char    encrypted[4096];
+    std::size_t      encrypted_len = 4096;
+    hj::rsa::options enc_opt;
+    enc_opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    enc_opt.pubkey_pem_len = pubkey.size();
+    enc_opt.pad_style      = hj::rsa::padding::pkcs1;
     ASSERT_EQ(
         hj::rsa::encrypt(encrypted,
                          encrypted_len,
                          reinterpret_cast<const unsigned char *>(plain.c_str()),
                          plain.size(),
-                         reinterpret_cast<unsigned char *>(pubkey.data()),
-                         pubkey.size(),
-                         hj::rsa::padding::pkcs1),
+                         enc_opt),
         ok);
 
-    unsigned char decrypted[4096];
-    std::size_t   decrypted_len = 4096;
-    ASSERT_EQ(hj::rsa::decrypt(
-                  decrypted,
-                  decrypted_len,
-                  encrypted,
-                  encrypted_len,
-                  reinterpret_cast<const unsigned char *>(prikey.data()),
-                  prikey.size(),
-                  hj::rsa::padding::pkcs1,
-                  reinterpret_cast<const unsigned char *>(passwd.c_str()),
-                  passwd.size()),
+    unsigned char    decrypted[4096];
+    std::size_t      decrypted_len = 4096;
+    hj::rsa::options dec_opt;
+    dec_opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
+    dec_opt.prikey_pem_len = prikey.size();
+    dec_opt.pad_style      = hj::rsa::padding::pkcs1;
+    dec_opt.password = reinterpret_cast<const unsigned char *>(passwd.c_str());
+    dec_opt.password_len = passwd.size();
+    ASSERT_EQ(hj::rsa::decrypt(decrypted,
+                               decrypted_len,
+                               encrypted,
+                               encrypted_len,
+                               dec_opt),
               ok);
 
     std::string decrypted_str;
@@ -325,12 +357,13 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAevxSYQggOUn0bfka93jW0E2wkakW9gxE
     std::string plain =
         R"(1234567812345678123456781234567812345678123456781234567812345678)";
 
+    hj::rsa::options opt;
+    opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
+    opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::no_padding;
+
     std::string encrypted;
-    ASSERT_EQ(hj::rsa::encrypt(encrypted,
-                               plain,
-                               pubkey,
-                               hj::rsa::padding::no_padding),
-              ok);
+    ASSERT_EQ(hj::rsa::encrypt(encrypted, plain, opt), ok);
 
     ASSERT_TRUE(hj::rsa::is_cipher_valid(encrypted,
                                          hj::rsa::padding::no_padding,

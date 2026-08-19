@@ -27,11 +27,19 @@
 extern "C" {
 #endif
 
+#ifndef HJ_USB_API
+#if defined(HJ_USB_STATIC)
+#define HJ_USB_API static inline
+#else
+#define HJ_USB_API extern
+#endif
+#endif
+
 typedef hid_device_info usb_info_t;
 typedef bool (*usb_device_range_fn)(usb_info_t *device);
 typedef bool (*usb_device_filter_fn)(const usb_info_t *device);
 
-inline bool default_usb_device_filter(const usb_info_t *device)
+HJ_USB_API bool default_usb_device_filter(const usb_info_t *device)
 {
     if(!device)
         return false;
@@ -42,9 +50,30 @@ inline bool default_usb_device_filter(const usb_info_t *device)
     return false;
 }
 
-// ----------------------------- USB API ------------------------------------
-inline void usb_device_range(usb_device_range_fn  fn,
-                             usb_device_filter_fn filter)
+// ------------------------ ROM API Declarations ------------------------
+HJ_USB_API void usb_device_range(usb_device_range_fn  fn,
+                                 usb_device_filter_fn filter);
+HJ_USB_API int  usb_device_count(usb_device_filter_fn filter);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // USB_H
+
+// --------------------- Implementation -------------------------
+// To include implementation, define HJ_USB_IMPL before including
+// this header in ONE C/C++ source file.
+#if (defined(HJ_USB_IMPL) || defined(HJ_USB_STATIC))                           \
+    && !defined(HJ_USB_IMPL_DONE)
+#define HJ_USB_IMPL_DONE
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+HJ_USB_API void usb_device_range(usb_device_range_fn  fn,
+                                 usb_device_filter_fn filter)
 {
     if(!fn)
         return;
@@ -66,7 +95,7 @@ inline void usb_device_range(usb_device_range_fn  fn,
     hid_free_enumeration(head);
 }
 
-inline int usb_device_count(usb_device_filter_fn filter)
+HJ_USB_API int usb_device_count(usb_device_filter_fn filter)
 {
     usb_info_t *head = hid_enumerate(0x00, 0x00);
     if(!head)

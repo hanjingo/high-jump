@@ -1,13 +1,15 @@
 #include <gtest/gtest.h>
 #include <codecvt>
 #include <locale>
+
+#define HJ_USB_IMPL
 #include <hj/hardware/usb.h>
 
 std::string ws2s(const wchar_t *wstr)
 {
     if(!wstr)
         return "";
-    std::wstring_convert<std::codecvt_utf8<wchar_t> > conv;
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
     return conv.to_bytes(wstr);
 }
 

@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
-#include <hj/hardware/simd.h>
 #include <vector>
 #include <cmath>
+
+#define HJ_SIMD_IMPL
+#include <hj/hardware/simd.h>
 
 TEST(simd, add_f32)
 {

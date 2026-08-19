@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
-#include <hj/hardware/rom.h>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <filesystem>
+
+#define HJ_ROM_IMPL
+#include <hj/hardware/rom.h>
 
 // Helper to create a test ROM file
 static void create_test_rom(const char *filename, const char *content)

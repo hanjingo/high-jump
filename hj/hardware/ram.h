@@ -27,34 +27,12 @@
 extern "C" {
 #endif
 
-/* ----------------------------- Platform Detection ------------------------------------ */
-#if defined(_WIN32) || defined(_WIN64)
-#define RAM_PLATFORM_WINDOWS 1
-#include <windows.h>
-#include <psapi.h>
-#include <memoryapi.h>
-#pragma comment(lib, "psapi.lib")
-#elif defined(__linux__)
-#define RAM_PLATFORM_LINUX 1
-#include <sys/sysinfo.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#elif defined(__APPLE__)
-#define RAM_PLATFORM_MACOS 1
-#include <sys/types.h>
-#include <sys/sysctl.h>
-#include <sys/mman.h>
-#include <mach/mach.h>
-#include <mach/vm_statistics.h>
-#include <mach/mach_types.h>
-#include <mach/mach_init.h>
-#include <mach/mach_host.h>
-#include <unistd.h>
+#ifndef HJ_RAM_API
+#if defined(HJ_RAM_STATIC)
+#define HJ_RAM_API static inline
 #else
-#define RAM_PLATFORM_UNKNOWN 1
+#define HJ_RAM_API extern
+#endif
 #endif
 
 /* ----------------------------- Constants and Limits ------------------------------------ */
@@ -163,26 +141,98 @@ typedef struct
     bool             is_shared;    /* Is shared memory */
 } ram_region_info_t;
 
-/* ----------------------------- Core Functions ------------------------------------ */
 
-inline ram_err_t ram_init(void)
+// ------------------------ RAM API Declarations ------------------------
+
+HJ_RAM_API ram_err_t   ram_init(void);
+HJ_RAM_API void        ram_cleanup(void);
+HJ_RAM_API ram_err_t   ram_get_system_info(ram_system_info_t *info);
+HJ_RAM_API ram_err_t   ram_get_modules(ram_module_info_t *modules,
+                                       uint32_t           max_modules,
+                                       uint32_t          *actual_count);
+HJ_RAM_API ram_err_t   ram_allocate_aligned(size_t size,
+                                            size_t alignment,
+                                            void **ptr);
+HJ_RAM_API ram_err_t   ram_free_aligned(void *ptr);
+HJ_RAM_API ram_err_t   ram_allocate_large_pages(size_t size, void **ptr);
+HJ_RAM_API ram_err_t   ram_free_large_pages(void *ptr, size_t size);
+HJ_RAM_API ram_err_t   ram_protect_memory(void            *ptr,
+                                          size_t           size,
+                                          ram_protection_t protection);
+HJ_RAM_API ram_err_t   ram_lock_memory(void *ptr, size_t size);
+HJ_RAM_API ram_err_t   ram_unlock_memory(void *ptr, size_t size);
+HJ_RAM_API ram_err_t   ram_prefetch_memory(const void *ptr, size_t size);
+HJ_RAM_API const char *ram_type_to_string(ram_type_t type);
+HJ_RAM_API ram_err_t   ram_format_size(uint64_t bytes,
+                                       char    *buffer,
+                                       size_t   buffer_size);
+HJ_RAM_API ram_err_t   ram_get_page_size(uint32_t *page_size);
+HJ_RAM_API ram_err_t   ram_is_valid_address(const void *ptr,
+                                            size_t      size,
+                                            bool        for_write,
+                                            bool       *is_valid);
+HJ_RAM_API ram_err_t   ram_get_process_usage(ram_statistics_t *stats);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // RAM_H
+
+// --------------------- Implementation -------------------------
+// To include implementation, define HJ_RAM_IMPL before including
+// this header in ONE C/C++ source file.
+#if (defined(HJ_RAM_IMPL) || defined(HJ_RAM_STATIC))                           \
+    && !defined(HJ_RAM_IMPL_DONE)
+#define HJ_RAM_IMPL_DONE
+
+#if defined(_WIN32) || defined(_WIN64)
+#define RAM_PLATFORM_WINDOWS 1
+#include <windows.h>
+#include <psapi.h>
+#include <memoryapi.h>
+#pragma comment(lib, "psapi.lib")
+#elif defined(__linux__)
+#define RAM_PLATFORM_LINUX 1
+#include <sys/sysinfo.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#elif defined(__APPLE__)
+#define RAM_PLATFORM_MACOS 1
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#include <sys/mman.h>
+#include <mach/mach.h>
+#include <mach/vm_statistics.h>
+#include <mach/mach_types.h>
+#include <mach/mach_init.h>
+#include <mach/mach_host.h>
+#include <unistd.h>
+#else
+#define RAM_PLATFORM_UNKNOWN 1
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ----------------------------- RAM Core ------------------------------------ */
+HJ_RAM_API ram_err_t ram_init(void)
 {
     // Most platforms don't need explicit initialization for RAM operations
     return RAM_SUCCESS;
 }
 
-inline void ram_cleanup(void)
+HJ_RAM_API void ram_cleanup(void)
 {
     // Most platforms don't need explicit cleanup for RAM operations
 }
 
 /* ----------------------------- System Memory Information ------------------------------------ */
-/**
- * Get system memory information
- * @param info [out] System memory information
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_get_system_info(ram_system_info_t *info)
+HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
 {
     if(!info)
         return RAM_ERR_INVALID_PARAMETER;
@@ -301,16 +351,9 @@ inline ram_err_t ram_get_system_info(ram_system_info_t *info)
 #endif
 }
 
-/**
- * Get RAM module information
- * @param modules [out] Array to store module information
- * @param max_modules Maximum number of modules to retrieve
- * @param actual_count [out] Actual number of modules retrieved
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_get_modules(ram_module_info_t *modules,
-                                 uint32_t           max_modules,
-                                 uint32_t          *actual_count)
+HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
+                                     uint32_t           max_modules,
+                                     uint32_t          *actual_count)
 {
     if(!modules || !actual_count || max_modules == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -371,15 +414,9 @@ inline ram_err_t ram_get_modules(ram_module_info_t *modules,
 }
 
 /* ----------------------------- Memory Allocation ------------------------------------ */
-
-/**
- * Allocate aligned memory
- * @param size Size in bytes to allocate
- * @param alignment Alignment requirement in bytes (must be power of 2)
- * @param ptr [out] Pointer to allocated memory
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_allocate_aligned(size_t size, size_t alignment, void **ptr)
+HJ_RAM_API ram_err_t ram_allocate_aligned(size_t size,
+                                          size_t alignment,
+                                          void **ptr)
 {
     if(!ptr || size == 0 || alignment == 0
        || (alignment & (alignment - 1)) != 0)
@@ -412,12 +449,7 @@ inline ram_err_t ram_allocate_aligned(size_t size, size_t alignment, void **ptr)
 #endif
 }
 
-/**
- * Free aligned memory
- * @param ptr Pointer to memory allocated with ram_allocate_aligned
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_free_aligned(void *ptr)
+HJ_RAM_API ram_err_t ram_free_aligned(void *ptr)
 {
     if(!ptr)
         return RAM_ERR_INVALID_PARAMETER;
@@ -438,13 +470,7 @@ inline ram_err_t ram_free_aligned(void *ptr)
 #endif
 }
 
-/**
- * Allocate large pages (huge pages)
- * @param size Size in bytes to allocate
- * @param ptr [out] Pointer to allocated memory
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_allocate_large_pages(size_t size, void **ptr)
+HJ_RAM_API ram_err_t ram_allocate_large_pages(size_t size, void **ptr)
 {
     if(!ptr || size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -492,13 +518,7 @@ inline ram_err_t ram_allocate_large_pages(size_t size, void **ptr)
 #endif
 }
 
-/**
- * Free large pages
- * @param ptr Pointer to memory allocated with ram_allocate_large_pages
- * @param size Size of the allocated memory
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_free_large_pages(void *ptr, size_t size)
+HJ_RAM_API ram_err_t ram_free_large_pages(void *ptr, size_t size)
 {
     if(!ptr || size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -519,15 +539,9 @@ inline ram_err_t ram_free_large_pages(void *ptr, size_t size)
 
 /* ----------------------------- Memory Protection ------------------------------------ */
 
-/**
- * Change memory protection
- * @param ptr Pointer to memory region
- * @param size Size of memory region
- * @param protection New protection flags
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t
-ram_protect_memory(void *ptr, size_t size, ram_protection_t protection)
+HJ_RAM_API ram_err_t ram_protect_memory(void            *ptr,
+                                        size_t           size,
+                                        ram_protection_t protection)
 {
     if(!ptr || size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -580,14 +594,7 @@ ram_protect_memory(void *ptr, size_t size, ram_protection_t protection)
 }
 
 /* ----------------------------- Memory Operations ------------------------------------ */
-
-/**
- * Lock memory in physical RAM (prevent swapping)
- * @param ptr Pointer to memory region
- * @param size Size of memory region
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_lock_memory(void *ptr, size_t size)
+HJ_RAM_API ram_err_t ram_lock_memory(void *ptr, size_t size)
 {
     if(!ptr || size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -606,13 +613,7 @@ inline ram_err_t ram_lock_memory(void *ptr, size_t size)
 #endif
 }
 
-/**
- * Unlock memory (allow swapping)
- * @param ptr Pointer to memory region
- * @param size Size of memory region
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_unlock_memory(void *ptr, size_t size)
+HJ_RAM_API ram_err_t ram_unlock_memory(void *ptr, size_t size)
 {
     if(!ptr || size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -631,13 +632,7 @@ inline ram_err_t ram_unlock_memory(void *ptr, size_t size)
 #endif
 }
 
-/**
- * Prefetch memory into cache
- * @param ptr Pointer to memory region
- * @param size Size of memory region
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_prefetch_memory(const void *ptr, size_t size)
+HJ_RAM_API ram_err_t ram_prefetch_memory(const void *ptr, size_t size)
 {
     if(!ptr || size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -665,13 +660,7 @@ inline ram_err_t ram_prefetch_memory(const void *ptr, size_t size)
 }
 
 /* ----------------------------- Utility Functions ------------------------------------ */
-
-/**
- * Convert RAM type to string
- * @param type RAM type
- * @return String representation of RAM type
- */
-inline const char *ram_type_to_string(ram_type_t type)
+HJ_RAM_API const char *ram_type_to_string(ram_type_t type)
 {
     switch(type)
     {
@@ -696,15 +685,9 @@ inline const char *ram_type_to_string(ram_type_t type)
     }
 }
 
-/**
- * Format memory size to human-readable string
- * @param bytes Size in bytes
- * @param buffer [out] Buffer to store formatted string
- * @param buffer_size Size of buffer
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t
-ram_format_size(uint64_t bytes, char *buffer, size_t buffer_size)
+HJ_RAM_API ram_err_t ram_format_size(uint64_t bytes,
+                                     char    *buffer,
+                                     size_t   buffer_size)
 {
     if(!buffer || buffer_size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -729,12 +712,7 @@ ram_format_size(uint64_t bytes, char *buffer, size_t buffer_size)
     return RAM_SUCCESS;
 }
 
-/**
- * Get memory page size
- * @param page_size [out] Page size in bytes
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_get_page_size(uint32_t *page_size)
+HJ_RAM_API ram_err_t ram_get_page_size(uint32_t *page_size)
 {
     if(!page_size)
         return RAM_ERR_INVALID_PARAMETER;
@@ -762,18 +740,10 @@ inline ram_err_t ram_get_page_size(uint32_t *page_size)
 #endif
 }
 
-/**
- * Check if address is valid and accessible
- * @param ptr Pointer to check
- * @param size Size of memory region to check
- * @param for_write True to check write access, false for read access
- * @param is_valid [out] True if memory is valid and accessible
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_is_valid_address(const void *ptr,
-                                      size_t      size,
-                                      bool        for_write,
-                                      bool       *is_valid)
+HJ_RAM_API ram_err_t ram_is_valid_address(const void *ptr,
+                                          size_t      size,
+                                          bool        for_write,
+                                          bool       *is_valid)
 {
     if(!ptr || !is_valid || size == 0)
         return RAM_ERR_INVALID_PARAMETER;
@@ -810,12 +780,7 @@ inline ram_err_t ram_is_valid_address(const void *ptr,
 #endif
 }
 
-/**
- * Get current process memory usage
- * @param stats [out] Memory usage statistics
- * @return RAM_SUCCESS on success, error code on failure
- */
-inline ram_err_t ram_get_process_usage(ram_statistics_t *stats)
+HJ_RAM_API ram_err_t ram_get_process_usage(ram_statistics_t *stats)
 {
     if(!stats)
         return RAM_ERR_INVALID_PARAMETER;

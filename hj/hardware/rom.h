@@ -29,6 +29,14 @@
 extern "C" {
 #endif
 
+#ifndef HJ_ROM_API
+#if defined(HJ_ROM_STATIC)
+#define HJ_ROM_API static inline
+#else
+#define HJ_ROM_API extern
+#endif
+#endif
+
 // ROM structure definition
 typedef struct
 {
@@ -37,8 +45,34 @@ typedef struct
     bool   loaded; // Whether ROM is loaded
 } rom_t;
 
-// Initialize ROM structure
-inline void rom_init(rom_t *rom)
+// ------------------------ ROM API Declarations ------------------------
+HJ_ROM_API void   rom_init(rom_t *rom);
+HJ_ROM_API bool   rom_load(rom_t *rom, const char *filename);
+HJ_ROM_API size_t rom_read(const rom_t *rom,
+                           size_t       offset,
+                           void        *buf,
+                           size_t       len);
+HJ_ROM_API void   rom_free(rom_t *rom);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // ROM_H
+
+
+// --------------------- Implementation -------------------------
+// To include implementation, define HJ_ROM_IMPL before including
+// this header in ONE C/C++ source file.
+#if (defined(HJ_ROM_IMPL) || defined(HJ_ROM_STATIC))                           \
+    && !defined(HJ_ROM_IMPL_DONE)
+#define HJ_ROM_IMPL_DONE
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+HJ_ROM_API void rom_init(rom_t *rom)
 {
     if(rom)
     {
@@ -48,8 +82,7 @@ inline void rom_init(rom_t *rom)
     }
 }
 
-// ----------------------------- ROM API define ------------------------------------
-inline bool rom_load(rom_t *rom, const char *filename)
+HJ_ROM_API bool rom_load(rom_t *rom, const char *filename)
 {
     if(!rom || !filename)
         return false;
@@ -96,7 +129,10 @@ inline bool rom_load(rom_t *rom, const char *filename)
     return true;
 }
 
-inline size_t rom_read(const rom_t *rom, size_t offset, void *buf, size_t len)
+HJ_ROM_API size_t rom_read(const rom_t *rom,
+                           size_t       offset,
+                           void        *buf,
+                           size_t       len)
 {
     if(!rom || !rom->loaded || !buf)
         return 0;
@@ -111,7 +147,7 @@ inline size_t rom_read(const rom_t *rom, size_t offset, void *buf, size_t len)
     return to_read;
 }
 
-inline void rom_free(rom_t *rom)
+HJ_ROM_API void rom_free(rom_t *rom)
 {
     if(!rom || !rom->data)
         return;

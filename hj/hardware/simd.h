@@ -21,6 +21,39 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef HJ_SIMD_API
+#if defined(HJ_SIMD_STATIC)
+#define HJ_SIMD_API static inline
+#else
+#define HJ_SIMD_API extern
+#endif
+#endif
+
+// ------------------------ ROM API Declarations ------------------------
+HJ_SIMD_API void
+simd_add_f32(const float *a, const float *b, float *out, size_t n);
+HJ_SIMD_API void
+simd_mul_f32(const float *a, const float *b, float *out, size_t n);
+HJ_SIMD_API float simd_dot_f32(const float *a, const float *b, size_t n);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // SIMD_H
+
+
+// --------------------- Implementation -------------------------
+// To include implementation, define HJ_SIMD_IMPL before including
+// this header in ONE C/C++ source file.
+#if (defined(HJ_SIMD_IMPL) || defined(HJ_SIMD_STATIC))                         \
+    && !defined(HJ_SIMD_IMPL_DONE)
+#define HJ_SIMD_IMPL_DONE
+
 #if defined(__SSE__) || defined(_M_IX86_FP)
 #include <xmmintrin.h>
 #define SIMD_SSE
@@ -35,7 +68,8 @@
 extern "C" {
 #endif
 
-inline void simd_add_f32(const float *a, const float *b, float *out, size_t n)
+HJ_SIMD_API void
+simd_add_f32(const float *a, const float *b, float *out, size_t n)
 {
 #if defined(SIMD_SSE)
     size_t i = 0;
@@ -56,7 +90,8 @@ inline void simd_add_f32(const float *a, const float *b, float *out, size_t n)
 #endif
 }
 
-inline void simd_mul_f32(const float *a, const float *b, float *out, size_t n)
+HJ_SIMD_API void
+simd_mul_f32(const float *a, const float *b, float *out, size_t n)
 {
 #if defined(SIMD_SSE)
     size_t i = 0;
@@ -77,7 +112,7 @@ inline void simd_mul_f32(const float *a, const float *b, float *out, size_t n)
 #endif
 }
 
-inline float simd_dot_f32(const float *a, const float *b, size_t n)
+HJ_SIMD_API float simd_dot_f32(const float *a, const float *b, size_t n)
 {
     float result = 0.0f;
 #if defined(SIMD_SSE)

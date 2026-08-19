@@ -224,7 +224,7 @@ extern "C" {
 #endif
 
 /* ---------------- Internal Safe Utility Helpers ---------------- */
-static inline void
+HJ_NIC_API void
 hj_nic_safe_strcpy(char *dest, size_t dest_size, const char *src)
 {
     if(!dest || dest_size == 0)
@@ -238,7 +238,7 @@ hj_nic_safe_strcpy(char *dest, size_t dest_size, const char *src)
 }
 
 #if defined(HJ_NIC_PLATFORM_WINDOWS)
-static inline void
+HJ_NIC_API void
 hj_nic_wchar_to_utf8(char *dest, size_t dest_size, const wchar_t *src)
 {
     if(!dest || dest_size == 0)
@@ -253,7 +253,7 @@ hj_nic_wchar_to_utf8(char *dest, size_t dest_size, const wchar_t *src)
 }
 #endif
 
-static inline hj_nic_err_t hj_nic_init(void)
+HJ_NIC_API hj_nic_err_t hj_nic_init(void)
 {
 #if defined(HJ_NIC_PLATFORM_WINDOWS)
     WSADATA wsaData;
@@ -264,14 +264,14 @@ static inline hj_nic_err_t hj_nic_init(void)
 #endif
 }
 
-static inline void hj_nic_cleanup(void)
+HJ_NIC_API void hj_nic_cleanup(void)
 {
 #if defined(HJ_NIC_PLATFORM_WINDOWS)
     WSACleanup();
 #endif
 }
 
-static inline hj_nic_err_t hj_nic_get_interface_count(uint32_t *count)
+HJ_NIC_API hj_nic_err_t hj_nic_get_interface_count(uint32_t *count)
 {
     if(!count)
         return HJ_NIC_ERR_INVALID_PARAMETER;
@@ -339,7 +339,7 @@ static inline hj_nic_err_t hj_nic_get_interface_count(uint32_t *count)
 }
 
 /* Helper function to find or append an interface entry by name in POSIX enumeration */
-static inline hj_nic_info_t *
+HJ_NIC_API hj_nic_info_t *
 hj_nic_find_or_add_interface(hj_nic_info_t *interfaces,
                              uint32_t       max_interfaces,
                              uint32_t      *count,
@@ -368,8 +368,9 @@ hj_nic_find_or_add_interface(hj_nic_info_t *interfaces,
     return nic;
 }
 
-static inline hj_nic_err_t hj_nic_enumerate_interfaces(
-    hj_nic_info_t *interfaces, uint32_t max_interfaces, uint32_t *actual_count)
+HJ_NIC_API hj_nic_err_t hj_nic_enumerate_interfaces(hj_nic_info_t *interfaces,
+                                                    uint32_t  max_interfaces,
+                                                    uint32_t *actual_count)
 {
     if(!actual_count)
         return HJ_NIC_ERR_INVALID_PARAMETER;
@@ -414,7 +415,7 @@ static inline hj_nic_err_t hj_nic_enumerate_interfaces(
     {
         if(count >= max_interfaces)
         {
-            adapter   = adapter->Next;
+            adapter = adapter->Next;
             continue;
         }
 
@@ -676,8 +677,8 @@ static inline hj_nic_err_t hj_nic_enumerate_interfaces(
 #endif
 }
 
-static inline hj_nic_err_t hj_nic_get_interface_info(const char *interface_name,
-                                                     hj_nic_info_t *info)
+HJ_NIC_API hj_nic_err_t hj_nic_get_interface_info(const char    *interface_name,
+                                                  hj_nic_info_t *info)
 {
     if(!interface_name || !info)
         return HJ_NIC_ERR_INVALID_PARAMETER;
@@ -719,8 +720,8 @@ static inline hj_nic_err_t hj_nic_get_interface_info(const char *interface_name,
     return ret;
 }
 
-static inline hj_nic_err_t hj_nic_get_statistics(const char *interface_name,
-                                                 hj_nic_statistics_t *stats)
+HJ_NIC_API hj_nic_err_t hj_nic_get_statistics(const char *interface_name,
+                                              hj_nic_statistics_t *stats)
 {
     if(!interface_name || !stats)
         return HJ_NIC_ERR_INVALID_PARAMETER;
@@ -908,8 +909,8 @@ static inline hj_nic_err_t hj_nic_get_statistics(const char *interface_name,
 }
 
 /* Helper function to set network interface status securely using OS Native APIs */
-static inline hj_nic_err_t
-hj_nic_set_interface_state(const char *interface_name, bool enable)
+HJ_NIC_API hj_nic_err_t hj_nic_set_interface_state(const char *interface_name,
+                                                   bool        enable)
 {
     if(!interface_name)
         return HJ_NIC_ERR_INVALID_PARAMETER;
@@ -978,12 +979,12 @@ hj_nic_set_interface_state(const char *interface_name, bool enable)
 #endif
 }
 
-static inline hj_nic_err_t hj_nic_enable_interface(const char *interface_name)
+HJ_NIC_API hj_nic_err_t hj_nic_enable_interface(const char *interface_name)
 {
     return hj_nic_set_interface_state(interface_name, true);
 }
 
-static inline hj_nic_err_t hj_nic_disable_interface(const char *interface_name)
+HJ_NIC_API hj_nic_err_t hj_nic_disable_interface(const char *interface_name)
 {
     return hj_nic_set_interface_state(interface_name, false);
 }

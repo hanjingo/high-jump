@@ -21,6 +21,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,26 +46,44 @@ typedef enum
     HJ_CPU_ERR_OPEN_FILE_FAILED         = -6,
     HJ_CPU_ERR_READ_INFO_FAILED         = -7,
     HJ_CPU_ERR_SYSCTL_FAILED            = -8,
-    HJ_CPU_ERR_SYSCONF_FAILED           = -9
+    HJ_CPU_ERR_SYSCONF_FAILED           = -9,
+    HJ_CPU_ERR_INVALID_CPU              = -10,
+    HJ_CPU_ERR_PERMISSION               = -11,
+    HJ_CPU_ERR_THREAD_NOT_FOUND         = -12
 } hj_cpu_err_t;
+
+typedef enum
+{
+    HJ_CPU_FEATURE_TSC,
+    HJ_CPU_FEATURE_RDTSCP,
+    HJ_CPU_FEATURE_CLFLUSH,
+    HJ_CPU_FEATURE_PREFETCH,
+    HJ_CPU_FEATURE_CPU_AFFINITY,
+    HJ_CPU_FEATURE_PMU,
+    HJ_CPU_FEATURE_PAUSE
+} hj_cpu_feature_t;
 
 // ------------------------ CPU API Declarations ------------------------
 
+HJ_CPU_API bool         hj_cpu_has_feature(hj_cpu_feature_t feature);
 HJ_CPU_API hj_cpu_err_t hj_cpu_brand(char *buf, size_t size);
 HJ_CPU_API hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size);
-HJ_CPU_API hj_cpu_err_t hj_cpu_core_num(unsigned int *num);
+HJ_CPU_API hj_cpu_err_t hj_cpu_logical_core_num(unsigned int *num);
 HJ_CPU_API hj_cpu_err_t hj_cpu_core_bind(const unsigned int core);
-HJ_CPU_API hj_cpu_err_t hj_cpu_core_list(unsigned int *buf, unsigned int *len);
+HJ_CPU_API hj_cpu_err_t hj_cpu_logical_core_list(unsigned int *buf,
+                                                 unsigned int *len);
 HJ_CPU_API hj_cpu_err_t hj_cpu_id(uint32_t *cpu_id);
 HJ_CPU_API void         hj_cpu_pause(void);
 HJ_CPU_API void         hj_cpu_nop(void);
-HJ_CPU_API void         hj_cpu_delay(uint64_t cycles);
+HJ_CPU_API void         hj_cpu_delay_ticks(uint64_t ticks);
 HJ_CPU_API void         hj_cpu_cache_flush(const void *addr);
 HJ_CPU_API void         hj_cpu_prefetch_read(const void *addr);
 HJ_CPU_API void         hj_cpu_prefetch_write(const void *addr);
+HJ_CPU_API uint64_t     hj_cpu_tsc_start(void);
+HJ_CPU_API uint64_t     hj_cpu_tsc_end(uint32_t *aux);
 HJ_CPU_API uint64_t     hj_cpu_tsc_read(void);
+HJ_CPU_API uint64_t     hj_cpu_tsc_frequency();
 HJ_CPU_API uint64_t     hj_cpu_tscp_read(uint32_t *aux);
-HJ_CPU_API uint64_t     hj_cpu_pmu_cycle_counter_read(void);
 
 #ifdef __cplusplus
 }
@@ -103,6 +122,7 @@ HJ_CPU_API uint64_t     hj_cpu_pmu_cycle_counter_read(void);
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <errno.h>
 #ifdef __GLIBC__
 #include <sched.h>
 #endif
@@ -115,7 +135,92 @@ HJ_CPU_API uint64_t     hj_cpu_pmu_cycle_counter_read(void);
 extern "C" {
 #endif
 
-static inline hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
+HJ_CPU_API bool hj_cpu_has_feature(hj_cpu_feature_t feature)
+{
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__)                   \
+    || defined(__x86_64__)
+    int cpuInfo[4] = {0};
+    switch(feature)
+    {
+        case HJ_CPU_FEATURE_TSC:
+            __cpuid(cpuInfo, 1);
+            return (cpuInfo[3] & (1 << 4)) != 0; // EDX bit 4
+        case HJ_CPU_FEATURE_RDTSCP:
+            __cpuid(cpuInfo, 0x80000000);
+            if((unsigned int) cpuInfo[0] >= 0x80000001)
+            {
+                __cpuid(cpuInfo, 0x80000001);
+                return (cpuInfo[3] & (1 << 27)) != 0; // EDX bit 27
+            }
+            return false;
+        case HJ_CPU_FEATURE_CLFLUSH:
+            __cpuid(cpuInfo, 1);
+            return (cpuInfo[3] & (1 << 19)) != 0; // EDX bit 19
+        case HJ_CPU_FEATURE_PREFETCH:
+            return true;
+        case HJ_CPU_FEATURE_CPU_AFFINITY:
+#if defined(_WIN32) || defined(_WIN64) || defined(__linux__)
+            return true;
+#else
+            return false;
+#endif
+        case HJ_CPU_FEATURE_PMU:
+            return true;
+        case HJ_CPU_FEATURE_PAUSE:
+            return true;
+        default:
+            return false;
+    }
+#elif defined(__aarch64__) || defined(__arm__) || defined(_M_ARM)              \
+    || defined(_M_ARM64)
+    switch(feature)
+    {
+        case HJ_CPU_FEATURE_TSC:
+            return true; // ARM generic timer (cntvct_el0)
+        case HJ_CPU_FEATURE_RDTSCP:
+            return false; // x86 specific
+        case HJ_CPU_FEATURE_CLFLUSH:
+            return true; // Supported via cache maintenance instructions
+        case HJ_CPU_FEATURE_PREFETCH:
+            return true; // Supported via compiler builtins
+        case HJ_CPU_FEATURE_CPU_AFFINITY:
+#if defined(__linux__) || defined(_WIN32) || defined(_WIN64)
+            return true;
+#else
+            return false;
+#endif
+        case HJ_CPU_FEATURE_PMU:
+            return true;
+        case HJ_CPU_FEATURE_PAUSE:
+            return true; // yield instruction
+        default:
+            return false;
+    }
+#else
+    switch(feature)
+    {
+        case HJ_CPU_FEATURE_TSC:
+        case HJ_CPU_FEATURE_PREFETCH:
+        case HJ_CPU_FEATURE_PMU:
+        case HJ_CPU_FEATURE_PAUSE:
+            return true;
+        case HJ_CPU_FEATURE_RDTSCP:
+            return false;
+        case HJ_CPU_FEATURE_CLFLUSH:
+            return true;
+        case HJ_CPU_FEATURE_CPU_AFFINITY:
+#if defined(_WIN32) || defined(_WIN64) || defined(__linux__)
+            return true;
+#else
+            return false;
+#endif
+        default:
+            return false;
+    }
+#endif
+}
+
+HJ_CPU_API hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -159,8 +264,9 @@ static inline hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
     char  line[256];
     while(fgets(line, sizeof(line), fp))
     {
-        if(!strstr(line, "model name") && !strstr(line, "Hardware")
-           && !strstr(line, "Processor"))
+        if(!(strncmp(line, "model name", 10) == 0
+             || strncmp(line, "Hardware", 8) == 0
+             || strncmp(line, "Processor", 9) == 0))
             continue;
 
         p = strchr(line, ':');
@@ -213,7 +319,7 @@ static inline hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
 #endif
 }
 
-static inline hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
+HJ_CPU_API hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -247,7 +353,8 @@ static inline hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
     char  line[256];
     while(fgets(line, sizeof(line), fp))
     {
-        if(!strstr(line, "vendor_id") && !strstr(line, "CPU implementer"))
+        if(!(strncmp(line, "vendor_id", 9) == 0
+             || strncmp(line, "CPU implementer", 15) == 0))
             continue;
 
         p = strchr(line, ':');
@@ -300,7 +407,7 @@ static inline hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
 #endif
 }
 
-static inline hj_cpu_err_t hj_cpu_core_num(unsigned int *num)
+HJ_CPU_API hj_cpu_err_t hj_cpu_logical_core_num(unsigned int *num)
 {
     if(!num)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -349,7 +456,7 @@ static inline hj_cpu_err_t hj_cpu_core_num(unsigned int *num)
 #endif
 }
 
-static inline hj_cpu_err_t hj_cpu_core_bind(const unsigned int core)
+HJ_CPU_API hj_cpu_err_t hj_cpu_core_bind(const unsigned int core)
 {
 #if defined(_WIN32) || defined(_WIN64)
     WORD         group_count   = GetActiveProcessorGroupCount();
@@ -385,11 +492,24 @@ static inline hj_cpu_err_t hj_cpu_core_bind(const unsigned int core)
     return HJ_CPU_ERR_INTERNAL;
 
 #elif defined(__linux__)
+    if(core >= CPU_SETSIZE)
+        return HJ_CPU_ERR_INVALID_CPU;
+
     cpu_set_t mask;
     CPU_ZERO(&mask);
     CPU_SET(core, &mask);
-    if(pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == 0)
+    int ret = pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask);
+    if(ret == 0)
+    {
         return HJ_CPU_OK;
+    }
+
+    if(ret == EINVAL)
+        return HJ_CPU_ERR_INVALID_CPU;
+    else if(ret == EPERM)
+        return HJ_CPU_ERR_PERMISSION;
+    else if(ret == ESRCH)
+        return HJ_CPU_ERR_THREAD_NOT_FOUND;
     else
         return HJ_CPU_ERR_INTERNAL;
 
@@ -404,74 +524,144 @@ static inline hj_cpu_err_t hj_cpu_core_bind(const unsigned int core)
 #endif
 }
 
-static inline hj_cpu_err_t hj_cpu_core_list(unsigned int *buf,
-                                            unsigned int *len)
+HJ_CPU_API hj_cpu_err_t hj_cpu_logical_core_list(unsigned int *buf,
+                                                 unsigned int *len)
 {
-    if(!buf || !len)
-    {
-        if(len)
-            *len = 0;
-
+    if(!len)
         return HJ_CPU_ERR_INVALID_ARG;
-    }
 
-    unsigned int max_capacity = *len;
+    unsigned int required_len = 0;
 
 #if defined(_WIN32) || defined(_WIN64)
     DWORD returnLength = 0;
-    GetLogicalProcessorInformation(NULL, &returnLength);
+    GetLogicalProcessorInformationEx(RelationProcessorCore,
+                                     NULL,
+                                     &returnLength);
     if(returnLength == 0)
+        return HJ_CPU_ERR_INTERNAL;
+
+    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX buffer =
+        (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) malloc(returnLength);
+    if(!buffer)
+        return HJ_CPU_ERR_ALLOCATION_MEMORY_FAILED;
+
+    if(!GetLogicalProcessorInformationEx(RelationProcessorCore,
+                                         buffer,
+                                         &returnLength))
     {
-        *len = 0;
+        free(buffer);
         return HJ_CPU_ERR_INTERNAL;
     }
 
-    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION buffer =
-        (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION) malloc(returnLength);
-    if(!buffer)
+    WORD          group_count = GetActiveProcessorGroupCount();
+    unsigned int *group_bases =
+        (unsigned int *) malloc(group_count * sizeof(unsigned int));
+    if(!group_bases)
     {
-        *len = 0;
+        free(buffer);
         return HJ_CPU_ERR_ALLOCATION_MEMORY_FAILED;
     }
 
-    if(!GetLogicalProcessorInformation(buffer, &returnLength))
+    unsigned int running_sum = 0;
+    WORD         sg;
+    for(sg = 0; sg < group_count; ++sg)
     {
-        free(buffer);
-        *len = 0;
-        return HJ_CPU_ERR_INTERNAL;
+        group_bases[sg] = running_sum;
+        running_sum += GetActiveProcessorCount(sg);
     }
 
-    unsigned int count = 0;
-    DWORD n = returnLength / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
-    DWORD i;
-    unsigned int j;
-    for(i = 0; i < n && count < max_capacity; ++i)
-    {
-        if(buffer[i].Relationship != RelationProcessorCore)
-            continue;
+    BYTE *ptr = (BYTE *) buffer;
+    BYTE *end = ptr + returnLength;
 
-        DWORD_PTR mask = buffer[i].ProcessorMask;
-        for(j = 0; j < sizeof(DWORD_PTR) * 8 && count < max_capacity; ++j)
+    while(ptr < end)
+    {
+        PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX info =
+            (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) ptr;
+        if(info->Relationship == RelationProcessorCore)
         {
-            if(mask & ((DWORD_PTR) 1 << j))
-                buf[count++] = j;
+            WORD g;
+            for(g = 0; g < info->Processor.GroupCount; ++g)
+            {
+                KAFFINITY mask = info->Processor.GroupMask[g].Mask;
+                int       j;
+                for(j = 0; j < (int) (sizeof(KAFFINITY) * 8); ++j)
+                {
+                    if(mask & ((KAFFINITY) 1 << j))
+                    {
+                        required_len++;
+                    }
+                }
+            }
         }
+        ptr += info->Size;
+    }
+
+    if(!buf)
+    {
+        *len = required_len;
+        free(group_bases);
+        free(buffer);
+        return HJ_CPU_OK;
+    }
+
+    unsigned int max_capacity = *len;
+    unsigned int count        = 0;
+
+    ptr = (BYTE *) buffer;
+    while(ptr < end && count < max_capacity)
+    {
+        PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX info =
+            (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) ptr;
+        if(info->Relationship == RelationProcessorCore)
+        {
+            WORD g;
+            for(g = 0; g < info->Processor.GroupCount && count < max_capacity;
+                ++g)
+            {
+                WORD         group_num = info->Processor.GroupMask[g].Group;
+                KAFFINITY    mask      = info->Processor.GroupMask[g].Mask;
+                unsigned int base      = (group_num < group_count)
+                                             ? group_bases[group_num]
+                                             : running_sum;
+
+                int j;
+                for(j = 0;
+                    j < (int) (sizeof(KAFFINITY) * 8) && count < max_capacity;
+                    ++j)
+                {
+                    if(mask & ((KAFFINITY) 1 << j))
+                    {
+                        if(count < max_capacity)
+                        {
+                            buf[count++] = base + j;
+                        }
+                    }
+                }
+            }
+        }
+        ptr += info->Size;
     }
 
     *len = count;
+    free(group_bases);
     free(buffer);
     return HJ_CPU_OK;
 
 #elif defined(__linux__)
     long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
     if(ncpu <= 0)
-    {
-        *len = 0;
         return HJ_CPU_ERR_SYSCONF_FAILED;
+
+    required_len = (unsigned int) ncpu;
+    if(!buf)
+    {
+        *len = required_len;
+        return HJ_CPU_OK;
     }
 
-    unsigned int count    = 0;
-    unsigned int max_cpus = (unsigned int) ncpu;
+    unsigned int max_capacity = *len;
+    unsigned int count        = 0;
+    unsigned int max_cpus     = required_len;
     unsigned int i;
     for(i = 0; i < max_cpus && count < max_capacity; ++i)
         buf[count++] = i;
@@ -489,13 +679,18 @@ static inline hj_cpu_err_t hj_cpu_core_list(unsigned int *buf,
     {
         nm[1] = HW_NCPU;
         if(sysctl(nm, 2, &ncpu, &len_cpu, NULL, 0) != 0 || ncpu == 0)
-        {
-            *len = 0;
             return HJ_CPU_ERR_SYSCTL_FAILED;
-        }
     }
 
-    unsigned int count = 0;
+    required_len = ncpu;
+    if(!buf)
+    {
+        *len = required_len;
+        return HJ_CPU_OK;
+    }
+
+    unsigned int max_capacity = *len;
+    unsigned int count        = 0;
     unsigned int i;
     for(i = 0; i < ncpu && count < max_capacity; ++i)
         buf[count++] = i;
@@ -510,7 +705,7 @@ static inline hj_cpu_err_t hj_cpu_core_list(unsigned int *buf,
 #endif
 }
 
-static inline hj_cpu_err_t hj_cpu_id(uint32_t *cpu_id)
+HJ_CPU_API hj_cpu_err_t hj_cpu_id(uint32_t *cpu_id)
 {
     if(!cpu_id)
         return HJ_CPU_ERR_INVALID_ARG;
@@ -572,7 +767,7 @@ static inline hj_cpu_err_t hj_cpu_id(uint32_t *cpu_id)
 #endif
 }
 
-static inline void hj_cpu_pause(void)
+HJ_CPU_API void hj_cpu_pause(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -580,7 +775,11 @@ static inline void hj_cpu_pause(void)
 #elif defined(_M_ARM) || defined(_M_ARM64)
     __yield();
 #else
-    Sleep(0);
+#if defined(_MSC_VER)
+    _ReadWriteBarrier();
+#else
+    (void) 0;
+#endif
 #endif
 
 #elif defined(__GNUC__) || defined(__clang__)
@@ -589,7 +788,7 @@ static inline void hj_cpu_pause(void)
 #elif defined(__arm__) || defined(__aarch64__)
     __asm__ volatile("yield" ::: "memory");
 #else
-    sched_yield();
+    __asm__ volatile("" ::: "memory");
 #endif
 
 #else
@@ -598,7 +797,7 @@ static inline void hj_cpu_pause(void)
 #endif
 }
 
-static inline void hj_cpu_nop(void)
+HJ_CPU_API void hj_cpu_nop(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -624,15 +823,15 @@ static inline void hj_cpu_nop(void)
 #endif
 }
 
-static inline void hj_cpu_delay(uint64_t cycles)
+HJ_CPU_API void hj_cpu_delay_ticks(uint64_t ticks)
 {
-    if(cycles == 0)
+    if(ticks == 0)
         return;
 
 #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__)                   \
     || defined(__x86_64__)
     uint64_t start = hj_cpu_tsc_read();
-    while((hj_cpu_tsc_read() - start) < cycles)
+    while((hj_cpu_tsc_read() - start) < ticks)
     {
         hj_cpu_pause();
     }
@@ -645,28 +844,28 @@ static inline void hj_cpu_delay(uint64_t cycles)
     {
         hj_cpu_pause();
         __asm__ volatile("mrs %0, cntvct_el0" : "=r"(current));
-    } while((current - start) < cycles);
+    } while((current - start) < ticks);
 #elif defined(_MSC_VER)
     uint64_t start = _ReadStatusReg(ARM64_CNTVCT);
-    while((_ReadStatusReg(ARM64_CNTVCT) - start) < cycles)
+    while((_ReadStatusReg(ARM64_CNTVCT) - start) < ticks)
     {
         hj_cpu_pause();
     }
 #else
     volatile uint64_t i;
-    for(i = 0; i < cycles; ++i)
+    for(i = 0; i < ticks; ++i)
         hj_cpu_pause();
 #endif
 
 #else
     volatile uint64_t i;
-    for(i = 0; i < cycles; ++i)
+    for(i = 0; i < ticks; ++i)
         hj_cpu_pause();
 
 #endif
 }
 
-static inline void hj_cpu_cache_flush(const void *addr)
+HJ_CPU_API void hj_cpu_cache_flush(const void *addr)
 {
     if(!addr)
         return;
@@ -674,41 +873,59 @@ static inline void hj_cpu_cache_flush(const void *addr)
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
     _mm_clflush(addr);
+#elif defined(_M_ARM64)
+    // Windows on ARM64: MSVC does not support inline asm.
+    // Issue a Data Synchronization Barrier to ensure memory visibility.
+    __dsb(_ARM64_BARRIER_SY);
+    (void) addr;
 #else
     MemoryBarrier();
     (void) addr;
 #endif
 
-#elif defined(__linux__)
-#if defined(__GNUC__) || defined(__clang__)
-#if defined(__i386__) || defined(__x86_64__)
+#elif defined(__APPLE__)
+#if defined(__aarch64__) || defined(__arm__)
+    // Apple Silicon / iOS: Use Apple's official system data cache flush API
+    // Flushes 64 bytes (standard cache line size on Apple Silicon)
+    sys_dcache_flush((void *) addr, 64);
+#elif defined(__i386__) || defined(__x86_64__)
     __builtin_ia32_clflush(addr);
 #else
-    __builtin___clear_cache((char *) addr, (char *) addr + 64);
+    __sync_synchronize();
+    (void) addr;
 #endif
+
+#elif defined(__linux__)
+#if defined(__i386__) || defined(__x86_64__)
+    __builtin_ia32_clflush(addr);
+#elif defined(__aarch64__)
+    // ARM64 Linux: Clean and Invalidate Data Cache line by VA to PoC
+    __asm__ volatile("dc civac, %0\n\t"
+                     "dsb ish\n\t"
+                     :
+                     : "r"(addr)
+                     : "memory");
+#elif defined(__arm__)
+    // 32-bit ARM Linux: DCCIMVAC (Clean and Invalidate Data Cache line by MVA to PoC)
+    __asm__ volatile("mcr p15, 0, %0, c7, c14, 1\n\t"
+                     "dsb\n\t"
+                     :
+                     : "r"(addr)
+                     : "memory");
 #else
     __sync_synchronize();
     (void) addr;
 #endif
 
-#elif defined(__APPLE__)
+#else
 #if defined(__GNUC__) || defined(__clang__)
-    __builtin___clear_cache((char *) addr, (char *) addr + 64);
-#else
-    __sync_synchronize();
-    (void) addr;
-#endif
-
-#else
-#if defined(__GNUC__) || defined(__clang__)
     __sync_synchronize();
 #endif
     (void) addr;
-
 #endif
 }
 
-static inline void hj_cpu_prefetch_read(const void *addr)
+HJ_CPU_API void hj_cpu_prefetch_read(const void *addr)
 {
     if(!addr)
         return;
@@ -724,19 +941,18 @@ static inline void hj_cpu_prefetch_read(const void *addr)
     __builtin_prefetch(addr, 0, 3);
 
 #else
-    volatile const char *ptr = (const char *) addr;
-    (void) *ptr;
+    (void) addr;
 #endif
 }
 
-static inline void hj_cpu_prefetch_write(const void *addr)
+HJ_CPU_API void hj_cpu_prefetch_write(const void *addr)
 {
     if(!addr)
         return;
 
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
-    _mm_prefetch((const char *) addr, _MM_HINT_T0);
+    _m_prefetchw((void *) addr);
 #else
     (void) addr;
 #endif
@@ -745,13 +961,77 @@ static inline void hj_cpu_prefetch_write(const void *addr)
     __builtin_prefetch(addr, 1, 3);
 
 #else
-    volatile char *ptr = (char *) addr;
-    *ptr               = *ptr;
+    (void) addr;
+#endif
+}
+
+HJ_CPU_API uint64_t hj_cpu_tsc_start(void)
+{
+#if defined(_WIN32) || defined(_WIN64)
+#if defined(_M_IX86) || defined(_M_X64)
+    _mm_lfence();
+    return __rdtsc();
+#else
+    return hj_cpu_tsc_read();
+#endif
+
+#elif defined(__GNUC__) || defined(__clang__)
+#if defined(__i386__) || defined(__x86_64__)
+    __asm__ volatile("lfence" ::: "memory");
+    return __builtin_ia32_rdtsc();
+#else
+    return hj_cpu_tsc_read();
+#endif
+
+#else
+    return hj_cpu_tsc_read();
 
 #endif
 }
 
-static inline uint64_t hj_cpu_tsc_read(void)
+HJ_CPU_API uint64_t hj_cpu_tsc_end(uint32_t *aux)
+{
+#if defined(_WIN32) || defined(_WIN64)
+#if defined(_M_IX86) || defined(_M_X64)
+    uint32_t     dummy;
+    uint32_t    *paux = aux ? aux : &dummy;
+    unsigned int tsc_aux;
+    uint64_t     tsc = __rdtscp(&tsc_aux);
+    _mm_lfence();
+    *paux = tsc_aux;
+    return tsc;
+#else
+    if(aux)
+        hj_cpu_id(aux);
+    return hj_cpu_tsc_read();
+#endif
+
+#elif defined(__GNUC__) || defined(__clang__)
+#if defined(__i386__) || defined(__x86_64__)
+    uint32_t lo, hi, cpu_id_val;
+    __asm__ volatile("rdtscp\n\t"
+                     "lfence"
+                     : "=a"(lo), "=d"(hi), "=c"(cpu_id_val)
+                     :
+                     : "memory");
+    if(aux)
+        *aux = cpu_id_val;
+    return ((uint64_t) hi << 32) | lo;
+#else
+    if(aux)
+        hj_cpu_id(aux);
+    return hj_cpu_tsc_read();
+#endif
+
+#else
+    if(aux)
+        hj_cpu_id(aux);
+    return hj_cpu_tsc_read();
+
+#endif
+}
+
+HJ_CPU_API uint64_t hj_cpu_tsc_read(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -793,7 +1073,81 @@ static inline uint64_t hj_cpu_tsc_read(void)
 #endif
 }
 
-static inline uint64_t hj_cpu_tscp_read(uint32_t *aux)
+HJ_CPU_API uint64_t hj_cpu_tsc_frequency()
+{
+#if defined(__APPLE__)
+    mach_timebase_info_data_t tb;
+    if(mach_timebase_info(&tb) == KERN_SUCCESS && tb.num != 0)
+    {
+        return 1000000000ULL * tb.denom / tb.num;
+    }
+    return 0;
+#elif defined(_WIN32) || defined(_WIN64)
+    LARGE_INTEGER freq;
+    if(QueryPerformanceFrequency(&freq))
+    {
+        return (uint64_t) freq.QuadPart;
+    }
+    return 0;
+#elif defined(__linux__) || defined(__unix__)
+#if defined(__i386__) || defined(__x86_64__)
+    FILE *fp = fopen("/proc/cpuinfo", "r");
+    if(fp)
+    {
+        char line[256];
+        while(fgets(line, sizeof(line), fp))
+        {
+            if(strncmp(line, "cpu MHz", 7) == 0)
+            {
+                char *p = strchr(line, ':');
+                if(p)
+                {
+                    double mhz = atof(p + 1);
+                    fclose(fp);
+                    if(mhz > 0.0)
+                    {
+                        return (uint64_t) (mhz * 1000000.0);
+                    }
+                }
+            }
+        }
+        fclose(fp);
+    }
+#elif defined(__aarch64__) || defined(__arm__)
+    return 1000000000ULL;
+#endif
+
+    struct timespec ts_start, ts_end;
+    uint64_t        tsc_start = hj_cpu_tsc_read();
+    if(clock_gettime(CLOCK_MONOTONIC, &ts_start) != 0)
+    {
+        return 0;
+    }
+
+    struct timespec req = {0, 10000000};
+    nanosleep(&req, NULL);
+
+    uint64_t tsc_end = hj_cpu_tsc_read();
+    if(clock_gettime(CLOCK_MONOTONIC, &ts_end) != 0)
+    {
+        return 0;
+    }
+
+    uint64_t ns_elapsed =
+        (uint64_t) (ts_end.tv_sec - ts_start.tv_sec) * 1000000000ULL
+        + (uint64_t) (ts_end.tv_nsec - ts_start.tv_nsec);
+    if(ns_elapsed == 0)
+    {
+        return 0;
+    }
+
+    return (tsc_end - tsc_start) * 1000000000ULL / ns_elapsed;
+#else
+    return 0;
+#endif
+}
+
+HJ_CPU_API uint64_t hj_cpu_tscp_read(uint32_t *aux)
 {
 #if defined(_WIN32) || defined(_WIN64)
 #if defined(_M_IX86) || defined(_M_X64)
@@ -868,47 +1222,6 @@ static inline uint64_t hj_cpu_tscp_read(uint32_t *aux)
     }
 
     return hj_cpu_tsc_read();
-#endif
-}
-
-static inline uint64_t hj_cpu_pmu_cycle_counter_read(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-#if defined(_M_IX86) || defined(_M_X64)
-    return __rdtsc();
-#else
-    LARGE_INTEGER counter;
-    if(QueryPerformanceCounter(&counter))
-        return (uint64_t) counter.QuadPart;
-
-    return 0;
-#endif
-
-#elif defined(__linux__)
-#if defined(__i386__) || defined(__x86_64__)
-#if defined(__GNUC__) || defined(__clang__)
-    return __builtin_ia32_rdtsc();
-#else
-    struct timespec ts;
-    if(clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0)
-        return (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
-
-    return 0;
-#endif
-#else
-    struct timespec ts;
-    if(clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == 0)
-        return (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
-
-    return 0;
-#endif
-
-#elif defined(__APPLE__)
-    return mach_absolute_time();
-
-#else
-    return hj_cpu_tsc_read();
-
 #endif
 }
 

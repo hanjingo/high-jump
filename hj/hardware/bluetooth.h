@@ -81,7 +81,7 @@ hj_bluetooth_device_count(hj_bluetooth_device_filter_fn filter);
 extern "C" {
 #endif
 
-static inline bool
+HJ_BLUETOOTH_API bool
 hj_default_bluetooth_device_filter(const hj_bluetooth_info_t *device)
 {
     if(!device)
@@ -122,7 +122,7 @@ hj_default_bluetooth_device_filter(const hj_bluetooth_info_t *device)
     return false;
 }
 
-static inline hj_bluetooth_err_t
+HJ_BLUETOOTH_API hj_bluetooth_err_t
 hj_bluetooth_device_range(hj_bluetooth_device_range_fn  fn,
                           hj_bluetooth_device_filter_fn filter,
                           void                         *user_data)
@@ -157,7 +157,7 @@ hj_bluetooth_device_range(hj_bluetooth_device_range_fn  fn,
     return HJ_BLUETOOTH_OK;
 }
 
-static inline int
+HJ_BLUETOOTH_API int
 hj_bluetooth_device_count(hj_bluetooth_device_filter_fn filter)
 {
     if(hid_init() != 0)

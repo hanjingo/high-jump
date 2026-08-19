@@ -131,7 +131,7 @@ HJ_MOUSE_API hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel);
 extern "C" {
 #endif
 
-static inline uint64_t hj_mouse_get_timestamp_us(void)
+HJ_MOUSE_API uint64_t hj_mouse_get_timestamp_us(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     LARGE_INTEGER freq, counter;
@@ -145,7 +145,7 @@ static inline uint64_t hj_mouse_get_timestamp_us(void)
 #endif
 }
 
-static inline void hj_safe_strcpy(char *dest, const char *src, size_t dest_size)
+HJ_MOUSE_API void hj_safe_strcpy(char *dest, const char *src, size_t dest_size)
 {
     if(!dest || dest_size == 0)
         return;
@@ -167,9 +167,9 @@ static inline void hj_safe_strcpy(char *dest, const char *src, size_t dest_size)
 #define LONG(x) ((x) / BITS_PER_LONG)
 #define IS_BIT_SET(bit, array) ((array[LONG(bit)] >> OFF(bit)) & 1)
 
-static inline hj_mouse_err_t
-hj_mouse_parse_input_event(const struct input_event *ev,
-                           hj_mouse_event_t         *event)
+HJ_MOUSE_API
+    hj_mouse_err_t hj_mouse_parse_input_event(const struct input_event *ev,
+                                              hj_mouse_event_t         *event)
 {
     if(!ev || !event)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -230,8 +230,9 @@ hj_mouse_parse_input_event(const struct input_event *ev,
     return HJ_MOUSE_ERROR_NO_DATA;
 }
 
-static inline hj_mouse_err_t
-hj_mouse_enumerate(hj_mouse_info_t *infos, int max_count, int *out)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_enumerate(hj_mouse_info_t *infos,
+                                               int              max_count,
+                                               int             *out)
 {
     if(!infos || max_count <= 0 || !out)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -306,7 +307,7 @@ hj_mouse_enumerate(hj_mouse_info_t *infos, int max_count, int *out)
     return HJ_MOUSE_SUCCESS;
 }
 
-static inline intptr_t hj_mouse_open(const char *device_path)
+HJ_MOUSE_API intptr_t hj_mouse_open(const char *device_path)
 {
     if(!device_path)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -315,14 +316,14 @@ static inline intptr_t hj_mouse_open(const char *device_path)
     return (fd < 0) ? (intptr_t) HJ_MOUSE_ERROR_IO : (intptr_t) fd;
 }
 
-static inline void hj_mouse_close(intptr_t handle)
+HJ_MOUSE_API void hj_mouse_close(intptr_t handle)
 {
     if(handle >= 0)
         close((int) handle);
 }
 
-static inline hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
-                                                 hj_mouse_event_t *event)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
+                                                hj_mouse_event_t *event)
 {
     if(handle < 0 || !event)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -335,7 +336,7 @@ static inline hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
     return hj_mouse_parse_input_event(&ev, event);
 }
 
-static inline hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel)
 {
     (void) handle;
     (void) accel;
@@ -360,8 +361,8 @@ typedef struct
     HANDLE           init_event;
 } hj_win32_mouse_ctx_t;
 
-static inline void hj_win32_push_event(hj_win32_mouse_ctx_t   *ctx,
-                                       const hj_mouse_event_t *evt)
+HJ_MOUSE_API void hj_win32_push_event(hj_win32_mouse_ctx_t   *ctx,
+                                      const hj_mouse_event_t *evt)
 {
     EnterCriticalSection(&ctx->cs);
     int next = (ctx->head + 1) % HJ_WIN32_EVENT_QUEUE_SIZE;
@@ -525,8 +526,9 @@ static unsigned __stdcall hj_win32_raw_input_thread(void *arg)
     return 0;
 }
 
-static inline hj_mouse_err_t
-hj_mouse_enumerate(hj_mouse_info_t *infos, int max_count, int *out)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_enumerate(hj_mouse_info_t *infos,
+                                               int              max_count,
+                                               int             *out)
 {
     if(!infos || max_count <= 0 || !out)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -587,7 +589,7 @@ hj_mouse_enumerate(hj_mouse_info_t *infos, int max_count, int *out)
     return HJ_MOUSE_SUCCESS;
 }
 
-static inline intptr_t hj_mouse_open(const char *device_path)
+HJ_MOUSE_API intptr_t hj_mouse_open(const char *device_path)
 {
     hj_win32_mouse_ctx_t *ctx =
         (hj_win32_mouse_ctx_t *) calloc(1, sizeof(hj_win32_mouse_ctx_t));
@@ -618,7 +620,7 @@ static inline intptr_t hj_mouse_open(const char *device_path)
     return (intptr_t) ctx;
 }
 
-static inline void hj_mouse_close(intptr_t handle)
+HJ_MOUSE_API void hj_mouse_close(intptr_t handle)
 {
     if(handle <= 0 || handle == (intptr_t) INVALID_HANDLE_VALUE)
         return;
@@ -640,8 +642,8 @@ static inline void hj_mouse_close(intptr_t handle)
     free(ctx);
 }
 
-static inline hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
-                                                 hj_mouse_event_t *event)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
+                                                hj_mouse_event_t *event)
 {
     if(!event || handle <= 0 || handle == (intptr_t) INVALID_HANDLE_VALUE)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -661,7 +663,7 @@ static inline hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
     return err;
 }
 
-static inline hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel)
 {
     (void) handle;
     (void) accel;
@@ -688,8 +690,8 @@ typedef struct
     void            *target_device_ptr;
 } hj_macos_mouse_ctx_t;
 
-static inline void hj_macos_push_event(hj_macos_mouse_ctx_t   *ctx,
-                                       const hj_mouse_event_t *evt)
+HJ_MOUSE_API void hj_macos_push_event(hj_macos_mouse_ctx_t   *ctx,
+                                      const hj_mouse_event_t *evt)
 {
     pthread_mutex_lock(&ctx->mutex);
     int next = (ctx->head + 1) % HJ_MACOS_EVENT_QUEUE_SIZE;
@@ -822,8 +824,9 @@ static void *hj_macos_event_thread(void *arg)
     return NULL;
 }
 
-static inline hj_mouse_err_t
-hj_mouse_enumerate(hj_mouse_info_t *infos, int max_count, int *out)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_enumerate(hj_mouse_info_t *infos,
+                                               int              max_count,
+                                               int             *out)
 {
     if(!infos || max_count <= 0 || !out)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -917,7 +920,7 @@ hj_mouse_enumerate(hj_mouse_info_t *infos, int max_count, int *out)
     return HJ_MOUSE_SUCCESS;
 }
 
-static inline intptr_t hj_mouse_open(const char *device_path)
+HJ_MOUSE_API intptr_t hj_mouse_open(const char *device_path)
 {
     hj_macos_mouse_ctx_t *ctx =
         (hj_macos_mouse_ctx_t *) calloc(1, sizeof(hj_macos_mouse_ctx_t));
@@ -946,7 +949,7 @@ static inline intptr_t hj_mouse_open(const char *device_path)
     return (intptr_t) ctx;
 }
 
-static inline void hj_mouse_close(intptr_t handle)
+HJ_MOUSE_API void hj_mouse_close(intptr_t handle)
 {
     if(handle <= 0)
         return;
@@ -964,8 +967,8 @@ static inline void hj_mouse_close(intptr_t handle)
     free(ctx);
 }
 
-static inline hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
-                                                 hj_mouse_event_t *event)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
+                                                hj_mouse_event_t *event)
 {
     if(!event || handle <= 0)
         return HJ_MOUSE_ERROR_INVALID_PARAM;
@@ -985,7 +988,7 @@ static inline hj_mouse_err_t hj_mouse_read_event(intptr_t          handle,
     return err;
 }
 
-static inline hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel)
+HJ_MOUSE_API hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel)
 {
     (void) handle;
     (void) accel;

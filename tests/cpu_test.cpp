@@ -10,6 +10,49 @@
 #define HJ_CPU_IMPL
 #include <hj/hardware/cpu.h>
 
+TEST(cpu, hj_cpu_has_feature)
+{
+    SCOPED_TRACE("Testing hj_cpu_has_feature functionality");
+
+    bool has_tsc      = hj_cpu_has_feature(HJ_CPU_FEATURE_TSC);
+    bool has_rdtscp   = hj_cpu_has_feature(HJ_CPU_FEATURE_RDTSCP);
+    bool has_clflush  = hj_cpu_has_feature(HJ_CPU_FEATURE_CLFLUSH);
+    bool has_prefetch = hj_cpu_has_feature(HJ_CPU_FEATURE_PREFETCH);
+    bool has_affinity = hj_cpu_has_feature(HJ_CPU_FEATURE_CPU_AFFINITY);
+    bool has_pmu      = hj_cpu_has_feature(HJ_CPU_FEATURE_PMU);
+    bool has_pause    = hj_cpu_has_feature(HJ_CPU_FEATURE_PAUSE);
+
+    std::cout << "CPU Features support status:" << std::endl;
+    std::cout << "  - TSC: " << (has_tsc ? "yes" : "no") << std::endl;
+    std::cout << "  - RDTSCP: " << (has_rdtscp ? "yes" : "no") << std::endl;
+    std::cout << "  - CLFLUSH: " << (has_clflush ? "yes" : "no") << std::endl;
+    std::cout << "  - PREFETCH: " << (has_prefetch ? "yes" : "no") << std::endl;
+    std::cout << "  - CPU_AFFINITY: " << (has_affinity ? "yes" : "no")
+              << std::endl;
+    std::cout << "  - PMU: " << (has_pmu ? "yes" : "no") << std::endl;
+    std::cout << "  - PAUSE: " << (has_pause ? "yes" : "no") << std::endl;
+
+#if defined(__aarch64__) || defined(__arm__) || defined(_M_ARM)                \
+    || defined(_M_ARM64)
+    EXPECT_TRUE(hj_cpu_has_feature(HJ_CPU_FEATURE_TSC));
+    EXPECT_FALSE(hj_cpu_has_feature(HJ_CPU_FEATURE_RDTSCP));
+    EXPECT_TRUE(hj_cpu_has_feature(HJ_CPU_FEATURE_PREFETCH));
+    EXPECT_TRUE(hj_cpu_has_feature(HJ_CPU_FEATURE_PMU));
+    EXPECT_TRUE(hj_cpu_has_feature(HJ_CPU_FEATURE_PAUSE));
+#elif defined(_M_IX86) || defined(_M_X64) || defined(__i386__)                 \
+    || defined(__x86_64__)
+    EXPECT_TRUE(hj_cpu_has_feature(HJ_CPU_FEATURE_PREFETCH));
+    EXPECT_TRUE(hj_cpu_has_feature(HJ_CPU_FEATURE_PMU));
+    EXPECT_TRUE(hj_cpu_has_feature(HJ_CPU_FEATURE_PAUSE));
+#endif
+
+    bool invalid_feature =
+        hj_cpu_has_feature(static_cast<hj_cpu_feature_t>(9999));
+    EXPECT_FALSE(invalid_feature) << "Invalid feature enum should return false";
+
+    SUCCEED() << "hj_cpu_has_feature executed successfully";
+}
+
 TEST(cpu, hj_cpu_brand)
 {
     SCOPED_TRACE("Testing hj_cpu_brand functionality");
@@ -55,16 +98,17 @@ TEST(cpu, hj_cpu_vendor)
     }
 }
 
-TEST(cpu, hj_cpu_core_num)
+TEST(cpu, hj_cpu_logical_core_num)
 {
-    SCOPED_TRACE("Testing hj_cpu_core_num functionality");
+    SCOPED_TRACE("Testing hj_cpu_logical_core_num functionality");
 
-    EXPECT_EQ(hj_cpu_core_num(nullptr), HJ_CPU_ERR_INVALID_ARG)
+    EXPECT_EQ(hj_cpu_logical_core_num(nullptr), HJ_CPU_ERR_INVALID_ARG)
         << "Should handle null pointer parameter";
 
     unsigned int core_count = 0;
-    auto         ec         = hj_cpu_core_num(&core_count);
-    EXPECT_EQ(ec, HJ_CPU_OK) << "hj_cpu_core_num should return HJ_CPU_OK";
+    auto         ec         = hj_cpu_logical_core_num(&core_count);
+    EXPECT_EQ(ec, HJ_CPU_OK)
+        << "hj_cpu_logical_core_num should return HJ_CPU_OK";
 
     EXPECT_GT(core_count, 0u) << "Should detect at least 1 CPU core";
     EXPECT_LE(core_count, 1024u)
@@ -73,26 +117,27 @@ TEST(cpu, hj_cpu_core_num)
     for(int i = 0; i < 5; ++i)
     {
         unsigned int temp_count = 0;
-        EXPECT_EQ(hj_cpu_core_num(&temp_count), HJ_CPU_OK);
+        EXPECT_EQ(hj_cpu_logical_core_num(&temp_count), HJ_CPU_OK);
         EXPECT_EQ(temp_count, core_count)
-            << "hj_cpu_core_num should return consistent results";
+            << "hj_cpu_logical_core_num should return consistent results";
     }
 }
 
-TEST(cpu, hj_cpu_core_list)
+TEST(cpu, hj_cpu_logical_core_list)
 {
-    SCOPED_TRACE("Testing hj_cpu_core_list");
+    SCOPED_TRACE("Testing hj_cpu_logical_core_list");
 
     unsigned int expected_count = 0;
-    ASSERT_EQ(hj_cpu_core_num(&expected_count), HJ_CPU_OK);
+    ASSERT_EQ(hj_cpu_logical_core_num(&expected_count), HJ_CPU_OK);
 
     std::vector<unsigned int> core_list(expected_count + 10);
     unsigned int list_len = static_cast<unsigned int>(core_list.size());
 
-    auto ec = hj_cpu_core_list(core_list.data(), &list_len);
-    EXPECT_EQ(ec, HJ_CPU_OK) << "hj_cpu_core_list should return HJ_CPU_OK";
+    auto ec = hj_cpu_logical_core_list(core_list.data(), &list_len);
+    EXPECT_EQ(ec, HJ_CPU_OK)
+        << "hj_cpu_logical_core_list should return HJ_CPU_OK";
     EXPECT_EQ(list_len, expected_count)
-        << "Core list length should match hj_cpu_core_num()";
+        << "Core list length should match hj_cpu_logical_core_num()";
 
     for(unsigned int i = 0; i < list_len; ++i)
     {
@@ -103,19 +148,20 @@ TEST(cpu, hj_cpu_core_list)
                                         core_list.begin() + list_len);
     EXPECT_EQ(unique_cores.size(), list_len) << "All core IDs should be unique";
 
-    // boundary conditions tested in separate test
-    unsigned int len = 0;
-    ec               = hj_cpu_core_list(nullptr, &len);
-    EXPECT_EQ(ec, HJ_CPU_ERR_INVALID_ARG) << "Should handle null buffer";
-    EXPECT_EQ(len, 0u) << "Should handle null buffer gracefully";
+    unsigned int query_len = 0;
+    ec                     = hj_cpu_logical_core_list(nullptr, &query_len);
+    EXPECT_EQ(ec, HJ_CPU_OK)
+        << "Should allow null buffer to query required length";
+    EXPECT_EQ(query_len, expected_count)
+        << "Queried length should match expected core count";
 
-    ec = hj_cpu_core_list(nullptr, nullptr);
+    ec = hj_cpu_logical_core_list(nullptr, nullptr);
     EXPECT_EQ(ec, HJ_CPU_ERR_INVALID_ARG)
         << "Should handle null length pointer";
 
     unsigned int small_buf[2];
     unsigned int small_len = 2;
-    ec                     = hj_cpu_core_list(small_buf, &small_len);
+    ec                     = hj_cpu_logical_core_list(small_buf, &small_len);
     EXPECT_EQ(ec, HJ_CPU_OK) << "Should handle small buffer";
 
     if(expected_count > 2)
@@ -132,7 +178,7 @@ TEST(cpu, hj_cpu_core_bind)
     SCOPED_TRACE("Testing hj_cpu_core_bind");
 
     unsigned int core_count = 0;
-    if(hj_cpu_core_num(&core_count) != HJ_CPU_OK || core_count <= 1)
+    if(hj_cpu_logical_core_num(&core_count) != HJ_CPU_OK || core_count <= 1)
     {
         GTEST_SKIP() << "Single core system, skipping bind test";
         return;
@@ -140,7 +186,7 @@ TEST(cpu, hj_cpu_core_bind)
 
     std::vector<unsigned int> core_list(core_count);
     unsigned int              list_len = core_count;
-    hj_cpu_core_list(core_list.data(), &list_len);
+    hj_cpu_logical_core_list(core_list.data(), &list_len);
 
 #if defined(_WIN32) || defined(__linux__)
     bool         any_bind_success = false;
@@ -224,11 +270,10 @@ TEST(cpu, hj_cpu_id)
     EXPECT_GE(unique_ids.size(), 1u) << "Should observe at least one CPU ID";
 
     unsigned int core_count = 0;
-    ASSERT_EQ(hj_cpu_core_num(&core_count), HJ_CPU_OK);
+    ASSERT_EQ(hj_cpu_logical_core_num(&core_count), HJ_CPU_OK);
     EXPECT_LE(unique_ids.size(), core_count)
         << "Unique CPU IDs should not exceed core count";
 
-    // multi threaded test in separate test
     if(core_count <= 1)
     {
         GTEST_SKIP() << "Single core system, skipping multithread test";
@@ -269,15 +314,13 @@ TEST(cpu, hj_cpu_pause)
 {
     SCOPED_TRACE("Testing hj_cpu_pause");
 
-    // Test that hj_cpu_pause executes without crashing
     for(int i = 0; i < 10; ++i)
     {
         hj_cpu_pause();
     }
 
-    // Test with more iterations to ensure measurable time difference
     auto start = std::chrono::high_resolution_clock::now();
-    for(int i = 0; i < 10000; ++i) // Increased iterations for measurable time
+    for(int i = 0; i < 10000; ++i)
     {
         hj_cpu_pause();
     }
@@ -286,19 +329,12 @@ TEST(cpu, hj_cpu_pause)
     auto duration =
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-    // hj_cpu_pause should complete successfully (main requirement)
     SUCCEED() << "hj_cpu_pause executed without errors";
 
-    // Optional timing check - don't fail if timing is not measurable
     if(duration.count() > 0)
     {
         EXPECT_LT(duration.count(), 500000000)
             << "hj_cpu_pause should not take excessively long (< 500ms)";
-    } else
-    {
-        std::cout << "Note: hj_cpu_pause timing not measurable on this system "
-                     "(very fast execution)"
-                  << std::endl;
     }
 }
 
@@ -319,27 +355,23 @@ TEST(cpu, hj_cpu_nop)
     EXPECT_LT(duration.count(), 50000) << "hj_cpu_nop should be very fast";
 }
 
-TEST(cpu, hj_cpu_delay)
+TEST(cpu, hj_cpu_delay_ticks)
 {
-    SCOPED_TRACE("Testing hj_cpu_delay");
+    SCOPED_TRACE("Testing hj_cpu_delay_ticks");
 
-    // Test that hj_cpu_delay executes without crashing for various cycle counts
-    std::vector<uint64_t> test_cycles = {1000, 10000, 100000, 1000000};
-    for(uint64_t cycles : test_cycles)
+    std::vector<uint64_t> test_ticks = {1000, 10000, 100000, 1000000};
+    for(uint64_t ticks : test_ticks)
     {
-        hj_cpu_delay(cycles); // Basic functionality test
+        hj_cpu_delay_ticks(ticks);
     }
 
-    // Test with larger cycle count to ensure measurable delay
     bool                  any_measurable = false;
-    std::vector<uint64_t> large_cycles   = {10000000,
-                                            50000000,
-                                            100000000}; // 10M, 50M, 100M cycles
+    std::vector<uint64_t> large_ticks    = {10000000, 50000000, 100000000};
 
-    for(uint64_t cycles : large_cycles)
+    for(uint64_t ticks : large_ticks)
     {
         auto start = std::chrono::high_resolution_clock::now();
-        hj_cpu_delay(cycles);
+        hj_cpu_delay_ticks(ticks);
         auto end = std::chrono::high_resolution_clock::now();
 
         auto duration =
@@ -350,24 +382,11 @@ TEST(cpu, hj_cpu_delay)
             any_measurable = true;
             EXPECT_LT(duration.count(), 1000000000)
                 << "Delay should not be excessive (< 1 second)";
-            break; // Found a measurable delay, no need to test larger values
+            break;
         }
     }
 
-    if(any_measurable)
-    {
-        std::cout
-            << "hj_cpu_delay produced measurable timing with large cycle counts"
-            << std::endl;
-    } else
-    {
-        std::cout << "Note: hj_cpu_delay timing not measurable on this system "
-                     "(very fast CPU or virtualized environment)"
-                  << std::endl;
-    }
-
-    // The main requirement is that hj_cpu_delay completes without error
-    SUCCEED() << "hj_cpu_delay executed successfully for all test cases";
+    SUCCEED() << "hj_cpu_delay_ticks executed successfully for all test cases";
 }
 
 TEST(cpu, hj_cpu_boundary_conditions)
@@ -375,7 +394,7 @@ TEST(cpu, hj_cpu_boundary_conditions)
     SCOPED_TRACE("Testing boundary conditions and error handling");
 
     auto start = std::chrono::high_resolution_clock::now();
-    hj_cpu_delay(0);
+    hj_cpu_delay_ticks(0);
     auto end = std::chrono::high_resolution_clock::now();
     auto zero_delay =
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);
@@ -383,7 +402,7 @@ TEST(cpu, hj_cpu_boundary_conditions)
     EXPECT_LT(zero_delay.count(), 1000) << "Zero delay should be very fast";
 
     start = std::chrono::high_resolution_clock::now();
-    hj_cpu_delay(10000000); // 10M cycles
+    hj_cpu_delay_ticks(10000000);
     end = std::chrono::high_resolution_clock::now();
     auto large_delay =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -421,7 +440,7 @@ TEST(cpu, hj_cpu_prefetch)
 {
     SCOPED_TRACE("Testing hj_cpu_prefetch");
 
-    const size_t     array_size = 1024 * 1024; // 1MB
+    const size_t     array_size = 1024 * 1024;
     std::vector<int> test_array(array_size);
     for(size_t i = 0; i < array_size; ++i)
     {
@@ -502,16 +521,6 @@ TEST(cpu, hj_cpu_tsc_functionality)
         }
     }
 
-    if(all_different)
-    {
-        std::cout << "TSC shows high precision (all values increasing)"
-                  << std::endl;
-    } else
-    {
-        std::cout << "TSC shows limited precision (some values equal)"
-                  << std::endl;
-    }
-
     auto start = std::chrono::high_resolution_clock::now();
     for(int i = 0; i < 10000; ++i)
     {
@@ -523,6 +532,26 @@ TEST(cpu, hj_cpu_tsc_functionality)
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
     EXPECT_LT(duration.count(), 10000) << "TSC reads should be fast";
+}
+
+TEST(cpu, hj_cpu_tsc_frequency)
+{
+    SCOPED_TRACE("Testing hj_cpu_tsc_frequency functionality");
+
+    uint64_t freq = hj_cpu_tsc_frequency();
+    std::cout << "Detected TSC frequency: " << freq << " Hz ("
+              << (freq / 1000000.0) << " MHz)" << std::endl;
+
+    if(freq > 0)
+    {
+        EXPECT_GE(freq, 1000000ULL) << "TSC frequency should be at least 1 MHz";
+        EXPECT_LE(freq, 100ULL * 1000 * 1000 * 1000)
+            << "TSC frequency should be reasonable (<= 100 GHz)";
+    } else
+    {
+        SUCCEED() << "TSC frequency detection returned 0 (may not be supported "
+                     "on this environment)";
+    }
 }
 
 TEST(cpu, hj_cpu_tscp_functionality)
@@ -545,169 +574,36 @@ TEST(cpu, hj_cpu_tscp_functionality)
 
     uint64_t tscp_no_aux = hj_cpu_tscp_read(nullptr);
     EXPECT_GT(tscp_no_aux, 0u) << "TSCP without aux should work";
-
-    uint64_t tsc  = hj_cpu_tsc_read();
-    uint64_t tscp = hj_cpu_tscp_read(nullptr);
-
-    if(tsc > 0 && tscp > 0)
-    {
-        uint64_t diff          = (tsc > tscp) ? (tsc - tscp) : (tscp - tsc);
-        double   max           = (tsc > tscp) ? tsc : tscp;
-        double   relative_diff = (double) diff / max;
-        (void) relative_diff;
-    }
 }
 
-TEST(cpu, hj_cpu_pmu_cycle_counter_functionality)
+TEST(cpu, hj_cpu_tsc_serialization)
 {
-    SCOPED_TRACE("Testing hj_cpu_pmu_cycle_counter_read functionality");
+    SCOPED_TRACE("Testing hj_cpu_tsc_start and hj_cpu_tsc_end serialization "
+                 "functionality");
 
-    uint64_t pmu1 = hj_cpu_pmu_cycle_counter_read();
-    std::this_thread::sleep_for(std::chrono::microseconds(100));
-    uint64_t pmu2 = hj_cpu_pmu_cycle_counter_read();
-    std::this_thread::sleep_for(std::chrono::microseconds(100));
-    uint64_t pmu3 = hj_cpu_pmu_cycle_counter_read();
+    uint32_t aux       = 0;
+    uint64_t start_tsc = hj_cpu_tsc_start();
 
-    EXPECT_GT(pmu2, pmu1) << "PMU cycle counter should be increasing";
-    EXPECT_GT(pmu3, pmu2) << "PMU cycle counter should be increasing";
-
-    bool        is_true_cycle_counter = false;
-    std::string counter_type          = "Unknown";
-
-#if defined(_WIN32) || defined(_WIN64)
-#if defined(_M_IX86) || defined(_M_X64)
-    is_true_cycle_counter = true;
-    counter_type          = "Windows x86/x64 RDTSC";
-#else
-    is_true_cycle_counter = false;
-    counter_type          = "Windows QueryPerformanceCounter";
-#endif
-#elif defined(__linux__)
-#if defined(__i386__) || defined(__x86_64__)
-    is_true_cycle_counter = true;
-    counter_type          = "Linux x86/x64 RDTSC";
-#elif defined(__arm__) || defined(__aarch64__)
-    is_true_cycle_counter = true;
-    counter_type          = "Linux ARM cycle counter";
-#else
-    is_true_cycle_counter = false;
-    counter_type          = "Linux clock_gettime";
-#endif
-#elif defined(__APPLE__)
-    is_true_cycle_counter = true;
-    counter_type          = "macOS mach_absolute_time";
-#else
-    is_true_cycle_counter = false;
-    counter_type          = "Generic fallback";
-#endif
-
-    auto     start     = std::chrono::high_resolution_clock::now();
-    uint64_t pmu_start = hj_cpu_pmu_cycle_counter_read();
-
-    volatile long long sum = 0;
-    for(int i = 0; i < 100000; ++i)
+    volatile uint64_t work = 0;
+    for(int i = 0; i < 1000; ++i)
     {
-        sum += i * i;
+        work += i;
     }
+    (void) work;
 
-    uint64_t pmu_end = hj_cpu_pmu_cycle_counter_read();
-    auto     end     = std::chrono::high_resolution_clock::now();
+    uint64_t end_tsc = hj_cpu_tsc_end(&aux);
 
-    auto wall_time =
-        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    uint64_t pmu_cycles = pmu_end - pmu_start;
+    EXPECT_GT(end_tsc, start_tsc)
+        << "Serialized end TSC should be greater than start TSC";
 
-    EXPECT_GT(pmu_cycles, 0u) << "PMU should count some cycles during work";
+    uint64_t start_tsc_null = hj_cpu_tsc_start();
+    uint64_t end_tsc_null   = hj_cpu_tsc_end(nullptr);
+    EXPECT_GT(end_tsc_null, start_tsc_null)
+        << "Serialized TSC with nullptr aux should work";
 
-    if(wall_time.count() > 0)
-    {
-        double cycles_per_microsecond = (double) pmu_cycles / wall_time.count();
-
-#if defined(__APPLE__)
-        EXPECT_GT(cycles_per_microsecond, 1.0)
-            << "mach_absolute_time should have reasonable frequency (> 1 MHz)";
-        EXPECT_LT(cycles_per_microsecond, 10000)
-            << "mach_absolute_time frequency should not be excessive";
-#else
-        if(is_true_cycle_counter)
-        {
-            EXPECT_GT(cycles_per_microsecond, 100)
-                << "CPU cycle rate seems too low for " << counter_type;
-            EXPECT_LT(cycles_per_microsecond, 10000)
-                << "CPU cycle rate seems too high for " << counter_type;
-        } else
-        {
-            EXPECT_GT(cycles_per_microsecond, 0.1)
-                << "Counter rate should be positive for " << counter_type;
-            EXPECT_LT(cycles_per_microsecond, 100000)
-                << "Counter rate seems unreasonably high for " << counter_type;
-
-            if(counter_type.find("QueryPerformanceCounter")
-               != std::string::npos)
-            {
-                std::cout
-                    << "  QueryPerformanceCounter frequency appears to be: "
-                    << cycles_per_microsecond << " counts/μs" << std::endl;
-                EXPECT_GT(cycles_per_microsecond, 0.1)
-                    << "QPC should have reasonable frequency";
-                EXPECT_LT(cycles_per_microsecond, 100)
-                    << "QPC frequency should be moderate";
-            }
-        }
+#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__)                   \
+    || defined(__x86_64__)
+    EXPECT_LT(aux, 1024u)
+        << "aux core ID returned by hj_cpu_tsc_end should be reasonable";
 #endif
-    }
-}
-
-TEST(cpu, hj_cpu_counter_frequency_detection)
-{
-    SCOPED_TRACE("Detecting counter frequencies and characteristics");
-
-    auto     wall_start = std::chrono::high_resolution_clock::now();
-    uint64_t tsc_start  = hj_cpu_tsc_read();
-    uint64_t pmu_start  = hj_cpu_pmu_cycle_counter_read();
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-    auto     wall_end = std::chrono::high_resolution_clock::now();
-    uint64_t tsc_end  = hj_cpu_tsc_read();
-    uint64_t pmu_end  = hj_cpu_pmu_cycle_counter_read();
-
-    auto wall_duration = std::chrono::duration_cast<std::chrono::microseconds>(
-        wall_end - wall_start);
-    uint64_t tsc_diff = tsc_end - tsc_start;
-    uint64_t pmu_diff = pmu_end - pmu_start;
-
-    if(wall_duration.count() > 0)
-    {
-        double tsc_freq_mhz = (double) tsc_diff / wall_duration.count();
-        double pmu_freq_mhz = (double) pmu_diff / wall_duration.count();
-        EXPECT_GT(tsc_freq_mhz, 0) << "TSC should have positive frequency";
-        EXPECT_GT(pmu_freq_mhz, 0) << "PMU should have positive frequency";
-    }
-
-    std::vector<double> tsc_frequencies;
-    std::vector<double> pmu_frequencies;
-
-    for(int i = 0; i < 5; ++i)
-    {
-        auto     start = std::chrono::high_resolution_clock::now();
-        uint64_t tsc_s = hj_cpu_tsc_read();
-        uint64_t pmu_s = hj_cpu_pmu_cycle_counter_read();
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-
-        auto     end   = std::chrono::high_resolution_clock::now();
-        uint64_t tsc_e = hj_cpu_tsc_read();
-        uint64_t pmu_e = hj_cpu_pmu_cycle_counter_read();
-
-        auto duration =
-            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        if(duration.count() > 0)
-        {
-            tsc_frequencies.push_back((double) (tsc_e - tsc_s)
-                                      / duration.count());
-            pmu_frequencies.push_back((double) (pmu_e - pmu_s)
-                                      / duration.count());
-        }
-    }
 }

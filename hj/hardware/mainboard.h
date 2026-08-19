@@ -115,10 +115,10 @@ extern "C" {
 
 // ------------------------ Helper Utilities ------------------------
 
-static inline int hj_parse_version_string(const char *str,
-                                          uint8_t    *major,
-                                          uint8_t    *minor,
-                                          uint8_t    *patch)
+HJ_MAINBOARD_API int hj_parse_version_string(const char *str,
+                                             uint8_t    *major,
+                                             uint8_t    *minor,
+                                             uint8_t    *patch)
 {
     if(!str || !major || !minor || !patch)
         return -1;
@@ -159,7 +159,7 @@ static inline int hj_parse_version_string(const char *str,
 static HJ_THREAD_LOCAL BOOL g_com_initialized = FALSE;
 static LONG                 g_sec_initialized = 0;
 
-static inline int hj_ensure_com_initialized(void)
+HJ_MAINBOARD_API int hj_ensure_com_initialized(void)
 {
     if(!g_com_initialized)
     {
@@ -184,10 +184,10 @@ static inline int hj_ensure_com_initialized(void)
     return 0;
 }
 
-static inline int hj_get_wmi_property(const char *wmi_class,
-                                      const char *prop_name,
-                                      char       *buf,
-                                      size_t      size)
+HJ_MAINBOARD_API int hj_get_wmi_property(const char *wmi_class,
+                                         const char *prop_name,
+                                         char       *buf,
+                                         size_t      size)
 {
     HRESULT               hres        = S_OK;
     IWbemLocator         *pLoc        = NULL;
@@ -371,7 +371,7 @@ cleanup:
 #endif // _WIN32
 
 #ifdef __linux__
-static inline int hj_read_sysfs(const char *path, char *buf, size_t size)
+HJ_MAINBOARD_API int hj_read_sysfs(const char *path, char *buf, size_t size)
 {
     if(!path || !buf || size == 0)
         return -1;
@@ -392,7 +392,7 @@ static inline int hj_read_sysfs(const char *path, char *buf, size_t size)
     return 0;
 }
 
-static inline int hj_get_linux_chipset(char *buf, size_t size)
+HJ_MAINBOARD_API int hj_get_linux_chipset(char *buf, size_t size)
 {
     char vendor_str[32] = {0};
     char device_str[32] = {0};
@@ -430,7 +430,7 @@ static inline int hj_get_linux_chipset(char *buf, size_t size)
 #endif
 
 #ifdef __APPLE__
-static inline int hj_sysctl_string(const char *name, char *buf, size_t size)
+HJ_MAINBOARD_API int hj_sysctl_string(const char *name, char *buf, size_t size)
 {
     if(!name || !buf || size == 0)
         return -1;
@@ -447,7 +447,7 @@ static inline int hj_sysctl_string(const char *name, char *buf, size_t size)
 
 // ------------------------ API Implementations ------------------------
 
-static inline hj_mainboard_err_t hj_mainboard_model(char *buf, size_t size)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_model(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -470,7 +470,7 @@ static inline hj_mainboard_err_t hj_mainboard_model(char *buf, size_t size)
 #endif
 }
 
-static inline hj_mainboard_err_t hj_mainboard_vendor(char *buf, size_t size)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_vendor(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -495,7 +495,8 @@ static inline hj_mainboard_err_t hj_mainboard_vendor(char *buf, size_t size)
 #endif
 }
 
-static inline hj_mainboard_err_t hj_mainboard_serial_num(char *buf, size_t size)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_serial_num(char  *buf,
+                                                            size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -538,8 +539,8 @@ static inline hj_mainboard_err_t hj_mainboard_serial_num(char *buf, size_t size)
 #endif
 }
 
-static inline hj_mainboard_err_t hj_mainboard_bios_version(char  *buf,
-                                                           size_t size)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_bios_version(char  *buf,
+                                                              size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -591,7 +592,7 @@ static inline hj_mainboard_err_t hj_mainboard_bios_version(char  *buf,
 #endif
 }
 
-static inline hj_mainboard_err_t hj_mainboard_chipset(char *buf, size_t size)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_chipset(char *buf, size_t size)
 {
     if(!buf || size == 0)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -616,7 +617,8 @@ static inline hj_mainboard_err_t hj_mainboard_chipset(char *buf, size_t size)
     return HJ_MAINBOARD_OK;
 }
 
-static inline hj_mainboard_err_t hj_mainboard_memory_slots(unsigned int *slots)
+HJ_MAINBOARD_API hj_mainboard_err_t
+hj_mainboard_memory_slots(unsigned int *slots)
 {
     if(!slots)
         return HJ_MAINBOARD_ERR_INVALID_ARG;
@@ -649,7 +651,7 @@ static inline hj_mainboard_err_t hj_mainboard_memory_slots(unsigned int *slots)
 #endif
 }
 
-static inline hj_mainboard_err_t
+HJ_MAINBOARD_API hj_mainboard_err_t
 hj_mainboard_expansion_slots(unsigned int *slots)
 {
     if(!slots)
@@ -669,20 +671,21 @@ hj_mainboard_expansion_slots(unsigned int *slots)
 #endif
 }
 
-static inline hj_mainboard_err_t hj_mainboard_manufacturer_name(char  *buf,
-                                                                size_t size)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_manufacturer_name(char  *buf,
+                                                                   size_t size)
 {
     return hj_mainboard_vendor(buf, size);
 }
 
-static inline hj_mainboard_err_t hj_mainboard_product_name(char  *buf,
-                                                           size_t size)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_product_name(char  *buf,
+                                                              size_t size)
 {
     return hj_mainboard_model(buf, size);
 }
 
-static inline hj_mainboard_err_t
-hj_mainboard_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
+HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_version(uint8_t *major,
+                                                         uint8_t *minor,
+                                                         uint8_t *patch)
 {
     if(!major || !minor || !patch)
         return HJ_MAINBOARD_ERR_INVALID_ARG;

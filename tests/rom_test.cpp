@@ -7,18 +7,26 @@
 #define HJ_ROM_IMPL
 #include <hj/hardware/rom.h>
 
-// Helper to create a test ROM file
-static void create_test_rom(const char *filename, const char *content)
+static void
+create_test_rom(const std::string &filename, const char *content, size_t len)
 {
-    FILE *fp = fopen(filename, "wb");
+    FILE *fp = fopen(filename.c_str(), "wb");
     if(!fp)
         FAIL() << "Failed to create test ROM file: " << filename;
 
-    fwrite(content, 1, strlen(content), fp);
+    fwrite(content, 1, len, fp);
     fclose(fp);
 }
 
-// Test ROM initialization
+static void create_empty_rom(const std::string &filename)
+{
+    FILE *fp = fopen(filename.c_str(), "wb");
+    if(fp)
+    {
+        fclose(fp);
+    }
+}
+
 TEST(rom, initialization)
 {
     rom_t r;
@@ -26,117 +34,172 @@ TEST(rom, initialization)
     EXPECT_EQ(r.data, nullptr);
     EXPECT_EQ(r.size, 0u);
     EXPECT_FALSE(r.loaded);
+
+    rom_init(nullptr);
 }
 
-// Test loading ROM from file
-TEST(rom, load)
+TEST(rom, load_success)
 {
-    rom_t       _rom;
-    std::string test_content = "ROMDATA123";
+    std::string test_content = "ROMDATA123456789";
     std::string test_file =
-        (std::filesystem::current_path() / "test1.rom").string();
+        (std::filesystem::current_path() / "test_success.rom").string();
 
     std::filesystem::remove_all(test_file);
-    create_test_rom(test_file.c_str(), test_content.c_str());
-    rom_init(&_rom);
+    create_test_rom(test_file, test_content.data(), test_content.size());
+
     if(!std::filesystem::exists(test_file))
     {
-        GTEST_SKIP() << "skip test rom::load create file failed";
+        GTEST_SKIP() << "skip test rom::load_success create file failed";
     }
 
-    EXPECT_TRUE(rom_load(&_rom, test_file.c_str()));
+    rom_t _rom;
+    rom_init(&_rom);
+
+    EXPECT_EQ(rom_load(&_rom, test_file.c_str()), ROM_SUCCESS);
     EXPECT_TRUE(_rom.loaded);
+    EXPECT_NE(_rom.data, nullptr);
     EXPECT_EQ(_rom.size, test_content.size());
+
+    rom_free(&_rom);
+    std::filesystem::remove_all(test_file);
 }
 
-// Test reading from ROM
-TEST(rom, read)
+TEST(rom, load_error_conditions)
 {
-    rom_t       _rom;
-    std::string test_content = "ROMDATA123";
-    std::string test_file =
-        (std::filesystem::current_path() / "test2.rom").string();
-
-    std::filesystem::remove_all(test_file);
-    create_test_rom(test_file.c_str(), test_content.c_str());
+    rom_t _rom;
     rom_init(&_rom);
-    if(!std::filesystem::exists(test_file))
+
+    EXPECT_EQ(rom_load(nullptr, "dummy.rom"), ROM_ERR_INVALID_PARAM);
+    EXPECT_EQ(rom_load(&_rom, nullptr), ROM_ERR_INVALID_PARAM);
+
+    std::string non_existent =
+        (std::filesystem::current_path() / "non_existent.rom").string();
+    std::filesystem::remove_all(non_existent);
+    EXPECT_EQ(rom_load(&_rom, non_existent.c_str()), ROM_ERR_FILE_NOT_FOUND);
+
+    std::string empty_file =
+        (std::filesystem::current_path() / "empty.rom").string();
+    std::filesystem::remove_all(empty_file);
+    create_empty_rom(empty_file);
+    if(std::filesystem::exists(empty_file))
     {
-        GTEST_SKIP() << "skip test rom::read create file failed";
+        EXPECT_EQ(rom_load(&_rom, empty_file.c_str()), ROM_ERR_EMPTY_FILE);
+        std::filesystem::remove_all(empty_file);
     }
-
-    ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
-    char   buf[16] = {0};
-    size_t n       = rom_read(&_rom, 0, buf, 4);
-    EXPECT_EQ(n, 4u);
-    EXPECT_EQ(std::string(buf, 4), "ROMD");
-
-    n = rom_read(&_rom, 5, buf, 16);
-    EXPECT_EQ(n, test_content.size() - 5);
-    EXPECT_EQ(std::string(buf, n), "TA123");
 }
 
-// Test reading with offset out of range
-TEST(rom, read_offset_out_of_range)
+TEST(rom, read_operations)
 {
-    rom_t       _rom;
-    std::string test_content = "ROMDATA123";
+    std::string test_content = "HELLO_ROM_WORLD";
     std::string test_file =
-        (std::filesystem::current_path() / "test3.rom").string();
+        (std::filesystem::current_path() / "test_read.rom").string();
 
     std::filesystem::remove_all(test_file);
-    create_test_rom(test_file.c_str(), test_content.c_str());
-    rom_init(&_rom);
-    if(!std::filesystem::exists(test_file))
-    {
-        GTEST_SKIP()
-            << "skip test rom::read_offset_out_of_range create file failed";
-    }
+    create_test_rom(test_file, test_content.data(), test_content.size());
 
-    ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
-    char   buf[8] = {0};
-    size_t n      = rom_read(&_rom, 100, buf, 4);
+    rom_t _rom;
+    rom_init(&_rom);
+    ASSERT_EQ(rom_load(&_rom, test_file.c_str()), ROM_SUCCESS);
+
+    char buf[32] = {0};
+
+    size_t n = rom_read(&_rom, 0, buf, 5);
+    EXPECT_EQ(n, 5u);
+    EXPECT_EQ(std::string(buf, 5), "HELLO");
+
+    memset(buf, 0, sizeof(buf));
+    n = rom_read(&_rom, 0, buf, 0);
     EXPECT_EQ(n, 0u);
+
+    n = rom_read(&_rom, 100, buf, 4);
+    EXPECT_EQ(n, 0u);
+
+    memset(buf, 0, sizeof(buf));
+    size_t offset = test_content.size() - 5;
+    n             = rom_read(&_rom, offset, buf, 20);
+    EXPECT_EQ(n, 5u);
+    EXPECT_EQ(std::string(buf, 5), "WORLD");
+
+    rom_free(&_rom);
+    std::filesystem::remove_all(test_file);
 }
 
-// Test loading with invalid arguments
-TEST(rom, load_invalid_args)
+TEST(rom, read_invalid_state)
 {
-    rom_t       _rom;
-    std::string test_content = "ROMDATA123";
+    char  buf[16];
+    rom_t _rom;
+    rom_init(&_rom);
+
+    EXPECT_EQ(rom_read(&_rom, 0, buf, sizeof(buf)), 0u);
+
+    EXPECT_EQ(rom_read(nullptr, 0, buf, sizeof(buf)), 0u);
+
     std::string test_file =
-        (std::filesystem::current_path() / "test4.rom").string();
+        (std::filesystem::current_path() / "test_dummy.rom").string();
+    create_test_rom(test_file, "1234", 4);
+    ASSERT_EQ(rom_load(&_rom, test_file.c_str()), ROM_SUCCESS);
+
+    EXPECT_EQ(rom_read(&_rom, 0, nullptr, 4), 0u);
+
+    rom_free(&_rom);
+    std::filesystem::remove_all(test_file);
+}
+
+TEST(rom, free_operations)
+{
+    std::string test_file =
+        (std::filesystem::current_path() / "test_free.rom").string();
+    create_test_rom(test_file, "DATA", 4);
+
+    rom_t _rom;
+    rom_init(&_rom);
+    ASSERT_EQ(rom_load(&_rom, test_file.c_str()), ROM_SUCCESS);
+
+    rom_free(&_rom);
+    EXPECT_EQ(_rom.data, nullptr);
+    EXPECT_EQ(_rom.size, 0u);
+    EXPECT_FALSE(_rom.loaded);
+
+    rom_free(&_rom);
+    rom_free(nullptr);
 
     std::filesystem::remove_all(test_file);
-    create_test_rom(test_file.c_str(), test_content.c_str());
-    rom_init(&_rom);
-    if(!std::filesystem::exists(test_file))
-    {
-        GTEST_SKIP() << "skip test rom::load_invalid_args create file failed";
-    }
-
-    EXPECT_FALSE(rom_load(nullptr, test_file.c_str()));
-    EXPECT_FALSE(rom_load(&_rom, nullptr));
 }
 
-// // Test freeing ROM
-// TEST(rom, free)
-// {
-//     rom_t       _rom;
-//     std::string test_content = "ROMDATA123";
-//     std::string test_file = (std::filesystem::current_path() / "test5.rom").string();
+TEST(rom, transactional_reload)
+{
+    std::string file1 =
+        (std::filesystem::current_path() / "file1.rom").string();
+    std::string file2 =
+        (std::filesystem::current_path() / "file2.rom").string();
+    std::string non_existent =
+        (std::filesystem::current_path() / "bad.rom").string();
+    std::filesystem::remove_all(non_existent);
 
-//     std::filesystem::remove_all(test_file);
-//     create_test_rom(test_file.c_str(), test_content.c_str());
-//     rom_init(&_rom);
-//     if(!std::filesystem::exists(test_file))
-//     {
-//         GTEST_SKIP() << "skip test rom::free create file failed";
-//     }
+    create_test_rom(file1, "FIRST_ROM", 9);
+    create_test_rom(file2, "SECOND_ROM_EXTENDED", 19);
 
-//     ASSERT_TRUE(rom_load(&_rom, test_file.c_str()));
-//     rom_free(&_rom);
-//     EXPECT_EQ(_rom.data, nullptr);
-//     EXPECT_EQ(_rom.size, 0u);
-//     EXPECT_FALSE(_rom.loaded);
-// }
+    rom_t _rom;
+    rom_init(&_rom);
+
+    ASSERT_EQ(rom_load(&_rom, file1.c_str()), ROM_SUCCESS);
+    EXPECT_EQ(_rom.size, 9u);
+
+    EXPECT_NE(rom_load(&_rom, non_existent.c_str()), ROM_SUCCESS);
+    EXPECT_TRUE(_rom.loaded);
+    EXPECT_EQ(_rom.size, 9u);
+
+    char buf[32] = {0};
+    rom_read(&_rom, 0, buf, 5);
+    EXPECT_EQ(std::string(buf, 5), "FIRST");
+
+    EXPECT_EQ(rom_load(&_rom, file2.c_str()), ROM_SUCCESS);
+    EXPECT_EQ(_rom.size, 19u);
+    memset(buf, 0, sizeof(buf));
+    rom_read(&_rom, 0, buf, 6);
+    EXPECT_EQ(std::string(buf, 6), "SECOND");
+
+    rom_free(&_rom);
+    std::filesystem::remove_all(file1);
+    std::filesystem::remove_all(file2);
+}

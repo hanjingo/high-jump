@@ -78,8 +78,8 @@ TEST(ram, system_memory_information)
         std::cout << "  Available Swap Space: " << buffer << std::endl;
 
         std::cout << "  Memory Load: " << info.memory_load << "%" << std::endl;
-        std::cout << "  Page Size: " << info.page_size << " bytes" << std::endl;
-        std::cout << "  Large Page Size: " << info.large_page_size << " bytes"
+        std::cout << "  Page Size: " << info.page_size << " byte" << std::endl;
+        std::cout << "  Large Page Size: " << info.large_page_size << " byte"
                   << std::endl;
         std::cout << "  Module Count: " << info.module_count << std::endl;
 
@@ -224,7 +224,7 @@ TEST(ram, aligned_memory_allocation)
             // Check alignment
             uintptr_t addr = (uintptr_t) aligned_ptr;
             EXPECT_EQ(addr % alignments[i], 0)
-                << "Memory should be aligned to " << alignments[i] << " bytes";
+                << "Memory should be aligned to " << alignments[i] << " byte";
 
             // Test that we can write to the memory
             memset(aligned_ptr, 0xAA, test_size);
@@ -509,10 +509,10 @@ TEST(ram, utility_functions)
     // Test RAM size formatting (matched to actual implementation behavior)
     char buffer[64];
     EXPECT_EQ(ram_format_size(0, buffer, sizeof(buffer)), RAM_SUCCESS);
-    EXPECT_STREQ(buffer, "0 byte");
+    EXPECT_STREQ(buffer, "0 bytes");
 
     EXPECT_EQ(ram_format_size(1, buffer, sizeof(buffer)), RAM_SUCCESS);
-    EXPECT_STREQ(buffer, "1 byte");
+    EXPECT_STREQ(buffer, "1 bytes");
 
     EXPECT_EQ(ram_format_size(1024, buffer, sizeof(buffer)), RAM_SUCCESS);
     EXPECT_STREQ(buffer, "1.00 KB");
@@ -535,9 +535,9 @@ TEST(ram, process_usage)
     if(result == RAM_SUCCESS)
     {
         std::cout << "Process Memory Usage:" << std::endl;
-        std::cout << "  Current Usage: " << stats.current_usage << " bytes"
+        std::cout << "  Current Usage: " << stats.current_usage << " byte"
                   << std::endl;
-        std::cout << "  Peak Usage: " << stats.peak_usage << " bytes"
+        std::cout << "  Peak Usage: " << stats.peak_usage << " byte"
                   << std::endl;
         std::cout << "  Page Faults: " << stats.page_faults << std::endl;
 

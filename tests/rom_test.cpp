@@ -101,23 +101,23 @@ TEST(rom, read_operations)
     rom_init(&_rom);
     ASSERT_EQ(rom_load(&_rom, test_file.c_str()), ROM_SUCCESS);
 
-    char buf[32] = {0};
+    char   buf[32]  = {0};
+    size_t out_read = 0;
 
-    size_t n = rom_read(&_rom, 0, buf, 5);
-    EXPECT_EQ(n, 5u);
+    EXPECT_EQ(rom_read(&_rom, 0, buf, 5, &out_read), ROM_SUCCESS);
+    EXPECT_EQ(out_read, 5u);
     EXPECT_EQ(std::string(buf, 5), "HELLO");
 
     memset(buf, 0, sizeof(buf));
-    n = rom_read(&_rom, 0, buf, 0);
-    EXPECT_EQ(n, 0u);
+    EXPECT_EQ(rom_read(&_rom, 0, buf, 0, &out_read), ROM_SUCCESS);
+    EXPECT_EQ(out_read, 0u);
 
-    n = rom_read(&_rom, 100, buf, 4);
-    EXPECT_EQ(n, 0u);
+    EXPECT_EQ(rom_read(&_rom, 100, buf, 4, &out_read), ROM_ERR_OUT_OF_BOUNDS);
 
     memset(buf, 0, sizeof(buf));
     size_t offset = test_content.size() - 5;
-    n             = rom_read(&_rom, offset, buf, 20);
-    EXPECT_EQ(n, 5u);
+    EXPECT_EQ(rom_read(&_rom, offset, buf, 20, &out_read), ROM_SUCCESS);
+    EXPECT_EQ(out_read, 5u);
     EXPECT_EQ(std::string(buf, 5), "WORLD");
 
     rom_free(&_rom);
@@ -129,17 +129,20 @@ TEST(rom, read_invalid_state)
     char  buf[16];
     rom_t _rom;
     rom_init(&_rom);
+    size_t out_read = 0;
 
-    EXPECT_EQ(rom_read(&_rom, 0, buf, sizeof(buf)), 0u);
+    EXPECT_EQ(rom_read(&_rom, 0, buf, sizeof(buf), &out_read),
+              ROM_ERR_NOT_LOADED);
 
-    EXPECT_EQ(rom_read(nullptr, 0, buf, sizeof(buf)), 0u);
+    EXPECT_EQ(rom_read(nullptr, 0, buf, sizeof(buf), &out_read),
+              ROM_ERR_INVALID_PARAM);
 
     std::string test_file =
         (std::filesystem::current_path() / "test_dummy.rom").string();
     create_test_rom(test_file, "1234", 4);
     ASSERT_EQ(rom_load(&_rom, test_file.c_str()), ROM_SUCCESS);
 
-    EXPECT_EQ(rom_read(&_rom, 0, nullptr, 4), 0u);
+    EXPECT_EQ(rom_read(&_rom, 0, nullptr, 4, &out_read), ROM_ERR_INVALID_PARAM);
 
     rom_free(&_rom);
     std::filesystem::remove_all(test_file);
@@ -189,14 +192,15 @@ TEST(rom, transactional_reload)
     EXPECT_TRUE(_rom.loaded);
     EXPECT_EQ(_rom.size, 9u);
 
-    char buf[32] = {0};
-    rom_read(&_rom, 0, buf, 5);
+    char   buf[32]  = {0};
+    size_t out_read = 0;
+    EXPECT_EQ(rom_read(&_rom, 0, buf, 5, &out_read), ROM_SUCCESS);
     EXPECT_EQ(std::string(buf, 5), "FIRST");
 
     EXPECT_EQ(rom_load(&_rom, file2.c_str()), ROM_SUCCESS);
     EXPECT_EQ(_rom.size, 19u);
     memset(buf, 0, sizeof(buf));
-    rom_read(&_rom, 0, buf, 6);
+    EXPECT_EQ(rom_read(&_rom, 0, buf, 6, &out_read), ROM_SUCCESS);
     EXPECT_EQ(std::string(buf, 6), "SECOND");
 
     rom_free(&_rom);

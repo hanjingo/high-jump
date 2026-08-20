@@ -8,21 +8,51 @@
 #include <chrono>
 #include <functional>
 
+class HjInitEnvironment : public ::testing::Environment
+{
+  public:
+    void SetUp() override { hj::registry::instance().bootstrap(); }
+};
+
+static ::testing::Environment *const hj_init_env =
+    ::testing::AddGlobalTestEnvironment(new HjInitEnvironment);
+
 static int              global_init_counter = 0;
 static std::vector<int> global_init_order;
 static std::atomic<int> atomic_counter{0};
 
-INIT(global_init_counter += 1; global_init_order.push_back(1););
-INIT(global_init_counter += 1; global_init_order.push_back(2););
-INIT(global_init_counter += 1; global_init_order.push_back(3););
+HJ_INIT(global_init_counter += 1; global_init_order.push_back(1););
+HJ_INIT(global_init_counter += 1; global_init_order.push_back(2););
+HJ_INIT(global_init_counter += 1; global_init_order.push_back(3););
 
-INIT(
+HJ_INIT(
     try { throw std::runtime_error("test exception in init"); } catch(...) {
         global_init_counter += 10;
     });
 
-INIT(atomic_counter.fetch_add(1););
-INIT(atomic_counter.fetch_add(1););
+HJ_INIT(atomic_counter.fetch_add(1););
+HJ_INIT(atomic_counter.fetch_add(1););
+
+// -----------------------------------------------------------------------------
+// New Test Fixtures for Priority Sorting and Stability Verification
+// -----------------------------------------------------------------------------
+static std::vector<std::string> priority_execution_order;
+
+// Register out of order and include duplicate priorities to test std::stable_sort
+HJ_INIT_PRIORITY(hj::priority::LOW,
+                 priority_execution_order.push_back("LOW_1"););
+HJ_INIT_PRIORITY(hj::priority::HIGHEST,
+                 priority_execution_order.push_back("HIGHEST_1"););
+HJ_INIT_PRIORITY(hj::priority::NORMAL,
+                 priority_execution_order.push_back("NORMAL_1"););
+HJ_INIT_PRIORITY(
+    hj::priority::HIGHEST,
+    priority_execution_order.push_back(
+        "HIGHEST_2");); // Should maintain relative order after HIGHEST_1
+HJ_INIT_PRIORITY(hj::priority::LOWEST,
+                 priority_execution_order.push_back("LOWEST_1"););
+HJ_INIT_PRIORITY(hj::priority::HIGH,
+                 priority_execution_order.push_back("HIGH_1"););
 
 class init_test_resource
 {
@@ -44,8 +74,8 @@ class init_test_resource
 int init_test_resource::instance_count = 0;
 
 static std::unique_ptr<init_test_resource> global_resource;
-INIT(global_resource = std::make_unique<init_test_resource>();
-     global_resource->setValue(42););
+HJ_INIT(global_resource = std::make_unique<init_test_resource>();
+        global_resource->setValue(42););
 
 TEST(init, global_init_execution)
 {
@@ -54,6 +84,26 @@ TEST(init, global_init_execution)
     EXPECT_EQ(global_init_order[0], 1);
     EXPECT_EQ(global_init_order[1], 2);
     EXPECT_EQ(global_init_order[2], 3);
+}
+
+TEST(init, priority_sorting_and_stability)
+{
+    // Expected order: HIGHEST_1 -> HIGHEST_2 -> HIGH_1 -> NORMAL_1 -> LOW_1 -> LOWEST_1
+    // This verifies both priority ranking (descending) and stability for identical priorities.
+    ASSERT_GE(priority_execution_order.size(), 6);
+    EXPECT_EQ(priority_execution_order[0], "HIGHEST_1");
+    EXPECT_EQ(priority_execution_order[1], "HIGHEST_2");
+    EXPECT_EQ(priority_execution_order[2], "HIGH_1");
+    EXPECT_EQ(priority_execution_order[3], "NORMAL_1");
+    EXPECT_EQ(priority_execution_order[4], "LOW_1");
+    EXPECT_EQ(priority_execution_order[5], "LOWEST_1");
+}
+
+TEST(init, bootstrap_idempotency)
+{
+    // Calling bootstrap() multiple times after execution should be completely safe and idempotent
+    EXPECT_NO_THROW(hj::registry::instance().bootstrap());
+    EXPECT_NO_THROW(hj::registry::instance().bootstrap());
 }
 
 TEST(init, atomic_initialization)
@@ -121,6 +171,27 @@ TEST(init, exception_in_init)
         EXPECT_EQ(counter, 2);
         EXPECT_TRUE(exception_caught);
     }
+}
+
+TEST(init, uncaught_exception_terminates)
+{
+    EXPECT_DEATH(
+        {
+            hj::init(
+                []() { throw std::runtime_error("unhandled fatal error"); });
+        },
+        "Critical: Exception in HJ_INIT");
+}
+
+TEST(init, init_once_uncaught_exception_terminates)
+{
+    EXPECT_DEATH(
+        {
+            hj::init_once([]() {
+                throw std::runtime_error("unhandled fatal once error");
+            });
+        },
+        "Critical: Exception in HJ_INIT_ONCE");
 }
 
 TEST(init, complex_initialization)

@@ -2,57 +2,81 @@
  *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  Licensed under the GNU General Public License, Version 3.0.
  */
 
 #ifndef DEFER_HPP
 #define DEFER_HPP
 
-#include <functional>
+#include <utility>
+#include <type_traits>
 
 namespace hj
 {
 
-class defer final
+struct empty_defer_t
 {
-  public:
-    defer() noexcept {}
-    ~defer() noexcept
-    {
-        if(_cb)
-            _cb();
-    }
-
-    defer(const defer &other)       = delete;
-    defer &operator=(const defer &) = delete;
-    defer(defer &&other)            = delete;
-    defer &operator=(defer &&other) = delete;
-
-    explicit defer(std::function<void()> &&cb) { _cb = std::move(cb); }
-
-  private:
-    std::function<void()> _cb;
+    void operator()() const noexcept {}
 };
 
-}
+template <typename F = empty_defer_t>
+class [[nodiscard]] defer final
+{
+  public:
+    defer() noexcept
+        : _active(false)
+    {
+    }
 
-#define __defer_cat(a, b) a##b
-#define _defer_cat(a, b) __defer_cat(a, b)
+    template <
+        typename Fn,
+        typename = std::enable_if_t<!std::is_same_v<std::decay_t<Fn>, defer>>>
+    explicit defer(Fn &&f) noexcept(std::is_nothrow_constructible_v<F, Fn>)
+        : _cb(std::forward<Fn>(f))
+        , _active(true)
+    {
+    }
 
-#define DEFER(cmd)                                                             \
-    ::hj::defer _defer_cat(__simulate_go_defer__,                              \
-                           __COUNTER__)([&]() noexcept {                       \
+    ~defer() noexcept
+    {
+        if(_active)
+        {
+            try
+            {
+                _cb();
+            }
+            catch(...)
+            {
+            }
+        }
+    }
+
+    defer(const defer &)            = delete;
+    defer &operator=(const defer &) = delete;
+    defer(defer &&other) noexcept(std::is_nothrow_move_constructible_v<F>)
+        : _cb(std::move(other._cb))
+        , _active(other._active)
+    {
+        other._active = false;
+    }
+
+    defer &operator=(defer &&) = delete;
+
+  private:
+    F    _cb;
+    bool _active = false;
+};
+
+template <typename Fn>
+defer(Fn &&) -> defer<std::decay_t<Fn>>;
+
+} // namespace hj
+
+#define HJ_DEFER_CAT_IMPL(a, b) a##b
+#define HJ_DEFER_CAT(a, b) HJ_DEFER_CAT_IMPL(a, b)
+
+#define HJ_DEFER(cmd)                                                          \
+    auto HJ_DEFER_CAT(_hj_defer_obj_, __COUNTER__) = ::hj::defer([&]() {       \
         try                                                                    \
         {                                                                      \
             cmd;                                                               \
@@ -60,17 +84,18 @@ class defer final
         catch(...)                                                             \
         {                                                                      \
         }                                                                      \
-    });
-#define DEFER_CLASS(cmd)                                                       \
-    ::hj::defer _defer_cat(__simulate_go_defer_class__,                        \
-                           __COUNTER__)([&, this]() noexcept {                 \
-        try                                                                    \
-        {                                                                      \
-            cmd;                                                               \
-        }                                                                      \
-        catch(...)                                                             \
-        {                                                                      \
-        }                                                                      \
-    });
+    })
+
+#define HJ_DEFER_CLASS(cmd)                                                    \
+    auto HJ_DEFER_CAT(_hj_defer_class_obj_, __COUNTER__) =                     \
+        ::hj::defer([&, this]() {                                              \
+            try                                                                \
+            {                                                                  \
+                cmd;                                                           \
+            }                                                                  \
+            catch(...)                                                         \
+            {                                                                  \
+            }                                                                  \
+        })
 
 #endif // DEFER_HPP

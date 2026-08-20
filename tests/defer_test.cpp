@@ -31,7 +31,7 @@ TEST(defer_test, basic_defer)
     int counter = 0;
 
     {
-        DEFER(counter = 42;);
+        HJ_DEFER(counter = 42;);
         EXPECT_EQ(counter, 0);
     }
 
@@ -43,9 +43,9 @@ TEST(defer_test, multiple_defers_execution_order)
     std::vector<int> execution_order;
 
     {
-        DEFER(execution_order.push_back(1););
-        DEFER(execution_order.push_back(2););
-        DEFER(execution_order.push_back(3););
+        HJ_DEFER(execution_order.push_back(1););
+        HJ_DEFER(execution_order.push_back(2););
+        HJ_DEFER(execution_order.push_back(3););
     }
 
     ASSERT_EQ(execution_order.size(), 3);
@@ -60,7 +60,7 @@ TEST(defer_test, complex_expressions)
     std::string result;
 
     {
-        DEFER(result = std::to_string(a + b + c); a *= 2; b *= 3; c *= 4;);
+        HJ_DEFER(result = std::to_string(a + b + c); a *= 2; b *= 3; c *= 4;);
 
         a = 10;
         b = 20;
@@ -81,7 +81,7 @@ TEST(defer_test, resource_management)
         auto resource = std::make_unique<test_resource>(resource_counter);
         EXPECT_EQ(resource_counter, 1);
 
-        DEFER(resource.reset(););
+        HJ_DEFER(resource.reset(););
 
         EXPECT_EQ(resource_counter, 1);
     }
@@ -96,8 +96,8 @@ TEST(defer_test, exception_safety)
 
     try
     {
-        DEFER(cleanup_counter++;);
-        DEFER(cleanup_counter++;);
+        HJ_DEFER(cleanup_counter++;);
+        HJ_DEFER(cleanup_counter++;);
 
         throw std::runtime_error("test exception");
     }
@@ -116,9 +116,9 @@ TEST(defer_test, exception_in_defer)
     bool normal_execution = false;
 
     {
-        DEFER(counter = 1;);
-        DEFER(throw std::runtime_error("exception in defer"););
-        DEFER(counter = 2;);
+        HJ_DEFER(counter = 1;);
+        HJ_DEFER(throw std::runtime_error("exception in defer"););
+        HJ_DEFER(counter = 2;);
 
         normal_execution = true;
     }
@@ -132,16 +132,16 @@ TEST(defer_test, nested_scopes)
     std::vector<std::string> execution_log;
 
     {
-        DEFER(execution_log.push_back("outer"););
+        HJ_DEFER(execution_log.push_back("outer"););
 
         {
-            DEFER(execution_log.push_back("inner1"););
+            HJ_DEFER(execution_log.push_back("inner1"););
 
             {
-                DEFER(execution_log.push_back("innermost"););
+                HJ_DEFER(execution_log.push_back("innermost"););
             }
 
-            DEFER(execution_log.push_back("inner2"););
+            HJ_DEFER(execution_log.push_back("inner2"););
         }
     }
 
@@ -159,7 +159,7 @@ TEST(defer_test, variable_capture)
 
     {
         int y = 20;
-        DEFER(captured_value = x + y;);
+        HJ_DEFER(captured_value = x + y;);
 
         x = 100;
         y = 200;
@@ -215,7 +215,7 @@ TEST(defer_test, edge_cases)
         std::vector<int> local_vec = {1, 2, 3};
         vec_ptr                    = &local_vec;
 
-        DEFER(vec_ptr = nullptr;);
+        HJ_DEFER(vec_ptr = nullptr;);
     }
 
     EXPECT_EQ(vec_ptr, nullptr);

@@ -27,6 +27,8 @@
 
 #include <hj/os/os.hpp>
 
+#include <hj/str/str.hpp>
+
 #include <hj/sync/sync.hpp>
 
 #include <hj/testing/testing.hpp>

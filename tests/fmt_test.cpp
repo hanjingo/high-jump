@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <hj/encoding/fmt.hpp>
+#include <hj/str/fmt.hpp>
 
 #include <map>
 #include <set>

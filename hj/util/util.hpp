@@ -7,6 +7,4 @@
 
 #include <hj/util/once.hpp>
 
-#include <hj/util/string_util.hpp>
-
 #endif

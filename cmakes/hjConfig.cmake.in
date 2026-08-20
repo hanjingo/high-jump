@@ -38,6 +38,11 @@ if(nlohmann_json_FOUND)
     list(APPEND hj_LIBRARIES nlohmann_json::nlohmann_json)
 endif()
 
+find_package(hwy CONFIG QUIET)
+if(hwy_FOUND)
+    list(APPEND hj_LIBRARIES hwy::hwy)
+endif()
+
 # concurrentqueue is header-only, no link target needed
 
 # ==============================================================================

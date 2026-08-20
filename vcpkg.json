@@ -44,6 +44,7 @@
     "gtest",
     "hffix",
     "hidapi",
+    "highway",
     "hiredis",
     "jwt-cpp",
     "llama-cpp",
@@ -236,6 +237,10 @@
     {
       "name": "hidapi",
       "version": "0.15.0#1"
+    },
+    {
+      "name": "highway",
+      "version": "1.4.0"
     },
     {
       "name": "hiredis",

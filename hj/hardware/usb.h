@@ -35,25 +35,17 @@ extern "C" {
 #endif
 #endif
 
-typedef hid_device_info usb_info_t;
-typedef bool (*usb_device_range_fn)(usb_info_t *device);
-typedef bool (*usb_device_filter_fn)(const usb_info_t *device);
+typedef hid_device_info hj_usb_info_t;
+typedef bool (*hj_usb_device_range_fn)(const hj_usb_info_t *device);
+typedef bool (*hj_usb_device_filter_fn)(const hj_usb_info_t *device);
 
-HJ_USB_API bool default_usb_device_filter(const usb_info_t *device)
-{
-    if(!device)
-        return false;
-
-    if(device->bus_type == HID_API_BUS_USB)
-        return true;
-
-    return false;
-}
-
-// ------------------------ ROM API Declarations ------------------------
-HJ_USB_API void usb_device_range(usb_device_range_fn  fn,
-                                 usb_device_filter_fn filter);
-HJ_USB_API int  usb_device_count(usb_device_filter_fn filter);
+// ------------------------ API Declarations ------------------------
+HJ_USB_API int  hj_usb_init(void);
+HJ_USB_API int  hj_usb_shutdown(void);
+HJ_USB_API void hj_usb_device_range(hj_usb_device_range_fn  fn,
+                                    hj_usb_device_filter_fn filter);
+HJ_USB_API int  hj_usb_device_count(hj_usb_device_filter_fn filter);
+HJ_USB_API bool hj_default_usb_device_filter(const hj_usb_info_t *device);
 
 #ifdef __cplusplus
 }
@@ -62,8 +54,6 @@ HJ_USB_API int  usb_device_count(usb_device_filter_fn filter);
 #endif // USB_H
 
 // --------------------- Implementation -------------------------
-// To include implementation, define HJ_USB_IMPL before including
-// this header in ONE C/C++ source file.
 #if (defined(HJ_USB_IMPL) || defined(HJ_USB_STATIC))                           \
     && !defined(HJ_USB_IMPL_DONE)
 #define HJ_USB_IMPL_DONE
@@ -72,17 +62,66 @@ HJ_USB_API int  usb_device_count(usb_device_filter_fn filter);
 extern "C" {
 #endif
 
-HJ_USB_API void usb_device_range(usb_device_range_fn  fn,
-                                 usb_device_filter_fn filter)
+#include <stdlib.h>
+
+static int  g_hj_user_init_count    = 0;
+static int  g_hj_internal_init_flag = 0;
+static void usb_atexit_handler(void)
+{
+    if(g_hj_internal_init_flag)
+    {
+        hid_exit();
+        g_hj_internal_init_flag = 0;
+    }
+}
+
+static void internal_hid_ensure_init(void)
+{
+    if(!g_hj_internal_init_flag)
+    {
+        if(hid_init() == 0)
+        {
+            g_hj_internal_init_flag = 1;
+            atexit(usb_atexit_handler);
+        }
+    }
+}
+
+HJ_USB_API int hj_usb_init(void)
+{
+    if(g_hj_user_init_count++ == 0)
+    {
+        if(hid_init() != 0)
+        {
+            g_hj_user_init_count = 0;
+            return -1;
+        }
+    }
+    return 0;
+}
+
+HJ_USB_API int hj_usb_shutdown(void)
+{
+    if(g_hj_user_init_count > 0 && --g_hj_user_init_count == 0)
+    {
+        return hid_exit();
+    }
+    return 0;
+}
+
+HJ_USB_API void hj_usb_device_range(hj_usb_device_range_fn  fn,
+                                    hj_usb_device_filter_fn filter)
 {
     if(!fn)
         return;
 
-    usb_info_t *head = hid_enumerate(0x00, 0x00);
+    internal_hid_ensure_init();
+
+    hj_usb_info_t *head = hid_enumerate(0x00, 0x00);
     if(!head)
         return;
 
-    usb_info_t *info;
+    const hj_usb_info_t *info;
     for(info = head; info; info = info->next)
     {
         if(filter && !filter(info))
@@ -95,14 +134,16 @@ HJ_USB_API void usb_device_range(usb_device_range_fn  fn,
     hid_free_enumeration(head);
 }
 
-HJ_USB_API int usb_device_count(usb_device_filter_fn filter)
+HJ_USB_API int hj_usb_device_count(hj_usb_device_filter_fn filter)
 {
-    usb_info_t *head = hid_enumerate(0x00, 0x00);
+    internal_hid_ensure_init();
+
+    hj_usb_info_t *head = hid_enumerate(0x00, 0x00);
     if(!head)
         return 0;
 
-    int         count = 0;
-    usb_info_t *info;
+    int                  count = 0;
+    const hj_usb_info_t *info;
     for(info = head; info; info = info->next)
     {
         if(filter && !filter(info))
@@ -113,6 +154,17 @@ HJ_USB_API int usb_device_count(usb_device_filter_fn filter)
 
     hid_free_enumeration(head);
     return count;
+}
+
+HJ_USB_API bool hj_default_usb_device_filter(const hj_usb_info_t *device)
+{
+    if(!device)
+        return false;
+
+    if(device->bus_type == HID_API_BUS_USB)
+        return true;
+
+    return false;
 }
 
 #ifdef __cplusplus

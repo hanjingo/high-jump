@@ -36,67 +36,67 @@ extern "C" {
 #endif
 #endif
 
-#define RAM_MAX_MODULES 8
-#define RAM_MAX_MANUFACTURER_LENGTH 64
-#define RAM_MAX_PART_NUMBER_LENGTH 32
-#define RAM_MAX_SERIAL_LENGTH 32
-#define RAM_BYTES_PER_KB 1024ULL
-#define RAM_BYTES_PER_MB (1024ULL * 1024ULL)
-#define RAM_BYTES_PER_GB (1024ULL * 1024ULL * 1024ULL)
+#define HJ_RAM_MAX_MODULES 8
+#define HJ_RAM_MAX_MANUFACTURER_LENGTH 64
+#define HJ_RAM_MAX_PART_NUMBER_LENGTH 32
+#define HJ_RAM_MAX_SERIAL_LENGTH 32
+#define HJ_RAM_BYTES_PER_KB 1024ULL
+#define HJ_RAM_BYTES_PER_MB (1024ULL * 1024ULL)
+#define HJ_RAM_BYTES_PER_GB (1024ULL * 1024ULL * 1024ULL)
 
 typedef enum
 {
-    RAM_SUCCESS                  = 0,
-    RAM_ERR_INVALID_PARAMETER    = -1,
-    RAM_ERR_ACCESS_DENIED        = -2,
-    RAM_ERR_NOT_FOUND            = -3,
-    RAM_ERR_INSUFFICIENT_BUFFER  = -4,
-    RAM_ERR_SYSTEM_ERROR         = -5,
-    RAM_ERR_NOT_SUPPORTED        = -6,
-    RAM_ERR_INSUFFICIENT_MEMORY  = -7,
-    RAM_ERR_ALLOCATION_FAILED    = -8,
-    RAM_ERR_INVALID_ADDRESS      = -9,
-    RAM_ERR_PROTECTION_VIOLATION = -10
-} ram_err_t;
+    HJ_RAM_SUCCESS                  = 0,
+    HJ_RAM_ERR_INVALID_PARAMETER    = -1,
+    HJ_RAM_ERR_ACCESS_DENIED        = -2,
+    HJ_RAM_ERR_NOT_FOUND            = -3,
+    HJ_RAM_ERR_INSUFFICIENT_BUFFER  = -4,
+    HJ_RAM_ERR_SYSTEM_ERROR         = -5,
+    HJ_RAM_ERR_NOT_SUPPORTED        = -6,
+    HJ_RAM_ERR_INSUFFICIENT_MEMORY  = -7,
+    HJ_RAM_ERR_ALLOCATION_FAILED    = -8,
+    HJ_RAM_ERR_INVALID_ADDRESS      = -9,
+    HJ_RAM_ERR_PROTECTION_VIOLATION = -10
+} hj_ram_err_t;
 
 typedef enum
 {
-    RAM_TYPE_UNKNOWN = 0,
-    RAM_TYPE_DDR     = 1,
-    RAM_TYPE_DDR2    = 2,
-    RAM_TYPE_DDR3    = 3,
-    RAM_TYPE_DDR4    = 4,
-    RAM_TYPE_DDR5    = 5,
-    RAM_TYPE_SDRAM   = 6,
-    RAM_TYPE_SRAM    = 7,
-    RAM_TYPE_RDRAM   = 8
-} ram_type_t;
+    HJ_RAM_TYPE_UNKNOWN = 0,
+    HJ_RAM_TYPE_DDR     = 1,
+    HJ_RAM_TYPE_DDR2    = 2,
+    HJ_RAM_TYPE_DDR3    = 3,
+    HJ_RAM_TYPE_DDR4    = 4,
+    HJ_RAM_TYPE_DDR5    = 5,
+    HJ_RAM_TYPE_SDRAM   = 6,
+    HJ_RAM_TYPE_SRAM    = 7,
+    HJ_RAM_TYPE_RDRAM   = 8
+} hj_ram_type_t;
 
 typedef enum
 {
-    RAM_PROTECTION_NONE               = 0,
-    RAM_PROTECTION_READ               = 1,
-    RAM_PROTECTION_WRITE              = 2,
-    RAM_PROTECTION_EXECUTE            = 4,
-    RAM_PROTECTION_READ_WRITE         = 3,
-    RAM_PROTECTION_READ_EXECUTE       = 5,
-    RAM_PROTECTION_WRITE_EXECUTE      = 6,
-    RAM_PROTECTION_READ_WRITE_EXECUTE = 7
-} ram_protection_t;
+    HJ_RAM_PROTECTION_NONE               = 0,
+    HJ_RAM_PROTECTION_READ               = 1,
+    HJ_RAM_PROTECTION_WRITE              = 2,
+    HJ_RAM_PROTECTION_EXECUTE            = 4,
+    HJ_RAM_PROTECTION_READ_WRITE         = 3,
+    HJ_RAM_PROTECTION_READ_EXECUTE       = 5,
+    HJ_RAM_PROTECTION_WRITE_EXECUTE      = 6,
+    HJ_RAM_PROTECTION_READ_WRITE_EXECUTE = 7
+} hj_ram_protection_t;
 
 typedef struct
 {
-    char manufacturer[RAM_MAX_MANUFACTURER_LENGTH]; /* Manufacturer name */
-    char part_number[RAM_MAX_PART_NUMBER_LENGTH];   /* Part number */
-    char serial_number[RAM_MAX_SERIAL_LENGTH];      /* Serial number */
-    ram_type_t type;          /* RAM type (DDR, DDR2, etc.) */
-    uint64_t   capacity;      /* Capacity in bytes */
-    uint32_t   speed;         /* Speed in MHz */
-    uint32_t   voltage;       /* Voltage in millivolts */
-    uint32_t   slot_number;   /* Physical slot number */
-    bool       is_ecc;        /* ECC support */
-    bool       is_registered; /* Registered memory */
-} ram_module_info_t;
+    char manufacturer[HJ_RAM_MAX_MANUFACTURER_LENGTH]; /* Manufacturer name */
+    char part_number[HJ_RAM_MAX_PART_NUMBER_LENGTH];   /* Part number */
+    char serial_number[HJ_RAM_MAX_SERIAL_LENGTH];      /* Serial number */
+    hj_ram_type_t type;          /* RAM type (DDR, DDR2, etc.) */
+    uint64_t      capacity;      /* Capacity in bytes */
+    uint32_t      speed;         /* Speed in MHz */
+    uint32_t      voltage;       /* Voltage in millivolts */
+    uint32_t      slot_number;   /* Physical slot number */
+    bool          is_ecc;        /* ECC support */
+    bool          is_registered; /* Registered memory */
+} hj_ram_module_info_t;
 
 typedef struct
 {
@@ -113,7 +113,7 @@ typedef struct
     uint32_t large_page_size;    /* Large page size in bytes */
     double   memory_load;        /* Memory load percentage (0-100) */
     uint32_t module_count;       /* Number of RAM modules */
-} ram_system_info_t;
+} hj_ram_system_info_t;
 
 typedef struct
 {
@@ -125,49 +125,49 @@ typedef struct
     uint64_t current_usage;       /* Current memory usage */
     uint32_t page_faults;         /* Page fault count */
     uint32_t page_file_usage;     /* Page file usage count */
-} ram_statistics_t;
+} hj_ram_statistics_t;
 
 typedef struct
 {
-    void            *base_address; /* Base address of region */
-    uint64_t         size;         /* Size of region in bytes */
-    ram_protection_t protection;   /* Memory protection flags */
-    bool             is_committed; /* Is memory committed */
-    bool             is_mapped;    /* Is memory mapped */
-    bool             is_shared;    /* Is shared memory */
-} ram_region_info_t;
+    void               *base_address; /* Base address of region */
+    uint64_t            size;         /* Size of region in bytes */
+    hj_ram_protection_t protection;   /* Memory protection flags */
+    bool                is_committed; /* Is memory committed */
+    bool                is_mapped;    /* Is memory mapped */
+    bool                is_shared;    /* Is shared memory */
+} hj_ram_region_info_t;
 
 
 // ------------------------ RAM API Declarations ------------------------
 
-HJ_RAM_API ram_err_t   ram_init(void);
-HJ_RAM_API void        ram_cleanup(void);
-HJ_RAM_API ram_err_t   ram_get_system_info(ram_system_info_t *info);
-HJ_RAM_API ram_err_t   ram_get_modules(ram_module_info_t *modules,
-                                       uint32_t           max_modules,
-                                       uint32_t          *actual_count);
-HJ_RAM_API ram_err_t   ram_allocate_aligned(size_t size,
-                                            size_t alignment,
-                                            void **ptr);
-HJ_RAM_API ram_err_t   ram_free_aligned(void *ptr);
-HJ_RAM_API ram_err_t   ram_allocate_large_pages(size_t size, void **ptr);
-HJ_RAM_API ram_err_t   ram_free_large_pages(void *ptr, size_t size);
-HJ_RAM_API ram_err_t   ram_protect_memory(void            *ptr,
-                                          size_t           size,
-                                          ram_protection_t protection);
-HJ_RAM_API ram_err_t   ram_lock_memory(void *ptr, size_t size);
-HJ_RAM_API ram_err_t   ram_unlock_memory(void *ptr, size_t size);
-HJ_RAM_API ram_err_t   ram_prefetch_memory(const void *ptr, size_t size);
-HJ_RAM_API const char *ram_type_to_string(ram_type_t type);
-HJ_RAM_API ram_err_t   ram_format_size(uint64_t bytes,
-                                       char    *buffer,
-                                       size_t   buffer_size);
-HJ_RAM_API ram_err_t   ram_get_page_size(uint32_t *page_size);
-HJ_RAM_API ram_err_t   ram_is_valid_address(const void *ptr,
-                                            size_t      size,
-                                            bool        for_write,
-                                            bool       *is_valid);
-HJ_RAM_API ram_err_t   ram_get_process_usage(ram_statistics_t *stats);
+HJ_RAM_API hj_ram_err_t hj_ram_init(void);
+HJ_RAM_API void         hj_ram_cleanup(void);
+HJ_RAM_API hj_ram_err_t hj_ram_get_system_info(hj_ram_system_info_t *info);
+HJ_RAM_API hj_ram_err_t hj_ram_get_modules(hj_ram_module_info_t *modules,
+                                           uint32_t              max_modules,
+                                           uint32_t             *actual_count);
+HJ_RAM_API hj_ram_err_t hj_ram_allocate_aligned(size_t size,
+                                                size_t alignment,
+                                                void **ptr);
+HJ_RAM_API hj_ram_err_t hj_ram_free_aligned(void *ptr);
+HJ_RAM_API hj_ram_err_t hj_ram_allocate_large_pages(size_t size, void **ptr);
+HJ_RAM_API hj_ram_err_t hj_ram_free_large_pages(void *ptr, size_t size);
+HJ_RAM_API hj_ram_err_t hj_ram_protect_memory(void               *ptr,
+                                              size_t              size,
+                                              hj_ram_protection_t protection);
+HJ_RAM_API hj_ram_err_t hj_ram_lock_memory(void *ptr, size_t size);
+HJ_RAM_API hj_ram_err_t hj_ram_unlock_memory(void *ptr, size_t size);
+HJ_RAM_API hj_ram_err_t hj_ram_prefetch_memory(const void *ptr, size_t size);
+HJ_RAM_API const char  *hj_ram_type_to_string(hj_ram_type_t type);
+HJ_RAM_API hj_ram_err_t hj_ram_format_size(uint64_t bytes,
+                                           char    *buffer,
+                                           size_t   buffer_size);
+HJ_RAM_API hj_ram_err_t hj_ram_get_page_size(uint32_t *page_size);
+HJ_RAM_API hj_ram_err_t hj_ram_is_valid_address(const void *ptr,
+                                                size_t      size,
+                                                bool        for_write,
+                                                bool       *is_valid);
+HJ_RAM_API hj_ram_err_t hj_ram_get_process_usage(hj_ram_statistics_t *stats);
 
 #ifdef __cplusplus
 }
@@ -214,21 +214,21 @@ extern "C" {
 #endif
 
 // --------------- RAM API Implementation -----------------
-HJ_RAM_API ram_err_t ram_init(void)
+HJ_RAM_API hj_ram_err_t hj_ram_init(void)
 {
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 }
 
-HJ_RAM_API void ram_cleanup(void)
+HJ_RAM_API void hj_ram_cleanup(void)
 {
 }
 
-HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
+HJ_RAM_API hj_ram_err_t hj_ram_get_system_info(hj_ram_system_info_t *info)
 {
     if(!info)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
-    memset(info, 0, sizeof(ram_system_info_t));
+    memset(info, 0, sizeof(hj_ram_system_info_t));
 
 #if defined(RAM_PLATFORM_WINDOWS)
     MEMORYSTATUSEX memStatus;
@@ -236,8 +236,8 @@ HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
     if(!GlobalMemoryStatusEx(&memStatus))
     {
         if(GetLastError() == ERROR_ACCESS_DENIED)
-            return RAM_ERR_ACCESS_DENIED;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_ACCESS_DENIED;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
 
     info->total_physical     = memStatus.ullTotalPhys;
@@ -274,15 +274,15 @@ HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
     SIZE_T largePageSize  = GetLargePageMinimum();
     info->large_page_size = (uint32_t) largePageSize;
 
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX)
     struct sysinfo si;
     if(sysinfo(&si) != 0)
     {
         if(errno == EACCES || errno == EPERM)
-            return RAM_ERR_ACCESS_DENIED;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_ACCESS_DENIED;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
 
     info->total_physical     = si.totalram * si.mem_unit;
@@ -310,10 +310,10 @@ HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
     if(!meminfo)
     {
         if(errno == ENOENT)
-            return RAM_ERR_NOT_FOUND;
+            return HJ_RAM_ERR_NOT_FOUND;
         if(errno == EACCES || errno == EPERM)
-            return RAM_ERR_ACCESS_DENIED;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_ACCESS_DENIED;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
 
     char line[256];
@@ -331,7 +331,7 @@ HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
                                   ? (info->total_virtual - info->used_virtual)
                                   : 0;
 
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_MACOS)
     int    mib[2];
@@ -341,7 +341,7 @@ HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
     mib[1] = HW_MEMSIZE;
     length = sizeof(info->total_physical);
     if(sysctl(mib, 2, &info->total_physical, &length, NULL, 0) != 0)
-        return RAM_ERR_SYSTEM_ERROR;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
 
     mib[1] = HW_PAGESIZE;
     length = sizeof(info->page_size);
@@ -367,34 +367,34 @@ HJ_RAM_API ram_err_t ram_get_system_info(ram_system_info_t *info)
             info->memory_load =
                 ((double) info->used_physical / info->total_physical) * 100.0;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }
 
-static ram_type_t smbios_parse_memory_type(uint8_t smbios_type)
+static hj_ram_type_t smbios_parse_memory_type(uint8_t smbios_type)
 {
     switch(smbios_type)
     {
         case 0x14:
-            return RAM_TYPE_DDR;
+            return HJ_RAM_TYPE_DDR;
         case 0x15:
-            return RAM_TYPE_DDR2;
+            return HJ_RAM_TYPE_DDR2;
         case 0x18:
-            return RAM_TYPE_DDR3;
+            return HJ_RAM_TYPE_DDR3;
         case 0x19:
-            return RAM_TYPE_DDR4;
+            return HJ_RAM_TYPE_DDR4;
         case 0x22:
-            return RAM_TYPE_DDR5;
+            return HJ_RAM_TYPE_DDR5;
         case 0x03:
-            return RAM_TYPE_SDRAM;
+            return HJ_RAM_TYPE_SDRAM;
         case 0x13:
-            return RAM_TYPE_RDRAM;
+            return HJ_RAM_TYPE_RDRAM;
         default:
-            return RAM_TYPE_UNKNOWN;
+            return HJ_RAM_TYPE_UNKNOWN;
     }
 }
 
@@ -434,12 +434,12 @@ static const char *smbios_get_string(const uint8_t *struct_ptr,
     return "Unknown";
 }
 
-HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
-                                     uint32_t           max_modules,
-                                     uint32_t          *actual_count)
+HJ_RAM_API hj_ram_err_t hj_ram_get_modules(hj_ram_module_info_t *modules,
+                                           uint32_t              max_modules,
+                                           uint32_t             *actual_count)
 {
     if(!modules || !actual_count || max_modules == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
     *actual_count = 0;
 
@@ -469,8 +469,8 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
 
                     if(type == 17)
                     {
-                        ram_module_info_t *mod = &modules[*actual_count];
-                        memset(mod, 0, sizeof(ram_module_info_t));
+                        hj_ram_module_info_t *mod = &modules[*actual_count];
+                        memset(mod, 0, sizeof(hj_ram_module_info_t));
 
                         // Capacity (Offset 0x0C)
                         if(length >= 0x0E)
@@ -588,28 +588,28 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
 
     if(*actual_count == 0 && max_modules >= 1)
     {
-        ram_system_info_t sys_info;
-        if(ram_get_system_info(&sys_info) == RAM_SUCCESS)
+        hj_ram_system_info_t sys_info;
+        if(hj_ram_get_system_info(&sys_info) == HJ_RAM_SUCCESS)
         {
-            memset(&modules[0], 0, sizeof(ram_module_info_t));
+            memset(&modules[0], 0, sizeof(hj_ram_module_info_t));
             strcpy_s(modules[0].manufacturer,
                      sizeof(modules[0].manufacturer),
                      "Unknown");
             strcpy_s(modules[0].part_number,
                      sizeof(modules[0].part_number),
                      "System RAM");
-            modules[0].type        = RAM_TYPE_UNKNOWN;
+            modules[0].type        = HJ_RAM_TYPE_UNKNOWN;
             modules[0].capacity    = sys_info.total_physical;
             modules[0].slot_number = 1;
             *actual_count          = 1;
         }
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX)
     FILE *f = fopen("/sys/firmware/dmi/tables/DMI", "rb");
     if(!f && (errno == EACCES || errno == EPERM))
-        return RAM_ERR_ACCESS_DENIED;
+        return HJ_RAM_ERR_ACCESS_DENIED;
 
     if(f)
     {
@@ -619,14 +619,14 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
         if(fsize <= 0)
         {
             fclose(f);
-            return RAM_ERR_NOT_FOUND;
+            return HJ_RAM_ERR_NOT_FOUND;
         }
 
         uint8_t *dmi_buffer = (uint8_t *) malloc(fsize);
         if(!dmi_buffer)
         {
             fclose(f);
-            return RAM_ERR_INSUFFICIENT_MEMORY;
+            return HJ_RAM_ERR_INSUFFICIENT_MEMORY;
         }
 
         if(fread(dmi_buffer, 1, fsize, f) == (size_t) fsize)
@@ -646,8 +646,8 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
 
                 if(type == 17)
                 {
-                    ram_module_info_t *mod = &modules[*actual_count];
-                    memset(mod, 0, sizeof(ram_module_info_t));
+                    hj_ram_module_info_t *mod = &modules[*actual_count];
+                    memset(mod, 0, sizeof(hj_ram_module_info_t));
 
                     // Capacity (Offset 0x0C)
                     if(length >= 0x0E)
@@ -767,102 +767,102 @@ HJ_RAM_API ram_err_t ram_get_modules(ram_module_info_t *modules,
 
     if(*actual_count == 0 && max_modules >= 1)
     {
-        ram_system_info_t sys_info;
-        if(ram_get_system_info(&sys_info) == RAM_SUCCESS)
+        hj_ram_system_info_t sys_info;
+        if(hj_ram_get_system_info(&sys_info) == HJ_RAM_SUCCESS)
         {
-            memset(&modules[0], 0, sizeof(ram_module_info_t));
+            memset(&modules[0], 0, sizeof(hj_ram_module_info_t));
             strncpy(modules[0].manufacturer,
                     "Unknown",
                     sizeof(modules[0].manufacturer) - 1);
             strncpy(modules[0].part_number,
                     "System RAM",
                     sizeof(modules[0].part_number) - 1);
-            modules[0].type        = RAM_TYPE_UNKNOWN;
+            modules[0].type        = HJ_RAM_TYPE_UNKNOWN;
             modules[0].capacity    = sys_info.total_physical;
             modules[0].slot_number = 1;
             *actual_count          = 1;
         }
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_MACOS)
-    ram_system_info_t sys_info;
-    if(ram_get_system_info(&sys_info) == RAM_SUCCESS && max_modules >= 1)
+    hj_ram_system_info_t sys_info;
+    if(hj_ram_get_system_info(&sys_info) == HJ_RAM_SUCCESS && max_modules >= 1)
     {
-        memset(&modules[0], 0, sizeof(ram_module_info_t));
+        memset(&modules[0], 0, sizeof(hj_ram_module_info_t));
         strncpy(modules[0].manufacturer,
                 "Apple",
                 sizeof(modules[0].manufacturer) - 1);
         strncpy(modules[0].part_number,
                 "Unified Memory",
                 sizeof(modules[0].part_number) - 1);
-        modules[0].type        = RAM_TYPE_DDR5;
+        modules[0].type        = HJ_RAM_TYPE_DDR5;
         modules[0].capacity    = sys_info.total_physical;
         modules[0].slot_number = 1;
         *actual_count          = 1;
-        return RAM_SUCCESS;
+        return HJ_RAM_SUCCESS;
     }
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_allocate_aligned(size_t size,
-                                          size_t alignment,
-                                          void **ptr)
+HJ_RAM_API hj_ram_err_t hj_ram_allocate_aligned(size_t size,
+                                                size_t alignment,
+                                                void **ptr)
 {
     if(!ptr || size == 0 || alignment == 0
        || (alignment & (alignment - 1)) != 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     *ptr = _aligned_malloc(size, alignment);
-    return (*ptr != NULL) ? RAM_SUCCESS : RAM_ERR_ALLOCATION_FAILED;
+    return (*ptr != NULL) ? HJ_RAM_SUCCESS : HJ_RAM_ERR_ALLOCATION_FAILED;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     int result = posix_memalign(ptr, alignment, size);
     if(result == 0)
-        return RAM_SUCCESS;
+        return HJ_RAM_SUCCESS;
     else if(result == ENOMEM)
-        return RAM_ERR_INSUFFICIENT_MEMORY;
+        return HJ_RAM_ERR_INSUFFICIENT_MEMORY;
     else
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #else
     size_t total_size = size + alignment - 1 + sizeof(void *);
     void  *raw_ptr    = malloc(total_size);
     if(!raw_ptr)
-        return RAM_ERR_ALLOCATION_FAILED;
+        return HJ_RAM_ERR_ALLOCATION_FAILED;
 
     uintptr_t ideal_addr   = (uintptr_t) raw_ptr + sizeof(void *);
     uintptr_t aligned_addr = (ideal_addr + alignment - 1) & ~(alignment - 1);
     *((void **) (aligned_addr - sizeof(void *))) = raw_ptr;
     *ptr                                         = (void *) aligned_addr;
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_free_aligned(void *ptr)
+HJ_RAM_API hj_ram_err_t hj_ram_free_aligned(void *ptr)
 {
     if(!ptr)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     _aligned_free(ptr);
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     free(ptr);
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #else
     void *raw_ptr = ((void **) ptr)[-1];
     free(raw_ptr);
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #endif
 }
@@ -904,16 +904,16 @@ static bool enable_lock_memory_privilege(void)
 }
 #endif
 
-HJ_RAM_API ram_err_t ram_allocate_large_pages(size_t size, void **ptr)
+HJ_RAM_API hj_ram_err_t hj_ram_allocate_large_pages(size_t size, void **ptr)
 {
     if(!ptr || size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     if(!enable_lock_memory_privilege())
     {
         *ptr = NULL;
-        return RAM_ERR_ACCESS_DENIED;
+        return HJ_RAM_ERR_ACCESS_DENIED;
     }
 
     *ptr = VirtualAlloc(NULL,
@@ -924,10 +924,10 @@ HJ_RAM_API ram_err_t ram_allocate_large_pages(size_t size, void **ptr)
     {
         DWORD err = GetLastError();
         if(err == ERROR_ACCESS_DENIED)
-            return RAM_ERR_ACCESS_DENIED;
-        return RAM_ERR_ALLOCATION_FAILED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
+        return HJ_RAM_ERR_ALLOCATION_FAILED;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX)
     *ptr = mmap(NULL,
@@ -939,10 +939,10 @@ HJ_RAM_API ram_err_t ram_allocate_large_pages(size_t size, void **ptr)
     if(*ptr == MAP_FAILED)
     {
         *ptr = NULL;
-        return RAM_ERR_ALLOCATION_FAILED;
+        return HJ_RAM_ERR_ALLOCATION_FAILED;
     }
 
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_MACOS)
     *ptr = mmap(NULL,
@@ -954,49 +954,49 @@ HJ_RAM_API ram_err_t ram_allocate_large_pages(size_t size, void **ptr)
     if(*ptr == MAP_FAILED)
     {
         *ptr = NULL;
-        return RAM_ERR_ALLOCATION_FAILED;
+        return HJ_RAM_ERR_ALLOCATION_FAILED;
     }
 
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_free_large_pages(void *ptr, size_t size)
+HJ_RAM_API hj_ram_err_t hj_ram_free_large_pages(void *ptr, size_t size)
 {
     if(!ptr || size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     BOOL result = VirtualFree(ptr, 0, MEM_RELEASE);
-    return result ? RAM_SUCCESS : RAM_ERR_SYSTEM_ERROR;
+    return result ? HJ_RAM_SUCCESS : HJ_RAM_ERR_SYSTEM_ERROR;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     int result = munmap(ptr, size);
-    return (result == 0) ? RAM_SUCCESS : RAM_ERR_SYSTEM_ERROR;
+    return (result == 0) ? HJ_RAM_SUCCESS : HJ_RAM_ERR_SYSTEM_ERROR;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_protect_memory(void            *ptr,
-                                        size_t           size,
-                                        ram_protection_t protection)
+HJ_RAM_API hj_ram_err_t hj_ram_protect_memory(void               *ptr,
+                                              size_t              size,
+                                              hj_ram_protection_t protection)
 {
     if(!ptr || size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     DWORD win_protection = 0;
-    bool  can_read       = (protection & RAM_PROTECTION_READ) != 0;
-    bool  can_write      = (protection & RAM_PROTECTION_WRITE) != 0;
-    bool  can_exec       = (protection & RAM_PROTECTION_EXECUTE) != 0;
-    if(protection == RAM_PROTECTION_NONE)
+    bool  can_read       = (protection & HJ_RAM_PROTECTION_READ) != 0;
+    bool  can_write      = (protection & HJ_RAM_PROTECTION_WRITE) != 0;
+    bool  can_exec       = (protection & HJ_RAM_PROTECTION_EXECUTE) != 0;
+    if(protection == HJ_RAM_PROTECTION_NONE)
     {
         win_protection = PAGE_NOACCESS;
     } else if(can_exec)
@@ -1037,45 +1037,45 @@ HJ_RAM_API ram_err_t ram_protect_memory(void            *ptr,
     {
         DWORD err = GetLastError();
         if(err == ERROR_ACCESS_DENIED)
-            return RAM_ERR_ACCESS_DENIED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
         if(err == ERROR_INVALID_ADDRESS || err == ERROR_INVALID_PARAMETER)
-            return RAM_ERR_INVALID_ADDRESS;
-        return RAM_ERR_PROTECTION_VIOLATION;
+            return HJ_RAM_ERR_INVALID_ADDRESS;
+        return HJ_RAM_ERR_PROTECTION_VIOLATION;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     int posix_protection = PROT_NONE;
-    if(protection & RAM_PROTECTION_READ)
+    if(protection & HJ_RAM_PROTECTION_READ)
         posix_protection |= PROT_READ;
 
-    if(protection & RAM_PROTECTION_WRITE)
+    if(protection & HJ_RAM_PROTECTION_WRITE)
         posix_protection |= PROT_WRITE;
 
-    if(protection & RAM_PROTECTION_EXECUTE)
+    if(protection & HJ_RAM_PROTECTION_EXECUTE)
         posix_protection |= PROT_EXEC;
 
     int result = mprotect(ptr, size, posix_protection);
     if(result != 0)
     {
         if(errno == EACCES || errno == EPERM)
-            return RAM_ERR_ACCESS_DENIED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
         if(errno == EFAULT || errno == EINVAL)
-            return RAM_ERR_INVALID_ADDRESS;
-        return RAM_ERR_PROTECTION_VIOLATION;
+            return HJ_RAM_ERR_INVALID_ADDRESS;
+        return HJ_RAM_ERR_PROTECTION_VIOLATION;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_lock_memory(void *ptr, size_t size)
+HJ_RAM_API hj_ram_err_t hj_ram_lock_memory(void *ptr, size_t size)
 {
     if(!ptr || size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     BOOL result = VirtualLock(ptr, size);
@@ -1083,35 +1083,35 @@ HJ_RAM_API ram_err_t ram_lock_memory(void *ptr, size_t size)
     {
         DWORD err = GetLastError();
         if(err == ERROR_ACCESS_DENIED)
-            return RAM_ERR_ACCESS_DENIED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
         if(err == ERROR_INVALID_ADDRESS)
-            return RAM_ERR_INVALID_ADDRESS;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_INVALID_ADDRESS;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     int result = mlock(ptr, size);
     if(result != 0)
     {
         if(errno == EACCES || errno == EPERM)
-            return RAM_ERR_ACCESS_DENIED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
         if(errno == EFAULT || errno == EINVAL)
-            return RAM_ERR_INVALID_ADDRESS;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_INVALID_ADDRESS;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_unlock_memory(void *ptr, size_t size)
+HJ_RAM_API hj_ram_err_t hj_ram_unlock_memory(void *ptr, size_t size)
 {
     if(!ptr || size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     BOOL result = VirtualUnlock(ptr, size);
@@ -1119,48 +1119,48 @@ HJ_RAM_API ram_err_t ram_unlock_memory(void *ptr, size_t size)
     {
         DWORD err = GetLastError();
         if(err == ERROR_ACCESS_DENIED)
-            return RAM_ERR_ACCESS_DENIED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
         if(err == ERROR_INVALID_ADDRESS)
-            return RAM_ERR_INVALID_ADDRESS;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_INVALID_ADDRESS;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     int result = munlock(ptr, size);
     if(result != 0)
     {
         if(errno == EACCES || errno == EPERM)
-            return RAM_ERR_ACCESS_DENIED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
         if(errno == EFAULT || errno == EINVAL)
-            return RAM_ERR_INVALID_ADDRESS;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_INVALID_ADDRESS;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_prefetch_memory(const void *ptr, size_t size)
+HJ_RAM_API hj_ram_err_t hj_ram_prefetch_memory(const void *ptr, size_t size)
 {
     if(!ptr || size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     WIN32_MEMORY_RANGE_ENTRY range;
     range.VirtualAddress = (PVOID) ptr;
     range.NumberOfBytes  = size;
     BOOL result = PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0);
-    return result ? RAM_SUCCESS : RAM_ERR_SYSTEM_ERROR;
+    return result ? HJ_RAM_SUCCESS : HJ_RAM_ERR_SYSTEM_ERROR;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     int result = madvise((void *) ptr, size, MADV_WILLNEED);
     if(result != 0 && errno == EFAULT)
-        return RAM_ERR_INVALID_ADDRESS;
-    return (result == 0) ? RAM_SUCCESS : RAM_ERR_SYSTEM_ERROR;
+        return HJ_RAM_ERR_INVALID_ADDRESS;
+    return (result == 0) ? HJ_RAM_SUCCESS : HJ_RAM_ERR_SYSTEM_ERROR;
 
 #else
     const char   *byte_ptr = (const char *) ptr;
@@ -1169,54 +1169,54 @@ HJ_RAM_API ram_err_t ram_prefetch_memory(const void *ptr, size_t size)
         dummy = byte_ptr[i];
 
     (void) dummy;
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 #endif
 }
 
-HJ_RAM_API const char *ram_type_to_string(ram_type_t type)
+HJ_RAM_API const char *hj_ram_type_to_string(hj_ram_type_t type)
 {
     switch(type)
     {
-        case RAM_TYPE_DDR:
+        case HJ_RAM_TYPE_DDR:
             return "DDR";
-        case RAM_TYPE_DDR2:
+        case HJ_RAM_TYPE_DDR2:
             return "DDR2";
-        case RAM_TYPE_DDR3:
+        case HJ_RAM_TYPE_DDR3:
             return "DDR3";
-        case RAM_TYPE_DDR4:
+        case HJ_RAM_TYPE_DDR4:
             return "DDR4";
-        case RAM_TYPE_DDR5:
+        case HJ_RAM_TYPE_DDR5:
             return "DDR5";
-        case RAM_TYPE_SDRAM:
+        case HJ_RAM_TYPE_SDRAM:
             return "SDRAM";
-        case RAM_TYPE_SRAM:
+        case HJ_RAM_TYPE_SRAM:
             return "SRAM";
-        case RAM_TYPE_RDRAM:
+        case HJ_RAM_TYPE_RDRAM:
             return "RDRAM";
         default:
             return "Unknown";
     }
 }
 
-HJ_RAM_API ram_err_t ram_format_size(uint64_t bytes,
-                                     char    *buffer,
-                                     size_t   buffer_size)
+HJ_RAM_API hj_ram_err_t hj_ram_format_size(uint64_t bytes,
+                                           char    *buffer,
+                                           size_t   buffer_size)
 {
     if(!buffer || buffer_size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
     int written = 0;
-    if(bytes >= RAM_BYTES_PER_GB)
+    if(bytes >= HJ_RAM_BYTES_PER_GB)
     {
-        double gb = (double) bytes / RAM_BYTES_PER_GB;
+        double gb = (double) bytes / HJ_RAM_BYTES_PER_GB;
         written   = snprintf(buffer, buffer_size, "%.2f GB", gb);
-    } else if(bytes >= RAM_BYTES_PER_MB)
+    } else if(bytes >= HJ_RAM_BYTES_PER_MB)
     {
-        double mb = (double) bytes / RAM_BYTES_PER_MB;
+        double mb = (double) bytes / HJ_RAM_BYTES_PER_MB;
         written   = snprintf(buffer, buffer_size, "%.2f MB", mb);
-    } else if(bytes >= RAM_BYTES_PER_KB)
+    } else if(bytes >= HJ_RAM_BYTES_PER_KB)
     {
-        double kb = (double) bytes / RAM_BYTES_PER_KB;
+        double kb = (double) bytes / HJ_RAM_BYTES_PER_KB;
         written   = snprintf(buffer, buffer_size, "%.2f KB", kb);
     } else
     {
@@ -1227,46 +1227,46 @@ HJ_RAM_API ram_err_t ram_format_size(uint64_t bytes,
     }
 
     if(written < 0 || (size_t) written >= buffer_size)
-        return RAM_ERR_INSUFFICIENT_BUFFER;
+        return HJ_RAM_ERR_INSUFFICIENT_BUFFER;
 
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 }
 
-HJ_RAM_API ram_err_t ram_get_page_size(uint32_t *page_size)
+HJ_RAM_API hj_ram_err_t hj_ram_get_page_size(uint32_t *page_size)
 {
     if(!page_size)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
 #if defined(RAM_PLATFORM_WINDOWS)
     SYSTEM_INFO sys_info;
     GetSystemInfo(&sys_info);
     *page_size = sys_info.dwPageSize;
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX) || defined(RAM_PLATFORM_MACOS)
     long size = sysconf(_SC_PAGESIZE);
     if(size > 0)
     {
         *page_size = (uint32_t) size;
-        return RAM_SUCCESS;
+        return HJ_RAM_SUCCESS;
     }
 
-    return RAM_ERR_SYSTEM_ERROR;
+    return HJ_RAM_ERR_SYSTEM_ERROR;
 
 #else
     *page_size = 4096;
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_is_valid_address(const void *ptr,
-                                          size_t      size,
-                                          bool        for_write,
-                                          bool       *is_valid)
+HJ_RAM_API hj_ram_err_t hj_ram_is_valid_address(const void *ptr,
+                                                size_t      size,
+                                                bool        for_write,
+                                                bool       *is_valid)
 {
     if(!ptr || !is_valid || size == 0)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
     *is_valid = false;
 
 #if defined(RAM_PLATFORM_WINDOWS)
@@ -1285,15 +1285,15 @@ HJ_RAM_API ram_err_t ram_is_valid_address(const void *ptr,
                             | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))
                         != 0;
     }
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_LINUX)
     FILE *maps = fopen("/proc/self/maps", "r");
     if(!maps)
     {
         if(errno == EACCES || errno == EPERM)
-            return RAM_ERR_ACCESS_DENIED;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_ACCESS_DENIED;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
 
     char      line[2048];
@@ -1329,21 +1329,21 @@ HJ_RAM_API ram_err_t ram_is_valid_address(const void *ptr,
         }
     }
     fclose(maps);
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #else
     *is_valid = (ptr != NULL);
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #endif
 }
 
-HJ_RAM_API ram_err_t ram_get_process_usage(ram_statistics_t *stats)
+HJ_RAM_API hj_ram_err_t hj_ram_get_process_usage(hj_ram_statistics_t *stats)
 {
     if(!stats)
-        return RAM_ERR_INVALID_PARAMETER;
+        return HJ_RAM_ERR_INVALID_PARAMETER;
 
-    memset(stats, 0, sizeof(ram_statistics_t));
+    memset(stats, 0, sizeof(hj_ram_statistics_t));
 
 #if defined(RAM_PLATFORM_WINDOWS)
     PROCESS_MEMORY_COUNTERS_EX pmc;
@@ -1355,20 +1355,20 @@ HJ_RAM_API ram_err_t ram_get_process_usage(ram_statistics_t *stats)
         stats->peak_usage      = pmc.PeakWorkingSetSize;
         stats->page_faults     = pmc.PageFaultCount;
         stats->page_file_usage = pmc.PagefileUsage;
-        return RAM_SUCCESS;
+        return HJ_RAM_SUCCESS;
     }
 
-    return RAM_ERR_SYSTEM_ERROR;
+    return HJ_RAM_ERR_SYSTEM_ERROR;
 
 #elif defined(RAM_PLATFORM_LINUX)
     FILE *status = fopen("/proc/self/status", "r");
     if(!status)
     {
         if(errno == EACCES || errno == EPERM)
-            return RAM_ERR_ACCESS_DENIED;
+            return HJ_RAM_ERR_ACCESS_DENIED;
         if(errno == ENOENT)
-            return RAM_ERR_NOT_FOUND;
-        return RAM_ERR_SYSTEM_ERROR;
+            return HJ_RAM_ERR_NOT_FOUND;
+        return HJ_RAM_ERR_SYSTEM_ERROR;
     }
 
     char line[256];
@@ -1382,7 +1382,7 @@ HJ_RAM_API ram_err_t ram_get_process_usage(ram_statistics_t *stats)
     }
 
     fclose(status);
-    return RAM_SUCCESS;
+    return HJ_RAM_SUCCESS;
 
 #elif defined(RAM_PLATFORM_MACOS)
     struct mach_task_basic_info info;
@@ -1394,13 +1394,13 @@ HJ_RAM_API ram_err_t ram_get_process_usage(ram_statistics_t *stats)
        == KERN_SUCCESS)
     {
         stats->current_usage = info.resident_size;
-        return RAM_SUCCESS;
+        return HJ_RAM_SUCCESS;
     }
 
-    return RAM_ERR_SYSTEM_ERROR;
+    return HJ_RAM_ERR_SYSTEM_ERROR;
 
 #else
-    return RAM_ERR_NOT_SUPPORTED;
+    return HJ_RAM_ERR_NOT_SUPPORTED;
 
 #endif
 }

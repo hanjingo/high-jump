@@ -17,23 +17,23 @@ TEST(ram, initialization_and_cleanup)
     SCOPED_TRACE("Testing RAM initialization and cleanup");
 
     // Cleanup and re-initialize to test the functions
-    ram_cleanup();
+    hj_ram_cleanup();
 
-    ram_err_t result = ram_init();
-    EXPECT_EQ(result, RAM_SUCCESS) << "RAM initialization should succeed";
+    hj_ram_err_t result = hj_ram_init();
+    EXPECT_EQ(result, HJ_RAM_SUCCESS) << "RAM initialization should succeed";
 
     // Test multiple initializations (should be safe)
-    result = ram_init();
-    EXPECT_EQ(result, RAM_SUCCESS)
+    result = hj_ram_init();
+    EXPECT_EQ(result, HJ_RAM_SUCCESS)
         << "Multiple RAM initializations should be safe";
 
     // Test cleanup (should be safe to call multiple times)
-    ram_cleanup();
-    ram_cleanup();
+    hj_ram_cleanup();
+    hj_ram_cleanup();
 
     // Re-initialize for other tests
-    result = ram_init();
-    EXPECT_EQ(result, RAM_SUCCESS) << "RAM re-initialization should succeed";
+    result = hj_ram_init();
+    EXPECT_EQ(result, HJ_RAM_SUCCESS) << "RAM re-initialization should succeed";
 }
 
 // Test system memory information
@@ -42,39 +42,39 @@ TEST(ram, system_memory_information)
     SCOPED_TRACE("Testing system memory information");
 
     // Test invalid parameter
-    ram_err_t result = ram_get_system_info(nullptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    hj_ram_err_t result = hj_ram_get_system_info(nullptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null parameter";
 
     // Test valid system info retrieval
-    ram_system_info_t info;
-    result = ram_get_system_info(&info);
-    EXPECT_EQ(result, RAM_SUCCESS) << "System info retrieval should succeed";
+    hj_ram_system_info_t info;
+    result = hj_ram_get_system_info(&info);
+    EXPECT_EQ(result, HJ_RAM_SUCCESS) << "System info retrieval should succeed";
 
-    if(result == RAM_SUCCESS)
+    if(result == HJ_RAM_SUCCESS)
     {
         std::cout << "System Memory Information:" << std::endl;
 
         char buffer[64];
-        ram_format_size(info.total_physical, buffer, sizeof(buffer));
+        hj_ram_format_size(info.total_physical, buffer, sizeof(buffer));
         std::cout << "  Total Physical RAM: " << buffer << std::endl;
 
-        ram_format_size(info.available_physical, buffer, sizeof(buffer));
+        hj_ram_format_size(info.available_physical, buffer, sizeof(buffer));
         std::cout << "  Available Physical RAM: " << buffer << std::endl;
 
-        ram_format_size(info.used_physical, buffer, sizeof(buffer));
+        hj_ram_format_size(info.used_physical, buffer, sizeof(buffer));
         std::cout << "  Used Physical RAM: " << buffer << std::endl;
 
-        ram_format_size(info.total_virtual, buffer, sizeof(buffer));
+        hj_ram_format_size(info.total_virtual, buffer, sizeof(buffer));
         std::cout << "  Total Virtual Memory: " << buffer << std::endl;
 
-        ram_format_size(info.available_virtual, buffer, sizeof(buffer));
+        hj_ram_format_size(info.available_virtual, buffer, sizeof(buffer));
         std::cout << "  Available Virtual Memory: " << buffer << std::endl;
 
-        ram_format_size(info.total_swap, buffer, sizeof(buffer));
+        hj_ram_format_size(info.total_swap, buffer, sizeof(buffer));
         std::cout << "  Total Swap Space: " << buffer << std::endl;
 
-        ram_format_size(info.available_swap, buffer, sizeof(buffer));
+        hj_ram_format_size(info.available_swap, buffer, sizeof(buffer));
         std::cout << "  Available Swap Space: " << buffer << std::endl;
 
         std::cout << "  Memory Load: " << info.memory_load << "%" << std::endl;
@@ -107,28 +107,28 @@ TEST(ram, ram_module_enumeration)
 
     // Test invalid parameters
     uint32_t  actual_count = 0;
-    ram_err_t result       = ram_get_modules(nullptr, 4, &actual_count);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    hj_ram_err_t result       = hj_ram_get_modules(nullptr, 4, &actual_count);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null modules array";
 
-    ram_module_info_t modules[4];
-    result = ram_get_modules(modules, 4, nullptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    hj_ram_module_info_t modules[4];
+    result = hj_ram_get_modules(modules, 4, nullptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null actual_count";
 
-    result = ram_get_modules(modules, 0, &actual_count);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_get_modules(modules, 0, &actual_count);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero max_modules";
 
     // Test valid module enumeration
-    result = ram_get_modules(modules, RAM_MAX_MODULES, &actual_count);
-    if(result == RAM_SUCCESS)
+    result = hj_ram_get_modules(modules, HJ_RAM_MAX_MODULES, &actual_count);
+    if(result == HJ_RAM_SUCCESS)
     {
         std::cout << "Found " << actual_count << " RAM modules:" << std::endl;
 
         for(uint32_t i = 0; i < actual_count; i++)
         {
-            const ram_module_info_t &module = modules[i];
+            const hj_ram_module_info_t &module = modules[i];
 
             std::cout << "  Module " << i + 1 << ":" << std::endl;
             std::cout << "    Manufacturer: " << module.manufacturer
@@ -136,11 +136,11 @@ TEST(ram, ram_module_enumeration)
             std::cout << "    Part Number: " << module.part_number << std::endl;
             std::cout << "    Serial Number: " << module.serial_number
                       << std::endl;
-            std::cout << "    Type: " << ram_type_to_string(module.type)
+            std::cout << "    Type: " << hj_ram_type_to_string(module.type)
                       << std::endl;
 
             char capacity_str[64];
-            ram_format_size(module.capacity,
+            hj_ram_format_size(module.capacity,
                             capacity_str,
                             sizeof(capacity_str));
             std::cout << "    Capacity: " << capacity_str << std::endl;
@@ -171,7 +171,7 @@ TEST(ram, ram_module_enumeration)
         }
 
         EXPECT_GE(actual_count, 1) << "Should have at least one RAM module";
-        EXPECT_LE(actual_count, RAM_MAX_MODULES)
+        EXPECT_LE(actual_count, HJ_RAM_MAX_MODULES)
             << "Module count should not exceed maximum";
     } else
     {
@@ -187,20 +187,20 @@ TEST(ram, aligned_memory_allocation)
 
     // Test invalid parameters
     void     *ptr    = nullptr;
-    ram_err_t result = ram_allocate_aligned(0, 16, &ptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    hj_ram_err_t result = hj_ram_allocate_aligned(0, 16, &ptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero size";
 
-    result = ram_allocate_aligned(1024, 0, &ptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_allocate_aligned(1024, 0, &ptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero alignment";
 
-    result = ram_allocate_aligned(1024, 16, nullptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_allocate_aligned(1024, 16, nullptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null pointer";
 
-    result = ram_allocate_aligned(1024, 15, &ptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_allocate_aligned(1024, 15, &ptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for non-power-of-2 alignment";
 
     // Test valid allocations with different alignments
@@ -211,12 +211,12 @@ TEST(ram, aligned_memory_allocation)
     for(size_t i = 0; i < num_alignments; i++)
     {
         void *aligned_ptr = nullptr;
-        result = ram_allocate_aligned(test_size, alignments[i], &aligned_ptr);
-        EXPECT_EQ(result, RAM_SUCCESS)
+        result = hj_ram_allocate_aligned(test_size, alignments[i], &aligned_ptr);
+        EXPECT_EQ(result, HJ_RAM_SUCCESS)
             << "Aligned allocation should succeed for alignment "
             << alignments[i];
 
-        if(result == RAM_SUCCESS)
+        if(result == HJ_RAM_SUCCESS)
         {
             EXPECT_NE(aligned_ptr, nullptr)
                 << "Allocated pointer should not be null";
@@ -238,15 +238,15 @@ TEST(ram, aligned_memory_allocation)
             }
 
             // Free the memory
-            result = ram_free_aligned(aligned_ptr);
-            EXPECT_EQ(result, RAM_SUCCESS)
+            result = hj_ram_free_aligned(aligned_ptr);
+            EXPECT_EQ(result, HJ_RAM_SUCCESS)
                 << "Aligned memory deallocation should succeed";
         }
     }
 
     // Test freeing null pointer
-    result = ram_free_aligned(nullptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_free_aligned(nullptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for freeing null pointer";
 }
 
@@ -257,19 +257,19 @@ TEST(ram, large_page_allocation)
 
     // Test invalid parameters
     void     *ptr    = nullptr;
-    ram_err_t result = ram_allocate_large_pages(0, &ptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    hj_ram_err_t result = hj_ram_allocate_large_pages(0, &ptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero size";
 
-    result = ram_allocate_large_pages(1024, nullptr);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_allocate_large_pages(1024, nullptr);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null pointer";
 
     // Test large page allocation (may fail if not supported or insufficient privileges)
     const size_t large_page_size = 2 * 1024 * 1024; // 2 MB
-    result = ram_allocate_large_pages(large_page_size, &ptr);
+    result = hj_ram_allocate_large_pages(large_page_size, &ptr);
 
-    if(result == RAM_SUCCESS)
+    if(result == HJ_RAM_SUCCESS)
     {
         std::cout << "Large page allocation succeeded" << std::endl;
 
@@ -287,8 +287,8 @@ TEST(ram, large_page_allocation)
         }
 
         // Free the large pages
-        result = ram_free_large_pages(ptr, large_page_size);
-        EXPECT_EQ(result, RAM_SUCCESS)
+        result = hj_ram_free_large_pages(ptr, large_page_size);
+        EXPECT_EQ(result, HJ_RAM_SUCCESS)
             << "Large page deallocation should succeed";
 
     } else
@@ -300,12 +300,12 @@ TEST(ram, large_page_allocation)
     }
 
     // Test freeing with invalid parameters
-    result = ram_free_large_pages(nullptr, large_page_size);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_free_large_pages(nullptr, large_page_size);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null pointer";
 
-    result = ram_free_large_pages((void *) 0x1000, 0);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_free_large_pages((void *) 0x1000, 0);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero size";
 }
 
@@ -317,37 +317,37 @@ TEST(ram, memory_protection)
     // Allocate memory for protection tests
     const size_t test_size = 4096;
     void        *ptr       = nullptr;
-    ram_err_t    result    = ram_allocate_aligned(test_size, 4096, &ptr);
-    ASSERT_EQ(result, RAM_SUCCESS) << "Memory allocation should succeed";
+    hj_ram_err_t    result    = hj_ram_allocate_aligned(test_size, 4096, &ptr);
+    ASSERT_EQ(result, HJ_RAM_SUCCESS) << "Memory allocation should succeed";
     ASSERT_NE(ptr, nullptr) << "Allocated pointer should not be null";
 
     // Test invalid parameters
-    result = ram_protect_memory(nullptr, test_size, RAM_PROTECTION_READ_WRITE);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_protect_memory(nullptr, test_size, HJ_RAM_PROTECTION_READ_WRITE);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null pointer";
 
-    result = ram_protect_memory(ptr, 0, RAM_PROTECTION_READ_WRITE);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_protect_memory(ptr, 0, HJ_RAM_PROTECTION_READ_WRITE);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero size";
 
     // Test different protection modes
-    const ram_protection_t protections[] = {RAM_PROTECTION_READ,
-                                            RAM_PROTECTION_READ_WRITE,
-                                            RAM_PROTECTION_READ_EXECUTE,
-                                            RAM_PROTECTION_NONE};
+    const hj_ram_protection_t protections[] = {HJ_RAM_PROTECTION_READ,
+                                            HJ_RAM_PROTECTION_READ_WRITE,
+                                            HJ_RAM_PROTECTION_READ_EXECUTE,
+                                            HJ_RAM_PROTECTION_NONE};
     const size_t num_protections = sizeof(protections) / sizeof(protections[0]);
 
     for(size_t i = 0; i < num_protections; i++)
     {
-        result = ram_protect_memory(ptr, test_size, protections[i]);
+        result = hj_ram_protect_memory(ptr, test_size, protections[i]);
 
-        if(result == RAM_SUCCESS)
+        if(result == HJ_RAM_SUCCESS)
         {
             std::cout << "Successfully set protection mode " << protections[i]
                       << std::endl;
 
             // Test read access (except for NONE protection)
-            if(protections[i] != RAM_PROTECTION_NONE)
+            if(protections[i] != HJ_RAM_PROTECTION_NONE)
             {
                 // Try to read from memory
                 volatile uint8_t *byte_ptr = (volatile uint8_t *) ptr;
@@ -356,7 +356,7 @@ TEST(ram, memory_protection)
             }
 
             // Test write access (only for protections that allow write)
-            if(protections[i] & RAM_PROTECTION_WRITE)
+            if(protections[i] & HJ_RAM_PROTECTION_WRITE)
             {
                 uint8_t *byte_ptr = (uint8_t *) ptr;
                 byte_ptr[0]       = 0x42;
@@ -371,10 +371,10 @@ TEST(ram, memory_protection)
     }
 
     // Restore read-write protection for cleanup
-    ram_protect_memory(ptr, test_size, RAM_PROTECTION_READ_WRITE);
+    hj_ram_protect_memory(ptr, test_size, HJ_RAM_PROTECTION_READ_WRITE);
 
     // Clean up
-    ram_free_aligned(ptr);
+    hj_ram_free_aligned(ptr);
 }
 
 // Test memory locking and unlocking
@@ -385,22 +385,22 @@ TEST(ram, memory_locking)
     // Allocate memory for locking tests
     const size_t test_size = 4096;
     void        *ptr       = nullptr;
-    ram_err_t    result    = ram_allocate_aligned(test_size, 4096, &ptr);
-    ASSERT_EQ(result, RAM_SUCCESS) << "Memory allocation should succeed";
+    hj_ram_err_t    result    = hj_ram_allocate_aligned(test_size, 4096, &ptr);
+    ASSERT_EQ(result, HJ_RAM_SUCCESS) << "Memory allocation should succeed";
     ASSERT_NE(ptr, nullptr) << "Allocated pointer should not be null";
 
     // Test invalid parameters
-    result = ram_lock_memory(nullptr, test_size);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_lock_memory(nullptr, test_size);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null pointer";
 
-    result = ram_lock_memory(ptr, 0);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_lock_memory(ptr, 0);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero size";
 
     // Test memory locking
-    result = ram_lock_memory(ptr, test_size);
-    if(result == RAM_SUCCESS)
+    result = hj_ram_lock_memory(ptr, test_size);
+    if(result == HJ_RAM_SUCCESS)
     {
         std::cout << "Memory locking succeeded" << std::endl;
 
@@ -410,10 +410,10 @@ TEST(ram, memory_locking)
         EXPECT_EQ(byte_ptr[0], 0x33) << "Locked memory should be accessible";
 
         // Test memory unlocking
-        result = ram_unlock_memory(ptr, test_size);
-        EXPECT_EQ(result, RAM_SUCCESS) << "Memory unlocking should succeed";
+        result = hj_ram_unlock_memory(ptr, test_size);
+        EXPECT_EQ(result, HJ_RAM_SUCCESS) << "Memory unlocking should succeed";
 
-        if(result == RAM_SUCCESS)
+        if(result == HJ_RAM_SUCCESS)
         {
             std::cout << "Memory unlocking succeeded" << std::endl;
 
@@ -428,16 +428,16 @@ TEST(ram, memory_locking)
     }
 
     // Test invalid parameters for unlocking
-    result = ram_unlock_memory(nullptr, test_size);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_unlock_memory(nullptr, test_size);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null pointer";
 
-    result = ram_unlock_memory(ptr, 0);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_unlock_memory(ptr, 0);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero size";
 
     // Clean up
-    ram_free_aligned(ptr);
+    hj_ram_free_aligned(ptr);
 }
 
 // Test memory prefetching
@@ -448,8 +448,8 @@ TEST(ram, memory_prefetching)
     // Allocate memory for prefetching tests
     const size_t test_size = 64 * 1024; // 64 KB
     void        *ptr       = nullptr;
-    ram_err_t    result    = ram_allocate_aligned(test_size, 4096, &ptr);
-    ASSERT_EQ(result, RAM_SUCCESS) << "Memory allocation should succeed";
+    hj_ram_err_t    result    = hj_ram_allocate_aligned(test_size, 4096, &ptr);
+    ASSERT_EQ(result, HJ_RAM_SUCCESS) << "Memory allocation should succeed";
     ASSERT_NE(ptr, nullptr) << "Allocated pointer should not be null";
 
     // Initialize memory with test data
@@ -459,23 +459,23 @@ TEST(ram, memory_prefetching)
     }
 
     // Test invalid parameters
-    result = ram_prefetch_memory(nullptr, test_size);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_prefetch_memory(nullptr, test_size);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for null pointer";
 
-    result = ram_prefetch_memory(ptr, 0);
-    EXPECT_EQ(result, RAM_ERR_INVALID_PARAMETER)
+    result = hj_ram_prefetch_memory(ptr, 0);
+    EXPECT_EQ(result, HJ_RAM_ERR_INVALID_PARAMETER)
         << "Should return error for zero size";
 
     // Test memory prefetching
     auto start_time = std::chrono::high_resolution_clock::now();
-    result          = ram_prefetch_memory(ptr, test_size);
+    result          = hj_ram_prefetch_memory(ptr, test_size);
     auto end_time   = std::chrono::high_resolution_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
         end_time - start_time);
 
-    if(result == RAM_SUCCESS)
+    if(result == HJ_RAM_SUCCESS)
     {
         std::cout << "Memory prefetching succeeded in " << duration.count()
                   << " microseconds" << std::endl;
@@ -493,7 +493,7 @@ TEST(ram, memory_prefetching)
     }
 
     // Clean up
-    ram_free_aligned(ptr);
+    hj_ram_free_aligned(ptr);
 }
 
 // Test utility functions
@@ -502,23 +502,23 @@ TEST(ram, utility_functions)
     SCOPED_TRACE("Testing utility functions");
 
     // Test RAM type to string conversion
-    EXPECT_STREQ(ram_type_to_string(RAM_TYPE_DDR), "DDR");
-    EXPECT_STREQ(ram_type_to_string(RAM_TYPE_DDR5), "DDR5");
-    EXPECT_STREQ(ram_type_to_string(RAM_TYPE_UNKNOWN), "Unknown");
+    EXPECT_STREQ(hj_ram_type_to_string(HJ_RAM_TYPE_DDR), "DDR");
+    EXPECT_STREQ(hj_ram_type_to_string(HJ_RAM_TYPE_DDR5), "DDR5");
+    EXPECT_STREQ(hj_ram_type_to_string(HJ_RAM_TYPE_UNKNOWN), "Unknown");
 
     // Test RAM size formatting (matched to actual implementation behavior)
     char buffer[64];
-    EXPECT_EQ(ram_format_size(0, buffer, sizeof(buffer)), RAM_SUCCESS);
+    EXPECT_EQ(hj_ram_format_size(0, buffer, sizeof(buffer)), HJ_RAM_SUCCESS);
     EXPECT_STREQ(buffer, "0 bytes");
 
-    EXPECT_EQ(ram_format_size(1, buffer, sizeof(buffer)), RAM_SUCCESS);
+    EXPECT_EQ(hj_ram_format_size(1, buffer, sizeof(buffer)), HJ_RAM_SUCCESS);
     EXPECT_STREQ(buffer, "1 bytes");
 
-    EXPECT_EQ(ram_format_size(1024, buffer, sizeof(buffer)), RAM_SUCCESS);
+    EXPECT_EQ(hj_ram_format_size(1024, buffer, sizeof(buffer)), HJ_RAM_SUCCESS);
     EXPECT_STREQ(buffer, "1.00 KB");
 
-    EXPECT_EQ(ram_format_size(1024 * 1024, buffer, sizeof(buffer)),
-              RAM_SUCCESS);
+    EXPECT_EQ(hj_ram_format_size(1024 * 1024, buffer, sizeof(buffer)),
+              HJ_RAM_SUCCESS);
     EXPECT_STREQ(buffer, "1.00 MB");
 }
 
@@ -527,12 +527,12 @@ TEST(ram, process_usage)
     SCOPED_TRACE("Testing process memory usage");
 
     // Test invalid parameter
-    EXPECT_EQ(ram_get_process_usage(nullptr), RAM_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_ram_get_process_usage(nullptr), HJ_RAM_ERR_INVALID_PARAMETER);
 
-    ram_statistics_t stats;
-    ram_err_t        result = ram_get_process_usage(&stats);
+    hj_ram_statistics_t stats;
+    hj_ram_err_t        result = hj_ram_get_process_usage(&stats);
 
-    if(result == RAM_SUCCESS)
+    if(result == HJ_RAM_SUCCESS)
     {
         std::cout << "Process Memory Usage:" << std::endl;
         std::cout << "  Current Usage: " << stats.current_usage << " byte"
@@ -556,32 +556,32 @@ TEST(ram, is_valid_address)
 
     bool is_valid = false;
     // Test invalid parameters
-    EXPECT_EQ(ram_is_valid_address(nullptr, 1024, false, &is_valid),
-              RAM_ERR_INVALID_PARAMETER);
-    EXPECT_EQ(ram_is_valid_address((void *) 0x1000, 1024, false, nullptr),
-              RAM_ERR_INVALID_PARAMETER);
-    EXPECT_EQ(ram_is_valid_address((void *) 0x1000, 0, false, &is_valid),
-              RAM_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_ram_is_valid_address(nullptr, 1024, false, &is_valid),
+              HJ_RAM_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_ram_is_valid_address((void *) 0x1000, 1024, false, nullptr),
+              HJ_RAM_ERR_INVALID_PARAMETER);
+    EXPECT_EQ(hj_ram_is_valid_address((void *) 0x1000, 0, false, &is_valid),
+              HJ_RAM_ERR_INVALID_PARAMETER);
 
     // Test with valid allocated memory
     const size_t test_size = 4096;
     void        *ptr       = nullptr;
-    ASSERT_EQ(ram_allocate_aligned(test_size, 4096, &ptr), RAM_SUCCESS);
+    ASSERT_EQ(hj_ram_allocate_aligned(test_size, 4096, &ptr), HJ_RAM_SUCCESS);
     ASSERT_NE(ptr, nullptr);
 
     // Check read validity
-    if(ram_is_valid_address(ptr, test_size, false, &is_valid) == RAM_SUCCESS)
+    if(hj_ram_is_valid_address(ptr, test_size, false, &is_valid) == HJ_RAM_SUCCESS)
     {
         EXPECT_TRUE(is_valid) << "Allocated memory should be valid for reading";
     }
 
     // Check write validity
-    if(ram_is_valid_address(ptr, test_size, true, &is_valid) == RAM_SUCCESS)
+    if(hj_ram_is_valid_address(ptr, test_size, true, &is_valid) == HJ_RAM_SUCCESS)
     {
         EXPECT_TRUE(is_valid) << "Allocated memory should be valid for writing";
     }
 
-    ram_free_aligned(ptr);
+    hj_ram_free_aligned(ptr);
 }
 
 TEST(ram, thread_safety_concurrency)
@@ -598,17 +598,17 @@ TEST(ram, thread_safety_concurrency)
         threads.emplace_back([&success_count, iterations]() {
             for(int j = 0; j < iterations; ++j)
             {
-                ram_system_info_t info;
-                if(ram_get_system_info(&info) == RAM_SUCCESS)
+                hj_ram_system_info_t info;
+                if(hj_ram_get_system_info(&info) == HJ_RAM_SUCCESS)
                 {
                     success_count++;
                 }
 
                 void *ptr = nullptr;
-                if(ram_allocate_aligned(1024, 64, &ptr) == RAM_SUCCESS)
+                if(hj_ram_allocate_aligned(1024, 64, &ptr) == HJ_RAM_SUCCESS)
                 {
                     memset(ptr, 0xAA, 1024);
-                    ram_free_aligned(ptr);
+                    hj_ram_free_aligned(ptr);
                 }
             }
         });

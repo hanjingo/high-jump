@@ -76,6 +76,7 @@ find_package(Boost REQUIRED COMPONENTS
 )
 find_package(OpenCL QUIET)
 find_package(CUDA QUIET)
+find_package(hwy REQUIRED)
 
 # Faiss
 # Find OpenMP (Faiss depends on it for parallel search)
@@ -202,6 +203,9 @@ target_link_libraries(${PROJECT_NAME}
 
     # whisper
     whisper
+
+    # highway
+    hwy::hwy
 )
 
 # for os-specific libraries

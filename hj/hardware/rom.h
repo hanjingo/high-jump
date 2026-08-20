@@ -31,15 +31,15 @@ extern "C" {
 
 typedef enum
 {
-    ROM_SUCCESS = 0,
-    ROM_ERR_INVALID_PARAM,
-    ROM_ERR_FILE_NOT_FOUND,
-    ROM_ERR_NOMEM,
-    ROM_ERR_IO_FAILURE,
-    ROM_ERR_EMPTY_FILE,
-    ROM_ERR_NOT_LOADED,
-    ROM_ERR_OUT_OF_BOUNDS
-} rom_result_t;
+    HJ_ROM_SUCCESS = 0,
+    HJ_ROM_ERR_INVALID_PARAM,
+    HJ_ROM_ERR_FILE_NOT_FOUND,
+    HJ_ROM_ERR_NOMEM,
+    HJ_ROM_ERR_IO_FAILURE,
+    HJ_ROM_ERR_EMPTY_FILE,
+    HJ_ROM_ERR_NOT_LOADED,
+    HJ_ROM_ERR_OUT_OF_BOUNDS
+} hj_rom_result_t;
 
 #ifndef HJ_ROM_API
 #if defined(HJ_ROM_STATIC)
@@ -55,14 +55,17 @@ typedef struct
     void  *data;   // Pointer to ROM data
     size_t size;   // Size of ROM in bytes
     bool   loaded; // Whether ROM is loaded
-} rom_t;
+} hj_rom_t;
 
 // ------------------------ ROM API Declarations ------------------------
-HJ_ROM_API void         rom_init(rom_t *rom);
-HJ_ROM_API rom_result_t rom_load(rom_t *rom, const char *filename);
-HJ_ROM_API rom_result_t rom_read(
-    const rom_t *rom, size_t offset, void *buf, size_t len, size_t *out_read);
-HJ_ROM_API void rom_free(rom_t *rom);
+HJ_ROM_API void            hj_rom_init(hj_rom_t *rom);
+HJ_ROM_API hj_rom_result_t hj_rom_load(hj_rom_t *rom, const char *filename);
+HJ_ROM_API hj_rom_result_t hj_rom_read(const hj_rom_t *rom,
+                                       size_t          offset,
+                                       void           *buf,
+                                       size_t          len,
+                                       size_t         *out_read);
+HJ_ROM_API void            hj_rom_free(hj_rom_t *rom);
 
 #ifdef __cplusplus
 }
@@ -80,7 +83,7 @@ HJ_ROM_API void rom_free(rom_t *rom);
 extern "C" {
 #endif
 
-HJ_ROM_API void rom_init(rom_t *rom)
+HJ_ROM_API void hj_rom_init(hj_rom_t *rom)
 {
     if(rom)
     {
@@ -90,19 +93,19 @@ HJ_ROM_API void rom_init(rom_t *rom)
     }
 }
 
-HJ_ROM_API rom_result_t rom_load(rom_t *rom, const char *filename)
+HJ_ROM_API hj_rom_result_t hj_rom_load(hj_rom_t *rom, const char *filename)
 {
     if(!rom || !filename)
-        return ROM_ERR_INVALID_PARAM;
+        return HJ_ROM_ERR_INVALID_PARAM;
 
     FILE *fp = fopen(filename, "rb");
     if(!fp)
-        return ROM_ERR_FILE_NOT_FOUND;
+        return HJ_ROM_ERR_FILE_NOT_FOUND;
 
     if(fseek(fp, 0, SEEK_END) != 0)
     {
         fclose(fp);
-        return ROM_ERR_IO_FAILURE;
+        return HJ_ROM_ERR_IO_FAILURE;
     }
 
     long sz = ftell(fp);
@@ -110,26 +113,26 @@ HJ_ROM_API rom_result_t rom_load(rom_t *rom, const char *filename)
     if(sz < 0)
     {
         fclose(fp);
-        return ROM_ERR_IO_FAILURE;
+        return HJ_ROM_ERR_IO_FAILURE;
     }
     if(sz == 0)
     {
         fclose(fp);
-        return ROM_ERR_EMPTY_FILE;
+        return HJ_ROM_ERR_EMPTY_FILE;
     }
 
     void *new_buf = malloc((size_t) sz);
     if(!new_buf)
     {
         fclose(fp);
-        return ROM_ERR_NOMEM;
+        return HJ_ROM_ERR_NOMEM;
     }
 
     if(fread(new_buf, 1, (size_t) sz, fp) != (size_t) sz)
     {
         free(new_buf);
         fclose(fp);
-        return ROM_ERR_IO_FAILURE;
+        return HJ_ROM_ERR_IO_FAILURE;
     }
 
     fclose(fp);
@@ -139,26 +142,26 @@ HJ_ROM_API rom_result_t rom_load(rom_t *rom, const char *filename)
     rom->data   = new_buf;
     rom->size   = (size_t) sz;
     rom->loaded = true;
-    return ROM_SUCCESS;
+    return HJ_ROM_SUCCESS;
 }
 
-HJ_ROM_API rom_result_t rom_read(
-    const rom_t *rom, size_t offset, void *buf, size_t len, size_t *out_read)
+HJ_ROM_API hj_rom_result_t hj_rom_read(
+    const hj_rom_t *rom, size_t offset, void *buf, size_t len, size_t *out_read)
 {
     if(out_read)
         *out_read = 0;
 
     if(!rom || !buf)
-        return ROM_ERR_INVALID_PARAM;
+        return HJ_ROM_ERR_INVALID_PARAM;
 
     if(!rom->loaded)
-        return ROM_ERR_NOT_LOADED;
+        return HJ_ROM_ERR_NOT_LOADED;
 
     if(len == 0)
-        return ROM_SUCCESS;
+        return HJ_ROM_SUCCESS;
 
     if(offset >= rom->size)
-        return ROM_ERR_OUT_OF_BOUNDS;
+        return HJ_ROM_ERR_OUT_OF_BOUNDS;
 
     size_t to_read = len;
     if(to_read > (rom->size - offset))
@@ -173,10 +176,10 @@ HJ_ROM_API rom_result_t rom_read(
         *out_read = to_read;
     }
 
-    return ROM_SUCCESS;
+    return HJ_ROM_SUCCESS;
 }
 
-HJ_ROM_API void rom_free(rom_t *rom)
+HJ_ROM_API void hj_rom_free(hj_rom_t *rom)
 {
     if(!rom || !rom->data)
         return;

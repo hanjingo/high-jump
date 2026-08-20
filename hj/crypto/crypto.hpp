@@ -15,4 +15,8 @@
 #include <hj/crypto/sha.hpp>
 #endif
 
+#ifdef HJ_ENABLE_LIC
+#include <hj/crypto/license.hpp>
+#endif
+
 #endif

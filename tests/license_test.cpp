@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <hj/util/license.hpp>
+#include <hj/crypto/license.hpp>
 #include <map>
 #include <chrono>
 

@@ -21,24 +21,17 @@
 
 #include <mutex>
 
-namespace hj
-{
+#define HJ_ONCE_CAT_IMPL(a, b) a##b
+#define HJ_ONCE_CAT(a, b) HJ_ONCE_CAT_IMPL(a, b)
 
-#define __once_cat(a, b) a##b
-#define _once_cat(a, b) __once_cat(a, b)
+#define HJ_ONCE_IMPL(counter_val, ...)                                         \
+    do                                                                         \
+    {                                                                          \
+        static std::once_flag HJ_ONCE_CAT(do_once_flag_, counter_val);         \
+        std::call_once(HJ_ONCE_CAT(do_once_flag_, counter_val),                \
+                       [&]() { __VA_ARGS__ });                                 \
+    } while(0)
 
-#define ONCE(cmd)                                                              \
-    static std::once_flag _once_cat(do_once_, __LINE__);                       \
-    std::call_once(_once_cat(do_once_, __LINE__), [&]() noexcept {             \
-        try                                                                    \
-        {                                                                      \
-            cmd                                                                \
-        }                                                                      \
-        catch(...)                                                             \
-        {                                                                      \
-        }                                                                      \
-    });
-
-}
+#define HJ_ONCE(...) HJ_ONCE_IMPL(__COUNTER__, __VA_ARGS__)
 
 #endif

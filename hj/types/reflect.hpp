@@ -2,18 +2,7 @@
  *  This file is part of high-jump(hj).
  *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
  *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  Licensed under the GNU General Public License, Version 3.0.
  */
 
 #ifndef REFLECT_HPP
@@ -24,92 +13,154 @@
 #include <type_traits>
 #include <vector>
 #include <cstring>
+#include <cstddef>
+#include <stdexcept>
 
 #include <boost/core/demangle.hpp>
 
-namespace hj
+namespace hj::reflect
 {
-class reflect
+template <typename T>
+inline constexpr bool is_simple_v =
+    std::is_trivial_v<T> && std::is_standard_layout_v<T>;
+
+template <typename T>
+constexpr bool is_simple(const T &) noexcept
 {
-  public:
-    template <typename T>
-    static std::string type_name(const T &t)
-    {
-#if defined(__GNUC__) || defined(__clang__)
-        return boost::core::demangle(typeid(t).name());
-#else
-        return typeid(t).name();
-#endif
-    }
-
-    template <typename T>
-    static bool is_pod(T t)
-    {
-        return std::is_pod<T>::value;
-    }
-
-    template <typename T>
-    static T copy(const T &t)
-    {
-        return t;
-    }
-
-    template <typename T>
-    static T clone(const T &t)
-    {
-        return T(t);
-    }
-
-    template <typename T>
-    static std::vector<unsigned char> serialize(const T &t)
-    {
-        static_assert(std::is_trivially_copyable<T>::value, "POD only");
-        const unsigned char *ptr = reinterpret_cast<const unsigned char *>(&t);
-        return std::vector<unsigned char>(ptr, ptr + sizeof(T));
-    }
-
-    template <typename T>
-    static T unserialize(const unsigned char *buf)
-    {
-        static_assert(std::is_trivially_copyable<T>::value, "POD only");
-        T t;
-        std::memcpy(&t, buf, sizeof(T));
-        return t;
-    }
-
-    template <typename T, typename Member>
-    static std::size_t offset_of(Member T::*member)
-    {
-        return reinterpret_cast<std::size_t>(&(((T *) 0)->*member));
-    }
-
-    template <typename T, typename Member>
-    static std::size_t size_of(Member T::*member)
-    {
-        return sizeof(((T *) 0)->*member);
-    }
-
-    template <typename T, typename Member>
-    static std::size_t align_of(Member T::*member)
-    {
-        return alignof(Member);
-    }
-
-    template <typename T, typename... Others>
-    static bool is_same_type(const T &, const Others &...)
-    {
-        return (std::conjunction<std::is_same<T, Others>...>::value);
-    }
-
-  private:
-    reflect()                           = default;
-    ~reflect()                          = default;
-    reflect(const reflect &)            = delete;
-    reflect &operator=(const reflect &) = delete;
-    reflect(reflect &&)                 = delete;
-    reflect &operator=(reflect &&)      = delete;
-};
-
+    return is_simple_v<T>;
 }
+
+template <typename T>
+[[deprecated("Use is_simple instead")]]
+constexpr bool is_pod(const T &t) noexcept
+{
+    return is_simple(t);
+}
+
+template <typename T>
+std::string type_name()
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return boost::core::demangle(typeid(T).name());
+#else
+    return typeid(T).name();
+#endif
+}
+
+template <typename T>
+std::string type_name(const T &)
+{
+    return type_name<T>();
+}
+
+template <typename T>
+T copy(const T &t)
+{
+    return t;
+}
+
+template <typename T>
+T clone(const T &t)
+{
+    return T(t);
+}
+
+/**
+ * @brief Performs a raw binary dump of a trivially copyable type into std::byte.
+ * 
+ * WARNING: This is NOT a portable serialization format.
+ * The serialized representation is implementation-defined, platform/compiler-dependent,
+ * and includes padding bytes. It must NOT be used as a cross-platform wire format 
+ * or long-term persistent storage format.
+ */
+template <typename T>
+std::vector<std::byte> dump_binary(const T &t)
+{
+    static_assert(std::is_trivially_copyable_v<T>,
+                  "Type must be trivially copyable for binary dump");
+    const auto *ptr = reinterpret_cast<const std::byte *>(&t);
+    return std::vector<std::byte>(ptr, ptr + sizeof(T));
+}
+
+/**
+ * @brief Restores a type from a raw byte pointer and size with bounds checking.
+ * 
+ * WARNING: See dump_binary() for limitations.
+ */
+template <typename T>
+T load_binary(const std::byte *buf, std::size_t size)
+{
+    static_assert(std::is_trivially_copyable_v<T>,
+                  "Type must be trivially copyable for binary load");
+    if(buf == nullptr || size < sizeof(T))
+    {
+        throw std::invalid_argument(
+            "load_binary: buffer is null or size is smaller than type size");
+    }
+    T t;
+    std::memcpy(&t, buf, sizeof(T));
+    return t;
+}
+
+template <typename T>
+T load_binary(const unsigned char *buf, std::size_t size)
+{
+    return load_binary<T>(reinterpret_cast<const std::byte *>(buf), size);
+}
+
+template <typename T>
+[[deprecated("Use dump_binary instead")]]
+std::vector<unsigned char> serialize(const T &t)
+{
+    auto        bytes = dump_binary(t);
+    const auto *ptr   = reinterpret_cast<const unsigned char *>(bytes.data());
+    return std::vector<unsigned char>(ptr, ptr + bytes.size());
+}
+
+template <typename T>
+[[deprecated("Use load_binary with size check instead")]]
+T unserialize(const unsigned char *buf)
+{
+    return load_binary<T>(buf, sizeof(T));
+}
+
+template <typename T>
+[[deprecated("Use load_binary with size check instead")]]
+T unserialize(const std::byte *buf)
+{
+    return load_binary<T>(buf, sizeof(T));
+}
+
+template <typename T, typename Member>
+constexpr std::size_t offset_of(Member T::*member) noexcept
+{
+    static_assert(
+        std::is_standard_layout_v<T>,
+        "Type must be a standard-layout type for offset_of computation");
+    return reinterpret_cast<std::size_t>(&(static_cast<T *>(nullptr)->*member));
+}
+
+template <typename T, typename Member>
+constexpr std::size_t size_of(Member T::*member) noexcept
+{
+    static_assert(
+        std::is_standard_layout_v<T>,
+        "Type must be a standard-layout type for size_of computation");
+    return sizeof(static_cast<T *>(nullptr)->*member);
+}
+
+template <typename T, typename Member>
+constexpr std::size_t align_of(Member T::*) noexcept
+{
+    return alignof(Member);
+}
+
+template <typename T, typename... Others>
+constexpr bool is_same_type(const T &, const Others &...) noexcept
+{
+    return (std::is_same_v<T, Others> && ...);
+}
+
+} // namespace hj::reflect
 
 #endif

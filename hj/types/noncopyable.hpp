@@ -19,44 +19,42 @@
 #ifndef NONCOPYABLE_HPP
 #define NONCOPYABLE_HPP
 
-#if __has_include(<boost/config.hpp>)
+#if defined(__has_include)
+#if __has_include(<boost/noncopyable.hpp>)
 #include <boost/noncopyable.hpp>
+#define HJ_HAS_BOOST_NONCOPYABLE 1
+#endif
+#endif
 
 namespace hj
 {
-
+#if defined(HJ_HAS_BOOST_NONCOPYABLE)
 using noncopyable = boost::noncopyable;
-
-}
-
 #else
-namespace hj
-{
-
 class noncopyable
 {
   protected:
-    noncopyable()                               = default;
-    ~noncopyable()                              = default;
+    noncopyable()  = default;
+    ~noncopyable() = default;
+
     noncopyable(const noncopyable &)            = delete;
     noncopyable &operator=(const noncopyable &) = delete;
+    noncopyable(noncopyable &&)                 = delete;
+    noncopyable &operator=(noncopyable &&)      = delete;
 };
-
+#endif
 }
 
-#endif
-
-
-#define DISABLE_COPY(Class)                                                    \
+#define HJ_DISABLE_COPY(Class)                                                 \
     Class(const Class &)            = delete;                                  \
     Class &operator=(const Class &) = delete;
 
-#define DISABLE_MOVE(Class)                                                    \
+#define HJ_DISABLE_MOVE(Class)                                                 \
     Class(Class &&)            = delete;                                       \
     Class &operator=(Class &&) = delete;
 
-#define DISABLE_COPY_MOVE(Class)                                               \
-    DISABLE_COPY(Class)                                                        \
-    DISABLE_MOVE(Class)
+#define HJ_DISABLE_COPY_MOVE(Class)                                            \
+    HJ_DISABLE_COPY(Class)                                                     \
+    HJ_DISABLE_MOVE(Class)
 
 #endif

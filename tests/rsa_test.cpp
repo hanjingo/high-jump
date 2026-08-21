@@ -200,6 +200,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     hj::rsa::options opt;
     opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
     opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
 
     // file -> rsa file
     std::string str_src = "./crypto.log";
@@ -221,6 +222,7 @@ MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJOz3qh46xBSUa21X0g6fBaWmJCcpzmEffwibaovEtOw4LYR
     hj::rsa::options opt;
     opt.pubkey_pem     = reinterpret_cast<unsigned char *>(pubkey.data());
     opt.pubkey_pem_len = pubkey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
 
     // file -> rsa file
     std::string str_src = "./crypto.log";
@@ -237,6 +239,7 @@ MIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAk7PeqHjrEFJRrbVfSDp8FpaYkJynOYR9
     opt.reset();
     opt.prikey_pem     = reinterpret_cast<unsigned char *>(prikey.data());
     opt.prikey_pem_len = prikey.size();
+    opt.pad_style      = hj::rsa::padding::pkcs1;
 
     // rsa file -> file
     ASSERT_EQ(hj::rsa::decrypt_file(std::string("./rsa_file_test_decrypt.log"),
@@ -255,7 +258,7 @@ TEST(rsa, keygen)
     hj::rsa::keygen_options opt;
     opt.bits         = 2048;
     opt.format       = hj::rsa::key_format::x509;
-    opt.mod          = hj::rsa::mode::aes_256_cbc;
+    opt.cipher       = hj::rsa::pem_cipher::aes_256_cbc;
     opt.password     = reinterpret_cast<const unsigned char *>(passwd.c_str());
     opt.password_len = passwd.size();
     ASSERT_EQ(hj::rsa::keygen(pubkey, prikey, opt), ok);

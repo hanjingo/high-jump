@@ -19,38 +19,41 @@
 #ifndef ANY_HPP
 #define ANY_HPP
 
+#include <utility>
+
 #if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <any>
 
 namespace hj
 {
-
-using any = std::any;
-
-template <class T>
-T *any_cast(any *operand)
-{
-    return std::any_cast<T>(operand);
-}
+using any          = std::any;
+using bad_any_cast = std::bad_any_cast;
 
 template <class T>
-const T *any_cast(const any *operand)
+inline T *any_cast(any *o) noexcept
 {
-    return std::any_cast<T>(operand);
+    return std::any_cast<T>(o);
 }
-
 template <class T>
-T any_cast(any &operand)
+inline const T *any_cast(const any *o) noexcept
 {
-    return std::any_cast<T>(operand);
+    return std::any_cast<T>(o);
 }
-
 template <class T>
-T any_cast(const any &operand)
+inline T any_cast(any &o)
 {
-    return std::any_cast<T>(operand);
+    return std::any_cast<T>(o);
 }
-
+template <class T>
+inline T any_cast(const any &o)
+{
+    return std::any_cast<T>(o);
+}
+template <class T>
+inline T any_cast(any &&o)
+{
+    return std::any_cast<T>(std::move(o));
+}
 }
 
 #else
@@ -58,33 +61,45 @@ T any_cast(const any &operand)
 
 namespace hj
 {
+class any : public boost::any
+{
+  public:
+    using boost::any::any;
+    any()
+        : boost::any()
+    {
+    }
 
-using any = boost::any;
+    bool has_value() const noexcept { return !this->empty(); }
+};
+
+using bad_any_cast = boost::bad_any_cast;
 
 template <class T>
-T *any_cast(any *operand)
+inline T *any_cast(any *o) noexcept
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T>(o);
 }
-
 template <class T>
-const T *any_cast(const any *operand)
+inline const T *any_cast(const any *o) noexcept
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T>(o);
 }
-
 template <class T>
-T any_cast(any &operand)
+inline T any_cast(any &o)
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T>(o);
 }
-
 template <class T>
-T any_cast(const any &operand)
+inline T any_cast(const any &o)
 {
-    return boost::any_cast<T>(operand);
+    return boost::any_cast<T>(o);
 }
-
+template <class T>
+inline T any_cast(any &&o)
+{
+    return boost::any_cast<T>(std::move(o));
+}
 }
 #endif
 

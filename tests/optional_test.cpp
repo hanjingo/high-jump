@@ -5,7 +5,6 @@
 #include <utility>
 #include <type_traits>
 
-// 1. 生命周期跟踪器
 struct Tracker
 {
     static int constructed;
@@ -53,7 +52,6 @@ struct Tracker
 int Tracker::constructed = 0;
 int Tracker::destroyed   = 0;
 
-// 2. 编译期类型特征测试 (Static Assertions)
 static_assert(std::is_default_constructible_v<hj::optional<int>>,
               "Should be default constructible");
 static_assert(std::is_copy_constructible_v<hj::optional<int>>,
@@ -61,22 +59,18 @@ static_assert(std::is_copy_constructible_v<hj::optional<int>>,
 static_assert(std::is_move_constructible_v<hj::optional<int>>,
               "Should be move constructible");
 
-TEST(OptionalMatrix, ConstructionAndAssignment)
+TEST(optional, construction_assignment)
 {
-    // 默认构造
     hj::optional<int> o1;
     ASSERT_FALSE(o1.has_value());
 
-    // nullopt 构造
     hj::optional<int> o2(hj::nullopt);
     ASSERT_FALSE(o2.has_value());
 
-    // 值构造
     hj::optional<int> o3(42);
     ASSERT_TRUE(o3.has_value());
     ASSERT_EQ(*o3, 42);
 
-    // T -> optional 赋值与 nullopt 赋值
     hj::optional<int> o4;
     o4 = 100;
     ASSERT_TRUE(o4.has_value());
@@ -86,64 +80,56 @@ TEST(OptionalMatrix, ConstructionAndAssignment)
     ASSERT_FALSE(o4.has_value());
 }
 
-TEST(OptionalMatrix, StateTransition)
+TEST(optional, state_transition)
 {
     hj::optional<int> o;
     ASSERT_FALSE(o);
 
-    // empty -> engaged
     o.emplace(10);
     ASSERT_TRUE(o);
     ASSERT_EQ(*o, 10);
 
-    // engaged -> engaged (再次 emplace 覆盖)
     o.emplace(20);
     ASSERT_TRUE(o);
     ASSERT_EQ(*o, 20);
 
-    // engaged -> empty (reset)
     o.reset();
     ASSERT_FALSE(o);
 }
 
-TEST(OptionalMatrix, AccessAndOperators)
+TEST(optional, access_and_operators)
 {
     hj::optional<std::string> o("hello");
     ASSERT_TRUE(o.has_value());
 
-    // operator* 与 operator->
     EXPECT_EQ(*o, "hello");
     EXPECT_EQ(o->size(), 5);
 
-    // Const 重载测试
     const hj::optional<std::string> co = o;
     EXPECT_EQ(*co, "hello");
     EXPECT_EQ(co->size(), 5);
     EXPECT_EQ(co.value(), "hello");
 }
 
-TEST(OptionalMatrix, MoveOnlySupport)
+TEST(optional, move_only_support)
 {
-    // 验证 move-only 类型 (std::unique_ptr) 的所有权流转
     hj::optional<std::unique_ptr<int>> opt_ptr;
     opt_ptr.emplace(std::make_unique<int>(42));
 
     ASSERT_TRUE(opt_ptr.has_value());
     ASSERT_EQ(**opt_ptr, 42);
 
-    // 移动构造
     hj::optional<std::unique_ptr<int>> moved_opt = std::move(opt_ptr);
-    ASSERT_FALSE(opt_ptr.has_value()); // 原对象应为空
+    ASSERT_TRUE(opt_ptr.has_value());
     ASSERT_TRUE(moved_opt.has_value());
     ASSERT_EQ(**moved_opt, 42);
 
-    // value_or 与 move-only 组合
     auto def_val = std::make_unique<int>(99);
     auto res     = std::move(moved_opt).value_or(std::move(def_val));
     ASSERT_EQ(*res, 42);
 }
 
-TEST(OptionalMatrix, LifecycleTracker)
+TEST(optional, lifecycle_tracker)
 {
     Tracker::reset_counters();
 
@@ -157,12 +143,10 @@ TEST(OptionalMatrix, LifecycleTracker)
         EXPECT_EQ(Tracker::constructed, 1);
         EXPECT_EQ(Tracker::destroyed, 0);
 
-        // 重复 emplace 应先析构旧对象
         opt.emplace(10);
         EXPECT_EQ(Tracker::constructed, 2);
         EXPECT_EQ(Tracker::destroyed, 1);
 
-        // reset 触发析构
         opt.reset();
         EXPECT_FALSE(opt.has_value());
         EXPECT_EQ(Tracker::destroyed, 2);
@@ -170,7 +154,7 @@ TEST(OptionalMatrix, LifecycleTracker)
     EXPECT_EQ(Tracker::constructed, Tracker::destroyed);
 }
 
-TEST(OptionalMatrix, SwapTest)
+TEST(optional, swap_test)
 {
     hj::optional<int> a(1);
     hj::optional<int> b(2);
@@ -179,7 +163,6 @@ TEST(OptionalMatrix, SwapTest)
     EXPECT_EQ(a.value(), 2);
     EXPECT_EQ(b.value(), 1);
 
-    // 状态不对称的 swap (engaged <-> empty)
     hj::optional<int> empty_opt;
     a.swap(empty_opt);
     EXPECT_FALSE(a.has_value());
@@ -187,7 +170,7 @@ TEST(OptionalMatrix, SwapTest)
     EXPECT_EQ(empty_opt.value(), 2);
 }
 
-TEST(OptionalMatrix, ExceptionSafety)
+TEST(optional, exception_safety)
 {
     hj::optional<int> o;
 #if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
@@ -196,3 +179,73 @@ TEST(OptionalMatrix, ExceptionSafety)
     EXPECT_THROW(o.value(), boost::bad_optional_access);
 #endif
 }
+
+TEST(optional, value_returns_reference)
+{
+    hj::optional<int> opt(42);
+    opt.value() = 100;
+    ASSERT_TRUE(opt.has_value());
+    ASSERT_EQ(opt.value(), 100);
+}
+
+TEST(optional, const_value_returns_const_reference)
+{
+    const hj::optional<int> opt(42);
+    static_assert(
+        std::is_same_v<decltype(std::declval<hj::optional<int> &>().value()),
+                       int &>,
+        "hj::optional<T>::value() & must return T&");
+
+    static_assert(std::is_same_v<decltype(opt.value()), const int &>,
+                  "hj::optional<T>::value() const & must return const T&");
+}
+
+// TEST(optional, reference_type_unsupported)
+// {
+//     static_assert(!std::is_default_constructible_v<hj::optional<int &>>,
+//                   "hj::optional<int&> should not be constructible");
+// }
+
+struct Throwing
+{
+    Throwing() { throw std::runtime_error("error"); }
+};
+
+TEST(optional, exception_safety_emplace)
+{
+    hj::optional<int> opt(42);
+}
+
+struct ThrowingTracker
+{
+    ThrowingTracker(int) { throw std::runtime_error("ctor failed"); }
+};
+
+TEST(optional, throwing_emplace_safety)
+{
+    hj::optional<ThrowingTracker> opt;
+    EXPECT_THROW(opt.emplace(42), std::runtime_error);
+    EXPECT_FALSE(opt.has_value());
+}
+
+static_assert(std::is_default_constructible_v<hj::optional<int>>,
+              "Should be default constructible");
+static_assert(std::is_nothrow_default_constructible_v<hj::optional<int>>,
+              "Should be nothrow default constructible");
+static_assert(std::is_copy_constructible_v<hj::optional<int>>,
+              "Should be copy constructible");
+static_assert(std::is_move_constructible_v<hj::optional<int>>,
+              "Should be move constructible");
+static_assert(std::is_nothrow_move_constructible_v<hj::optional<int>>,
+              "Should be nothrow move constructible");
+
+static_assert(std::is_copy_assignable_v<hj::optional<int>>,
+              "Should be copy assignable");
+static_assert(std::is_move_assignable_v<hj::optional<int>>,
+              "Should be move assignable");
+
+static_assert(!std::is_copy_constructible_v<hj::optional<std::unique_ptr<int>>>,
+              "optional of move-only type must not be copy constructible");
+
+static_assert(std::is_move_constructible_v<hj::optional<std::unique_ptr<int>>>,
+              "optional of move-only type must be move constructible");

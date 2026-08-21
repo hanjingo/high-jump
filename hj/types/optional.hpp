@@ -19,6 +19,10 @@
 #ifndef OPTIONAL_HPP
 #define OPTIONAL_HPP
 
+#include <type_traits>
+#include <utility>
+#include <initializer_list>
+
 #if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <optional>
 #define HJ_USE_STD_OPTIONAL
@@ -52,6 +56,11 @@ template <class T>
 class optional
 {
   private:
+    static_assert(
+        !std::is_reference_v<T>,
+        "hj::optional<T&> is not supported. "
+        "Consider using hj::optional<std::reference_wrapper<T>> or pointers.");
+
 #ifdef HJ_USE_STD_OPTIONAL
     std::optional<T> _impl;
 #else
@@ -75,32 +84,34 @@ class optional
     template <
         class U               = T,
         std::enable_if_t<!std::is_same_v<std::decay_t<U>, optional>
-                             && !std::is_same_v<std::decay_t<U>, nullopt_t>,
+                             && !std::is_same_v<std::decay_t<U>, nullopt_t>
+                             && std::is_constructible_v<T, U>
+                             && std::is_convertible_v<U, T>,
                          int> = 0>
     constexpr optional(U &&value)
         : _impl(std::forward<U>(value))
     {
     }
 
-    optional(const optional &) = default;
-    constexpr optional(optional &&other) noexcept(
-        std::is_nothrow_move_constructible_v<T>)
-        : _impl(std::move(other._impl))
+    template <
+        class U               = T,
+        std::enable_if_t<!std::is_same_v<std::decay_t<U>, optional>
+                             && !std::is_same_v<std::decay_t<U>, nullopt_t>
+                             && std::is_constructible_v<T, U>
+                             && !std::is_convertible_v<U, T>,
+                         int> = 0>
+    constexpr explicit optional(U &&value)
+        : _impl(std::forward<U>(value))
     {
-        other.reset();
     }
 
+    optional(const optional &) = default;
+    constexpr optional(optional &&) noexcept(
+        std::is_nothrow_move_constructible_v<T>) = default;
+
     optional &operator=(const optional &) = default;
-    optional &
-    operator=(optional &&other) noexcept(std::is_nothrow_move_assignable_v<T>)
-    {
-        if(this != &other)
-        {
-            _impl = std::move(other._impl);
-            other.reset();
-        }
-        return *this;
-    }
+    optional &operator=(optional &&) noexcept(
+        std::is_nothrow_move_assignable_v<T>) = default;
 
     optional &operator=(nullopt_t) noexcept
     {
@@ -124,9 +135,13 @@ class optional
 
     constexpr explicit operator bool() const noexcept { return has_value(); }
 
-    HJ_NODISCARD auto value() & { return _impl.value(); }
-    HJ_NODISCARD auto value() const & { return _impl.value(); }
-    HJ_NODISCARD auto value() && { return std::move(_impl).value(); }
+    HJ_NODISCARD constexpr T       &value()       &{ return _impl.value(); }
+    HJ_NODISCARD constexpr const T &value() const & { return _impl.value(); }
+    HJ_NODISCARD constexpr T &&value() && { return std::move(_impl).value(); }
+    HJ_NODISCARD constexpr const T &&value() const &&
+    {
+        return std::move(_impl).value();
+    }
 
     template <class U>
     HJ_NODISCARD T value_or(U &&default_value) const &
@@ -145,13 +160,30 @@ class optional
     HJ_NODISCARD const T *operator->() const noexcept { return &*_impl; }
     HJ_NODISCARD T       *operator->() noexcept { return &*_impl; }
 
-    HJ_NODISCARD const T &operator*() const & noexcept { return *_impl; }
-    HJ_NODISCARD T       &operator*()       &noexcept { return *_impl; }
+    HJ_NODISCARD constexpr T       &operator*()       &noexcept { return *_impl; }
+    HJ_NODISCARD constexpr const T &operator*() const & noexcept
+    {
+        return *_impl;
+    }
+    HJ_NODISCARD constexpr T &&operator*() && noexcept
+    {
+        return std::move(_impl).operator*();
+    }
+    HJ_NODISCARD constexpr const T &&operator*() const && noexcept
+    {
+        return std::move(_impl).operator*();
+    }
 
     template <class... Args>
-    void emplace(Args &&...args)
+    T &emplace(Args &&...args)
     {
-        _impl.emplace(std::forward<Args>(args)...);
+        return _impl.emplace(std::forward<Args>(args)...);
+    }
+
+    template <class U, class... Args>
+    T &emplace(std::initializer_list<U> il, Args &&...args)
+    {
+        return _impl.emplace(il, std::forward<Args>(args)...);
     }
 
     void reset() noexcept
@@ -166,6 +198,12 @@ class optional
     void swap(optional &other) noexcept(noexcept(_impl.swap(other._impl)))
     {
         _impl.swap(other._impl);
+    }
+
+    friend void swap(optional &lhs,
+                     optional &rhs) noexcept(noexcept(lhs.swap(rhs)))
+    {
+        lhs.swap(rhs);
     }
 };
 

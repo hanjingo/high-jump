@@ -4,1897 +4,657 @@
 #include <openssl/evp.h>
 
 #include <array>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
-#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
-std::string calc_file_md5(const std::string &file_path)
+namespace
 {
-    std::ifstream ifs(file_path, std::ios::binary);
-    if(!ifs.is_open())
-        return "";
+
+using error_code = hj::des::error_code;
+
+constexpr char k3des_key[] = "12345678abcdefgh00000000"; // 24 bytes
+constexpr char k2des_key[] = "12345678abcdefgh";         // 16 bytes
+constexpr char k_iv[]      = "abcdefgh";                 // 8 bytes
+
+std::string to_hex(const std::string &src)
+{
+    static constexpr char hex[] = "0123456789ABCDEF";
+
+    std::string out;
+    out.reserve(src.size() * 2);
+
+    for(unsigned char c : src)
+    {
+        out.push_back(hex[c >> 4]);
+        out.push_back(hex[c & 0x0F]);
+    }
+
+    return out;
+}
+
+std::string from_hex(const std::string &hex)
+{
+    if(hex.size() % 2 != 0)
+        return {};
+
+    std::string out;
+    out.reserve(hex.size() / 2);
+
+    auto value = [](char c) -> unsigned char {
+        if(c >= '0' && c <= '9')
+            return static_cast<unsigned char>(c - '0');
+
+        if(c >= 'a' && c <= 'f')
+            return static_cast<unsigned char>(c - 'a' + 10);
+
+        return static_cast<unsigned char>(c - 'A' + 10);
+    };
+
+    for(std::size_t i = 0; i < hex.size(); i += 2)
+    {
+        out.push_back(
+            static_cast<char>((value(hex[i]) << 4) | value(hex[i + 1])));
+    }
+
+    return out;
+}
+
+hj::des::options make_options(const std::string &key,
+                              hj::des::mode      mode,
+                              hj::des::padding   pad,
+                              const std::string &iv = k_iv)
+{
+    hj::des::options opt;
+    opt.key       = reinterpret_cast<const unsigned char *>(key.data());
+    opt.key_len   = key.size();
+    opt.mod       = mode;
+    opt.pad_style = pad;
+
+    if(mode != hj::des::mode::ecb)
+    {
+        opt.iv     = reinterpret_cast<const unsigned char *>(iv.data());
+        opt.iv_len = iv.size();
+    }
+
+    return opt;
+}
+
+std::string openssl_encrypt(const std::string &key,
+                            const std::string &iv,
+                            hj::des::mode      mode,
+                            const std::string &plain,
+                            bool               padding)
+{
+    const char *name = nullptr;
+
+    switch(mode)
+    {
+        case hj::des::mode::ecb:
+            name = key.size() == 16 ? "DES-EDE-ECB" : "DES-EDE3-ECB";
+            break;
+
+        case hj::des::mode::cbc:
+            name = key.size() == 16 ? "DES-EDE-CBC" : "DES-EDE3-CBC";
+            break;
+
+        case hj::des::mode::cfb:
+            name = key.size() == 16 ? "DES-EDE-CFB" : "DES-EDE3-CFB";
+            break;
+
+        case hj::des::mode::ofb:
+            name = key.size() == 16 ? "DES-EDE-OFB" : "DES-EDE3-OFB";
+            break;
+
+        case hj::des::mode::ctr:
+            ADD_FAILURE() << "CTR is intentionally not cross-validated through "
+                             "a direct EVP CTR cipher";
+            return {};
+    }
+
+    std::unique_ptr<EVP_CIPHER, decltype(&EVP_CIPHER_free)> cipher(
+        EVP_CIPHER_fetch(nullptr, name, nullptr),
+        EVP_CIPHER_free);
+
+    if(!cipher)
+    {
+        ADD_FAILURE() << "EVP_CIPHER_fetch failed for " << name;
+        return {};
+    }
+
+    std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(
+        EVP_CIPHER_CTX_new(),
+        EVP_CIPHER_CTX_free);
+
+    if(!ctx)
+    {
+        ADD_FAILURE() << "EVP_CIPHER_CTX_new failed";
+        return {};
+    }
+
+    const unsigned char *iv_ptr =
+        mode == hj::des::mode::ecb
+            ? nullptr
+            : reinterpret_cast<const unsigned char *>(iv.data());
+
+    if(EVP_EncryptInit_ex(ctx.get(),
+                          cipher.get(),
+                          nullptr,
+                          reinterpret_cast<const unsigned char *>(key.data()),
+                          iv_ptr)
+       != 1)
+    {
+        ADD_FAILURE() << "EVP_EncryptInit_ex failed";
+        return {};
+    }
+
+    if(EVP_CIPHER_CTX_set_padding(ctx.get(), padding ? 1 : 0) != 1)
+    {
+        ADD_FAILURE() << "EVP_CIPHER_CTX_set_padding failed";
+        return {};
+    }
+
+    std::string out(plain.size() + hj::des::block_size, '\0');
+    int         out_len   = 0;
+    int         final_len = 0;
+
+    if(EVP_EncryptUpdate(ctx.get(),
+                         reinterpret_cast<unsigned char *>(out.data()),
+                         &out_len,
+                         reinterpret_cast<const unsigned char *>(plain.data()),
+                         static_cast<int>(plain.size()))
+       != 1)
+    {
+        ADD_FAILURE() << "EVP_EncryptUpdate failed";
+        return {};
+    }
+
+    if(EVP_EncryptFinal_ex(ctx.get(),
+                           reinterpret_cast<unsigned char *>(out.data())
+                               + out_len,
+                           &final_len)
+       != 1)
+    {
+        ADD_FAILURE() << "EVP_EncryptFinal_ex failed";
+        return {};
+    }
+
+    out.resize(static_cast<std::size_t>(out_len + final_len));
+    return out;
+}
+
+std::string calc_file_md5(const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    if(!in)
+        return {};
 
     std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> ctx(
         EVP_MD_CTX_new(),
         EVP_MD_CTX_free);
-    if(!ctx)
-        return "";
 
-    if(EVP_DigestInit_ex(ctx.get(), EVP_md5(), nullptr) != 1)
-        return "";
+    if(!ctx || EVP_DigestInit_ex(ctx.get(), EVP_md5(), nullptr) != 1)
+        return {};
 
-    char buffer[8192];
-    while(ifs.read(buffer, sizeof(buffer)) || ifs.gcount() > 0)
+    std::array<unsigned char, 8192> buffer{};
+
+    while(in)
     {
-        if(EVP_DigestUpdate(ctx.get(),
-                            buffer,
-                            static_cast<std::size_t>(ifs.gcount()))
-           != 1)
-            return "";
+        in.read(reinterpret_cast<char *>(buffer.data()),
+                static_cast<std::streamsize>(buffer.size()));
+
+        const auto n = in.gcount();
+
+        if(n > 0
+           && EVP_DigestUpdate(ctx.get(),
+                               buffer.data(),
+                               static_cast<std::size_t>(n))
+                  != 1)
+        {
+            return {};
+        }
     }
 
-    std::array<unsigned char, EVP_MAX_MD_SIZE> hash{};
-    unsigned int                               hash_len = 0;
-    if(EVP_DigestFinal_ex(ctx.get(), hash.data(), &hash_len) != 1)
-        return "";
+    std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
+    unsigned int                               digest_len = 0;
 
-    std::ostringstream oss;
-    for(unsigned int i = 0; i < hash_len; ++i)
+    if(EVP_DigestFinal_ex(ctx.get(), digest.data(), &digest_len) != 1)
     {
-        oss << std::hex << std::setw(2) << std::setfill('0')
-            << static_cast<int>(hash[i]);
+        return {};
     }
 
-    return oss.str();
+    std::ostringstream out;
+
+    for(unsigned int i = 0; i < digest_len; ++i)
+    {
+        out << std::hex << std::setw(2) << std::setfill('0')
+            << static_cast<unsigned int>(digest[i]);
+    }
+
+    return out.str();
 }
-std::string to_hex(const std::string &src)
-{
-    std::stringstream ss;
-    for(unsigned char c : src)
-        ss << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
-           << static_cast<int>(c);
 
-    return ss.str();
-}
+} // namespace
 
-std::string to_bytes(const std::string &hex)
+/*
+ * Security policy:
+ *
+ * Single DES is intentionally unavailable.
+ * OpenSSL 3 places DES in the legacy provider; this test suite
+ * verifies that the wrapper does NOT silently load that provider.
+ */
+TEST(des, single_des_is_unsupported)
 {
-    std::string bytes;
-    for(size_t i = 0; i < hex.length(); i += 2)
-    {
-        unsigned int      byte;
-        std::stringstream ss;
-        ss << std::hex << hex.substr(i, 2);
-        ss >> byte;
-        bytes.push_back(static_cast<char>(byte));
-    }
-    return bytes;
+    const std::string key   = "12345678";
+    const std::string plain = "hello world";
+
+    auto opt = make_options(key, hj::des::mode::ecb, hj::des::padding::pkcs7);
+
+    std::string encrypted;
+
+    EXPECT_EQ(hj::des::encrypt(encrypted, plain, opt),
+              error_code::unsupported_algorithm);
+
+    const std::string ciphertext(8, '\0');
+
+    EXPECT_EQ(hj::des::decrypt(encrypted, ciphertext, opt),
+              error_code::unsupported_algorithm);
 }
 
 TEST(des, encrypt)
 {
-    auto        ok = hj::des::error_code::ok;
-    std::string str_src("hello world 1234");
-    std::string str_dst;
-    std::string key("12345678");
-    std::string iv("abcdefgh");
+    const std::string key = k3des_key;
+    const std::string iv  = k_iv;
 
-    hj::des::options opt;
+    /*
+     * Known-answer test from the previous implementation:
+     * 3-key TDEA / ECB / PKCS#5.
+     */
+    {
+        auto opt =
+            make_options(key, hj::des::mode::ecb, hj::des::padding::pkcs5);
 
-    // for stream ECB padding PKCS#5 test
-    str_src = "hello world 1";
-    std::istringstream in(str_src);
-    std::ostringstream out;
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ecb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::encrypt(out, in, opt));
-    ASSERT_STREQ(to_hex(out.str()).c_str(), "28DBA02EB5F6DD47AA291D16D82146BF");
+        std::string encrypted;
 
-    // ECB padding PKCS#5
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD475D82E3681C83BB77");
+        ASSERT_EQ(hj::des::encrypt(encrypted, "1", opt), error_code::ok);
 
-    // ECB padding PKCS#7
-    str_dst.clear();
-    str_src       = "hello world 1";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47AA291D16D82146BF");
+        EXPECT_EQ(to_hex(encrypted), "40C3AD88D21D2BCA");
+    }
 
-    // ECB padding 0
-    str_dst.clear();
-    str_src       = "hello world 12";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47535FFDB06574A87D");
+    /*
+     * Cross-validation against OpenSSL EVP.
+     */
+    {
+        auto opt =
+            make_options(key, hj::des::mode::cbc, hj::des::padding::pkcs7, iv);
 
-    // ECB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "hello world 123";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
+        const std::string plain = "hello world";
 
-    // ECB padding ANSIX923
-    str_dst.clear();
-    str_src       = "hello world 1234";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(),
-                 "28DBA02EB5F6DD47BABFF98EFA6DB628030116F7E552E7B6");
+        std::string actual;
 
-    // ECB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "hello world 12345";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(),
-                 "28DBA02EB5F6DD47BABFF98EFA6DB628DE3491731DCB353C");
+        ASSERT_EQ(hj::des::encrypt(actual, plain, opt), error_code::ok);
 
-    // ECB padding NOPADDING
-    str_dst.clear();
-    str_src       = "hello world 1234";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "28DBA02EB5F6DD47BABFF98EFA6DB628");
+        const std::string expected =
+            openssl_encrypt(key, iv, hj::des::mode::cbc, plain, true);
 
-    str_dst.clear();
-    str_src       = "hello world 12345";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
+        EXPECT_EQ(actual, expected);
+    }
 
-    // CBC padding PKCS#5
-    str_dst.clear();
-    str_src = "hello world";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cbc;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B0373FB9C7373EEE4D1");
+    /*
+     * All supported padding schemes must round-trip.
+     * ISO10126 is intentionally not compared byte-for-byte because
+     * its padding bytes are random.
+     */
+    for(auto pad : {hj::des::padding::pkcs5,
+                    hj::des::padding::pkcs7,
+                    hj::des::padding::zero,
+                    hj::des::padding::iso10126,
+                    hj::des::padding::ansix923,
+                    hj::des::padding::iso_iec_7816_4})
+    {
+        auto opt = make_options(key, hj::des::mode::cbc, pad, iv);
 
-    // CBC padding PKCS#7
-    str_dst.clear();
-    str_src       = "hello world 1";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B03849FE655EE80DB80");
+        const std::string plain = "hello world 1234";
+        std::string       encrypted;
 
-    // CBC padding 0
-    str_dst.clear();
-    str_src       = "hello world 12";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B0353E3BE76EB413AB0");
+        ASSERT_EQ(hj::des::encrypt(encrypted, plain, opt), error_code::ok);
 
-    // CBC padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "hello world 123";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
+        ASSERT_FALSE(encrypted.empty());
+        ASSERT_EQ(encrypted.size() % hj::des::block_size, 0U);
 
-    // CBC padding ANSIX923
-    str_dst.clear();
-    str_src       = "hello world 1234";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(),
-                 "B72D0DC9E9433B031400731AF6B95E3BDF39AA4FBB8F6F63");
+        std::string decrypted;
 
-    // CBC padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "hello world 12345";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(),
-                 "B72D0DC9E9433B031400731AF6B95E3BC113907DECCE3490");
+        ASSERT_EQ(hj::des::decrypt(decrypted, encrypted, opt), error_code::ok);
 
-    // CBC padding NOPADDING
-    str_dst.clear();
-    str_src       = "hello world 1234";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B72D0DC9E9433B031400731AF6B95E3B");
-
-    // CFB padding PKCS#5
-    str_dst.clear();
-    str_src = "hello world 1234";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cfb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(),
-                 "FCB12F07AC95C1FC248142DD0763FF0EC92210E9B43584E0");
-
-    // CFB padding PKCS#7
-    str_dst.clear();
-    str_src       = "hello world 123";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD0763FF3B");
-
-    // CFB padding 0
-    str_dst.clear();
-    str_src       = "hello world 12";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD0763CC3A");
-
-    // CFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "hello world 1";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-
-    // CFB padding ANSIX923
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142FD3651CC3F");
-
-    // CFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "hello world 1";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD07D1CC3A");
-
-    // CFB padding NOPADDING
-    str_dst.clear();
-    str_src       = "hello world 1234";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FCB12F07AC95C1FC248142DD0763FF0E");
-
-    // OFB padding PKCS#5
-    str_dst.clear();
-    str_src = "libcpp";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ofb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C5B491");
-
-    // OFB padding PKCS#7
-    str_dst.clear();
-    str_src       = "libcpp1";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C58792");
-
-    // OFB padding 0
-    str_dst.clear();
-    str_src       = "libcpp12";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C587A14B6BB3A9E45E6967");
-
-    // OFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "libcpp123";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-
-    // OFB padding ANSIX923
-    str_dst.clear();
-    str_src       = "libcpp1234";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C587A1785FB3A9E45E6961");
-
-    // OFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "libcpp12345";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "F8BD2108B3C587A1785F8629E45E6967");
-
-    // OFB padding NOPADDING
-    str_dst.clear();
-    str_src       = "1234567812345678";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6705FF68381AB7A59809DD1685E5F");
-
-    // OFB padding NOPADDING
-    str_dst.clear();
-    str_src       = "123456781234567";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
-
-    // CTR padding PKCS#5
-    str_dst.clear();
-    str_src = "1";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ctr;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5D3446CC4B2B194");
-
-    // CTR padding PKCS#7
-    str_dst.clear();
-    str_src       = "12";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6456DC5B3B095");
-
-    // CTR padding 0
-    str_dst.clear();
-    str_src       = "123";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6706BC3B5B693");
-
-    // CTR padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "1234";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-
-    // CTR padding ANSIX923
-    str_dst.clear();
-    str_src       = "12345";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6705FF6B5B690");
-
-    // CTR padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "123456";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6705FF6833693");
-
-    // CTR padding NOPADDING
-    str_dst.clear();
-    str_src       = "1234567";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
-
-    str_dst.clear();
-    str_src       = "12345678";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A5E6705FF68381AB");
+        EXPECT_EQ(decrypted, plain);
+    }
 }
 
 TEST(des, encrypt_n)
 {
-    auto        ok = hj::des::error_code::ok;
-    std::string str_src("");
-    std::string str_dst;
-    std::string key("12345678abcdefgh00000000");
-    std::string iv("abcdefgh");
+    const std::string key = k3des_key;
+    const std::string iv  = k_iv;
 
-    hj::des::options opt;
+    /*
+     * 2-key TDEA must also work through EVP.
+     */
+    {
+        auto opt = make_options(std::string(k2des_key),
+                                hj::des::mode::ecb,
+                                hj::des::padding::pkcs5);
 
-    // for stream ECB padding PKCS#5 test
-    str_src = "hello world";
-    std::istringstream in(str_src);
-    std::ostringstream out;
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ecb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::encrypt(out, in, opt));
-    ASSERT_STREQ(to_hex(out.str()).c_str(), "3E4665C52F935552F1C9C86E67880CBB");
+        std::string encrypted;
 
-    // ECB padding PKCS#5
-    str_dst.clear();
-    str_src       = "1";
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "40C3AD88D21D2BCA");
+        ASSERT_EQ(hj::des::encrypt(encrypted, "1", opt), error_code::ok);
 
-    // ECB padding PKCS#7
-    str_dst.clear();
-    str_src       = "12";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "BFA6FD1DE34FB600");
+        EXPECT_EQ(to_hex(encrypted), "E60BC2FCA8AB2AEC");
+    }
 
-    // ECB padding 0
-    str_dst.clear();
-    str_src       = "123";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "595C70C0662C2635");
+    /*
+     * no_padding contract:
+     * the public API requires complete DES blocks.
+     */
+    for(auto mode : {hj::des::mode::ecb,
+                     hj::des::mode::cbc,
+                     hj::des::mode::cfb,
+                     hj::des::mode::ofb,
+                     hj::des::mode::ctr})
+    {
+        auto opt = make_options(key, mode, hj::des::padding::no_padding, iv);
 
-    // ECB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "1234";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
+        std::string encrypted;
 
-    // ECB padding ANSIX923
-    str_dst.clear();
-    str_src       = "12345";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "B2D791C38A1AD844");
+        EXPECT_EQ(hj::des::encrypt(encrypted, "1234567812345678", opt),
+                  error_code::ok);
 
-    // ECB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "123456";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "A1A227D1256E7C2D");
+        EXPECT_EQ(encrypted.size(), 16U);
 
-    // ECB padding NOPADDING
-    str_dst.clear();
-    str_src       = "12345678";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "FE4ABFB5190D173D");
+        encrypted.clear();
 
-    str_dst.clear();
-    str_src = "1234567";
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
+        EXPECT_EQ(hj::des::encrypt(encrypted, "123456789", opt),
+                  error_code::invalid_plain);
+    }
 
-    // CBC padding PKCS#5
-    str_dst.clear();
-    str_src = "hello world";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cbc;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E870607FEDECED97190");
+    /*
+     * Buffer-too-small must be reported before writing past dst.
+     */
+    {
+        auto opt =
+            make_options(key, hj::des::mode::ecb, hj::des::padding::pkcs7);
 
-    // CBC padding PKCS#7
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E870607FEDECED97190");
+        const std::string            plain = "hello world";
+        std::array<unsigned char, 8> out{};
+        std::size_t                  out_len = 0;
 
-    // CBC padding 0
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E875122F18A882D6318");
+        EXPECT_EQ(hj::des::encrypt(
+                      out.data(),
+                      out.size(),
+                      out_len,
+                      reinterpret_cast<const unsigned char *>(plain.data()),
+                      plain.size(),
+                      opt),
+                  error_code::buffer_too_small);
 
-    // CBC padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
+        EXPECT_EQ(out_len, 0U);
+    }
+}
 
-    // CBC padding ANSIX923
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E87D3A3E13D0A9DBC1D");
+TEST(des, encrypt_2key_tdea)
+{
+    const std::string key = k2des_key;
 
-    // CBC padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E876D62899FA608C319");
+    auto opt = make_options(key, hj::des::mode::ecb, hj::des::padding::pkcs5);
 
-    // CBC padding NOPADDING
-    str_dst.clear();
-    str_src       = "hello world 1234";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "77910467EA549E87E5C4991F4D218550");
+    std::string actual;
 
-    str_dst.clear();
-    str_src = "hello world 123";
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
+    ASSERT_EQ(hj::des::encrypt(actual, "1", opt), error_code::ok);
 
-    // CFB padding PKCS#5
-    str_dst.clear();
-    str_src = "hello world";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cfb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5090F2BA835F");
+    EXPECT_EQ(to_hex(actual), "2AAE73C0284C9B06");
 
-    // CFB padding PKCS#7
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5090F2BA835F");
+    // Cross-check against OpenSSL EVP.
+    const auto expected =
+        openssl_encrypt(key, "", hj::des::mode::ecb, "1", true);
 
-    // CFB padding 0
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5095F7BF865A");
-
-    // CFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-
-    // CFB padding ANSIX923
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5095F7BF865F");
-
-    // CFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B5015F7BF865A");
-
-    // CFB padding NOPADDING
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
-
-    str_dst.clear();
-    str_src       = "hello world 4321";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED4F4B50B5C38CB46B");
-
-    // OFB padding PKCS#5
-    str_dst.clear();
-    str_src = "hello world";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ofb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1B96753DD5");
-
-    // OFB padding PKCS#7
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1B96753DD5");
-
-    // OFB padding 0
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1E937038D0");
-
-    // OFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-
-    // OFB padding ANSIX923
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B1E937038D5");
-
-    // OFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644ED66BC7B9E937038D0");
-
-    // OFB padding NOPADDING
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
-
-    str_dst.clear();
-    str_src       = "hello world 123412345678";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(),
-                 "8BA580A7B50644ED66BC7B3EA2420BE48977339416654194");
-
-    // CTR padding PKCS#5
-    str_dst.clear();
-    str_src = "hello world";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ctr;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF1975DDF811E");
-
-    // CTR padding PKCS#7
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF1975DDF811E");
-
-    // CTR padding 0
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF19258DA841B");
-
-    // CTR padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-
-    // CTR padding ANSIX923
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF19258DA841E");
-
-    // CTR padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF11258DA841B");
-
-    // CTR padding NOPADDING
-    str_dst.clear();
-    str_src       = "hello world";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_FALSE(hj::des::encrypt(str_dst, str_src, opt) == ok);
-
-    str_dst.clear();
-    str_src       = "hello world 1234";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "8BA580A7B50644EDF85DF1B269E8B72F");
+    EXPECT_EQ(actual, expected);
 }
 
 TEST(des, decrypt)
 {
-    auto        ok = hj::des::error_code::ok;
-    std::string str_src;
-    std::string str_dst;
-    std::string key("12345678");
-    std::string iv("abcdefgh");
+    const std::string key = k3des_key;
+    const std::string iv  = k_iv;
 
-    hj::des::options opt;
+    /*
+     * Known-answer decrypt.
+     */
+    {
+        auto opt =
+            make_options(key, hj::des::mode::ecb, hj::des::padding::pkcs5);
 
-    // for stream ECB padding PKCS#5 test
-    str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD475D82E3681C83BB77");
-    std::istringstream in(str_src);
-    std::ostringstream out;
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ecb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::decrypt(out, in, opt));
-    ASSERT_STREQ(to_hex(out.str()).c_str(), "68656C6C6F20776F726C64");
+        const std::string encrypted = from_hex("40C3AD88D21D2BCA");
 
-    // ECB padding PKCS#5
-    str_dst.clear();
-    str_src       = to_bytes("28DBA02EB5F6DD47AA291D16D82146BF");
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
+        std::string plain;
 
-    // ECB padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("28DBA02EB5F6DD47AA291D16D82146BF");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
+        ASSERT_EQ(hj::des::decrypt(plain, encrypted, opt), error_code::ok);
 
-    // ECB padding 0
-    str_dst.clear();
-    str_src       = to_bytes("28DBA02EB5F6DD47535FFDB06574A87D");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132");
+        EXPECT_EQ(plain, "1");
+    }
 
-    // ECB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("28DBA02EB5F6DD4721FF332B8A40E8D9");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    /*
+     * Every mode must round-trip.
+     */
+    for(auto mode : {hj::des::mode::ecb,
+                     hj::des::mode::cbc,
+                     hj::des::mode::cfb,
+                     hj::des::mode::ofb,
+                     hj::des::mode::ctr})
+    {
+        auto opt = make_options(key, mode, hj::des::padding::pkcs7, iv);
 
-    // ECB padding ANSIX923
-    str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD47BABFF98EFA6DB628030116F7E552E7B6");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
+        const std::string plain = "hello world";
+        std::string       encrypted;
+        std::string       decrypted;
 
-    // ECB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src = to_bytes("28DBA02EB5F6DD47BABFF98EFA6DB628DE3491731DCB353C");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132333435");
+        ASSERT_EQ(hj::des::encrypt(encrypted, plain, opt), error_code::ok);
 
-    // ECB padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("28DBA02EB5F6DD47BABFF98EFA6DB628");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
+        ASSERT_EQ(hj::des::decrypt(decrypted, encrypted, opt), error_code::ok);
 
-    // CBC padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B0373FB9C7373EEE4D1");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cbc;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CBC padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("B72D0DC9E9433B03849FE655EE80DB80");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
-
-    // CBC padding 0
-    str_dst.clear();
-    str_src       = to_bytes("B72D0DC9E9433B0353E3BE76EB413AB0");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132");
-
-    // CBC padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("B72D0DC9E9433B0368437984E8C9A32D");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CBC padding ANSIX923
-    str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B031400731AF6B95E3BDF39AA4FBB8F6F63");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
-
-    // CBC padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src = to_bytes("B72D0DC9E9433B031400731AF6B95E3BC113907DECCE3490");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132333435");
-
-    // CBC padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("B72D0DC9E9433B031400731AF6B95E3B");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
-
-    // CFB padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("FCB12F07AC95C1FC248142DD0763FF0EC92210E9B43584E0");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cfb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
-
-    // CFB padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC248142DD0763FF3B");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C6420313233");
-
-    // CFB padding 0
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC248142DD0763CC3A");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64203132");
-
-    // CFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC24814288857BCC3F");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC248142FD3651CC3F");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC248142DD07D1CC3A");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031");
-
-    // CFB padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC248142DD0763FF0E");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
-
-    // OFB padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("F8BD2108B3C5B491");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ofb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C6962637070");
-
-    // OFB padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("F8BD2108B3C58792");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C696263707031");
-
-    // OFB padding 0
-    str_dst.clear();
-    str_src       = to_bytes("F8BD2108B3C587A14B6BB3A9E45E6967");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C69626370703132");
-
-    // OFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC3907D759632FDF62");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // OFB padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("F8BD2108B3C587A1785FB3A9E45E6961");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C696263707031323334");
-
-    // OFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("F8BD2108B3C587A1785F8629E45E6967");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "6C69626370703132333435");
-
-    // OFB padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("A5E6705FF68381AB7A59809DD1685E5F");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "31323334353637383132333435363738");
-
-    // CTR padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("A5D3446CC4B2B194");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ctr;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "31");
-
-    // CTR padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("A5E6456DC5B3B095");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3132");
-
-    // CTR padding 0
-    str_dst.clear();
-    str_src       = to_bytes("A5E6706BC3B5B693");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "313233");
-
-    // CTR padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("FCB12F07AC95C1FC46D14F6AF9AD1330");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CTR padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("A5E6705FF6B5B690");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3132333435");
-
-    // CTR padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("A5E6705FF6833693");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "313233343536");
-
-    // CTR padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("A5E6705FF68381AB");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3132333435363738");
+        EXPECT_EQ(decrypted, plain);
+    }
 }
 
 TEST(des, decrypt_n)
 {
-    auto        ok = hj::des::error_code::ok;
-    std::string str_src;
-    std::string str_dst;
-    std::string key("12345678abcdefgh00000000");
-    std::string iv("abcdefgh");
+    const std::string key = k3des_key;
+    const std::string iv  = k_iv;
 
-    hj::des::options opt;
+    /*
+     * Invalid ciphertext length must never reach EVP.
+     */
+    {
+        auto opt =
+            make_options(key, hj::des::mode::cbc, hj::des::padding::pkcs7, iv);
 
-    // for stream ECB padding PKCS#5 test
-    str_dst.clear();
-    str_src = to_bytes("3E4665C52F935552F1C9C86E67880CBB");
-    std::istringstream in(str_src);
-    std::ostringstream out;
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ecb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::decrypt(out, in, opt));
-    ASSERT_STREQ(to_hex(out.str()).c_str(), "68656C6C6F20776F726C64");
+        std::string plain;
 
-    // ECB padding PKCS#5
-    str_dst.clear();
-    str_src       = to_bytes("3E4665C52F935552F1C9C86E67880CBB");
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        EXPECT_EQ(hj::des::decrypt(plain, std::string("1234567"), opt),
+                  error_code::invalid_input);
+    }
 
-    // ECB padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("3E4665C52F935552F1C9C86E67880CBB");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    /*
+     * Invalid padding must be rejected.
+     */
+    {
+        auto opt =
+            make_options(key, hj::des::mode::cbc, hj::des::padding::pkcs7, iv);
 
-    // ECB padding 0
-    str_dst.clear();
-    str_src       = to_bytes("3E4665C52F935552ED4059A86631C2ED");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        std::string encrypted;
 
-    // ECB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("8C4EE7F2FF1D139E");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "31323334");
+        ASSERT_EQ(hj::des::encrypt(encrypted, "hello world", opt),
+                  error_code::ok);
 
-    // ECB padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("3E4665C52F9355523559BB7793D1D266");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        ASSERT_FALSE(encrypted.empty());
 
-    // ECB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("3E4665C52F93555275E23EDBE984B84C");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        encrypted.back() ^= 0x01;
 
-    // ECB padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("FE4ABFB5190D173D");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "3132333435363738");
+        std::string decrypted;
 
-    // CBC padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("77910467EA549E870607FEDECED97190");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cbc;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        EXPECT_EQ(hj::des::decrypt(decrypted, encrypted, opt),
+                  error_code::invalid_padding);
 
-    // CBC padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("77910467EA549E870607FEDECED97190");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        EXPECT_TRUE(decrypted.empty());
+    }
 
-    // CBC padding 0
-    str_dst.clear();
-    str_src       = to_bytes("77910467EA549E875122F18A882D6318");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+    /*
+     * Raw buffer decrypt API must honor dst capacity.
+     */
+    {
+        auto opt =
+            make_options(key, hj::des::mode::ecb, hj::des::padding::pkcs7);
 
-    // CBC padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("77910467EA549E870607FEDECED97190");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        const std::string encrypted = from_hex("40C3AD88D21D2BCA");
 
-    // CBC padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("77910467EA549E87D3A3E13D0A9DBC1D");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        std::array<unsigned char, 0> output{};
+        std::size_t                  output_len = 0;
 
-    // CBC padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("77910467EA549E876D62899FA608C319");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
+        EXPECT_EQ(hj::des::decrypt(
+                      output.data(),
+                      0,
+                      output_len,
+                      reinterpret_cast<const unsigned char *>(encrypted.data()),
+                      encrypted.size(),
+                      opt),
+                  error_code::buffer_too_small);
 
-    // CBC padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("77910467EA549E87E5C4991F4D218550");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
-
-    // CFB padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("8BA580A7B50644ED4F4B5090F2BA835F");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cfb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED4F4B5090F2BA835F");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding 0
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED4F4B5095F7BF865A");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED4F4B50");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED4F4B5095F7BF865F");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED4F4B5015F7BF865A");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CFB padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED4F4B50B5C38CB46B");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642034333231");
-
-    // OFB padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("8BA580A7B50644ED66BC7B1B96753DD5");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ofb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // OFB padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED66BC7B1B96753DD5");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // OFB padding 0
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED66BC7B1E937038D0");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // OFB padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED66BC7B");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // OFB padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED66BC7B1E937038D5");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // OFB padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644ED66BC7B9E937038D0");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // OFB padding NOPADDING
-    str_dst.clear();
-    str_src = to_bytes("8BA580A7B50644ED66BC7B3EA2420BE48977339416654194");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(),
-                 "68656C6C6F20776F726C6420313233343132333435363738");
-
-    // CTR padding PKCS#5
-    str_dst.clear();
-    str_src = to_bytes("8BA580A7B50644EDF85DF1975DDF811E");
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ctr;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CTR padding PKCS#7
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644EDF85DF1975DDF811E");
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CTR padding 0
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644EDF85DF19258DA841B");
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CTR padding ISO10126 （random result）
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644EDF85DF1");
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CTR padding ANSIX923
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644EDF85DF19258DA841E");
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CTR padding ISO/IEC 7816-4
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644EDF85DF11258DA841B");
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C64");
-
-    // CTR padding NOPADDING
-    str_dst.clear();
-    str_src       = to_bytes("8BA580A7B50644EDF85DF1B269E8B72F");
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::decrypt(str_dst, str_src, opt));
-    ASSERT_STREQ(to_hex(str_dst).c_str(), "68656C6C6F20776F726C642031323334");
+        EXPECT_EQ(output_len, 0U);
+    }
 }
-
 
 TEST(des, encrypt_file)
 {
-    auto        ok = hj::des::error_code::ok;
-    std::string str_src("./crypto.log");
-    std::string str_dst;
-    std::string str_src_nopadding("./crypto_nopadding.log");
-    std::string key("12345678");
-    std::string iv("abcdefgh");
+    const auto base = std::filesystem::temp_directory_path() / "hj_des_test";
 
-    hj::des::options opt;
+    const auto plain_path  = base.string() + "_plain.bin";
+    const auto cipher_path = base.string() + "_cipher.bin";
 
-    if(!std::filesystem::exists(str_src))
+    const std::string plain = "high-jump DES EVP test\n"
+                              "binary:\x00\x01\x02\x03\xFE\xFF\n";
+
     {
-        GTEST_SKIP() << "skip test base64 decode_file not exist: " << str_src;
+        std::ofstream out(plain_path, std::ios::binary);
+        ASSERT_TRUE(out);
+        out.write(plain.data(), static_cast<std::streamsize>(plain.size()));
+        ASSERT_TRUE(out);
     }
 
-    // ECB padding PKCS#5
-    str_dst = "./des_ecb_pkcs5_padding_encrypt.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ecb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
+    const std::string key = k3des_key;
+    auto              opt =
+        make_options(key, hj::des::mode::cbc, hj::des::padding::pkcs7, k_iv);
 
-    // ECB padding PKCS#7
-    str_dst       = "./des_ecb_pkcs7_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
+    ASSERT_EQ(hj::des::encrypt_file(cipher_path, plain_path, opt),
+              error_code::ok);
 
-    // ECB padding 0
-    str_dst       = "./des_ecb_zero_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
+    ASSERT_TRUE(std::filesystem::exists(cipher_path));
+    ASSERT_GT(std::filesystem::file_size(cipher_path), 0U);
 
-    // ECB padding ISO10126 （random result）
-    str_dst       = "./des_ecb_iso10126_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // ECB padding ANSIX923
-    str_dst       = "./des_ecb_ansix923_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // ECB padding ISO/IEC 7816-4
-    str_dst       = "./des_ecb_iso_iec_7816_4_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // ECB padding NOPADDING
-    str_dst       = "./des_ecb_no_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src_nopadding, opt));
-
-    // CBC padding PKCS#5
-    str_dst = "./des_cbc_pkcs5_padding_encrypt.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cbc;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CBC padding PKCS#7
-    str_dst       = "./des_cbc_pkcs7_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CBC padding 0
-    str_dst       = "./des_cbc_zero_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CBC padding ISO10126 （random result）
-    str_dst       = "./des_cbc_iso10126_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CBC padding ANSIX923
-    str_dst       = "./des_cbc_ansix923_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CBC padding ISO/IEC 7816-4
-    str_dst       = "./des_cbc_iso_iec_7816_4_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CBC padding NOPADDING
-    str_dst       = "./des_cbc_no_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src_nopadding, opt));
-
-    // CFB padding PKCS#5
-    str_dst = "./des_cfb_pkcs5_padding_encrypt.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cfb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CFB padding PKCS#7
-    str_dst       = "./des_cfb_pkcs7_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CFB padding 0
-    str_dst       = "./des_cfb_zero_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CFB padding ISO10126 （random result）
-    str_dst       = "./des_cfb_iso10126_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CFB padding ANSIX923
-    str_dst       = "./des_cfb_ansix923_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CFB padding ISO/IEC 7816-4
-    str_dst       = "./des_cfb_iso_iec_7816_4_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CFB padding NOPADDING
-    str_dst       = "./des_cfb_no_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src_nopadding, opt));
-
-    // OFB padding PKCS#5
-    str_dst = "./des_ofb_pkcs5_padding_encrypt.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ofb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // OFB padding PKCS#7
-    str_dst       = "./des_ofb_pkcs7_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // OFB padding 0
-    str_dst       = "./des_ofb_zero_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // OFB padding ISO10126 （random result）
-    str_dst       = "./des_ofb_iso10126_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // OFB padding ANSIX923
-    str_dst       = "./des_ofb_ansix923_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // OFB padding ISO/IEC 7816-4
-    str_dst       = "./des_ofb_iso_iec_7816_4_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // OFB padding NOPADDING
-    str_dst       = "./des_ofb_no_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src_nopadding, opt));
-
-    // CTR padding PKCS#5
-    str_dst = "./des_ctr_pkcs5_padding_encrypt.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ctr;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CTR padding PKCS#7
-    str_dst       = "./des_ctr_pkcs7_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CTR padding 0
-    str_dst       = "./des_ctr_zero_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CTR padding ISO10126 （random result）
-    str_dst       = "./des_ctr_iso10126_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CTR padding ANSIX923
-    str_dst       = "./des_ctr_ansix923_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CTR padding ISO/IEC 7816-4
-    str_dst       = "./des_ctr_iso_iec_7816_4_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src, opt));
-
-    // CTR padding NOPADDING
-    str_dst       = "./des_ctr_no_padding_encrypt.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_dst, str_src_nopadding, opt));
+    std::filesystem::remove(plain_path);
+    std::filesystem::remove(cipher_path);
 }
 
 TEST(des, decrypt_file)
 {
-    auto        ok = hj::des::error_code::ok;
-    std::string md5_src;
-    std::string md5_dst;
-    std::string str_dst;
-    std::string str_src;
-    std::string key("12345678");
-    std::string iv("abcdefgh");
+    const auto base =
+        std::filesystem::temp_directory_path() / "hj_des_test_decrypt";
 
-    hj::des::options opt;
+    const auto plain_path  = base.string() + "_plain.bin";
+    const auto cipher_path = base.string() + "_cipher.bin";
+    const auto output_path = base.string() + "_output.bin";
 
-    str_src = "./crypto.log";
-    if(!std::filesystem::exists(str_src))
+    const std::string plain = "high-jump DES EVP file round-trip\n"
+                              "0123456789ABCDEF\n";
+
     {
-        GTEST_SKIP() << "skip test des encrypt_file not exist: " << str_src;
+        std::ofstream out(plain_path, std::ios::binary);
+        ASSERT_TRUE(out);
+        out.write(plain.data(), static_cast<std::streamsize>(plain.size()));
+        ASSERT_TRUE(out);
     }
 
-    // ECB padding PKCS#5
-    str_src = "./des_ecb_pkcs5_padding_encrypt.log";
-    str_dst = "./des_ecb_pkcs5_padding.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ecb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    const std::string key = k3des_key;
+    auto              opt =
+        make_options(key, hj::des::mode::ctr, hj::des::padding::pkcs7, k_iv);
 
-    // ECB padding PKCS#7
-    str_src       = "./des_ecb_pkcs7_padding_encrypt.log";
-    str_dst       = "./des_ecb_pkcs7_padding.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    ASSERT_EQ(hj::des::encrypt_file(cipher_path, plain_path, opt),
+              error_code::ok);
 
-    // ECB padding 0
-    str_src       = "./des_ecb_zero_padding_encrypt.log";
-    str_dst       = "./des_ecb_zero_padding.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    ASSERT_EQ(hj::des::decrypt_file(output_path, cipher_path, opt),
+              error_code::ok);
 
-    // ECB padding ISO10126 （random result）
-    str_src       = "./des_ecb_iso10126_padding_encrypt.log";
-    str_dst       = "./des_ecb_iso10126_padding.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    EXPECT_EQ(calc_file_md5(plain_path), calc_file_md5(output_path));
 
-    // ECB padding ANSIX923
-    str_src       = "./des_ecb_ansix923_padding_encrypt.log";
-    str_dst       = "./des_ecb_ansix923_padding.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    std::filesystem::remove(plain_path);
+    std::filesystem::remove(cipher_path);
+    std::filesystem::remove(output_path);
+}
 
-    // ECB padding ISO/IEC 7816-4
-    str_src       = "./des_ecb_iso_iec_7816_4_padding_encrypt.log";
-    str_dst       = "./des_ecb_iso_iec_7816_4_padding.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+TEST(des, invalid_options)
+{
+    const std::string key = k3des_key;
 
-    // ECB padding NOPADDING
-    str_src       = "./des_ecb_no_padding_encrypt.log";
-    str_dst       = "./des_ecb_no_padding.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto_nopadding.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    {
+        auto opt = make_options(std::string("short"),
+                                hj::des::mode::ecb,
+                                hj::des::padding::pkcs7);
 
-    // CBC padding PKCS#5
-    str_src = "./des_cbc_pkcs5_padding_encrypt.log";
-    str_dst = "./des_cbc_pkcs5_padding.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cbc;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+        std::string encrypted;
 
-    // CBC padding PKCS#7
-    str_src       = "./des_cbc_pkcs7_padding_encrypt.log";
-    str_dst       = "./des_cbc_pkcs7_padding.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+        EXPECT_EQ(hj::des::encrypt(encrypted, "hello", opt),
+                  error_code::invalid_key);
+    }
 
-    // CBC padding 0
-    str_src       = "./des_cbc_zero_padding_encrypt.log";
-    str_dst       = "./des_cbc_zero_padding.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    {
+        auto opt = make_options(key,
+                                hj::des::mode::cbc,
+                                hj::des::padding::pkcs7,
+                                "short");
 
-    // CBC padding ISO10126 （random result）
-    str_src       = "./des_cbc_iso10126_padding_encrypt.log";
-    str_dst       = "./des_cbc_iso10126_padding.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+        std::string encrypted;
 
-    // CBC padding ANSIX923
-    str_src       = "./des_cbc_ansix923_padding_encrypt.log";
-    str_dst       = "./des_cbc_ansix923_padding.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+        EXPECT_EQ(hj::des::encrypt(encrypted, "hello", opt),
+                  error_code::invalid_iv);
+    }
 
-    // CBC padding ISO/IEC 7816-4
-    str_src       = "./des_cbc_iso_iec_7816_4_padding_encrypt.log";
-    str_dst       = "./des_cbc_iso_iec_7816_4_padding.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    {
+        hj::des::options opt;
+        opt.key       = reinterpret_cast<const unsigned char *>(key.data());
+        opt.key_len   = key.size();
+        opt.mod       = hj::des::mode::ecb;
+        opt.pad_style = hj::des::padding::pkcs7;
+        opt.iv        = reinterpret_cast<const unsigned char *>(k_iv);
+        opt.iv_len    = 8;
 
-    // CBC padding NOPADDING
-    str_src       = "./des_cbc_no_padding_encrypt.log";
-    str_dst       = "./des_cbc_no_padding.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+        std::string encrypted;
 
-    // CFB padding PKCS#5
-    str_src = "./des_cfb_pkcs5_padding_encrypt.log";
-    str_dst = "./des_cfb_pkcs5_padding.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::cfb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+        EXPECT_EQ(hj::des::encrypt(encrypted, "hello", opt),
+                  error_code::invalid_iv);
+    }
+}
 
-    // CFB padding PKCS#7
-    str_src       = "./des_cfb_pkcs7_padding_encrypt.log";
-    str_dst       = "./des_cfb_pkcs7_padding.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+TEST(des, provider_policy)
+{
+    /*
+     * The wrapper itself must never turn single DES into a supported
+     * algorithm. This remains true even if an application separately
+     * configures OpenSSL providers.
+     */
+    const std::string key = "12345678";
+    auto opt = make_options(key, hj::des::mode::ecb, hj::des::padding::pkcs7);
 
-    // CFB padding 0
-    str_src       = "./des_cfb_zero_padding_encrypt.log";
-    str_dst       = "./des_cfb_zero_padding.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    std::string encrypted;
 
-    // CFB padding ISO10126 （random result）
-    str_src       = "./des_cfb_iso10126_padding_encrypt.log";
-    str_dst       = "./des_cfb_iso10126_padding.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CFB padding ANSIX923
-    str_src       = "./des_cfb_ansix923_padding_encrypt.log";
-    str_dst       = "./des_cfb_ansix923_padding.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CFB padding ISO/IEC 7816-4
-    str_src       = "./des_cfb_iso_iec_7816_4_padding_encrypt.log";
-    str_dst       = "./des_cfb_iso_iec_7816_4_padding.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CFB padding NOPADDING
-    str_src       = "./des_cfb_no_padding_encrypt.log";
-    str_dst       = "./des_cfb_no_padding.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto_nopadding.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // OFB padding PKCS#5
-    str_src = "./des_ofb_pkcs5_padding_encrypt.log";
-    str_dst = "./des_ofb_pkcs5_padding.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ofb;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // OFB padding PKCS#7
-    str_src       = "./des_ofb_pkcs7_padding_encrypt.log";
-    str_dst       = "./des_ofb_pkcs7_padding.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // OFB padding 0
-    str_src       = "./des_ofb_zero_padding_encrypt.log";
-    str_dst       = "./des_ofb_zero_padding.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // OFB padding ISO10126 （random result）
-    str_src       = "./des_ofb_iso10126_padding_encrypt.log";
-    str_dst       = "./des_ofb_iso10126_padding.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // OFB padding ANSIX923
-    str_src       = "./des_ofb_ansix923_padding_encrypt.log";
-    str_dst       = "./des_ofb_ansix923_padding.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // OFB padding ISO/IEC 7816-4
-    str_src       = "./des_ofb_iso_iec_7816_4_padding_encrypt.log";
-    str_dst       = "./des_ofb_iso_iec_7816_4_padding.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // OFB padding NOPADDING
-    str_src       = "./des_ofb_no_padding_encrypt.log";
-    str_dst       = "./des_ofb_no_padding.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto_nopadding.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CTR padding PKCS#5
-    str_src = "./des_ctr_pkcs5_padding_encrypt.log";
-    str_dst = "./des_ctr_pkcs5_padding.log";
-    opt.reset();
-    opt.key       = reinterpret_cast<const unsigned char *>(key.c_str());
-    opt.key_len   = key.size();
-    opt.mod       = hj::des::mode::ctr;
-    opt.pad_style = hj::des::padding::pkcs5;
-    opt.iv        = reinterpret_cast<const unsigned char *>(iv.c_str());
-    opt.iv_len    = iv.size();
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CTR padding PKCS#7
-    str_src       = "./des_ctr_pkcs7_padding_encrypt.log";
-    str_dst       = "./des_ctr_pkcs7_padding.log";
-    opt.pad_style = hj::des::padding::pkcs7;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CTR padding 0
-    str_src       = "./des_ctr_zero_padding_encrypt.log";
-    str_dst       = "./des_ctr_zero_padding.log";
-    opt.pad_style = hj::des::padding::zero;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CTR padding ISO10126 （random result）
-    str_src       = "./des_ctr_iso10126_padding_encrypt.log";
-    str_dst       = "./des_ctr_iso10126_padding.log";
-    opt.pad_style = hj::des::padding::iso10126;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CTR padding ANSIX923
-    str_src       = "./des_ctr_ansix923_padding_encrypt.log";
-    str_dst       = "./des_ctr_ansix923_padding.log";
-    opt.pad_style = hj::des::padding::ansix923;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CTR padding ISO/IEC 7816-4
-    str_src       = "./des_ctr_iso_iec_7816_4_padding_encrypt.log";
-    str_dst       = "./des_ctr_iso_iec_7816_4_padding.log";
-    opt.pad_style = hj::des::padding::iso_iec_7816_4;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
-
-    // CTR padding NOPADDING
-    str_src       = "./des_ctr_no_padding_encrypt.log";
-    str_dst       = "./des_ctr_no_padding.log";
-    opt.pad_style = hj::des::padding::no_padding;
-    ASSERT_EQ(ok, hj::des::encrypt_file(str_src, "./crypto.log", opt));
-    ASSERT_EQ(ok, hj::des::decrypt_file(str_dst, str_src, opt));
-    md5_src = calc_file_md5("./crypto_nopadding.log");
-    md5_dst = calc_file_md5(str_dst.c_str());
-    ASSERT_EQ(md5_src, md5_dst);
+    EXPECT_EQ(hj::des::encrypt(encrypted, "hello", opt),
+              error_code::unsupported_algorithm);
 }

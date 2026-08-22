@@ -19,464 +19,603 @@
 #ifndef FILEPATH_HPP
 #define FILEPATH_HPP
 
-#include <string>
-#include <list>
-#include <vector>
+#include <algorithm>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
+#include <functional>
 #include <regex>
-#include <boost/filesystem.hpp>
+#include <string>
+#include <system_error>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace hj
 {
-
-class filepath
+namespace filepath
 {
-  public:
-    static std::string pwd() noexcept
-    {
-        try
-        {
-            return boost::filesystem::current_path().string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
 
-    static std::string parent(const std::string &filepath) noexcept
-    {
-        try
-        {
-            return boost::filesystem::path(filepath).parent_path().string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
+namespace fs = std::filesystem;
 
-    static std::string absolute(const std::string &path) noexcept
-    {
-        try
-        {
-            return boost::filesystem::absolute(boost::filesystem::path(path))
-                .string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
+namespace detail
+{
+template <typename T>
+inline void join_helper(fs::path &p, T &&arg)
+{
+    p /= std::forward<T>(arg);
+}
 
-    static std::string relative(const std::string &path,
-                                const std::string &base = pwd()) noexcept
-    {
-        try
-        {
-            return boost::filesystem::relative(boost::filesystem::path(path),
-                                               boost::filesystem::path(base))
-                .string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
+template <typename T, typename... Args>
+inline void join_helper(fs::path &p, T &&first, Args &&...args)
+{
+    p /= std::forward<T>(first);
+    join_helper(p, std::forward<Args>(args)...);
+}
+} // namespace detail
 
-    template <typename... Types>
-    static std::string join(Types &&...args) noexcept
-    {
-        std::vector<std::string> v{std::forward<Types>(args)...};
-        auto                     path = boost::filesystem::path("");
-        for(const auto &s : v)
-            path /= boost::filesystem::path(s);
-        return path.string();
-    }
-
-    static std::string file_name(const std::string &file,
-                                 bool               with_ext = true) noexcept
-    {
-        try
-        {
-            if(boost::filesystem::is_directory(file))
-                return "";
-            return with_ext ? boost::filesystem::path(file).filename().string()
-                            : boost::filesystem::path(file).stem().string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
-
-    static std::string dir_name(const std::string &path) noexcept
-    {
-        try
-        {
-            return boost::filesystem::path(path)
-                .parent_path()
-                .filename()
-                .string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
-
-    static std::string path_name(const std::string &filepath) noexcept
-    {
-        try
-        {
-            auto path = boost::filesystem::path(filepath);
-            return boost::filesystem::is_directory(path)
-                       ? filepath
-                       : path.parent_path().string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
-
-    static std::string extension(const std::string &filepath) noexcept
-    {
-        try
-        {
-            return boost::filesystem::path(filepath).extension().string();
-        }
-        catch(...)
-        {
-            return "";
-        }
-    }
-
-    static std::string replace_extension(const std::string &filepath,
-                                         const std::string &ext) noexcept
-    {
-        try
-        {
-            return boost::filesystem::path(filepath)
-                .replace_extension(ext)
-                .string();
-        }
-        catch(...)
-        {
-            return filepath;
-        }
-    }
-
-    static bool is_dir(const std::string &path) noexcept
-    {
-        try
-        {
-            return boost::filesystem::is_directory(
-                boost::filesystem::path(path));
-        }
-        catch(...)
-        {
-            return false;
-        }
-    }
-
-    static bool is_symlink(const std::string &file) noexcept
-    {
-        try
-        {
-            return boost::filesystem::is_symlink(boost::filesystem::path(file));
-        }
-        catch(...)
-        {
-            return false;
-        }
-    }
-
-    static bool is_exist(const std::string &file) noexcept
-    {
-        try
-        {
-            return boost::filesystem::exists(boost::filesystem::path(file));
-        }
-        catch(...)
-        {
-            return false;
-        }
-    }
-
-    static std::time_t last_mod_time(const std::string &filepath) noexcept
-    {
-        try
-        {
-            return boost::filesystem::last_write_time(
-                boost::filesystem::path(filepath));
-        }
-        catch(...)
-        {
-            return 0;
-        }
-    }
-
-    static long long size(const std::string &file) noexcept
-    {
-        try
-        {
-            if(!is_exist(file) || is_dir(file))
-                return -1;
-            return boost::filesystem::file_size(boost::filesystem::path(file));
-        }
-        catch(...)
-        {
-            return -1;
-        }
-    }
-
-    static void walk(const std::string                       &path,
-                     std::function<bool(const std::string &)> fn,
-                     bool recursive = false) noexcept
-    {
-        try
-        {
-            if(recursive)
-            {
-                for(auto &entry :
-                    boost::filesystem::recursive_directory_iterator(path))
-                    if(!fn(entry.path().string()))
-                        return;
-            } else
-            {
-                for(auto &entry : boost::filesystem::directory_iterator(path))
-                    if(!fn(entry.path().string()))
-                        return;
-            }
-        }
-        catch(...)
-        {
-        }
-    }
-
-    static std::list<std::string> list(const std::string &path) noexcept
-    {
-        std::list<std::string> li;
-        try
-        {
-            for(auto &entry : boost::filesystem::directory_iterator(path))
-                li.emplace_back(entry.path().string());
-        }
-        catch(...)
-        {
-        }
-        return li;
-    }
-
-    static std::list<std::string>
-    list(const std::string &path,
-         std::function<bool(const std::string &, const std::string &)>
-             greater) noexcept
-    {
-        std::list<std::string> li;
-        try
-        {
-            for(auto &entry : boost::filesystem::directory_iterator(path))
-            {
-                auto item = entry.path().string();
-                if(li.empty())
-                {
-                    li.emplace_back(item);
-                    continue;
-                }
-                for(auto litr = li.begin(); litr != li.end(); litr++)
-                {
-                    if(greater(*litr, item))
-                        continue;
-                    li.insert(litr, item);
-                    break;
-                }
-            }
-        }
-        catch(...)
-        {
-        }
-        return li;
-    }
-
-    static std::list<std::string> find(const std::string &path,
-                                       const std::string &file,
-                                       bool recursive = false) noexcept
-    {
-        std::list<std::string> li;
-        try
-        {
-            if(!boost::filesystem::exists(path))
-                return li;
-            if(recursive)
-            {
-                for(auto &entry :
-                    boost::filesystem::recursive_directory_iterator(path))
-                    if(entry.path().filename().string() == file)
-                        li.emplace_back(entry.path().string());
-            } else
-            {
-                for(auto &entry : boost::filesystem::directory_iterator(path))
-                    if(entry.path().filename().string() == file)
-                        li.emplace_back(entry.path().string());
-            }
-        }
-        catch(...)
-        {
-        }
-        return li;
-    }
-
-    static std::list<std::string> find_by_regex(const std::string &path,
-                                                const std::string &pattern,
-                                                bool recursive = false) noexcept
-    {
-        std::list<std::string> li;
-        try
-        {
-            std::regex re(pattern);
-            if(recursive)
-            {
-                for(auto &entry :
-                    boost::filesystem::recursive_directory_iterator(path))
-                    if(std::regex_match(entry.path().filename().string(), re))
-                        li.emplace_back(entry.path().string());
-            } else
-            {
-                for(auto &entry : boost::filesystem::directory_iterator(path))
-                    if(std::regex_match(entry.path().filename().string(), re))
-                        li.emplace_back(entry.path().string());
-            }
-        }
-        catch(...)
-        {
-        }
-        return li;
-    }
-
-    static bool make_dir(const std::string &path,
-                         bool               recursive = true) noexcept
-    {
-        try
-        {
-            return recursive ? boost::filesystem::create_directories(path)
-                             : boost::filesystem::create_directory(path);
-        }
-        catch(...)
-        {
-            return false;
-        }
-    }
-
-    static bool make_file(const std::string &file) noexcept
-    {
-        try
-        {
-            if(boost::filesystem::exists(file))
-                return false;
-            std::ofstream fs(file);
-            if(!fs.is_open())
-                return false;
-            fs.close();
-            return true;
-        }
-        catch(...)
-        {
-            return false;
-        }
-    }
-
-    static bool copy_dir(const std::string &from,
-                         const std::string &to) noexcept
-    {
-        try
-        {
-            auto f_from = boost::filesystem::path(from);
-            auto f_to   = boost::filesystem::path(to);
-
-            if(!boost::filesystem::exists(f_from)
-               || !boost::filesystem::is_directory(f_from))
-                return false;
-
-            if(!boost::filesystem::exists(f_to))
-                boost::filesystem::create_directory(f_to);
-
-            for(auto &file : boost::filesystem::directory_iterator(f_from))
-            {
-                const auto &entry = file.path();
-                auto        dest  = f_to / entry.filename();
-                if(boost::filesystem::is_directory(entry))
-                {
-                    if(!copy_dir(entry.string(), dest.string()))
-                        return false;
-                } else
-                {
-                    boost::filesystem::copy_file(entry, dest);
-                }
-            }
-            return true;
-        }
-        catch(...)
-        {
-            return false;
-        }
-    }
-
-    static bool copy_file(const std::string &from,
-                          const std::string &to) noexcept
-    {
-        try
-        {
-            boost::filesystem::copy_file(from, to);
-            return boost::filesystem::exists(to);
-        }
-        catch(...)
-        {
-            return false;
-        }
-    }
-
-    static unsigned long long remove(const std::string &filepath,
-                                     bool recursive = true) noexcept
-    {
-        try
-        {
-            auto fpath = boost::filesystem::path(filepath);
-            return recursive ? boost::filesystem::remove_all(fpath)
-                             : boost::filesystem::remove(fpath);
-        }
-        catch(...)
-        {
-            return 0;
-        }
-    }
-
-    static std::string rename(const std::string &from,
-                              const std::string &to) noexcept
-    {
-        try
-        {
-            auto f_from = boost::filesystem::path(from);
-            auto f_to   = boost::filesystem::path(to);
-            boost::filesystem::rename(f_from, f_to);
-            return boost::filesystem::exists(f_to) ? to : from;
-        }
-        catch(...)
-        {
-            return from;
-        }
-    }
-
-  private:
-    filepath()                            = default;
-    ~filepath()                           = default;
-    filepath(const filepath &)            = delete;
-    filepath &operator=(const filepath &) = delete;
-    filepath(filepath &&)                 = delete;
-    filepath &operator=(filepath &&)      = delete;
+enum class match_target
+{
+    filename,
+    path
 };
 
+inline std::string pwd()
+{
+    return fs::current_path().string();
 }
+
+inline std::string pwd(std::error_code &ec) noexcept
+{
+    auto p = fs::current_path(ec);
+    if(ec)
+        return "";
+    return p.string();
+}
+
+inline std::string parent(const std::string &filepath)
+{
+    return fs::path(filepath).parent_path().string();
+}
+
+inline std::string absolute(const std::string &path)
+{
+    return fs::absolute(fs::path(path)).string();
+}
+
+inline std::string absolute(const std::string &path,
+                            std::error_code   &ec) noexcept
+{
+    auto p = fs::absolute(fs::path(path), ec);
+    if(ec)
+        return "";
+    return p.string();
+}
+
+inline std::string normalize(const std::string &path)
+{
+    return fs::path(path).lexically_normal().string();
+}
+
+inline std::string canonical(const std::string &path)
+{
+    return fs::canonical(fs::path(path)).string();
+}
+
+inline std::string canonical(const std::string &path,
+                             std::error_code   &ec) noexcept
+{
+    auto p = fs::canonical(fs::path(path), ec);
+    if(ec)
+        return "";
+    return p.string();
+}
+
+inline std::string weakly_canonical(const std::string &path)
+{
+    return fs::weakly_canonical(fs::path(path)).string();
+}
+
+inline std::string weakly_canonical(const std::string &path,
+                                    std::error_code   &ec) noexcept
+{
+    auto p = fs::weakly_canonical(fs::path(path), ec);
+    if(ec)
+        return "";
+    return p.string();
+}
+
+inline std::string relative(const std::string &path, const std::string &base)
+{
+    return fs::relative(fs::path(path), fs::path(base)).string();
+}
+
+inline std::string relative(const std::string &path,
+                            const std::string &base,
+                            std::error_code   &ec) noexcept
+{
+    auto p = fs::relative(fs::path(path), fs::path(base), ec);
+    if(ec)
+        return "";
+    return p.string();
+}
+
+template <typename T,
+          typename... Args,
+          typename = typename std::enable_if<
+              !std::is_same<typename std::decay<T>::type,
+                            std::vector<std::string>>::value>::type>
+inline std::string join(T &&first, Args &&...args)
+{
+    fs::path p(std::forward<T>(first));
+    detail::join_helper(p, std::forward<Args>(args)...);
+    return p.string();
+}
+
+template <typename Container>
+inline auto join(const Container &c) ->
+    typename std::enable_if<!std::is_constructible<fs::path, Container>::value,
+                            std::string>::type
+{
+    fs::path p;
+    for(const auto &s : c)
+        p /= fs::path(s);
+
+    return p.string();
+}
+
+inline std::string file_name(const std::string &file, bool with_ext = true)
+{
+    fs::path p(file);
+    if(fs::is_directory(p))
+        return "";
+    return with_ext ? p.filename().string() : p.stem().string();
+}
+
+inline std::string dir_name(const std::string &path)
+{
+    return fs::path(path).parent_path().filename().string();
+}
+
+inline std::string path_name(const std::string &filepath)
+{
+    auto path = fs::path(filepath);
+    return fs::is_directory(path) ? filepath : path.parent_path().string();
+}
+
+inline std::string extension(const std::string &filepath)
+{
+    return fs::path(filepath).extension().string();
+}
+
+inline std::string replace_extension(const std::string &filepath,
+                                     const std::string &ext)
+{
+    return fs::path(filepath).replace_extension(ext).string();
+}
+
+inline bool is_dir(const std::string &path)
+{
+    return fs::is_directory(fs::path(path));
+}
+
+inline bool is_dir(const std::string &path, std::error_code &ec) noexcept
+{
+    return fs::is_directory(fs::path(path), ec);
+}
+
+inline bool is_symlink(const std::string &file)
+{
+    return fs::is_symlink(fs::path(file));
+}
+
+inline bool is_symlink(const std::string &file, std::error_code &ec) noexcept
+{
+    return fs::is_symlink(fs::path(file), ec);
+}
+
+inline bool is_exist(const std::string &file)
+{
+    return fs::exists(fs::path(file));
+}
+
+inline bool is_exist(const std::string &file, std::error_code &ec) noexcept
+{
+    return fs::exists(fs::path(file), ec);
+}
+
+inline std::time_t last_mod_time(const std::string &filepath)
+{
+    auto p = fs::path(filepath);
+    if(!fs::exists(p))
+        return 0;
+
+    auto ftime = fs::last_write_time(p);
+    auto sctp =
+        std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+            ftime - fs::file_time_type::clock::now()
+            + std::chrono::system_clock::now());
+    return std::chrono::system_clock::to_time_t(sctp);
+}
+
+inline std::time_t last_mod_time(const std::string &filepath,
+                                 std::error_code   &ec) noexcept
+{
+    auto p = fs::path(filepath);
+    if(!fs::exists(p, ec) || ec)
+        return 0;
+
+    auto ftime = fs::last_write_time(p, ec);
+    if(ec)
+        return 0;
+
+    auto sctp =
+        std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+            ftime - fs::file_time_type::clock::now()
+            + std::chrono::system_clock::now());
+    return std::chrono::system_clock::to_time_t(sctp);
+}
+
+inline std::uintmax_t size(const std::string &file)
+{
+    std::error_code ec;
+    if(!fs::exists(fs::path(file), ec) || ec || fs::is_directory(file, ec))
+        return -1;
+
+    return fs::file_size(file);
+}
+
+inline std::uintmax_t size(const std::string &file,
+                           std::error_code   &ec) noexcept
+{
+    if(!fs::exists(fs::path(file), ec) || ec || fs::is_directory(file, ec))
+        return static_cast<std::uintmax_t>(-1);
+
+    auto sz = fs::file_size(file, ec);
+    if(ec)
+        return static_cast<std::uintmax_t>(-1);
+
+    return sz;
+}
+
+template <typename Callback>
+inline void walk(const std::string &path,
+                 Callback         &&callback,
+                 bool               recursive       = false,
+                 bool               skip_permission = true)
+{
+    std::error_code ec;
+    auto options = skip_permission
+                       ? fs::directory_options::skip_permission_denied
+                       : fs::directory_options::none;
+
+    if(recursive)
+    {
+        fs::recursive_directory_iterator it(path, options, ec);
+        fs::recursive_directory_iterator end;
+        while(it != end)
+        {
+            if(ec)
+            {
+                ec.clear();
+                it.increment(ec);
+                continue;
+            }
+
+            if(!callback(it->path().string()))
+                break;
+
+            it.increment(ec);
+        }
+    } else
+    {
+        fs::directory_iterator it(path, options, ec);
+        fs::directory_iterator end;
+        while(it != end)
+        {
+            if(ec)
+            {
+                ec.clear();
+                it.increment(ec);
+                continue;
+            }
+
+            if(!callback(it->path().string()))
+                break;
+
+            it.increment(ec);
+        }
+    }
+}
+
+template <typename Callback>
+inline void walk(const std::string &path,
+                 Callback         &&callback,
+                 bool               recursive,
+                 bool               skip_permission,
+                 std::error_code   &ec) noexcept
+{
+    auto options = skip_permission
+                       ? fs::directory_options::skip_permission_denied
+                       : fs::directory_options::none;
+
+    if(recursive)
+    {
+        fs::recursive_directory_iterator it(path, options, ec);
+        if(ec)
+            return;
+
+        fs::recursive_directory_iterator end;
+        while(it != end)
+        {
+            if(ec)
+            {
+                ec.clear();
+                it.increment(ec);
+                continue;
+            }
+
+            if(!callback(it->path().string()))
+                break;
+
+            it.increment(ec);
+        }
+    } else
+    {
+        fs::directory_iterator it(path, options, ec);
+        if(ec)
+            return;
+
+        fs::directory_iterator end;
+        while(it != end)
+        {
+            if(ec)
+            {
+                ec.clear();
+                it.increment(ec);
+                continue;
+            }
+
+            if(!callback(it->path().string()))
+                break;
+
+            it.increment(ec);
+        }
+    }
+}
+
+inline std::vector<std::string> list(const std::string &path)
+{
+    std::vector<std::string> vec;
+    for(auto &entry : fs::directory_iterator(path))
+        vec.emplace_back(entry.path().string());
+    return vec;
+}
+
+inline std::vector<std::string> list(const std::string &path,
+                                     std::error_code   &ec) noexcept
+{
+    std::vector<std::string> vec;
+    auto                     it = fs::directory_iterator(path, ec);
+    if(ec)
+        return vec;
+    fs::directory_iterator end;
+    while(it != end)
+    {
+        if(ec)
+        {
+            ec.clear();
+            it.increment(ec);
+            continue;
+        }
+        vec.emplace_back(it->path().string());
+        it.increment(ec);
+    }
+    return vec;
+}
+
+inline std::vector<std::string>
+list(const std::string                                            &path,
+     std::function<bool(const std::string &, const std::string &)> cmp)
+{
+    std::vector<std::string> vec;
+    for(auto &entry : fs::directory_iterator(path))
+        vec.emplace_back(entry.path().string());
+
+    std::sort(vec.begin(), vec.end(), cmp);
+    return vec;
+}
+
+inline std::vector<std::string>
+find(const std::string &path, const std::string &file, bool recursive = false)
+{
+    std::vector<std::string> vec;
+    if(!fs::exists(path))
+        return vec;
+    if(recursive)
+    {
+        for(auto &entry : fs::recursive_directory_iterator(path))
+            if(entry.path().filename().string() == file)
+                vec.emplace_back(entry.path().string());
+    } else
+    {
+        for(auto &entry : fs::directory_iterator(path))
+            if(entry.path().filename().string() == file)
+                vec.emplace_back(entry.path().string());
+    }
+    return vec;
+}
+
+inline std::vector<std::string>
+find_by_regex(const std::string &path,
+              const std::string &pattern,
+              bool               recursive = false,
+              match_target       target    = match_target::filename)
+{
+    std::vector<std::string> vec;
+    std::regex               re(pattern);
+    if(!fs::exists(path))
+        return vec;
+
+    auto match_func = [&](const fs::path &entry_path) {
+        if(target == match_target::path)
+            return std::regex_match(entry_path.string(), re);
+        else
+            return std::regex_match(entry_path.filename().string(), re);
+    };
+
+    if(recursive)
+    {
+        for(auto &entry : fs::recursive_directory_iterator(path))
+            if(match_func(entry.path()))
+                vec.emplace_back(entry.path().string());
+    } else
+    {
+        for(auto &entry : fs::directory_iterator(path))
+            if(match_func(entry.path()))
+                vec.emplace_back(entry.path().string());
+    }
+    return vec;
+}
+
+inline bool make_dir(const std::string &path, bool recursive = true)
+{
+    return recursive ? fs::create_directories(path)
+                     : fs::create_directory(path);
+}
+
+inline bool
+make_dir(const std::string &path, bool recursive, std::error_code &ec) noexcept
+{
+    return recursive ? fs::create_directories(path, ec)
+                     : fs::create_directory(path, ec);
+}
+
+inline bool create_file(const std::string &file)
+{
+    if(fs::exists(file))
+        return false;
+
+    std::ofstream ofs(file);
+    if(!ofs.is_open())
+        return false;
+
+    ofs.close();
+    return true;
+}
+
+inline bool
+copy_dir(const std::string &from, const std::string &to, bool overwrite = true)
+{
+    std::error_code ec;
+    auto            f_from = fs::path(from);
+    auto            f_to   = fs::path(to);
+
+    if(!fs::exists(f_from, ec) || !fs::is_directory(f_from, ec) || ec)
+        return false;
+
+    auto options =
+        fs::copy_options::recursive | fs::copy_options::copy_symlinks;
+    if(overwrite)
+        options |= fs::copy_options::overwrite_existing;
+    else
+        options |= fs::copy_options::skip_existing;
+
+    fs::copy(f_from, f_to, options, ec);
+    return !ec;
+}
+
+inline bool copy_dir(const std::string &from,
+                     const std::string &to,
+                     bool               overwrite,
+                     std::error_code   &ec) noexcept
+{
+    auto f_from = fs::path(from);
+    auto f_to   = fs::path(to);
+    if(!fs::exists(f_from, ec) || !fs::is_directory(f_from, ec) || ec)
+        return false;
+
+    auto options =
+        fs::copy_options::recursive | fs::copy_options::copy_symlinks;
+    if(overwrite)
+        options |= fs::copy_options::overwrite_existing;
+    else
+        options |= fs::copy_options::skip_existing;
+
+    fs::copy(f_from, f_to, options, ec);
+    return !ec;
+}
+
+inline bool copy_file(const std::string &from, const std::string &to)
+{
+    fs::copy_file(from, to);
+    return fs::exists(to);
+}
+
+inline bool copy_file(const std::string &from,
+                      const std::string &to,
+                      std::error_code   &ec) noexcept
+{
+    fs::copy_file(from, to, ec);
+    if(ec)
+        return false;
+
+    return fs::exists(to, ec);
+}
+
+inline bool remove(const std::string &filepath)
+{
+    std::error_code ec;
+    auto            fpath = fs::path(filepath);
+    bool            res   = fs::remove(fpath, ec);
+    return res && !ec;
+}
+
+inline bool remove(const std::string &filepath, std::error_code &ec) noexcept
+{
+    auto fpath = fs::path(filepath);
+    return fs::remove(fpath, ec);
+}
+
+inline std::uintmax_t remove_all(const std::string &filepath)
+{
+    std::error_code ec;
+    auto            fpath = fs::path(filepath);
+    auto            count = fs::remove_all(fpath, ec);
+    if(ec)
+        return static_cast<std::uintmax_t>(-1);
+
+    return count;
+}
+
+inline std::uintmax_t remove_all(const std::string &filepath,
+                                 std::error_code   &ec) noexcept
+{
+    auto fpath = fs::path(filepath);
+    return fs::remove_all(fpath, ec);
+}
+
+inline bool rename(const std::string &from, const std::string &to)
+{
+    std::error_code ec;
+    auto            f_from = fs::path(from);
+    auto            f_to   = fs::path(to);
+    fs::rename(f_from, f_to, ec);
+    return !ec;
+}
+
+inline bool rename(const std::string &from,
+                   const std::string &to,
+                   std::error_code   &ec) noexcept
+{
+    auto f_from = fs::path(from);
+    auto f_to   = fs::path(to);
+
+    fs::rename(f_from, f_to, ec);
+    return !ec;
+}
+
+} // namespace filepath
+} // namespace hj
 
 #endif

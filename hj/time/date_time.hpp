@@ -6,6 +6,14 @@
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef DATE_TIME_HPP
@@ -30,6 +38,7 @@
 #endif
 
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/local_time/local_time.hpp>
 
 namespace hj
 {
@@ -69,114 +78,245 @@ enum class month
     december
 };
 
-struct fixed_timezone
+namespace timezone
 {
-    const char                      *name;
-    const char                      *abbreviation;
-    const char                      *description;
-    boost::posix_time::time_duration offset;
+static constexpr char TZ_DB[] =
+    R"(Region,STDABBR,STDNAME,DSTABBR,DSTNAME,GMTOFFSET,DSTADJUST,START_DATE_RULE,START_TIME,END_DATE_RULE,END_TIME
+"Etc/UTC","UTC","Coordinated Universal Time","","","+00:00:00","","","","",""
+"Asia/Shanghai","CST","China Standard Time","","","+08:00:00","","","","",""
+"Asia/Beijing","CST","China Standard Time","","","+08:00:00","","","","",""
+"Asia/Tokyo","JST","Japan Standard Time","","","+09:00:00","","","","",""
+"Asia/Seoul","KST","Korea Standard Time","","","+09:00:00","","","","",""
+"Asia/Kolkata","IST","India Standard Time","","","+05:30:00","","","","",""
+"Asia/Bangkok","ICT","Indochina Time","","","+07:00:00","","","","",""
+"Asia/Singapore","SGT","Singapore Standard Time","","","+08:00:00","","","","",""
+"Asia/Dubai","GST","Gulf Standard Time","","","+04:00:00","","","","",""
+"Asia/Hong_Kong","HKT","Hong Kong Time","","","+08:00:00","","","","",""
+"Europe/London","GMT","Greenwich Mean Time","BST","British Summer Time","+00:00:00","+01:00:00","-1;0;3","+01:00:00","-1;0;10","+01:00:00"
+"Europe/Berlin","CET","Central European Time","CEST","Central European Summer Time","+01:00:00","+01:00:00","-1;0;3","+02:00:00","-1;0;10","+03:00:00"
+"Europe/Paris","CET","Central European Time","CEST","Central European Summer Time","+01:00:00","+01:00:00","-1;0;3","+02:00:00","-1;0;10","+03:00:00"
+"Europe/Rome","CET","Central European Time","CEST","Central European Summer Time","+01:00:00","+01:00:00","-1;0;3","+02:00:00","-1;0;10","+03:00:00"
+"Europe/Moscow","MSK","Moscow Standard Time","","","+03:00:00","","","","",""
+"Europe/Stockholm","CET","Central European Time","CEST","Central European Summer Time","+01:00:00","+01:00:00","-1;0;3","+02:00:00","-1;0;10","+03:00:00"
+"America/New_York","EST","Eastern Standard Time","EDT","Eastern Daylight Time","-05:00:00","+01:00:00","2;0;3","+02:00:00","1;0;11","+02:00:00"
+"America/Chicago","CST","Central Standard Time","CDT","Central Daylight Time","-06:00:00","+01:00:00","2;0;3","+02:00:00","1;0;11","+02:00:00"
+"America/Denver","MST","Mountain Standard Time","MDT","Mountain Daylight Time","-07:00:00","+01:00:00","2;0;3","+02:00:00","1;0;11","+02:00:00"
+"America/Los_Angeles","PST","Pacific Standard Time","PDT","Pacific Daylight Time","-08:00:00","+01:00:00","2;0;3","+02:00:00","1;0;11","+02:00:00"
+"America/Toronto","EST","Eastern Standard Time","EDT","Eastern Daylight Time","-05:00:00","+01:00:00","2;0;3","+02:00:00","1;0;11","+02:00:00"
+"America/Sao_Paulo","BRT","Brasilia Time","","","-03:00:00","","","","",""
+"America/Mexico_City","CST","Central Standard Time","","","-06:00:00","","","","",""
+"Australia/Sydney","AEST","Australian Eastern Standard Time","AEDT","Australian Eastern Daylight Time","+10:00:00","+01:00:00","1;0;10","+02:00:00","1;0;4","+03:00:00"
+"Australia/Melbourne","AEST","Australian Eastern Standard Time","AEDT","Australian Eastern Daylight Time","+10:00:00","+01:00:00","1;0;10","+02:00:00","1;0;4","+03:00:00"
+"Pacific/Auckland","NZST","New Zealand Standard Time","NZDT","New Zealand Daylight Time","+12:00:00","+01:00:00","-1;0;9","+02:00:00","1;0;4","+03:00:00"
+"Australia/Perth","AWST","Australian Western Standard Time","","","+08:00:00","","","","",""
+"Africa/Cairo","EET","Eastern European Time","EEST","Eastern European Summer Time","+02:00:00","+01:00:00","-1;5;4","+00:00:00","-1;4;10","+00:00:00"
+"Africa/Johannesburg","SAST","South Africa Standard Time","","","+02:00:00","","","","",""
+"Africa/Lagos","WAT","West Africa Time","","","+01:00:00","","","","",""
+)";
+} // namespace timezone
 
-    fixed_timezone(const char *name_,
-                   const char *abbreviation_,
-                   int         hours_offset,
-                   int         minutes_offset,
-                   const char *description_)
-        : name{name_}
-        , abbreviation{abbreviation_}
-        , description{description_}
-        , offset{boost::posix_time::minutes(
-              static_cast<long>(hours_offset) * 60L + minutes_offset)}
+struct dynamic_timezone
+{
+    using db_t = boost::local_time::tz_database;
+
+    std::string                      name;
+    boost::local_time::time_zone_ptr tz;
+
+    dynamic_timezone(const std::string &dt_name)
+        : name{dt_name}
     {
+        tz = db().time_zone_from_region(name);
+        if(!tz)
+            throw std::runtime_error("Unknown timezone: " + dt_name);
+    }
+
+    static db_t &db()
+    {
+        static db_t database = [] {
+            db_t               value;
+            std::istringstream ss(timezone::TZ_DB);
+            // Skip CSV header.
+            std::string header;
+            std::getline(ss, header);
+            value.load_from_stream(ss);
+            return value;
+        }();
+        return database;
     }
 };
 
 namespace timezone
 {
-inline const fixed_timezone BEIJING{
-    "Asia/Shanghai", "CST", 8, 0, "China Standard Time"};
-inline const fixed_timezone HONG_KONG{
-    "Asia/Hong_Kong", "HKT", 8, 0, "Hong Kong Time"};
-inline const fixed_timezone TOKYO{
-    "Asia/Tokyo", "JST", 9, 0, "Japan Standard Time"};
-inline const fixed_timezone SEOUL{
-    "Asia/Seoul", "KST", 9, 0, "Korea Standard Time"};
-inline const fixed_timezone MUMBAI{
-    "Asia/Kolkata", "IST", 5, 30, "India Standard Time"};
-inline const fixed_timezone BANGKOK{
-    "Asia/Bangkok", "ICT", 7, 0, "Indochina Time"};
-inline const fixed_timezone SINGAPORE{
-    "Asia/Singapore", "SGT", 8, 0, "Singapore Standard Time"};
-inline const fixed_timezone DUBAI{
-    "Asia/Dubai", "GST", 4, 0, "Gulf Standard Time"};
+// other
+inline const dynamic_timezone &utc()
+{
+    static const dynamic_timezone tz{"Etc/UTC"};
+    return tz;
+}
 
-inline const fixed_timezone LONDON{
-    "Europe/London", "GMT", 0, 0, "Greenwich Mean Time"};
-inline const fixed_timezone BERLIN{
-    "Europe/Berlin", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
-inline const fixed_timezone PARIS{
-    "Europe/Paris", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
-inline const fixed_timezone ROME{
-    "Europe/Rome", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
-inline const fixed_timezone MOSCOW{
-    "Europe/Moscow", "MSK", 3, 0, "Moscow Standard Time"};
-inline const fixed_timezone STOCKHOLM{
-    "Europe/Stockholm", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
+// asian
+inline const dynamic_timezone &shanghai()
+{
+    static const dynamic_timezone tz{"Asia/Shanghai"};
+    return tz;
+}
 
-inline const fixed_timezone NEW_YORK{
-    "America/New_York", "EST", -5, 0, "Eastern Standard Time (fixed UTC-5)"};
-inline const fixed_timezone CHICAGO{
-    "America/Chicago", "CST", -6, 0, "Central Standard Time (fixed UTC-6)"};
-inline const fixed_timezone DENVER{
-    "America/Denver", "MST", -7, 0, "Mountain Standard Time (fixed UTC-7)"};
-inline const fixed_timezone LOS_ANGELES{
-    "America/Los_Angeles", "PST", -8, 0, "Pacific Standard Time (fixed UTC-8)"};
-inline const fixed_timezone TORONTO{
-    "America/Toronto", "EST", -5, 0, "Eastern Standard Time (fixed UTC-5)"};
-inline const fixed_timezone SAO_PAULO{
-    "America/Sao_Paulo", "BRT", -3, 0, "Brazil Time (fixed UTC-3)"};
-inline const fixed_timezone MEXICO_CITY{
-    "America/Mexico_City", "CST", -6, 0, "Central Standard Time (fixed UTC-6)"};
+inline const dynamic_timezone &beijing()
+{
+    static const dynamic_timezone tz{"Asia/Beijing"};
+    return tz;
+}
 
-inline const fixed_timezone SYDNEY{
-    "Australia/Sydney",
-    "AEST",
-    10,
-    0,
-    "Australian Eastern Standard Time (fixed UTC+10)"};
-inline const fixed_timezone MELBOURNE{
-    "Australia/Melbourne",
-    "AEST",
-    10,
-    0,
-    "Australian Eastern Standard Time (fixed UTC+10)"};
-inline const fixed_timezone AUCKLAND{
-    "Pacific/Auckland",
-    "NZST",
-    12,
-    0,
-    "New Zealand Standard Time (fixed UTC+12)"};
-inline const fixed_timezone PERTH{
-    "Australia/Perth",
-    "AWST",
-    8,
-    0,
-    "Australian Western Standard Time (fixed UTC+8)"};
+inline const dynamic_timezone &hong_kong()
+{
+    static const dynamic_timezone tz{"Asia/Hong_Kong"};
+    return tz;
+}
 
-inline const fixed_timezone CAIRO{
-    "Africa/Cairo", "EET", 2, 0, "Eastern European Time (fixed UTC+2)"};
-inline const fixed_timezone JOHANNESBURG{
-    "Africa/Johannesburg",
-    "SAST",
-    2,
-    0,
-    "South Africa Standard Time (fixed UTC+2)"};
-inline const fixed_timezone LAGOS{
-    "Africa/Lagos", "WAT", 1, 0, "West Africa Time (fixed UTC+1)"};
+inline const dynamic_timezone &tokyo()
+{
+    static const dynamic_timezone tz{"Asia/Tokyo"};
+    return tz;
+}
 
-inline const fixed_timezone UTC{
-    "UTC", "UTC", 0, 0, "Coordinated Universal Time"};
+inline const dynamic_timezone &seoul()
+{
+    static const dynamic_timezone tz{"Asia/Seoul"};
+    return tz;
+}
 
-inline const fixed_timezone LOCAL{"LOCAL", "LOCAL", 0, 0, "Host Local Time"};
+inline const dynamic_timezone &mumbai()
+{
+    static const dynamic_timezone tz{"Asia/Kolkata"};
+    return tz;
+}
+
+inline const dynamic_timezone &bangkok()
+{
+    static const dynamic_timezone tz{"Asia/Bangkok"};
+    return tz;
+}
+
+inline const dynamic_timezone &singapore()
+{
+    static const dynamic_timezone tz{"Asia/Singapore"};
+    return tz;
+}
+
+inline const dynamic_timezone &dubai()
+{
+    static const dynamic_timezone tz{"Asia/Dubai"};
+    return tz;
+}
+
+// Europe
+inline const dynamic_timezone &london()
+{
+    static const dynamic_timezone tz{"Europe/London"};
+    return tz;
+}
+inline const dynamic_timezone &berlin()
+{
+    static const dynamic_timezone tz{"Europe/Berlin"};
+    return tz;
+}
+inline const dynamic_timezone &paris()
+{
+    static const dynamic_timezone tz{"Europe/Paris"};
+    return tz;
+}
+inline const dynamic_timezone &rome()
+{
+    static const dynamic_timezone tz{"Europe/Rome"};
+    return tz;
+}
+inline const dynamic_timezone &moscow()
+{
+    static const dynamic_timezone tz{"Europe/Moscow"};
+    return tz;
+}
+inline const dynamic_timezone &stockholm()
+{
+    static const dynamic_timezone tz{"Europe/Stockholm"};
+    return tz;
+}
+
+// Americas
+inline const dynamic_timezone &new_york()
+{
+    static const dynamic_timezone tz{"America/New_York"};
+    return tz;
+}
+inline const dynamic_timezone &chicago()
+{
+    static const dynamic_timezone tz{"America/Chicago"};
+    return tz;
+}
+inline const dynamic_timezone &denver()
+{
+    static const dynamic_timezone tz{"America/Denver"};
+    return tz;
+}
+inline const dynamic_timezone &los_angeles()
+{
+    static const dynamic_timezone tz{"America/Los_Angeles"};
+    return tz;
+}
+inline const dynamic_timezone &toronto()
+{
+    static const dynamic_timezone tz{"America/Toronto"};
+    return tz;
+}
+inline const dynamic_timezone &sao_paulo()
+{
+    static const dynamic_timezone tz{"America/Sao_Paulo"};
+    return tz;
+}
+inline const dynamic_timezone &mexico_city()
+{
+    static const dynamic_timezone tz{"America/Mexico_City"};
+    return tz;
+}
+
+// Australia & Oceania
+inline const dynamic_timezone &sydney()
+{
+    static const dynamic_timezone tz{"Australia/Sydney"};
+    return tz;
+}
+inline const dynamic_timezone &melbourne()
+{
+    static const dynamic_timezone tz{"Australia/Melbourne"};
+    return tz;
+}
+inline const dynamic_timezone &auckland()
+{
+    static const dynamic_timezone tz{"Pacific/Auckland"};
+    return tz;
+}
+inline const dynamic_timezone &perth()
+{
+    static const dynamic_timezone tz{"Australia/Perth"};
+    return tz;
+}
+
+// Africa
+inline const dynamic_timezone &cairo()
+{
+    static const dynamic_timezone tz{"Africa/Cairo"};
+    return tz;
+}
+inline const dynamic_timezone &johannesburg()
+{
+    static const dynamic_timezone tz{"Africa/Johannesburg"};
+    return tz;
+}
+inline const dynamic_timezone &lagos()
+{
+    static const dynamic_timezone tz{"Africa/Lagos"};
+    return tz;
+}
+
 } // namespace timezone
 
 inline const boost::posix_time::ptime NullTime{
@@ -205,14 +345,19 @@ class date_time
     {
     }
 
-    static bool is_local_timezone(const fixed_timezone &tz) noexcept
+    explicit date_time(const boost::posix_time::ptime         &tm,
+                       const boost::posix_time::time_duration &offset)
+        : _tm{tm + offset}
+        , _offset{offset}
     {
-        return std::strcmp(tz.name, timezone::LOCAL.name) == 0;
     }
 
-    static bool is_utc_timezone(const fixed_timezone &tz) noexcept
+    explicit date_time(const std::chrono::system_clock::time_point &tp,
+                       const boost::posix_time::time_duration      &offset)
+        : date_time(std::chrono::system_clock::to_time_t(tp), 0)
     {
-        return std::strcmp(tz.name, timezone::UTC.name) == 0;
+        _tm += offset;
+        _offset = offset;
     }
 
     static bool localtime_safe(std::time_t value, std::tm &result) noexcept
@@ -256,20 +401,6 @@ class date_time
         return local + fraction;
     }
 
-    static boost::posix_time::time_duration
-    offset_for(const fixed_timezone           &tz,
-               const boost::posix_time::ptime &instant)
-    {
-        if(is_local_timezone(tz))
-        {
-            boost::posix_time::time_duration offset;
-            (void) local_time_for_instant(instant, offset);
-            return offset;
-        }
-
-        return tz.offset;
-    }
-
     static date_time
     from_instant(const boost::posix_time::ptime         &instant,
                  const boost::posix_time::time_duration &offset)
@@ -277,11 +408,7 @@ class date_time
         return date_time(instant + offset, offset, local_time_tag{});
     }
 
-    boost::posix_time::ptime instant() const
-    {
-        require_valid();
-        return _tm - _offset;
-    }
+    boost::posix_time::ptime instant() const { return _tm - _offset; }
 
     void require_valid() const
     {
@@ -391,28 +518,9 @@ class date_time
     {
     }
 
-    /*
-     * ptime is interpreted as an absolute instant and converted to the
-     * requested fixed timezone representation.
-     */
-    explicit date_time(const boost::posix_time::ptime         &tm,
-                       const boost::posix_time::time_duration &offset)
-        : _tm{tm + offset}
-        , _offset{offset}
-    {
-    }
-
     explicit date_time(const std::chrono::system_clock::time_point &tp)
         : date_time(std::chrono::system_clock::to_time_t(tp))
     {
-    }
-
-    explicit date_time(const std::chrono::system_clock::time_point &tp,
-                       const boost::posix_time::time_duration      &offset)
-        : date_time(std::chrono::system_clock::to_time_t(tp), 0)
-    {
-        _tm += offset;
-        _offset = offset;
     }
 
     explicit date_time(const std::string &str,
@@ -455,40 +563,34 @@ class date_time
         return epoch;
     }
 
-    static date_time now(const fixed_timezone &tz = timezone::UTC)
+    static date_time now(const dynamic_timezone &dtz = timezone::utc())
     {
         const auto utc = boost::posix_time::microsec_clock::universal_time();
+        boost::local_time::local_date_time ldt(utc, dtz.tz);
+        auto offset = ldt.zone()->base_utc_offset();
+        if(ldt.is_dst())
+            offset += ldt.zone()->dst_offset();
 
-        if(is_local_timezone(tz))
-        {
-            boost::posix_time::time_duration offset;
-            const auto local = local_time_for_instant(utc, offset);
-            return date_time(local, offset, local_time_tag{});
-        }
-
-        return from_instant(utc, offset_for(tz, utc));
+        return from_instant(utc, offset);
     }
 
-    static date_time today(const fixed_timezone &tz = timezone::UTC)
+    static date_time today(const dynamic_timezone &dtz = timezone::utc())
     {
-        const auto current = now(tz);
+        const auto current = now(dtz);
         current.require_valid();
-
         return date_time(boost::posix_time::ptime(current._tm.date()),
                          current._offset,
                          local_time_tag{});
     }
 
-    /*
-     * Convert this instant to another fixed timezone representation.
-     * The instant is preserved; only the local calendar representation
-     * changes.
-     */
-    date_time to_timezone(const fixed_timezone &tz) const
+    date_time to_timezone(const dynamic_timezone &dtz) const
     {
-        const auto current = instant();
-        const auto offset  = offset_for(tz, current);
-        return from_instant(current, offset);
+        boost::local_time::local_date_time ldt(instant(), dtz.tz);
+        auto offset = ldt.zone()->base_utc_offset();
+        if(ldt.is_dst())
+            offset += ldt.zone()->dst_offset();
+
+        return from_instant(instant(), offset);
     }
 
     boost::posix_time::time_duration timezone_offset() const noexcept
@@ -550,6 +652,7 @@ class date_time
 
     std::int64_t sec_since_epoch() const
     {
+        require_valid();
         return (instant() - epoch_time()._tm).total_seconds();
     }
 
@@ -618,7 +721,11 @@ class date_time
         return boost::posix_time::to_tm(_tm);
     }
 
-    std::time_t time() const { return boost::posix_time::to_time_t(instant()); }
+    std::time_t time() const
+    {
+        require_valid();
+        return boost::posix_time::to_time_t(instant());
+    }
 
     std::int64_t seconds() const
     {

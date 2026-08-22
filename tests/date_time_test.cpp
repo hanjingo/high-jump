@@ -69,7 +69,7 @@ TEST(date_time, month_name)
 
 TEST(date_time, now_utc_preserves_epoch)
 {
-    const auto now = hj::date_time::now(hj::timezone::UTC);
+    const auto now = hj::date_time::now(hj::timezone::utc());
 
     const auto system_now = std::time(nullptr);
     const auto actual     = now.time();
@@ -83,8 +83,8 @@ TEST(date_time, now_utc_preserves_epoch)
 TEST(date_time, fixed_timezone_preserves_instant)
 {
     const auto utc = make_utc(2026, 8, 22, 2, 0, 0);
-    const auto bj  = utc.to_timezone(hj::timezone::BEIJING);
-    const auto ny  = utc.to_timezone(hj::timezone::NEW_YORK);
+    const auto bj  = utc.to_timezone(hj::timezone::beijing());
+    const auto ny  = utc.to_timezone(hj::timezone::new_york());
 
     ASSERT_EQ(utc.sec_since_epoch(), bj.sec_since_epoch());
     ASSERT_EQ(utc.sec_since_epoch(), ny.sec_since_epoch());
@@ -97,13 +97,14 @@ TEST(date_time, fixed_timezone_preserves_instant)
     ASSERT_EQ(ny.year(), 2026);
     ASSERT_EQ(ny.month(), hj::month::august);
     ASSERT_EQ(ny.day(), 21);
-    ASSERT_EQ(ny.hour(), 21);
+    ASSERT_EQ(ny.hour(), 22);
+    ASSERT_EQ(ny.timezone_offset().total_seconds(), -4 * 3600);
 }
 
 TEST(date_time, fixed_timezone_time_conversion)
 {
     const auto utc = make_utc(2026, 8, 22, 2, 0, 0);
-    const auto bj  = utc.to_timezone(hj::timezone::BEIJING);
+    const auto bj  = utc.to_timezone(hj::timezone::beijing());
 
     ASSERT_EQ(utc.time(), bj.time());
     ASSERT_EQ(utc.ms_since_epoch(), bj.ms_since_epoch());
@@ -113,7 +114,7 @@ TEST(date_time, fixed_timezone_time_conversion)
 TEST(date_time, fixed_timezone_comparison_uses_instant)
 {
     const auto utc = make_utc(2026, 8, 22, 2, 0, 0);
-    const auto bj  = utc.to_timezone(hj::timezone::BEIJING);
+    const auto bj  = utc.to_timezone(hj::timezone::beijing());
 
     ASSERT_EQ(utc, bj);
     ASSERT_FALSE(utc < bj);
@@ -123,7 +124,7 @@ TEST(date_time, fixed_timezone_comparison_uses_instant)
 TEST(date_time, today_fixed_timezone)
 {
     const auto utc_midnight = make_utc(2026, 8, 22, 0, 0, 0);
-    const auto bj           = utc_midnight.to_timezone(hj::timezone::BEIJING);
+    const auto bj           = utc_midnight.to_timezone(hj::timezone::beijing());
 
     const auto bj_today = bj.start_of_day();
 
@@ -138,7 +139,7 @@ TEST(date_time, today_fixed_timezone)
 
 TEST(date_time, today_utc)
 {
-    const auto today = hj::date_time::today(hj::timezone::UTC);
+    const auto today = hj::date_time::today(hj::timezone::utc());
 
     ASSERT_EQ(today.hour(), 0);
     ASSERT_EQ(today.minute(), 0);
@@ -241,7 +242,7 @@ TEST(date_time, negative_epoch_round_trip)
 TEST(date_time, timezone_epoch_is_identical)
 {
     const auto utc = make_utc(1970, 1, 1, 0, 0, 0);
-    const auto bj  = utc.to_timezone(hj::timezone::BEIJING);
+    const auto bj  = utc.to_timezone(hj::timezone::beijing());
 
     ASSERT_EQ(utc.sec_since_epoch(), 0);
     ASSERT_EQ(bj.sec_since_epoch(), 0);
@@ -494,7 +495,7 @@ TEST(date_time, next_pre_working_day)
 TEST(date_time, timezone_calendar_operations_preserve_offset)
 {
     const auto utc = make_utc(2026, 8, 22, 2, 0, 0);
-    const auto bj  = utc.to_timezone(hj::timezone::BEIJING);
+    const auto bj  = utc.to_timezone(hj::timezone::beijing());
 
     ASSERT_EQ(bj.start_of_day().timezone_offset().total_seconds(), 8 * 3600);
     ASSERT_EQ(bj.next_day().timezone_offset().total_seconds(), 8 * 3600);
@@ -505,7 +506,7 @@ TEST(date_time, timezone_calendar_operations_preserve_offset)
 TEST(date_time, local_timezone_conversion_keeps_instant)
 {
     const auto utc   = make_utc(2026, 1, 1, 0, 0, 0);
-    const auto local = utc.to_timezone(hj::timezone::LOCAL);
+    const auto local = utc.to_timezone(hj::timezone::utc());
 
     ASSERT_EQ(local.sec_since_epoch(), utc.sec_since_epoch());
 }
@@ -528,4 +529,64 @@ TEST(date_time, current_epoch_values_are_positive)
 {
     ASSERT_GT(hj::date_time::current_sec_since_epoch(), 0);
     ASSERT_GT(hj::date_time::current_ms_since_epoch(), 0);
+}
+
+TEST(date_time, dst_spring_forward_new_york)
+{
+    const auto utc_before = make_utc(2026, 3, 8, 6, 59, 59);
+    const auto ny_before  = utc_before.to_timezone(hj::timezone::new_york());
+
+    ASSERT_EQ(ny_before.hour(), 1);
+    ASSERT_EQ(ny_before.minute(), 59);
+    ASSERT_EQ(ny_before.seconds(), 59);
+
+    const auto utc_after = make_utc(2026, 3, 8, 7, 0, 0);
+    const auto ny_after  = utc_after.to_timezone(hj::timezone::new_york());
+
+    ASSERT_EQ(ny_after.hour(), 3);
+    ASSERT_EQ(ny_after.minute(), 0);
+    ASSERT_EQ(ny_after.timezone_offset().total_seconds(), -4 * 3600);
+}
+
+TEST(date_time, dst_fall_back_new_york)
+{
+    const auto utc_before = make_utc(2026, 11, 1, 5, 59, 59);
+    const auto ny_before  = utc_before.to_timezone(hj::timezone::new_york());
+    ASSERT_EQ(ny_before.hour(), 1);
+    ASSERT_EQ(ny_before.minute(), 59);
+    ASSERT_EQ(ny_before.timezone_offset().total_seconds(), -4 * 3600);
+
+    const auto utc_after = make_utc(2026, 11, 1, 6, 0, 0);
+    const auto ny_after  = utc_after.to_timezone(hj::timezone::new_york());
+    ASSERT_EQ(ny_after.hour(), 1);
+    ASSERT_EQ(ny_after.minute(), 0);
+    ASSERT_EQ(ny_after.timezone_offset().total_seconds(), -5 * 3600);
+}
+
+TEST(date_time, dst_berlin_transition)
+{
+    const auto utc_winter    = make_utc(2026, 3, 28, 12, 0, 0);
+    const auto berlin_winter = utc_winter.to_timezone(hj::timezone::berlin());
+    ASSERT_EQ(berlin_winter.timezone_offset().total_seconds(), 1 * 3600);
+
+    const auto utc_summer    = make_utc(2026, 3, 30, 12, 0, 0);
+    const auto berlin_summer = utc_summer.to_timezone(hj::timezone::berlin());
+    ASSERT_EQ(berlin_summer.timezone_offset().total_seconds(), 2 * 3600);
+}
+
+TEST(date_time, dst_cross_boundary_calendar_operations)
+{
+    const auto utc_base = make_utc(2026, 3, 7, 12, 0, 0);
+    const auto ny_base  = utc_base.to_timezone(hj::timezone::new_york());
+
+    const auto initial_offset = ny_base.timezone_offset().total_seconds();
+    ASSERT_EQ(initial_offset, -5 * 3600);
+
+    const auto ny_next = ny_base.next_day(2);
+
+    ASSERT_EQ(ny_next.year(), 2026);
+    ASSERT_EQ(ny_next.month(), hj::month::march);
+    ASSERT_EQ(ny_next.day(), 9);
+
+    ASSERT_EQ(ny_next.timezone_offset().total_seconds(), initial_offset);
 }

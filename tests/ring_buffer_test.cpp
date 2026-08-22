@@ -2,6 +2,11 @@
 #include <hj/io/ring_buffer.hpp>
 
 #include <vector>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 TEST(ring_buffer, push_back_overwrite)
 {

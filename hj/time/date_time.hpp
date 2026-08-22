@@ -6,40 +6,41 @@
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef DATE_TIME_HPP
 #define DATE_TIME_HPP
 
-#include <ctime>
 #include <chrono>
-#include <iostream>
+#include <cstdint>
+#include <ctime>
+#include <cstring>
 #include <functional>
+#include <iomanip>
+#include <limits>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <array>
+
+#if !defined(_WIN32)
+#include <sys/time.h>
+#endif
 
 #include <boost/date_time/posix_time/posix_time.hpp>
-
-#ifndef TIME_FMT
-#define TIME_FMT "%Y-%m-%d %H:%M:%S"
-#endif
 
 namespace hj
 {
 
 class date_time;
 
-static constexpr std::time_t sec    = std::time_t(1);
-static constexpr std::time_t minute = std::time_t(60) * sec;
-static constexpr std::time_t hour   = std::time_t(60) * minute;
-static constexpr std::time_t day    = std::time_t(24) * hour;
-static constexpr std::time_t week   = std::time_t(7) * day;
+inline constexpr std::time_t sec    = std::time_t(1);
+inline constexpr std::time_t minute = std::time_t(60) * sec;
+inline constexpr std::time_t hour   = std::time_t(60) * minute;
+inline constexpr std::time_t day    = std::time_t(24) * hour;
+inline constexpr std::time_t week   = std::time_t(7) * day;
 
 enum class weekday
 {
@@ -52,7 +53,7 @@ enum class weekday
     saturday
 };
 
-enum class moon
+enum class month
 {
     january = 1,
     february,
@@ -68,90 +69,117 @@ enum class moon
     december
 };
 
-struct timezone_info
+struct fixed_timezone
 {
-    const char *name;
-    const char *abbreviation;
-    long        hours_offset;
-    long        minutes_offset;
-    const char *description;
+    const char                      *name;
+    const char                      *abbreviation;
+    const char                      *description;
+    boost::posix_time::time_duration offset;
+
+    fixed_timezone(const char *name_,
+                   const char *abbreviation_,
+                   int         hours_offset,
+                   int         minutes_offset,
+                   const char *description_)
+        : name{name_}
+        , abbreviation{abbreviation_}
+        , description{description_}
+        , offset{boost::posix_time::minutes(
+              static_cast<long>(hours_offset) * 60L + minutes_offset)}
+    {
+    }
 };
 
 namespace timezone
 {
-// ASIA
-constexpr timezone_info BEIJING = {
+inline const fixed_timezone BEIJING{
     "Asia/Shanghai", "CST", 8, 0, "China Standard Time"};
-constexpr timezone_info HONG_KONG = {
+inline const fixed_timezone HONG_KONG{
     "Asia/Hong_Kong", "HKT", 8, 0, "Hong Kong Time"};
-constexpr timezone_info TOKYO = {
+inline const fixed_timezone TOKYO{
     "Asia/Tokyo", "JST", 9, 0, "Japan Standard Time"};
-constexpr timezone_info SEOUL = {
+inline const fixed_timezone SEOUL{
     "Asia/Seoul", "KST", 9, 0, "Korea Standard Time"};
-constexpr timezone_info MUMBAI = {
+inline const fixed_timezone MUMBAI{
     "Asia/Kolkata", "IST", 5, 30, "India Standard Time"};
-constexpr timezone_info BANGKOK = {
+inline const fixed_timezone BANGKOK{
     "Asia/Bangkok", "ICT", 7, 0, "Indochina Time"};
-constexpr timezone_info SINGAPORE = {
+inline const fixed_timezone SINGAPORE{
     "Asia/Singapore", "SGT", 8, 0, "Singapore Standard Time"};
-constexpr timezone_info DUBAI = {
+inline const fixed_timezone DUBAI{
     "Asia/Dubai", "GST", 4, 0, "Gulf Standard Time"};
 
-// EUROPE
-constexpr timezone_info LONDON = {
+inline const fixed_timezone LONDON{
     "Europe/London", "GMT", 0, 0, "Greenwich Mean Time"};
-constexpr timezone_info BERLIN = {
-    "Europe/Berlin", "CET", 1, 0, "Central European Time"};
-constexpr timezone_info PARIS = {
-    "Europe/Paris", "CET", 1, 0, "Central European Time"};
-constexpr timezone_info ROME = {
-    "Europe/Rome", "CET", 1, 0, "Central European Time"};
-constexpr timezone_info MOSCOW = {
+inline const fixed_timezone BERLIN{
+    "Europe/Berlin", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
+inline const fixed_timezone PARIS{
+    "Europe/Paris", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
+inline const fixed_timezone ROME{
+    "Europe/Rome", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
+inline const fixed_timezone MOSCOW{
     "Europe/Moscow", "MSK", 3, 0, "Moscow Standard Time"};
-constexpr timezone_info STOCKHOLM = {
-    "Europe/Stockholm", "CET", 1, 0, "Central European Time"};
+inline const fixed_timezone STOCKHOLM{
+    "Europe/Stockholm", "CET", 1, 0, "Central European Time (fixed UTC+1)"};
 
-// AMERICAS
-constexpr timezone_info NEW_YORK = {
-    "America/New_York", "EST", -5, 0, "Eastern Standard Time"};
-constexpr timezone_info CHICAGO = {
-    "America/Chicago", "CST", -6, 0, "Central Standard Time"};
-constexpr timezone_info DENVER = {
-    "America/Denver", "MST", -7, 0, "Mountain Standard Time"};
-constexpr timezone_info LOS_ANGELES = {
-    "America/Los_Angeles", "PST", -8, 0, "Pacific Standard Time"};
-constexpr timezone_info TORONTO = {
-    "America/Toronto", "EST", -5, 0, "Eastern Standard Time"};
-constexpr timezone_info SAO_PAULO = {
-    "America/Sao_Paulo", "BRT", -3, 0, "Brazil Time"};
-constexpr timezone_info MEXICO_CITY = {
-    "America/Mexico_City", "CST", -6, 0, "Central Standard Time"};
+inline const fixed_timezone NEW_YORK{
+    "America/New_York", "EST", -5, 0, "Eastern Standard Time (fixed UTC-5)"};
+inline const fixed_timezone CHICAGO{
+    "America/Chicago", "CST", -6, 0, "Central Standard Time (fixed UTC-6)"};
+inline const fixed_timezone DENVER{
+    "America/Denver", "MST", -7, 0, "Mountain Standard Time (fixed UTC-7)"};
+inline const fixed_timezone LOS_ANGELES{
+    "America/Los_Angeles", "PST", -8, 0, "Pacific Standard Time (fixed UTC-8)"};
+inline const fixed_timezone TORONTO{
+    "America/Toronto", "EST", -5, 0, "Eastern Standard Time (fixed UTC-5)"};
+inline const fixed_timezone SAO_PAULO{
+    "America/Sao_Paulo", "BRT", -3, 0, "Brazil Time (fixed UTC-3)"};
+inline const fixed_timezone MEXICO_CITY{
+    "America/Mexico_City", "CST", -6, 0, "Central Standard Time (fixed UTC-6)"};
 
-// AUSTRALIA & OCEANIA
-constexpr timezone_info SYDNEY = {
-    "Australia/Sydney", "AEST", 10, 0, "Australian Eastern Standard Time"};
-constexpr timezone_info MELBOURNE = {
-    "Australia/Melbourne", "AEST", 10, 0, "Australian Eastern Standard Time"};
-constexpr timezone_info AUCKLAND = {
-    "Pacific/Auckland", "NZST", 12, 0, "New Zealand Standard Time"};
-constexpr timezone_info PERTH = {
-    "Australia/Perth", "AWST", 8, 0, "Australian Western Standard Time"};
+inline const fixed_timezone SYDNEY{
+    "Australia/Sydney",
+    "AEST",
+    10,
+    0,
+    "Australian Eastern Standard Time (fixed UTC+10)"};
+inline const fixed_timezone MELBOURNE{
+    "Australia/Melbourne",
+    "AEST",
+    10,
+    0,
+    "Australian Eastern Standard Time (fixed UTC+10)"};
+inline const fixed_timezone AUCKLAND{
+    "Pacific/Auckland",
+    "NZST",
+    12,
+    0,
+    "New Zealand Standard Time (fixed UTC+12)"};
+inline const fixed_timezone PERTH{
+    "Australia/Perth",
+    "AWST",
+    8,
+    0,
+    "Australian Western Standard Time (fixed UTC+8)"};
 
-// AFRICA
-constexpr timezone_info CAIRO = {
-    "Africa/Cairo", "EET", 2, 0, "Eastern European Time"};
-constexpr timezone_info JOHANNESBURG = {
-    "Africa/Johannesburg", "SAST", 2, 0, "South Africa Standard Time"};
-constexpr timezone_info LAGOS = {
-    "Africa/Lagos", "WAT", 1, 0, "West Africa Time"};
+inline const fixed_timezone CAIRO{
+    "Africa/Cairo", "EET", 2, 0, "Eastern European Time (fixed UTC+2)"};
+inline const fixed_timezone JOHANNESBURG{
+    "Africa/Johannesburg",
+    "SAST",
+    2,
+    0,
+    "South Africa Standard Time (fixed UTC+2)"};
+inline const fixed_timezone LAGOS{
+    "Africa/Lagos", "WAT", 1, 0, "West Africa Time (fixed UTC+1)"};
 
-// other
-constexpr timezone_info UTC = {
+inline const fixed_timezone UTC{
     "UTC", "UTC", 0, 0, "Coordinated Universal Time"};
-constexpr timezone_info LOCAL = {"LOCAL", "LOCAL", 0, 0, "Local Time"};
-}
 
-static const boost::posix_time::ptime NullTime{
+inline const fixed_timezone LOCAL{"LOCAL", "LOCAL", 0, 0, "Host Local Time"};
+} // namespace timezone
+
+inline const boost::posix_time::ptime NullTime{
     boost::gregorian::date(boost::gregorian::pos_infin),
     boost::posix_time::time_duration(0, 0, 0)};
 
@@ -159,332 +187,501 @@ class date_time
 {
   public:
     using is_working_day_fn = std::function<bool(const date_time &)>;
+    inline static constexpr const char *time_fmt = "%Y-%m-%d %H:%M:%S";
+
+  private:
+    struct local_time_tag
+    {
+    };
+
+    boost::posix_time::ptime         _tm{NullTime};
+    boost::posix_time::time_duration _offset{0, 0, 0};
+
+    date_time(const boost::posix_time::ptime         &local_time,
+              const boost::posix_time::time_duration &offset,
+              local_time_tag)
+        : _tm{local_time}
+        , _offset{offset}
+    {
+    }
+
+    static bool is_local_timezone(const fixed_timezone &tz) noexcept
+    {
+        return std::strcmp(tz.name, timezone::LOCAL.name) == 0;
+    }
+
+    static bool is_utc_timezone(const fixed_timezone &tz) noexcept
+    {
+        return std::strcmp(tz.name, timezone::UTC.name) == 0;
+    }
+
+    static bool localtime_safe(std::time_t value, std::tm &result) noexcept
+    {
+#if defined(_WIN32)
+        return localtime_s(&result, &value) == 0;
+#else
+        return localtime_r(&value, &result) != nullptr;
+#endif
+    }
+
+    static bool gmtime_safe(std::time_t value, std::tm &result) noexcept
+    {
+#if defined(_WIN32)
+        return gmtime_s(&result, &value) == 0;
+#else
+        return gmtime_r(&value, &result) != nullptr;
+#endif
+    }
+
+    static boost::posix_time::ptime
+    local_time_for_instant(const boost::posix_time::ptime   &instant,
+                           boost::posix_time::time_duration &offset)
+    {
+        const std::time_t value = boost::posix_time::to_time_t(instant);
+
+        std::tm local_tm{};
+        std::tm utc_tm{};
+        if(!localtime_safe(value, local_tm) || !gmtime_safe(value, utc_tm))
+            throw std::runtime_error(
+                "failed to convert time_t to local/UTC time");
+
+        const auto local = boost::posix_time::ptime_from_tm(local_tm);
+        const auto utc   = boost::posix_time::ptime_from_tm(utc_tm);
+
+        const auto whole_seconds = local - utc;
+        const auto utc_seconds   = boost::posix_time::from_time_t(value);
+        const auto fraction      = instant - utc_seconds;
+
+        offset = whole_seconds;
+        return local + fraction;
+    }
+
+    static boost::posix_time::time_duration
+    offset_for(const fixed_timezone           &tz,
+               const boost::posix_time::ptime &instant)
+    {
+        if(is_local_timezone(tz))
+        {
+            boost::posix_time::time_duration offset;
+            (void) local_time_for_instant(instant, offset);
+            return offset;
+        }
+
+        return tz.offset;
+    }
+
+    static date_time
+    from_instant(const boost::posix_time::ptime         &instant,
+                 const boost::posix_time::time_duration &offset)
+    {
+        return date_time(instant + offset, offset, local_time_tag{});
+    }
+
+    boost::posix_time::ptime instant() const
+    {
+        require_valid();
+        return _tm - _offset;
+    }
+
+    void require_valid() const
+    {
+        if(is_null())
+            throw std::logic_error("invalid/null date_time");
+    }
+
+    static std::optional<date_time> parse_impl(std::string_view str,
+                                               std::string_view fmt)
+    {
+        std::tm            tm{};
+        std::istringstream ss{std::string(str)};
+        ss >> std::get_time(&tm, std::string(fmt).c_str());
+
+        if(ss.fail())
+            return std::nullopt;
+
+        ss >> std::ws;
+        if(!ss.eof())
+            return std::nullopt;
+
+        try
+        {
+            return date_time(boost::posix_time::ptime_from_tm(tm));
+        }
+        catch(...)
+        {
+            return std::nullopt;
+        }
+    }
+
+    static std::size_t format_to_impl(const date_time &dt,
+                                      char            *buffer,
+                                      std::size_t      size,
+                                      std::string_view fmt)
+    {
+        if(buffer == nullptr || size == 0 || dt.is_null())
+            return 0;
+
+        std::tm     tm = boost::posix_time::to_tm(dt._tm);
+        std::string f(fmt);
+        return std::strftime(buffer, size, f.c_str(), &tm);
+    }
 
   public:
-    date_time()
-        : _tm{NullTime} {};
-    date_time(const date_time &dt)
-        : _tm{dt._tm} {};
-    explicit date_time(const std::tm &tm, int64_t ms = 0)
+    date_time() noexcept = default;
+
+    date_time(const date_time &)                = default;
+    date_time(date_time &&) noexcept            = default;
+    date_time &operator=(const date_time &)     = default;
+    date_time &operator=(date_time &&) noexcept = default;
+    ~date_time()                                = default;
+
+    explicit date_time(const std::tm &tm, std::int64_t ms = 0)
         : _tm{boost::posix_time::ptime_from_tm(tm)
-              + boost::posix_time::time_duration(0, 0, 0, int64_t(ms) * 1000)} {
-        };
-    explicit date_time(const std::time_t time, int64_t ms = 0)
-        : _tm{boost::posix_time::from_time_t(time)
-              + boost::posix_time::time_duration(0, 0, 0, int64_t(ms) * 1000)} {
-        };
+              + boost::posix_time::milliseconds(ms)}
+    {
+    }
+
+    explicit date_time(std::time_t value, std::int64_t ms = 0)
+        : _tm{boost::posix_time::from_time_t(value)
+              + boost::posix_time::milliseconds(ms)}
+    {
+    }
+
     date_time(unsigned short year,
-              unsigned short month,
-              unsigned short day,
-              long           hour    = 0,
-              long           minute  = 0,
-              long           seconds = 0,
-              long           ms      = 0)
+              unsigned short month_value,
+              unsigned short day_value,
+              long           hour_value   = 0,
+              long           minute_value = 0,
+              long           second_value = 0,
+              long           ms           = 0)
         : _tm{boost::posix_time::ptime(
-              boost::gregorian::date(year, month, day),
-              boost::posix_time::time_duration(
-                  hour, minute, seconds, int64_t(ms) * 1000))} {};
-    explicit date_time(const boost::posix_time::ptime &tm)
-        : _tm{tm} {};
+              boost::gregorian::date(year, month_value, day_value),
+              boost::posix_time::time_duration(hour_value,
+                                               minute_value,
+                                               second_value,
+                                               static_cast<long>(ms) * 1000L))}
+    {
+    }
+
+    explicit date_time(const boost::gregorian::date           &dt,
+                       const boost::posix_time::time_duration &time_of_day)
+        : _tm{boost::posix_time::ptime(dt, time_of_day)}
+    {
+    }
+
     explicit date_time(const boost::gregorian::date &dt,
-                       long                          hour    = 0,
-                       long                          minute  = 0,
-                       long                          seconds = 0,
-                       long                          ms      = 0)
+                       long                          hour_value   = 0,
+                       long                          minute_value = 0,
+                       long                          second_value = 0,
+                       long                          ms           = 0)
         : _tm{boost::posix_time::ptime(
               dt,
-              boost::posix_time::time_duration(
-                  hour, minute, seconds, int64_t(ms) * 1000))} {};
+              boost::posix_time::time_duration(hour_value,
+                                               minute_value,
+                                               second_value,
+                                               static_cast<long>(ms) * 1000L))}
+    {
+    }
+
+    /*
+     * ptime is interpreted as a UTC/absolute instant.
+     */
+    explicit date_time(const boost::posix_time::ptime &tm)
+        : _tm{tm}
+    {
+    }
+
+    /*
+     * ptime is interpreted as an absolute instant and converted to the
+     * requested fixed timezone representation.
+     */
+    explicit date_time(const boost::posix_time::ptime         &tm,
+                       const boost::posix_time::time_duration &offset)
+        : _tm{tm + offset}
+        , _offset{offset}
+    {
+    }
+
     explicit date_time(const std::chrono::system_clock::time_point &tp)
-        : date_time(std::chrono::system_clock::to_time_t(tp)) {};
+        : date_time(std::chrono::system_clock::to_time_t(tp))
+    {
+    }
+
+    explicit date_time(const std::chrono::system_clock::time_point &tp,
+                       const boost::posix_time::time_duration      &offset)
+        : date_time(std::chrono::system_clock::to_time_t(tp), 0)
+    {
+        _tm += offset;
+        _offset = offset;
+    }
 
     explicit date_time(const std::string &str,
-                       const std::string &fmt = TIME_FMT)
+                       const std::string &fmt = time_fmt)
     {
-        std::tm            tm = {};
-        std::istringstream ss(str);
-        ss >> std::get_time(&tm, fmt.c_str());
-        if(!ss.fail())
-            _tm = boost::posix_time::ptime_from_tm(tm);
-    };
+        auto parsed = parse_impl(str, fmt);
+        if(parsed)
+            *this = *parsed;
+    }
 
 #if !defined(_WIN32)
     explicit date_time(const timeval &tv)
         : _tm{boost::posix_time::from_time_t(tv.tv_sec)
-              + boost::posix_time::time_duration(0, 0, 0, tv.tv_usec * 1000)} {
-        };
+              + boost::posix_time::microseconds(tv.tv_usec)}
+    {
+    }
+
     date_time(const char *str, const char *fmt)
     {
-        std::tm tm;
-        strptime(str, fmt, &tm);
-        _tm = boost::posix_time::ptime_from_tm(tm);
-    };
+        std::tm tm{};
+        if(str == nullptr || fmt == nullptr
+           || strptime(str, fmt, &tm) == nullptr)
+            return;
+
+        try
+        {
+            _tm = boost::posix_time::ptime_from_tm(tm);
+        }
+        catch(...)
+        {
+            _tm = NullTime;
+        }
+    }
 #endif
-
-    ~date_time() {};
-
-  public:
-    date_time &operator=(const date_time &dt)
-    {
-        if(this == &dt)
-            return *this;
-
-        _tm = dt._tm;
-        return *this;
-    }
-
-    inline bool operator==(const date_time &other) const noexcept
-    {
-        return _tm == other._tm;
-    }
-
-    inline bool operator!=(const date_time &other) const noexcept
-    {
-        return _tm != other._tm;
-    }
-
-    inline bool operator<(const date_time &other) const noexcept
-    {
-        return _tm < other._tm;
-    }
-
-    inline bool operator<=(const date_time &other) const noexcept
-    {
-        return _tm <= other._tm;
-    }
-
-    inline bool operator>(const date_time &other) const noexcept
-    {
-        return _tm > other._tm;
-    }
-
-    inline bool operator>=(const date_time &other) const noexcept
-    {
-        return _tm >= other._tm;
-    }
 
     static const date_time &epoch_time()
     {
-        static hj::date_time epoch{
+        static const date_time epoch{
             boost::posix_time::ptime(boost::gregorian::date(1970, 1, 1))};
         return epoch;
     }
 
-    static hj::date_time::is_working_day_fn &get_working_day_func()
+    static date_time now(const fixed_timezone &tz = timezone::UTC)
     {
-        static hj::date_time::is_working_day_fn inst =
-            [](const hj::date_time &dt) -> bool {
-            auto day =
-                static_cast<weekday>(int64_t(dt._tm.date().day_of_week()));
-            return day != weekday::saturday && day != weekday::sunday;
-        };
+        const auto utc = boost::posix_time::microsec_clock::universal_time();
 
-        return inst;
-    }
-
-    static date_time now(const timezone_info &tz = timezone::LOCAL)
-    {
-        if(tz.name == timezone::UTC.name)
+        if(is_local_timezone(tz))
         {
-            return date_time(
-                boost::posix_time::microsec_clock::universal_time());
-        } else if(tz.name == timezone::LOCAL.name)
-        {
-            return date_time(boost::posix_time::microsec_clock::local_time());
-        } else
-        {
-            auto utc_time = boost::posix_time::microsec_clock::universal_time();
-            auto offset   = boost::posix_time::time_duration(tz.hours_offset,
-                                                             tz.minutes_offset,
-                                                             0);
-            return date_time(utc_time + offset);
+            boost::posix_time::time_duration offset;
+            const auto local = local_time_for_instant(utc, offset);
+            return date_time(local, offset, local_time_tag{});
         }
+
+        return from_instant(utc, offset_for(tz, utc));
     }
 
-    static date_time today(const timezone_info &tz = timezone::LOCAL)
+    static date_time today(const fixed_timezone &tz = timezone::UTC)
     {
-        if(tz.name == timezone::UTC.name)
-        {
-            return date_time(boost::gregorian::day_clock::universal_day());
-        } else if(tz.name == timezone::LOCAL.name)
-        {
-            return date_time(boost::gregorian::day_clock::local_day());
-        } else
-        {
-            auto utc_day = boost::gregorian::day_clock::universal_day();
-            auto offset  = boost::posix_time::time_duration(tz.hours_offset,
-                                                            tz.minutes_offset,
-                                                            0);
-            return date_time(utc_day, offset.hours(), offset.minutes(), 0, 0);
-        }
+        const auto current = now(tz);
+        current.require_valid();
+
+        return date_time(boost::posix_time::ptime(current._tm.date()),
+                         current._offset,
+                         local_time_tag{});
     }
 
-    static void format(const date_time  &dt,
-                       char             *str,
-                       const std::size_t sz,
-                       const char       *fmt = TIME_FMT)
+    /*
+     * Convert this instant to another fixed timezone representation.
+     * The instant is preserved; only the local calendar representation
+     * changes.
+     */
+    date_time to_timezone(const fixed_timezone &tz) const
     {
-        std::tm tm = boost::posix_time::to_tm(dt._tm);
-        strftime(str, sz, fmt, &tm);
+        const auto current = instant();
+        const auto offset  = offset_for(tz, current);
+        return from_instant(current, offset);
     }
 
-    static std::string format(const date_time   &dt,
-                              const std::string &fmt = TIME_FMT)
+    boost::posix_time::time_duration timezone_offset() const noexcept
     {
-        std::tm tm = boost::posix_time::to_tm(dt._tm);
-        char    buf[256];
-        strftime(buf, sizeof(buf), fmt.c_str(), &tm);
-        return std::string(buf);
+        return _offset;
     }
 
-    static date_time parse(const std::string &str,
-                           const std::string &fmt = TIME_FMT)
+    const boost::posix_time::ptime &local_ptime() const noexcept { return _tm; }
+
+    static std::size_t format(const date_time &dt,
+                              char            *buffer,
+                              std::size_t      size,
+                              std::string_view fmt = time_fmt)
     {
-        std::tm            tm;
-        std::istringstream ss(str);
-        ss >> std::get_time(&tm, fmt.c_str());
-        if(ss.fail())
-            return date_time(NullTime);
-
-        return date_time(tm);
+        return format_to_impl(dt, buffer, size, fmt);
     }
 
-    static void parse(date_time &dt, const char *str, const char *fmt)
+    static std::string format(const date_time &dt,
+                              std::string_view fmt = time_fmt)
     {
-        std::tm            tm;
-        std::istringstream ss(str);
-        ss >> std::get_time(&tm, fmt);
-        if(ss.fail())
-            return;
+        if(dt.is_null())
+            return {};
 
-        dt._tm = boost::posix_time::ptime_from_tm(tm);
+        std::array<char, 128> buffer;
+        std::tm               tm = boost::posix_time::to_tm(dt._tm);
+        std::string           f(fmt);
+        size_t                written =
+            std::strftime(buffer.data(), buffer.size(), f.c_str(), &tm);
+        if(written == 0)
+            return {};
+
+        return std::string(buffer.data(), written);
     }
 
-    static void parse(date_time         &dt,
-                      const std::string &str,
-                      const std::string &fmt = TIME_FMT)
+    static std::optional<date_time> parse(std::string_view str,
+                                          std::string_view fmt = time_fmt)
     {
-        std::tm            tm;
-        std::istringstream ss(str);
-        ss >> std::get_time(&tm, fmt.c_str());
-        if(ss.fail())
-            return;
-
-        dt._tm = boost::posix_time::ptime_from_tm(tm);
+        return parse_impl(str, fmt);
     }
 
-    long long sec_since_epoch()
+    static bool
+    parse(date_time &dt, std::string_view str, std::string_view fmt = time_fmt)
     {
-        return (this->_tm - epoch_time()._tm).total_seconds();
+        auto parsed = parse_impl(str, fmt);
+        if(!parsed)
+            return false;
+
+        dt = *parsed;
+        return true;
     }
 
-    static date_time from_sec_since_epoch(long long sec)
+    static bool parse(date_time &dt, const char *str, const char *fmt)
     {
-        return date_time(epoch_time()._tm + boost::posix_time::seconds(sec));
+        if(str == nullptr || fmt == nullptr)
+            return false;
+
+        return parse(dt, std::string_view(str), std::string_view(fmt));
     }
 
-    static long long current_sec_since_epoch()
+    std::int64_t sec_since_epoch() const
+    {
+        return (instant() - epoch_time()._tm).total_seconds();
+    }
+
+    static date_time from_sec_since_epoch(std::int64_t value)
+    {
+        return date_time(epoch_time()._tm + boost::posix_time::seconds(value));
+    }
+
+    static std::int64_t current_sec_since_epoch()
     {
         return now().sec_since_epoch();
     }
 
-    long long ms_since_epoch()
+    std::int64_t ms_since_epoch() const
     {
-        return (_tm - epoch_time()._tm).total_milliseconds();
+        return (instant() - epoch_time()._tm).total_milliseconds();
     }
 
-    static date_time from_ms_since_epoch(long long ms)
+    static date_time from_ms_since_epoch(std::int64_t value)
     {
         return date_time(epoch_time()._tm
-                         + boost::posix_time::milliseconds(ms));
+                         + boost::posix_time::milliseconds(value));
     }
 
-    static long long current_ms_since_epoch() { return now().ms_since_epoch(); }
-
-  public:
-    inline bool is_null() const noexcept { return NullTime == _tm; }
-
-    inline bool is_bigger(const date_time &dt) const noexcept
+    static std::int64_t current_ms_since_epoch()
     {
-        return _tm > dt._tm;
+        return now().ms_since_epoch();
     }
 
-    inline bool is_smaller(const date_time &dt) const noexcept
+    bool is_null() const noexcept { return _tm.is_pos_infinity(); }
+
+    bool is_bigger(const date_time &dt) const noexcept { return *this > dt; }
+
+    bool is_smaller(const date_time &dt) const noexcept { return *this < dt; }
+
+    bool is_equal(const date_time &dt) const noexcept { return *this == dt; }
+
+    bool is_working_day() const
     {
-        return _tm < dt._tm;
+        require_valid();
+        return !is_weekend();
     }
 
-    inline bool is_equal(const date_time &dt) const noexcept
+    bool is_working_day(const is_working_day_fn &predicate) const
     {
-        return _tm == dt._tm;
+        require_valid();
+        if(!predicate)
+            throw std::invalid_argument("working-day predicate is empty");
+        return predicate(*this);
     }
 
-    virtual inline bool is_working_day()
+    bool is_weekend() const
     {
-        return get_working_day_func()(*this);
+        const auto value = day_of_week();
+        return value == weekday::saturday || value == weekday::sunday;
     }
 
-    inline bool is_weekend()
+    std::string string(std::string_view fmt = time_fmt) const
     {
-        auto day = static_cast<weekday>(int64_t(_tm.date().day_of_week()));
-        return day == weekday::saturday || day == weekday::sunday;
+        return format(*this, fmt);
     }
 
-    inline std::string string(const std::string &fmt = TIME_FMT)
+    std::tm date() const
     {
-        std::tm tm = boost::posix_time::to_tm(_tm);
-        char    buf[256];
-        strftime(buf, sizeof(buf), fmt.c_str(), &tm);
-        return std::string(buf);
+        require_valid();
+        return boost::posix_time::to_tm(_tm);
     }
 
-    inline std::tm date() { return boost::posix_time::to_tm(_tm); }
+    std::time_t time() const { return boost::posix_time::to_time_t(instant()); }
 
-    inline std::time_t time() { return boost::posix_time::to_time_t(_tm); }
-
-    inline int64_t seconds() { return _tm.time_of_day().seconds(); }
-
-    inline int64_t seconds_to(const date_time &dt)
+    std::int64_t seconds() const
     {
-        return (dt._tm - _tm).total_seconds();
+        require_valid();
+        return _tm.time_of_day().seconds();
     }
 
-    inline int64_t minute() { return _tm.time_of_day().minutes(); }
-
-    inline int64_t minutes_to(const date_time &dt)
+    std::int64_t milliseconds() const
     {
-        return (dt._tm - _tm).total_seconds() / 60;
+        require_valid();
+        return _tm.time_of_day().fractional_seconds() / 1000;
     }
 
-    inline int64_t hour() { return _tm.time_of_day().hours(); }
-
-    inline int64_t hours_to(const date_time &dt)
+    std::int64_t seconds_to(const date_time &dt) const
     {
-        return (dt._tm - _tm).total_seconds() / 3600;
+        return (dt.instant() - instant()).total_seconds();
     }
 
-    inline int64_t day() { return _tm.date().day(); }
-
-    inline int64_t days_to(const date_time &dt)
+    std::int64_t minute() const
     {
-        return (dt._tm - _tm).total_seconds() / 86400;
+        require_valid();
+        return _tm.time_of_day().minutes();
     }
 
-    inline weekday day_of_week()
+    std::int64_t minutes_to(const date_time &dt) const
     {
-        if(is_null())
-            return weekday::sunday; // Default to Sunday if null
-
-        return static_cast<weekday>(int64_t(_tm.date().day_of_week()));
+        return seconds_to(dt) / 60;
     }
 
-    inline std::string day_of_week_str()
+    std::int64_t hour() const
     {
-        if(is_null())
-            return "???"; // Default to "???" if null
+        require_valid();
+        return _tm.time_of_day().hours();
+    }
 
+    std::int64_t hours_to(const date_time &dt) const
+    {
+        return seconds_to(dt) / 3600;
+    }
+
+    std::int64_t day() const
+    {
+        require_valid();
+        return _tm.date().day();
+    }
+
+    std::int64_t days_to(const date_time &dt) const
+    {
+        return seconds_to(dt) / 86400;
+    }
+
+    weekday day_of_week() const
+    {
+        require_valid();
+        return static_cast<weekday>(static_cast<int>(_tm.date().day_of_week()));
+    }
+
+    std::string day_of_week_str() const
+    {
         switch(day_of_week())
         {
+            case weekday::sunday:
+                return "Sun";
             case weekday::monday:
                 return "Mon";
             case weekday::tuesday:
@@ -497,344 +694,507 @@ class date_time
                 return "Fri";
             case weekday::saturday:
                 return "Sat";
-            case weekday::sunday:
-                return "Sun";
-            default:
-                return "???";
         }
+
+        return {};
     }
 
-    inline int64_t day_of_month() { return _tm.date().day(); }
+    std::int64_t day_of_month() const { return day(); }
 
-    inline int64_t day_of_year() { return _tm.date().day_of_year(); }
-
-    inline moon month()
+    std::int64_t day_of_year() const
     {
-        if(is_null())
-            return moon::january; // Default to January if null
-
-        return static_cast<moon>(int64_t(_tm.date().month()));
+        require_valid();
+        return _tm.date().day_of_year();
     }
 
-    inline std::string month_str()
+    hj::month month() const
     {
-        if(is_null())
-            return "???"; // Default to "???" if null
+        require_valid();
+        return static_cast<hj::month>(static_cast<int>(_tm.date().month()));
+    }
 
+    std::string month_str() const
+    {
         switch(month())
         {
-            case moon::january:
+            case hj::month::january:
                 return "January";
-            case moon::february:
+            case hj::month::february:
                 return "February";
-            case moon::march:
+            case hj::month::march:
                 return "March";
-            case moon::april:
+            case hj::month::april:
                 return "April";
-            case moon::may:
+            case hj::month::may:
                 return "May";
-            case moon::june:
+            case hj::month::june:
                 return "June";
-            case moon::july:
+            case hj::month::july:
                 return "July";
-            case moon::august:
+            case hj::month::august:
                 return "August";
-            case moon::september:
+            case hj::month::september:
                 return "September";
-            case moon::october:
+            case hj::month::october:
                 return "October";
-            case moon::november:
+            case hj::month::november:
                 return "November";
-            case moon::december:
+            case hj::month::december:
                 return "December";
-            default:
-                return "???";
         }
+
+        return {};
     }
 
-    inline int64_t year() { return _tm.date().year(); }
-
-    inline date_time start_of_day() { return date_time(_tm.date()); }
-
-    inline date_time end_of_day()
+    std::int64_t year() const
     {
-        return date_time(_tm.date().year(),
-                         _tm.date().month(),
-                         _tm.date().day(),
-                         23,
-                         59,
-                         59);
+        require_valid();
+        return _tm.date().year();
     }
 
-    inline date_time start_of_week()
+    date_time start_of_day() const
     {
-        return day_of_week() == weekday::sunday
-                   ? date_time(_tm.date() + boost::gregorian::date_duration(-6))
-                         .start_of_day()
-                   : date_time(_tm.date()
-                               + boost::gregorian::date_duration(
-                                   1 - static_cast<int64_t>(day_of_week())))
-                         .start_of_day();
+        require_valid();
+        return date_time(boost::posix_time::ptime(_tm.date()),
+                         _offset,
+                         local_time_tag{});
     }
 
-    inline date_time end_of_week()
+    date_time end_of_day() const
     {
-        return day_of_week() == weekday::sunday
-                   ? date_time(_tm.date(), 23, 59, 59)
-                   : date_time(_tm.date()
-                                   + boost::gregorian::date_duration(
-                                       7 - static_cast<int64_t>(day_of_week())),
-                               23,
-                               59,
-                               59);
+        require_valid();
+        return date_time(boost::posix_time::ptime(
+                             _tm.date(),
+                             boost::posix_time::time_duration(23, 59, 59)),
+                         _offset,
+                         local_time_tag{});
     }
 
-    inline date_time start_of_month()
+    date_time start_of_week() const
     {
-        return date_time(_tm.date().year(),
-                         static_cast<unsigned short>(month()),
-                         1);
-    }
+        require_valid();
 
-    inline date_time end_of_month()
-    {
-        return date_time(_tm.date().end_of_month(), 23, 59, 59);
-    }
+        const int current = static_cast<int>(_tm.date().day_of_week());
 
-    inline date_time start_of_quarter()
-    {
-        int64_t m = static_cast<int64_t>(month());
-        if(m <= 3)
-            return date_time(_tm.date().year(), 1, 1);
-        else if(m <= 6)
-            return date_time(_tm.date().year(), 4, 1);
-        else if(m <= 9)
-            return date_time(_tm.date().year(), 7, 1);
-        else
-            return date_time(_tm.date().year(), 10, 1);
-    }
-
-    inline date_time end_of_quarter()
-    {
-        int64_t m = static_cast<int64_t>(month());
-        if(m <= 3)
-            return date_time(_tm.date().year(), 3, 31, 23, 59, 59);
-        else if(m <= 6)
-            return date_time(_tm.date().year(), 6, 30, 23, 59, 59);
-        else if(m <= 9)
-            return date_time(_tm.date().year(), 9, 30, 23, 59, 59);
-        else
-            return date_time(_tm.date().year(), 12, 31, 23, 59, 59);
-    }
-
-    inline date_time start_of_half_year()
-    {
-        return static_cast<int64_t>(month()) <= static_cast<int64_t>(moon::june)
-                   ? date_time(_tm.date().year(), 1, 1)
-                   : date_time(_tm.date().year(), 7, 1);
-    }
-
-    inline date_time end_of_half_year()
-    {
-        return static_cast<int64_t>(month()) <= static_cast<int64_t>(moon::june)
-                   ? date_time(_tm.date().year(), 6, 30, 23, 59, 59)
-                   : date_time(_tm.date().year(), 12, 31, 23, 59, 59);
-    }
-
-    inline date_time start_of_year()
-    {
-        return date_time(_tm.date().year(), 1, 1);
-    }
-
-    inline date_time end_of_year()
-    {
-        return date_time(_tm.date().year(), 12, 31, 23, 59, 59);
-    }
-
-    inline date_time next_day(const unsigned long n = 1)
-    {
-        return date_time(_tm.date() + boost::gregorian::date_duration(n));
-    }
-
-    inline date_time pre_day(const unsigned long n = 1)
-    {
-        return date_time(_tm.date() - boost::gregorian::date_duration(n));
-    }
-
-    inline date_time next_weekday(const weekday       target_day,
-                                  const unsigned long n_week = 0)
-    {
-        unsigned long current_day = static_cast<unsigned long>(day_of_week());
-        unsigned long target      = static_cast<unsigned long>(target_day);
-        if(target > current_day)
-            return next_day(target - current_day + n_week * 7);
-        else
-            return next_day(7 - (current_day - target) + n_week * 7);
-    }
-
-    inline date_time pre_weekday(const weekday       target_day,
-                                 const unsigned long n_week = 0)
-    {
-        unsigned long current_day = static_cast<unsigned long>(day_of_week());
-        unsigned long target      = static_cast<unsigned long>(target_day);
-        if(target < current_day)
-            return pre_day(current_day - target + n_week * 7);
-        else
-            return pre_day(7 - (target - current_day) + n_week * 7);
-    }
-
-    inline date_time next_working_day(const unsigned long n_day = 1)
-    {
-        date_time current = next_day(1);
-
-        if(n_day == 0)
-        {
-            while(!current.is_working_day())
-                current = current.next_day(1);
-
-            return current;
-        } else
-        {
-            unsigned long count = 0;
-            while(true)
-            {
-                if(current.is_working_day())
-                {
-                    count++;
-                    if(count == n_day)
-                        return current;
-                }
-                current = current.next_day(1);
-            }
-        }
-    }
-
-    inline date_time pre_working_day(const unsigned long n_day = 1)
-    {
-        date_time current = pre_day(1);
-        if(n_day == 0)
-        {
-            while(!current.is_working_day())
-                current = current.pre_day(1);
-
-            return current;
-        } else
-        {
-            unsigned long count = 0;
-            while(true)
-            {
-                if(current.is_working_day())
-                {
-                    count++;
-                    if(count == n_day)
-                        return current;
-                }
-
-                current = current.pre_day(1);
-            }
-        }
-    }
-
-    inline date_time next_month(const unsigned long n = 1)
-    {
-        auto current_date = _tm.date();
-        auto target_date  = current_date + boost::gregorian::months(n);
+        const int delta =
+            current == static_cast<int>(weekday::sunday) ? -6 : 1 - current;
 
         return date_time(
-            boost::gregorian::date(target_date.year(), target_date.month(), 1));
+            boost::posix_time::ptime(_tm.date()
+                                     + boost::gregorian::date_duration(delta)),
+            _offset,
+            local_time_tag{});
     }
 
-    inline date_time pre_month(const unsigned long n = 1)
+    date_time end_of_week() const
     {
-        auto current_date = _tm.date();
-        auto target_date  = current_date - boost::gregorian::months(n);
+        require_valid();
+
+        const int current = static_cast<int>(_tm.date().day_of_week());
+
+        const int delta =
+            current == static_cast<int>(weekday::sunday) ? 0 : 7 - current;
 
         return date_time(
-            boost::gregorian::date(target_date.year(), target_date.month(), 1));
+            boost::posix_time::ptime(
+                _tm.date() + boost::gregorian::date_duration(delta),
+                boost::posix_time::time_duration(23, 59, 59)),
+            _offset,
+            local_time_tag{});
     }
 
-    inline date_time next_quarter(const uint64_t n = 1)
+    date_time start_of_month() const
     {
-        int current_month   = static_cast<int>(_tm.date().month());
-        int current_quarter = (current_month - 1) / 3; // 0, 1, 2, 3
-        int current_quarter_start_month =
-            current_quarter * 3 + 1; // 1, 4, 7, 10
-
-        int target_quarter = current_quarter + n;
-        int target_year    = _tm.date().year() + (target_quarter / 4);
-        target_quarter     = target_quarter % 4;
-        int target_month   = target_quarter * 3 + 1;
-
-        return date_time(boost::gregorian::date(target_year, target_month, 1));
+        require_valid();
+        return date_time(
+            boost::posix_time::ptime(boost::gregorian::date(_tm.date().year(),
+                                                            _tm.date().month(),
+                                                            1)),
+            _offset,
+            local_time_tag{});
     }
 
-    inline date_time pre_quarter(const uint64_t n = 1)
+    date_time end_of_month() const
     {
-        int current_month   = static_cast<int>(_tm.date().month());
-        int current_quarter = (current_month - 1) / 3; // 0, 1, 2, 3
-        int target_quarter  = current_quarter - n;
-        int target_year     = _tm.date().year();
+        require_valid();
+        return date_time(boost::posix_time::ptime(
+                             _tm.date().end_of_month(),
+                             boost::posix_time::time_duration(23, 59, 59)),
+                         _offset,
+                         local_time_tag{});
+    }
 
-        while(target_quarter < 0)
+    date_time start_of_quarter() const
+    {
+        require_valid();
+
+        const int m           = static_cast<int>(_tm.date().month());
+        const int start_month = ((m - 1) / 3) * 3 + 1;
+
+        return date_time(
+            boost::posix_time::ptime(
+                boost::gregorian::date(_tm.date().year(), start_month, 1)),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time end_of_quarter() const
+    {
+        require_valid();
+
+        const int  m           = static_cast<int>(_tm.date().month());
+        const int  start_month = ((m - 1) / 3) * 3 + 1;
+        const auto end_month_date =
+            boost::gregorian::date(_tm.date().year(), start_month, 1)
+            + boost::gregorian::months(2);
+
+        return date_time(boost::posix_time::ptime(
+                             end_month_date.end_of_month(),
+                             boost::posix_time::time_duration(23, 59, 59)),
+                         _offset,
+                         local_time_tag{});
+    }
+
+    date_time start_of_half_year() const
+    {
+        require_valid();
+
+        const int m           = static_cast<int>(_tm.date().month());
+        const int start_month = m <= 6 ? 1 : 7;
+
+        return date_time(
+            boost::posix_time::ptime(
+                boost::gregorian::date(_tm.date().year(), start_month, 1)),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time end_of_half_year() const
+    {
+        require_valid();
+
+        const int m         = static_cast<int>(_tm.date().month());
+        const int end_month = m <= 6 ? 6 : 12;
+
+        const auto end_date =
+            boost::gregorian::date(_tm.date().year(), end_month, 1)
+                .end_of_month();
+
+        return date_time(boost::posix_time::ptime(
+                             end_date,
+                             boost::posix_time::time_duration(23, 59, 59)),
+                         _offset,
+                         local_time_tag{});
+    }
+
+    date_time start_of_year() const
+    {
+        require_valid();
+        return date_time(boost::posix_time::ptime(
+                             boost::gregorian::date(_tm.date().year(), 1, 1)),
+                         _offset,
+                         local_time_tag{});
+    }
+
+    date_time end_of_year() const
+    {
+        require_valid();
+        return date_time(boost::posix_time::ptime(
+                             boost::gregorian::date(_tm.date().year(), 12, 31),
+                             boost::posix_time::time_duration(23, 59, 59)),
+                         _offset,
+                         local_time_tag{});
+    }
+
+    date_time next_day(std::uint64_t n = 1) const
+    {
+        require_valid();
+        return date_time(
+            boost::posix_time::ptime(
+                _tm.date()
+                + boost::gregorian::date_duration(static_cast<long>(n))),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time pre_day(std::uint64_t n = 1) const
+    {
+        require_valid();
+        return date_time(
+            boost::posix_time::ptime(
+                _tm.date()
+                - boost::gregorian::date_duration(static_cast<long>(n))),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time next_weekday(weekday target_day, std::uint64_t n_week = 0) const
+    {
+        require_valid();
+
+        const int current = static_cast<int>(day_of_week());
+        const int target  = static_cast<int>(target_day);
+
+        int delta = target - current;
+        if(delta <= 0)
+            delta += 7;
+
+        delta += static_cast<int>(n_week * 7);
+
+        return next_day(static_cast<std::uint64_t>(delta));
+    }
+
+    date_time pre_weekday(weekday target_day, std::uint64_t n_week = 0) const
+    {
+        require_valid();
+
+        const int current = static_cast<int>(day_of_week());
+        const int target  = static_cast<int>(target_day);
+
+        int delta = current - target;
+        if(delta <= 0)
+            delta += 7;
+
+        delta += static_cast<int>(n_week * 7);
+
+        return pre_day(static_cast<std::uint64_t>(delta));
+    }
+
+    date_time next_working_day(std::uint64_t n_day = 1) const
+    {
+        return next_working_day(n_day, [](const date_time &value) {
+            return value.is_working_day();
+        });
+    }
+
+    date_time next_working_day(std::uint64_t            n_day,
+                               const is_working_day_fn &predicate) const
+    {
+        require_valid();
+
+        if(!predicate)
+            throw std::invalid_argument("working-day predicate is empty");
+
+        date_time     current = next_day();
+        std::uint64_t count   = 0;
+
+        while(true)
         {
-            target_quarter += 4;
-            target_year--;
+            if(predicate(current))
+            {
+                ++count;
+                if(count == (n_day == 0 ? 1 : n_day))
+                    return current;
+            }
+            current = current.next_day();
         }
-
-        int target_month = target_quarter * 3 + 1;
-        return date_time(boost::gregorian::date(target_year, target_month, 1));
     }
 
-    inline date_time next_half_year(const uint64_t n = 1)
+    date_time pre_working_day(std::uint64_t n_day = 1) const
     {
-        int current_month = static_cast<int>(_tm.date().month());
-        int current_half  = (current_month - 1) / 6;
-
-        int target_half = current_half + n;
-        int target_year = _tm.date().year() + (target_half / 2);
-
-        target_half = target_half % 2;
-
-        int target_month = target_half * 6 + 1;
-
-        return date_time(boost::gregorian::date(target_year, target_month, 1));
+        return pre_working_day(n_day, [](const date_time &value) {
+            return value.is_working_day();
+        });
     }
 
-    inline date_time pre_half_year(const uint64_t n = 1)
+    date_time pre_working_day(std::uint64_t            n_day,
+                              const is_working_day_fn &predicate) const
     {
-        int current_month = static_cast<int>(_tm.date().month());
-        int current_half  = (current_month - 1) / 6;
+        require_valid();
 
-        int target_half = current_half - n;
-        int target_year = _tm.date().year();
+        if(!predicate)
+            throw std::invalid_argument("working-day predicate is empty");
 
-        while(target_half < 0)
+        date_time     current = pre_day();
+        std::uint64_t count   = 0;
+
+        while(true)
         {
-            target_half += 2;
-            target_year--;
+            if(predicate(current))
+            {
+                ++count;
+                if(count == (n_day == 0 ? 1 : n_day))
+                    return current;
+            }
+            current = current.pre_day();
         }
-
-        int target_month = target_half * 6 + 1;
-
-        return date_time(boost::gregorian::date(target_year, target_month, 1));
     }
 
-    inline date_time next_year(const uint64_t n = 1)
+    date_time next_month(std::uint64_t n = 1) const
     {
-        int target_year = _tm.date().year() + n;
-        return date_time(boost::gregorian::date(target_year, 1, 1));
+        require_valid();
+
+        const auto target =
+            _tm.date() + boost::gregorian::months(static_cast<long>(n));
+
+        return date_time(
+            boost::posix_time::ptime(
+                boost::gregorian::date(target.year(), target.month(), 1)),
+            _offset,
+            local_time_tag{});
     }
 
-    inline date_time pre_year(const uint64_t n = 1)
+    date_time pre_month(std::uint64_t n = 1) const
     {
-        int target_year = _tm.date().year() - n;
-        return date_time(boost::gregorian::date(target_year, 1, 1));
+        require_valid();
+
+        const auto target =
+            _tm.date() - boost::gregorian::months(static_cast<long>(n));
+
+        return date_time(
+            boost::posix_time::ptime(
+                boost::gregorian::date(target.year(), target.month(), 1)),
+            _offset,
+            local_time_tag{});
     }
 
-  private:
-    boost::posix_time::ptime _tm;
+    date_time next_quarter(std::uint64_t n = 1) const
+    {
+        require_valid();
+
+        const std::int64_t current_index =
+            static_cast<std::int64_t>(_tm.date().year()) * 4
+            + (static_cast<int>(_tm.date().month()) - 1) / 3;
+
+        const std::int64_t target_index =
+            current_index + static_cast<std::int64_t>(n);
+
+        const int target_year  = static_cast<int>(target_index / 4);
+        const int quarter      = static_cast<int>(target_index % 4);
+        const int target_month = quarter * 3 + 1;
+
+        return date_time(
+            boost::posix_time::ptime(
+                boost::gregorian::date(target_year, target_month, 1)),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time pre_quarter(std::uint64_t n = 1) const
+    {
+        require_valid();
+
+        const std::int64_t year = static_cast<std::int64_t>(_tm.date().year());
+        const int month_idx = static_cast<int>(_tm.date().month()) - 1; // 0-11
+        const std::int64_t current_index = year * 4 + (month_idx / 3);
+
+        const std::int64_t target_index =
+            current_index - static_cast<std::int64_t>(n);
+
+        std::int64_t target_year =
+            (target_index >= 0) ? (target_index / 4) : ((target_index - 3) / 4);
+        int quarter = (target_index >= 0) ? (target_index % 4)
+                                          : (3 + (target_index + 1) % 4);
+
+        const int target_month = quarter * 3 + 1;
+
+        return date_time(boost::posix_time::ptime(boost::gregorian::date(
+                             static_cast<int>(target_year),
+                             target_month,
+                             1)),
+                         _offset,
+                         local_time_tag{});
+    }
+
+    date_time next_half_year(std::uint64_t n = 1) const
+    {
+        require_valid();
+
+        const std::int64_t current_index =
+            static_cast<std::int64_t>(_tm.date().year()) * 2
+            + (static_cast<int>(_tm.date().month()) - 1) / 6;
+
+        const std::int64_t target_index =
+            current_index + static_cast<std::int64_t>(n);
+
+        const int target_year  = static_cast<int>(target_index / 2);
+        const int half         = static_cast<int>(target_index % 2);
+        const int target_month = half * 6 + 1;
+
+        return date_time(
+            boost::posix_time::ptime(
+                boost::gregorian::date(target_year, target_month, 1)),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time pre_half_year(std::uint64_t n = 1) const
+    {
+        require_valid();
+
+        const std::int64_t current_index =
+            static_cast<std::int64_t>(_tm.date().year()) * 2
+            + (static_cast<int>(_tm.date().month()) - 1) / 6;
+
+        const std::int64_t target_index =
+            current_index - static_cast<std::int64_t>(n);
+
+        const int target_year  = static_cast<int>(target_index / 2);
+        const int half         = static_cast<int>(target_index % 2);
+        const int target_month = half * 6 + 1;
+
+        return date_time(
+            boost::posix_time::ptime(
+                boost::gregorian::date(target_year, target_month, 1)),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time next_year(std::uint64_t n = 1) const
+    {
+        require_valid();
+
+        const auto target_year = static_cast<int>(_tm.date().year() + n);
+
+        return date_time(
+            boost::posix_time::ptime(boost::gregorian::date(target_year, 1, 1)),
+            _offset,
+            local_time_tag{});
+    }
+
+    date_time pre_year(std::uint64_t n = 1) const
+    {
+        require_valid();
+
+        const auto target_year = static_cast<int>(_tm.date().year() - n);
+
+        return date_time(
+            boost::posix_time::ptime(boost::gregorian::date(target_year, 1, 1)),
+            _offset,
+            local_time_tag{});
+    }
+
+    friend bool operator==(const date_time &lhs, const date_time &rhs) noexcept
+    {
+        return (lhs._tm - lhs._offset) == (rhs._tm - rhs._offset);
+    }
+
+    friend bool operator!=(const date_time &lhs, const date_time &rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bool operator<(const date_time &lhs, const date_time &rhs) noexcept
+    {
+        return lhs._tm - lhs._offset < rhs._tm - rhs._offset;
+    }
+
+    friend bool operator<=(const date_time &lhs, const date_time &rhs) noexcept
+    {
+        return !(rhs < lhs);
+    }
+
+    friend bool operator>(const date_time &lhs, const date_time &rhs) noexcept
+    {
+        return rhs < lhs;
+    }
+
+    friend bool operator>=(const date_time &lhs, const date_time &rhs) noexcept
+    {
+        return !(lhs < rhs);
+    }
 };
 
-}
+} // namespace hj
 
-#endif
+#endif // DATE_TIME_HPP

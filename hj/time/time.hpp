@@ -3,6 +3,6 @@
 
 #include <hj/time/date_time.hpp>
 
-#include <hj/time/duration.hpp>
+#include <hj/time/stopwatch.hpp>
 
 #endif

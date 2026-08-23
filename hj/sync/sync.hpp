@@ -7,6 +7,8 @@
 
 #include <hj/sync/counter.hpp>
 
+#include <hj/sync/dbuffer.hpp>
+
 #include <hj/sync/object_pool.hpp>
 
 #ifdef HJ_ENABLE_SYNC

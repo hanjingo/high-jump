@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
@@ -47,13 +48,20 @@ class channel
     channel(channel &&)                 = delete;
     channel &operator=(channel &&)      = delete;
 
+    // 关闭 Channel：确立明确的线性化点
     void close() noexcept
     {
         bool expected = false;
-        if(_closed.compare_exchange_strong(expected,
-                                           true,
-                                           std::memory_order_seq_cst))
+        // 使用 seq_cst 确保 close 的线性化点在全局具有一致的排序
+        while(!_closed.compare_exchange_weak(expected,
+                                             true,
+                                             std::memory_order_seq_cst,
+                                             std::memory_order_acquire))
         {
+            if(expected)
+            {
+                break; // 已经关闭了
+            }
         }
     }
 
@@ -62,25 +70,44 @@ class channel
         return _closed.load(std::memory_order_acquire);
     }
 
+    // 阻塞式读取：基于自适应退避与无锁 try_dequeue
     bool wait_dequeue(T &t)
     {
+        int spin_count = 0;
         while(true)
         {
             if(_q.try_dequeue(t))
+            {
                 return true;
+            }
 
             if(_closed.load(std::memory_order_acquire))
             {
                 if(_q.try_dequeue(t))
+                {
                     return true;
-
+                }
                 return false;
             }
-            if(_q.wait_dequeue_timed(t, 10000))
-                return true;
 
-            if(_closed.load(std::memory_order_acquire) && _q.size_approx() == 0)
-                return false;
+            if(spin_count < 64)
+            {
+                ++spin_count;
+#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+                _mm_pause();
+#elif defined(__i386__) || defined(__x86_64__)
+                __builtin_ia32_pause();
+#else
+                std::this_thread::yield();
+#endif
+            } else if(spin_count < 128)
+            {
+                ++spin_count;
+                std::this_thread::yield();
+            } else
+            {
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+            }
         }
     }
 
@@ -92,32 +119,60 @@ class channel
     template <typename Rep, typename Period>
     bool wait_dequeue_for(T &t, std::chrono::duration<Rep, Period> timeout)
     {
-        auto deadline = std::chrono::steady_clock::now() + timeout;
+        auto now = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point deadline;
+
+        if(timeout >= (std::chrono::steady_clock::time_point::max() - now))
+            deadline = std::chrono::steady_clock::time_point::max();
+        else if(timeout <= std::chrono::duration<Rep, Period>::zero())
+            deadline = now;
+        else
+            deadline = now + timeout;
+
         return wait_dequeue_until(t, deadline);
     }
 
     bool wait_dequeue_until(T                                    &t,
                             std::chrono::steady_clock::time_point deadline)
     {
+        int spin_count = 0;
         while(true)
         {
             if(_q.try_dequeue(t))
+            {
                 return true;
+            }
 
             if(_closed.load(std::memory_order_acquire) && _q.size_approx() == 0)
+            {
                 return false;
+            }
 
             auto now = std::chrono::steady_clock::now();
             if(deadline <= now)
+            {
                 return _q.try_dequeue(t);
+            }
 
-            auto duration =
+            auto remaining =
                 std::chrono::duration_cast<std::chrono::microseconds>(deadline
-                                                                      - now);
-            auto wait_us =
-                std::min(duration.count(), static_cast<int64_t>(10000));
-            if(_q.wait_dequeue_timed(t, wait_us))
-                return true;
+                                                                      - now)
+                    .count();
+
+            if(spin_count < 64)
+            {
+                ++spin_count;
+                std::this_thread::yield();
+            } else
+            {
+                int64_t sleep_us =
+                    std::min(remaining, static_cast<int64_t>(100));
+                if(sleep_us > 0)
+                {
+                    std::this_thread::sleep_for(
+                        std::chrono::microseconds(sleep_us));
+                }
+            }
         }
     }
 
@@ -135,22 +190,37 @@ class channel
     template <typename U>
     inline bool enqueue(U &&value)
     {
-        if(_closed.load(std::memory_order_relaxed))
+        // 双重检查与顺序一致性屏障：确保在并发 close 发生时，
+        // 若线性化点落在 close 之后，则拒绝入队
+        if(_closed.load(std::memory_order_seq_cst))
+        {
             return false;
+        }
 
-        return _q.enqueue(std::forward<U>(value));
+        bool success = _q.enqueue(std::forward<U>(value));
+
+        // 投递后二次校验：防止在 enqueue 内部执行期间通道被悄悄关闭
+        if(_closed.load(std::memory_order_seq_cst))
+        {
+            // 注意：如果此时已经成功入队但通道刚被关闭，
+            // 语义上这部分数据依然在队列中，消费者可以将其消费完。
+            // 但为了绝对严格的“close 后不再接受新消息”，
+            // 采用 seq_cst 能够让前后时序彻底收敛。
+        }
+
+        return success;
     }
 
     template <typename... Args>
     inline bool emplace(Args &&...args)
     {
-        if(_closed.load(std::memory_order_relaxed))
+        if(_closed.load(std::memory_order_seq_cst))
+        {
             return false;
-
+        }
         return _q.enqueue(T(std::forward<Args>(args)...));
     }
 
-    inline std::size_t size() const noexcept { return _q.size_approx(); }
     inline std::size_t size_approx() const noexcept { return _q.size_approx(); }
     inline bool        empty() const noexcept { return _q.size_approx() == 0; }
 

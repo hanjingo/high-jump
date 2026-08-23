@@ -246,7 +246,7 @@ TEST(channel, capacity_semantics_as_initial_allocation)
         ch << i;
     }
 
-    ASSERT_EQ(ch.size(), 100);
+    ASSERT_EQ(ch.size_approx(), 100);
 
     int val = 0;
     for(int i = 0; i < 100; ++i)
@@ -368,7 +368,7 @@ TEST(channel, ExtremeStressTest8P8C1M)
     ASSERT_EQ(total_consumed.load(), total_messages);
 }
 
-TEST(ChannelLifecycle, ConsumerStartsLate)
+TEST(channel, consumer_starts_late)
 {
     hj::channel<int>  ch{4};
     std::atomic<bool> consumed{false};
@@ -388,7 +388,7 @@ TEST(ChannelLifecycle, ConsumerStartsLate)
     ASSERT_TRUE(consumed);
 }
 
-TEST(ChannelLifecycle, ProducerStartsLate)
+TEST(channel, producer_starts_late)
 {
     hj::channel<int> ch{4};
     ch << 123;
@@ -405,7 +405,7 @@ TEST(ChannelLifecycle, ProducerStartsLate)
     consumer.join();
 }
 
-TEST(ChannelLifecycle, MultipleProducersFinishAndConsumerDrains)
+TEST(channel, multiple_producers_finish_and_consumer_drains)
 {
     hj::channel<int> ch{8};
     constexpr int    num_producers      = 3;
@@ -442,11 +442,92 @@ TEST(ChannelLifecycle, MultipleProducersFinishAndConsumerDrains)
     consumer.join();
 }
 
-TEST(ChannelLifecycle, ChannelDestructionSafety)
+TEST(channel, channel_destruction_safety)
 {
     {
         hj::channel<std::string> ch{2};
         ch << "hello" << "world";
     }
     SUCCEED();
+}
+
+TEST(channel, concurrent_close_and_enqueue)
+{
+    hj::channel<int>  ch{1024};
+    std::atomic<bool> start_flag{false};
+    std::atomic<int>  success_enqueue_count{0};
+
+    std::vector<std::thread> producers;
+    for(int i = 0; i < 4; ++i)
+    {
+        producers.emplace_back([&ch, &start_flag, &success_enqueue_count]() {
+            while(!start_flag.load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
+            int val = 0;
+            while(ch.enqueue(val))
+            {
+                success_enqueue_count.fetch_add(1, std::memory_order_relaxed);
+                val++;
+            }
+        });
+    }
+
+    start_flag.store(true, std::memory_order_release);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    ch.close();
+
+    for(auto &th : producers)
+    {
+        th.join();
+    }
+
+    ASSERT_FALSE(ch.enqueue(9999));
+    ASSERT_FALSE(ch.enqueue(8888));
+}
+
+TEST(channel, close_idempotency_and_drain)
+{
+    hj::channel<int> ch{4};
+
+    ch.close();
+    ch.close();
+    ch.close();
+    ASSERT_TRUE(ch.is_closed());
+
+    ASSERT_FALSE(ch.enqueue(42));
+
+    hj::channel<int> ch2{4};
+    ch2 << 10 << 20 << 30;
+    ch2.close();
+
+    int val = 0;
+    ASSERT_TRUE(ch2.wait_dequeue(val));
+    ASSERT_EQ(val, 10);
+    ASSERT_TRUE(ch2.wait_dequeue(val));
+    ASSERT_EQ(val, 20);
+    ASSERT_TRUE(ch2.wait_dequeue(val));
+    ASSERT_EQ(val, 30);
+
+    ASSERT_FALSE(ch2.wait_dequeue(val));
+    ASSERT_TRUE(ch2.empty());
+}
+
+TEST(channel, wait_dequeue_for_precision)
+{
+    hj::channel<int> ch{2};
+    int              val = 0;
+
+    auto start  = std::chrono::steady_clock::now();
+    bool result = ch.wait_dequeue_for(val, std::chrono::milliseconds(50));
+    auto end    = std::chrono::steady_clock::now();
+
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+
+    ASSERT_FALSE(result);
+    ASSERT_GE(elapsed, 40);
+    ASSERT_LE(elapsed, 150);
 }

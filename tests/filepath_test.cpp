@@ -21,7 +21,7 @@ class FilePathTest : public ::testing::Test
 
     void TearDown() override
     {
-        if(hj::filepath::is_exist(test_dir_))
+        if(hj::filepath::exists(test_dir_))
         {
             hj::filepath::remove_all(test_dir_);
         }
@@ -124,9 +124,9 @@ TEST_F(FilePathTest, is_symlink)
     ASSERT_EQ(hj::filepath::is_symlink(test_dir_), false);
 }
 
-TEST_F(FilePathTest, is_exist)
+TEST_F(FilePathTest, exists)
 {
-    ASSERT_EQ(hj::filepath::is_exist(test_dir_), true);
+    ASSERT_EQ(hj::filepath::exists(test_dir_), true);
 }
 
 TEST_F(FilePathTest, last_mod_time)
@@ -136,12 +136,15 @@ TEST_F(FilePathTest, last_mod_time)
 
 TEST_F(FilePathTest, size)
 {
-    ASSERT_EQ(hj::filepath::size(test_dir_) == static_cast<std::uintmax_t>(-1),
-              true);
+    auto dir_size = hj::filepath::size(test_dir_);
+    ASSERT_FALSE(dir_size.has_value());
 
     std::string f = hj::filepath::join(test_dir_, "size_test.txt");
     ASSERT_EQ(hj::filepath::create_file(f), true);
-    ASSERT_EQ(hj::filepath::size(f) >= 0, true);
+
+    auto file_size = hj::filepath::size(f);
+    ASSERT_TRUE(file_size.has_value());
+    ASSERT_GE(*file_size, 0);
 }
 
 TEST_F(FilePathTest, walk)
@@ -189,7 +192,7 @@ TEST_F(FilePathTest, create_file)
 {
     std::string f = hj::filepath::join(test_dir_, "file.txt");
     ASSERT_EQ(hj::filepath::create_file(f), true);
-    ASSERT_EQ(hj::filepath::is_exist(f), true);
+    ASSERT_EQ(hj::filepath::exists(f), true);
 }
 
 TEST_F(FilePathTest, copy_dir)
@@ -201,12 +204,12 @@ TEST_F(FilePathTest, copy_dir)
     std::string sub_file = hj::filepath::join(from, "a.txt");
     ASSERT_TRUE(hj::filepath::create_file(sub_file));
 
-    ASSERT_FALSE(hj::filepath::is_exist(to));
+    ASSERT_FALSE(hj::filepath::exists(to));
 
     ASSERT_TRUE(hj::filepath::copy_dir(from, to));
     ASSERT_TRUE(hj::filepath::is_dir(to));
     std::string copied_sub_file = hj::filepath::join(to, "a.txt");
-    ASSERT_TRUE(hj::filepath::is_exist(copied_sub_file));
+    ASSERT_TRUE(hj::filepath::exists(copied_sub_file));
 }
 
 TEST_F(FilePathTest, copy_file)
@@ -216,10 +219,10 @@ TEST_F(FilePathTest, copy_file)
 
     ASSERT_TRUE(hj::filepath::create_file(from));
 
-    ASSERT_FALSE(hj::filepath::is_exist(to));
+    ASSERT_FALSE(hj::filepath::exists(to));
 
     ASSERT_TRUE(hj::filepath::copy_file(from, to));
-    ASSERT_TRUE(hj::filepath::is_exist(to));
+    ASSERT_TRUE(hj::filepath::exists(to));
 }
 
 TEST_F(FilePathTest, remove)
@@ -227,7 +230,7 @@ TEST_F(FilePathTest, remove)
     std::string f = hj::filepath::join(test_dir_, "remove.txt");
     hj::filepath::create_file(f);
     ASSERT_EQ(hj::filepath::remove(f), true);
-    ASSERT_EQ(hj::filepath::is_exist(f), false);
+    ASSERT_EQ(hj::filepath::exists(f), false);
 }
 
 TEST_F(FilePathTest, rename)
@@ -237,11 +240,11 @@ TEST_F(FilePathTest, rename)
 
     ASSERT_TRUE(hj::filepath::create_file(from));
 
-    ASSERT_FALSE(hj::filepath::is_exist(to));
+    ASSERT_FALSE(hj::filepath::exists(to));
 
     ASSERT_TRUE(hj::filepath::rename(from, to));
-    ASSERT_TRUE(hj::filepath::is_exist(to));
-    ASSERT_FALSE(hj::filepath::is_exist(from));
+    ASSERT_TRUE(hj::filepath::exists(to));
+    ASSERT_FALSE(hj::filepath::exists(from));
 }
 
 TEST_F(FilePathTest, find_by_regex)
@@ -256,7 +259,7 @@ TEST_F(FilePathTest, find_by_regex)
     ASSERT_EQ(txts[0], f1);
 }
 
-TEST(file_path, PathParsingContract)
+TEST(file_path, path_parsing_contract)
 {
     ASSERT_EQ(hj::filepath::extension(""), "");
     ASSERT_EQ(hj::filepath::file_name(""), "");
@@ -277,10 +280,10 @@ TEST(file_path, PathParsingContract)
     ASSERT_STREQ(hj::filepath::extension("foo.").c_str(), ".");
 }
 
-TEST(file_path, WindowsSpecificContract)
+TEST(file_path, windows_specific_contract)
 {
 #if defined(_WIN32)
-    ASSERT_EQ(hj::filepath::is_exist("C:\\"), true);
+    ASSERT_EQ(hj::filepath::exists("C:\\"), true);
 
     std::string unc_path = "\\\\server\\share\\dir\\file.txt";
     ASSERT_STREQ(hj::filepath::parent(unc_path).c_str(),
@@ -293,28 +296,34 @@ TEST(file_path, WindowsSpecificContract)
 #endif
 }
 
-TEST(file_path, ExceptionSafety)
+TEST(file_path, exception_safety)
 {
     std::error_code ec;
     ASSERT_NO_THROW(hj::filepath::list("/not_exist_dir_1234567890", ec));
     ASSERT_NO_THROW(
-        hj::filepath::find_by_regex("/not_exist_dir_1234567890", ".*"));
-    ASSERT_NO_THROW(hj::filepath::find("/not_exist_dir_1234567890", "foo"));
+        hj::filepath::find_by_regex("/not_exist_dir_1234567890",
+                                    ".*",
+                                    false,
+                                    hj::filepath::match_target::filename,
+                                    ec));
+    ASSERT_NO_THROW(
+        hj::filepath::find("/not_exist_dir_1234567890", "foo", false, ec));
+
     ASSERT_NO_THROW(hj::filepath::is_dir("/not_exist_dir_1234567890"));
-    ASSERT_NO_THROW(hj::filepath::is_exist("/not_exist_dir_1234567890"));
+    ASSERT_NO_THROW(hj::filepath::exists("/not_exist_dir_1234567890"));
     ASSERT_NO_THROW(hj::filepath::size("/not_exist_dir_1234567890"));
     ASSERT_NO_THROW(hj::filepath::remove("/not_exist_dir_1234567890"));
 }
 
-TEST(file_path, EdgeCases)
+TEST(file_path, edge_cases)
 {
     ASSERT_EQ(hj::filepath::file_name("").empty(), true);
     ASSERT_EQ(hj::filepath::dir_name("").empty(), true);
     ASSERT_EQ(hj::filepath::extension("").empty(), true);
     ASSERT_EQ(hj::filepath::replace_extension("", ".log"), ".log");
     ASSERT_EQ(hj::filepath::is_dir(""), false);
-    ASSERT_EQ(hj::filepath::is_exist(""), false);
-    ASSERT_EQ(hj::filepath::size(""), static_cast<std::uintmax_t>(-1));
+    ASSERT_EQ(hj::filepath::exists(""), false);
+    ASSERT_EQ(hj::filepath::size("").has_value(), false);
 }
 
 TEST_F(FilePathTest, find_by_regex_target)

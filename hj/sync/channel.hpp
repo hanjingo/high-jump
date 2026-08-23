@@ -18,12 +18,14 @@
 #ifndef CHANNEL_HPP
 #define CHANNEL_HPP
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <stdexcept>
-#include <thread>
 #include <utility>
 
 #include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
@@ -37,7 +39,6 @@ class channel
   public:
     explicit channel(const std::size_t initial_capacity)
         : _q{validate_capacity(initial_capacity)}
-        , _closed(false)
     {
     }
 
@@ -48,86 +49,80 @@ class channel
     channel(channel &&)                 = delete;
     channel &operator=(channel &&)      = delete;
 
-    // 关闭 Channel：确立明确的线性化点
     void close() noexcept
     {
-        bool expected = false;
-        // 使用 seq_cst 确保 close 的线性化点在全局具有一致的排序
-        while(!_closed.compare_exchange_weak(expected,
-                                             true,
-                                             std::memory_order_seq_cst,
-                                             std::memory_order_acquire))
+        std::unique_lock<std::mutex> lock(_state_mutex);
+
+        if(_state == state::closed)
+            return;
+
+        if(_state == state::closing)
         {
-            if(expected)
-            {
-                break; // 已经关闭了
-            }
+            _state_cv.wait(lock, [this] { return _state == state::closed; });
+            return;
         }
+
+        // Linearization point for close(): OPEN -> CLOSING.
+        _state = state::closing;
+        _state_cv.wait(lock, [this] { return _active_enqueuers == 0; });
+
+        // No producer admitted before close can still modify the queue.
+        _state = state::closed;
+        lock.unlock();
+
+        // Wake all blocked consumers so they can observe CLOSED + empty.
+        _state_cv.notify_all();
     }
 
     bool is_closed() const noexcept
     {
-        return _closed.load(std::memory_order_acquire);
+        std::lock_guard<std::mutex> lock(_state_mutex);
+        return _state == state::closed;
     }
 
-    // 阻塞式读取：基于自适应退避与无锁 try_dequeue
     bool wait_dequeue(T &t)
     {
-        int spin_count = 0;
-        while(true)
+        std::unique_lock<std::mutex> lock(_state_mutex);
+
+        for(;;)
         {
             if(_q.try_dequeue(t))
-            {
                 return true;
-            }
 
-            if(_closed.load(std::memory_order_acquire))
-            {
-                if(_q.try_dequeue(t))
-                {
-                    return true;
-                }
+            if(_state == state::closed)
                 return false;
-            }
 
-            if(spin_count < 64)
-            {
-                ++spin_count;
-#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
-                _mm_pause();
-#elif defined(__i386__) || defined(__x86_64__)
-                __builtin_ia32_pause();
-#else
-                std::this_thread::yield();
-#endif
-            } else if(spin_count < 128)
-            {
-                ++spin_count;
-                std::this_thread::yield();
-            } else
-            {
-                std::this_thread::sleep_for(std::chrono::microseconds(100));
-            }
+            _state_cv.wait(lock);
         }
     }
 
-    bool wait_dequeue_timeout(T &t, int64_t timeout_ms)
+    bool wait_dequeue_timeout(T &t, std::int64_t timeout_ms)
     {
+        if(timeout_ms <= 0)
+            return try_dequeue(t);
+
         return wait_dequeue_for(t, std::chrono::milliseconds(timeout_ms));
     }
 
     template <typename Rep, typename Period>
     bool wait_dequeue_for(T &t, std::chrono::duration<Rep, Period> timeout)
     {
-        auto now = std::chrono::steady_clock::now();
-        std::chrono::steady_clock::time_point deadline;
+        const auto now = std::chrono::steady_clock::now();
 
-        if(timeout >= (std::chrono::steady_clock::time_point::max() - now))
-            deadline = std::chrono::steady_clock::time_point::max();
-        else if(timeout <= std::chrono::duration<Rep, Period>::zero())
-            deadline = now;
-        else
-            deadline = now + timeout;
+        if(timeout <= std::chrono::duration<Rep, Period>::zero())
+            return try_dequeue(t);
+
+        const auto max_duration =
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                std::chrono::steady_clock::time_point::max() - now);
+
+        const auto timeout_duration =
+            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                timeout);
+
+        const auto deadline = timeout_duration >= max_duration
+                                  ? std::chrono::steady_clock::time_point::max()
+                                  : now + timeout_duration;
 
         return wait_dequeue_until(t, deadline);
     }
@@ -135,96 +130,83 @@ class channel
     bool wait_dequeue_until(T                                    &t,
                             std::chrono::steady_clock::time_point deadline)
     {
-        int spin_count = 0;
-        while(true)
+        std::unique_lock<std::mutex> lock(_state_mutex);
+
+        for(;;)
         {
             if(_q.try_dequeue(t))
-            {
                 return true;
-            }
 
-            if(_closed.load(std::memory_order_acquire) && _q.size_approx() == 0)
-            {
+            if(_state == state::closed)
                 return false;
-            }
 
-            auto now = std::chrono::steady_clock::now();
-            if(deadline <= now)
-            {
+            if(std::chrono::steady_clock::now() >= deadline)
                 return _q.try_dequeue(t);
-            }
 
-            auto remaining =
-                std::chrono::duration_cast<std::chrono::microseconds>(deadline
-                                                                      - now)
-                    .count();
-
-            if(spin_count < 64)
-            {
-                ++spin_count;
-                std::this_thread::yield();
-            } else
-            {
-                int64_t sleep_us =
-                    std::min(remaining, static_cast<int64_t>(100));
-                if(sleep_us > 0)
-                {
-                    std::this_thread::sleep_for(
-                        std::chrono::microseconds(sleep_us));
-                }
-            }
+            if(_state_cv.wait_until(lock, deadline) == std::cv_status::timeout)
+                return _q.try_dequeue(t);
         }
     }
 
     bool try_dequeue(T &t) { return _q.try_dequeue(t); }
-
     bool operator>>(T &t) { return wait_dequeue(t); }
-
     template <typename U>
-    inline channel &operator<<(U &&value)
+    channel &operator<<(U &&value)
     {
-        enqueue(std::forward<U>(value));
+        (void) enqueue(std::forward<U>(value));
         return *this;
     }
 
     template <typename U>
-    inline bool enqueue(U &&value)
+    bool enqueue(U &&value)
     {
-        // 双重检查与顺序一致性屏障：确保在并发 close 发生时，
-        // 若线性化点落在 close 之后，则拒绝入队
-        if(_closed.load(std::memory_order_seq_cst))
-        {
+        if(!begin_enqueue())
             return false;
-        }
 
-        bool success = _q.enqueue(std::forward<U>(value));
-
-        // 投递后二次校验：防止在 enqueue 内部执行期间通道被悄悄关闭
-        if(_closed.load(std::memory_order_seq_cst))
+        try
         {
-            // 注意：如果此时已经成功入队但通道刚被关闭，
-            // 语义上这部分数据依然在队列中，消费者可以将其消费完。
-            // 但为了绝对严格的“close 后不再接受新消息”，
-            // 采用 seq_cst 能够让前后时序彻底收敛。
+            const bool success = _q.enqueue(std::forward<U>(value));
+            end_enqueue();
+            return success;
         }
-
-        return success;
+        catch(...)
+        {
+            end_enqueue();
+            throw;
+        }
     }
 
     template <typename... Args>
-    inline bool emplace(Args &&...args)
+    bool emplace(Args &&...args)
     {
-        if(_closed.load(std::memory_order_seq_cst))
-        {
+        if(!begin_enqueue())
             return false;
+
+        try
+        {
+            const bool success = _q.enqueue(T(std::forward<Args>(args)...));
+            end_enqueue();
+            return success;
         }
-        return _q.enqueue(T(std::forward<Args>(args)...));
+        catch(...)
+        {
+            end_enqueue();
+            throw;
+        }
     }
 
-    inline std::size_t size_approx() const noexcept { return _q.size_approx(); }
-    inline bool        empty() const noexcept { return _q.size_approx() == 0; }
+    std::size_t size_approx() const noexcept { return _q.size_approx(); }
+
+    bool empty() const noexcept { return size_approx() == 0; }
 
   private:
+    enum class state : unsigned char
+    {
+        open,
+        closing,
+        closed
+    };
+
     static std::size_t validate_capacity(std::size_t capacity)
     {
         if(capacity == 0)
@@ -232,11 +214,42 @@ class channel
             throw std::invalid_argument(
                 "hj::channel initial_capacity must be greater than 0.");
         }
+
         return capacity;
     }
 
+    bool begin_enqueue()
+    {
+        std::lock_guard<std::mutex> lock(_state_mutex);
+
+        if(_state != state::open)
+            return false;
+
+        ++_active_enqueuers;
+        return true;
+    }
+
+    void end_enqueue() noexcept
+    {
+        {
+            std::lock_guard<std::mutex> lock(_state_mutex);
+
+            --_active_enqueuers;
+
+            if(_state == state::closing && _active_enqueuers == 0)
+                _state = state::closed;
+        }
+
+        // Notify both waiting consumers and a concurrent close().
+        _state_cv.notify_all();
+    }
+
     moodycamel::BlockingConcurrentQueue<T> _q;
-    std::atomic<bool>                      _closed;
+
+    mutable std::mutex      _state_mutex;
+    std::condition_variable _state_cv;
+    state                   _state{state::open};
+    std::size_t             _active_enqueuers{0};
 };
 
 } // namespace hj

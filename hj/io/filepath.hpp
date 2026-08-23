@@ -20,10 +20,11 @@
 #define FILEPATH_HPP
 
 #include <algorithm>
+#include <chrono>
+#include <cstdint>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <optional>
 #include <regex>
 #include <string>
@@ -31,6 +32,16 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <utime.h>
+#endif
 
 namespace hj
 {
@@ -47,16 +58,110 @@ enum class match_target
 
 struct walk_options
 {
-    bool recursive              = false;
-    bool skip_permission_denied = true;
-    bool continue_on_error      = true;
+    bool        recursive              = false;
+    std::size_t max_depth              = 0;
+    bool        skip_permission_denied = true;
+    bool        continue_on_error      = true;
 
-    walk_options(bool rec)
+    walk_options(bool        rec,
+                 std::size_t depth     = 0,
+                 bool        skip_perm = true,
+                 bool        cont_err  = true)
         : recursive(rec)
+        , max_depth(depth)
+        , skip_permission_denied(skip_perm)
+        , continue_on_error(cont_err)
     {
     }
     walk_options() = default;
+
+    void reset()
+    {
+        recursive              = false;
+        max_depth              = 0;
+        skip_permission_denied = true;
+        continue_on_error      = true;
+    }
 };
+
+struct mkdir_options
+{
+    bool recursive     = true;
+    bool succ_if_exist = false;
+
+    mkdir_options(bool rec, bool ok)
+        : recursive(rec)
+        , succ_if_exist(ok)
+    {
+    }
+    mkdir_options() = default;
+
+    void reset()
+    {
+        recursive     = true;
+        succ_if_exist = false;
+    }
+};
+
+struct find_options
+{
+    bool         recursive              = false;
+    std::size_t  max_depth              = 0;
+    std::size_t  max_result             = 0;
+    match_target target                 = match_target::filename;
+    bool         skip_permission_denied = true;
+    bool         continue_on_error      = true;
+
+    find_options(bool         rec,
+                 std::size_t  depth,
+                 std::size_t  max_res,
+                 match_target t,
+                 bool         skip_perm = true,
+                 bool         cont_err  = true)
+        : recursive(rec)
+        , max_depth(depth)
+        , max_result(max_res)
+        , target(t)
+        , skip_permission_denied(skip_perm)
+        , continue_on_error(cont_err)
+    {
+    }
+    find_options() = default;
+
+    void reset()
+    {
+        recursive              = false;
+        max_depth              = 0;
+        max_result             = 0;
+        target                 = match_target::filename;
+        skip_permission_denied = true;
+        continue_on_error      = true;
+    }
+};
+
+struct list_options
+{
+    bool skip_permission_denied = true;
+    bool continue_on_error      = true;
+
+    list_options(bool skip_perm = true, bool cont_err = true)
+        : skip_permission_denied(skip_perm)
+        , continue_on_error(cont_err)
+    {
+    }
+
+    void reset()
+    {
+        skip_permission_denied = true;
+        continue_on_error      = true;
+    }
+};
+
+inline bool default_walk_error_handler(const std::string &,
+                                       const std::error_code &)
+{
+    return true;
+}
 
 namespace detail
 {
@@ -88,8 +193,17 @@ inline void walk_impl(const std::string &path,
     Iterator end;
     if(ec)
     {
-        if(!err_handler(path, ec) || !options.continue_on_error)
+        const bool handled = err_handler(path, ec);
+
+        // Once the error handler has been invoked, the handler owns the
+        // decision to stop/continue. A handled termination is not a
+        // pending error and therefore must not escape through the
+        // non-error-code overload as an exception.
+        if(!handled || !options.continue_on_error)
+        {
+            ec.clear();
             return;
+        }
 
         ec.clear();
     }
@@ -107,15 +221,33 @@ inline void walk_impl(const std::string &path,
             {
             }
 
-            if(!err_handler(current_path, ec) || !options.continue_on_error)
+            const bool handled = err_handler(current_path, ec);
+            if(!handled || !options.continue_on_error)
+            {
+                // The error has been delivered to the handler. Clear it so
+                // that termination caused by the handler is not re-thrown
+                // by the throwing walk() overload.
+                ec.clear();
                 break;
-
+            }
             ec.clear();
             it.increment(ec);
             continue;
         }
 
-        if(!callback(it->path().string()))
+        std::size_t current_depth = 0;
+        if constexpr(std::is_same_v<Iterator, fs::recursive_directory_iterator>)
+        {
+            current_depth = it.depth();
+            if(options.max_depth > 0 && current_depth >= options.max_depth)
+            {
+                std::error_code temp_ec;
+                if(it->is_directory(temp_ec))
+                    it.disable_recursion_pending();
+            }
+        }
+
+        if(!callback(it->path().string(), current_depth))
             break;
 
         it.increment(ec);
@@ -133,6 +265,7 @@ inline std::string pwd(std::error_code &ec) noexcept
     auto p = fs::current_path(ec);
     if(ec)
         return "";
+
     return p.string();
 }
 
@@ -152,6 +285,7 @@ inline std::string absolute(const std::string &path,
     auto p = fs::absolute(fs::path(path), ec);
     if(ec)
         return "";
+
     return p.string();
 }
 
@@ -171,6 +305,7 @@ inline std::string canonical(const std::string &path,
     auto p = fs::canonical(fs::path(path), ec);
     if(ec)
         return "";
+
     return p.string();
 }
 
@@ -185,6 +320,7 @@ inline std::string weakly_canonical(const std::string &path,
     auto p = fs::weakly_canonical(fs::path(path), ec);
     if(ec)
         return "";
+
     return p.string();
 }
 
@@ -200,6 +336,7 @@ inline std::string relative(const std::string &path,
     auto p = fs::relative(fs::path(path), fs::path(base), ec);
     if(ec)
         return "";
+
     return p.string();
 }
 
@@ -230,8 +367,6 @@ inline auto join(const Container &c) ->
 inline std::string file_name(const std::string &file, bool with_ext = true)
 {
     fs::path p(file);
-    if(fs::is_directory(p))
-        return "";
     return with_ext ? p.filename().string() : p.stem().string();
 }
 
@@ -242,19 +377,18 @@ inline std::string dir_name(const std::string &path)
 
 inline std::string path_name(const std::string &filepath)
 {
-    auto path = fs::path(filepath);
-    return fs::is_directory(path) ? filepath : path.parent_path().string();
+    return fs::path(filepath).parent_path().string();
 }
 
-inline std::string extension(const std::string &filepath)
+inline std::string extension(const std::string &filepathname)
 {
-    return fs::path(filepath).extension().string();
+    return fs::path(filepathname).extension().string();
 }
 
-inline std::string replace_extension(const std::string &filepath,
+inline std::string replace_extension(const std::string &filepathname,
                                      const std::string &ext)
 {
-    return fs::path(filepath).replace_extension(ext).string();
+    return fs::path(filepathname).replace_extension(ext).string();
 }
 
 inline bool is_dir(const std::string &path)
@@ -317,62 +451,43 @@ inline std::time_t last_mod_time(const std::string &filepath,
     return std::chrono::system_clock::to_time_t(sctp);
 }
 
-inline std::optional<std::uintmax_t> size(const std::string &file)
-{
-    std::error_code ec;
-    auto            p = fs::path(file);
-    if(!fs::exists(p, ec) || ec)
-        return std::nullopt;
-
-    bool is_dir = fs::is_directory(p, ec);
-    if(ec || is_dir)
-        return std::nullopt;
-
-    auto sz = fs::file_size(p, ec);
-    if(ec)
-        return std::nullopt;
-
-    return sz;
-}
-
 inline std::uintmax_t size(const std::string &file,
                            std::error_code   &ec) noexcept
 {
     auto p = fs::path(file);
-    if(!fs::exists(p, ec) || ec)
+    if(fs::is_directory(p, ec))
     {
         if(!ec)
-            ec = std::make_error_code(std::errc::no_such_file_or_directory);
+            ec = std::make_error_code(std::errc::is_a_directory);
 
         return 0;
     }
-
-    bool is_dir = fs::is_directory(p, ec);
     if(ec)
         return 0;
-
-    if(is_dir)
-    {
-        ec = std::make_error_code(std::errc::is_a_directory);
-        return 0;
-    }
 
     auto sz = fs::file_size(p, ec);
     if(ec)
         return 0;
+
+    return sz;
+}
+
+inline std::optional<std::uintmax_t> size(const std::string &file)
+{
+    std::error_code ec;
+    auto            sz = hj::filepath::size(file, ec);
+    if(ec)
+        return std::nullopt;
 
     return sz;
 }
 
 template <typename Callback,
-          typename ErrorHandler =
-              std::function<bool(const std::string &, const std::error_code &)>>
-inline void walk(
-    const std::string &path,
-    Callback         &&callback,
-    walk_options       options = {},
-    ErrorHandler &&err_handler = [](const std::string &,
-                                    const std::error_code &) { return true; })
+          typename ErrorHandler = decltype(&default_walk_error_handler)>
+inline void walk(const std::string &path,
+                 Callback         &&callback,
+                 walk_options       options     = {},
+                 ErrorHandler     &&err_handler = default_walk_error_handler)
 {
     std::error_code ec;
     walk(path,
@@ -381,23 +496,17 @@ inline void walk(
          ec,
          std::forward<ErrorHandler>(err_handler));
     if(ec && !options.continue_on_error)
-    {
         throw std::filesystem::filesystem_error("walk failed", path, ec);
-    }
 }
 
 template <typename Callback,
-          typename ErrorHandler =
-              std::function<bool(const std::string &, const std::error_code &)>>
-inline void walk(
-    const std::string &path,
-    Callback         &&callback,
-    walk_options       options,
-    std::error_code   &ec,
-    ErrorHandler     &&err_handler = [](const std::string &,
-                                        const std::error_code &) {
-        return true;
-    }) noexcept
+          typename ErrorHandler = decltype(&default_walk_error_handler)>
+inline void
+walk(const std::string &path,
+     Callback         &&callback,
+     walk_options       options,
+     std::error_code   &ec,
+     ErrorHandler     &&err_handler = default_walk_error_handler) noexcept
 {
     if(options.recursive)
     {
@@ -418,32 +527,59 @@ inline void walk(
     }
 }
 
-inline std::vector<std::string> list(const std::string &path)
+inline std::vector<std::string>
+list(const std::string &path, list_options opt, std::error_code &ec) noexcept
 {
     std::vector<std::string> vec;
-    for(auto &entry : fs::directory_iterator(path))
-        vec.emplace_back(entry.path().string());
+    ec.clear();
+    auto fs_options = opt.skip_permission_denied
+                          ? fs::directory_options::skip_permission_denied
+                          : fs::directory_options::none;
+    fs::directory_iterator it(path, fs_options, ec);
+    fs::directory_iterator end;
+    if(ec)
+        return vec;
+
+    while(it != end)
+    {
+        if(ec)
+        {
+            bool is_perm = (ec == std::errc::permission_denied
+                            || ec.value() == EACCES || ec.value() == EPERM);
+            if(opt.skip_permission_denied && is_perm)
+            {
+                ec.clear();
+                it.increment(ec);
+                continue;
+            }
+
+            if(!opt.continue_on_error)
+                break;
+
+            it.increment(ec);
+            continue;
+        }
+
+        vec.emplace_back(it->path().string());
+        it.increment(ec);
+    }
+
     return vec;
 }
 
 inline std::vector<std::string> list(const std::string &path,
                                      std::error_code   &ec) noexcept
 {
-    std::vector<std::string> vec;
-    auto                     it = fs::directory_iterator(path, ec);
+    return list(path, list_options{}, ec);
+}
+
+inline std::vector<std::string> list(const std::string &path)
+{
+    std::error_code ec;
+    auto            vec = list(path, list_options{}, ec);
     if(ec)
-        return vec;
-    fs::directory_iterator end;
-    while(it != end)
     {
-        if(ec)
-        {
-            ec.clear();
-            it.increment(ec);
-            continue;
-        }
-        vec.emplace_back(it->path().string());
-        it.increment(ec);
+        throw std::filesystem::filesystem_error("list failed", path, ec);
     }
     return vec;
 }
@@ -463,69 +599,86 @@ list(const std::string &path, std::error_code &ec, Compare &&cmp) noexcept
     std::vector<std::string> vec = list(path, ec);
     if(ec)
         return vec;
+
     std::sort(vec.begin(), vec.end(), std::forward<Compare>(cmp));
     return vec;
 }
 
 inline std::vector<std::string> find(const std::string &path,
                                      const std::string &file,
-                                     bool               recursive,
+                                     find_options       opt,
                                      std::error_code   &ec) noexcept
 {
     std::vector<std::string> vec;
     ec.clear();
-
     if(!fs::exists(path, ec) || ec)
     {
         if(!ec)
             ec = std::make_error_code(std::errc::no_such_file_or_directory);
+
         return vec;
     }
 
-    auto callback = [&](const std::string &current_path) {
-        try
+    auto callback = [&](const std::string &current_path, std::size_t depth) {
+        if(opt.max_depth > 0 && depth >= opt.max_depth)
+            return true;
+
+        fs::path curr(current_path);
+        if(curr.filename().string() == file)
         {
-            if(fs::path(current_path).filename().string() == file)
-            {
-                vec.emplace_back(current_path);
-            }
-        }
-        catch(...)
-        {
+            vec.emplace_back(current_path);
+            if(opt.max_result > 0 && vec.size() >= opt.max_result)
+                return false;
         }
         return true;
     };
 
-    walk_options options(recursive);
-    options.skip_permission_denied = true;
-    options.continue_on_error      = true;
+    walk_options options(opt.recursive);
+    options.max_depth              = opt.max_depth;
+    options.skip_permission_denied = opt.skip_permission_denied;
+    options.continue_on_error      = opt.continue_on_error;
+    auto err_handler = [&](const std::string &, const std::error_code &err) {
+        if(opt.skip_permission_denied
+           && (err == std::errc::permission_denied || err.value() == EACCES
+               || err.value() == EPERM))
+            return true;
 
-    if(recursive)
+        if(opt.continue_on_error)
+        {
+            if(!ec)
+                ec = err;
+
+            return true;
+        }
+        if(!ec)
+            ec = err;
+        return false;
+    };
+
+    if(opt.recursive)
     {
-        detail::walk_impl<fs::recursive_directory_iterator>(
-            path,
-            callback,
-            options,
-            ec,
-            [](const std::string &, const std::error_code &) { return true; });
+        detail::walk_impl<fs::recursive_directory_iterator>(path,
+                                                            callback,
+                                                            options,
+                                                            ec,
+                                                            err_handler);
     } else
     {
-        detail::walk_impl<fs::directory_iterator>(
-            path,
-            callback,
-            options,
-            ec,
-            [](const std::string &, const std::error_code &) { return true; });
+        detail::walk_impl<fs::directory_iterator>(path,
+                                                  callback,
+                                                  options,
+                                                  ec,
+                                                  err_handler);
     }
 
     return vec;
 }
 
 inline std::vector<std::string>
-find(const std::string &path, const std::string &file, bool recursive = false)
+find(const std::string &path, const std::string &file, find_options opt)
 {
     std::error_code ec;
-    auto            vec = hj::filepath::find(path, file, recursive, ec);
+    auto            vec = hj::filepath::find(path, file, opt, ec);
     if(ec)
     {
         throw std::filesystem::filesystem_error("find failed", path, ec);
@@ -535,19 +688,17 @@ find(const std::string &path, const std::string &file, bool recursive = false)
 
 inline std::vector<std::string> find_by_regex(const std::string &path,
                                               const std::string &pattern,
-                                              bool               recursive,
-                                              match_target       target,
+                                              find_options       opt,
                                               std::error_code   &ec) noexcept
 {
     std::vector<std::string> vec;
     ec.clear();
-
     std::regex re;
     try
     {
         re.assign(pattern);
     }
-    catch(...)
+    catch(const std::regex_error &)
     {
         ec = std::make_error_code(std::errc::invalid_argument);
         return vec;
@@ -557,71 +708,79 @@ inline std::vector<std::string> find_by_regex(const std::string &path,
     {
         if(!ec)
             ec = std::make_error_code(std::errc::no_such_file_or_directory);
+
         return vec;
     }
 
     auto match_func = [&](const fs::path &entry_path) {
-        try
-        {
-            if(target == match_target::path)
-                return std::regex_match(entry_path.string(), re);
-            else
-                return std::regex_match(entry_path.filename().string(), re);
-        }
-        catch(...)
-        {
-            return false;
-        }
+        if(opt.target == match_target::path)
+            return std::regex_match(entry_path.string(), re);
+        else
+            return std::regex_match(entry_path.filename().string(), re);
     };
 
-    auto callback = [&](const std::string &current_path) {
-        try
+    auto callback = [&](const std::string &current_path, std::size_t depth) {
+        if(opt.max_depth > 0 && depth >= opt.max_depth)
+            return true;
+
+        fs::path curr(current_path);
+        if(match_func(curr))
         {
-            if(match_func(fs::path(current_path)))
-            {
-                vec.emplace_back(current_path);
-            }
-        }
-        catch(...)
-        {
+            vec.emplace_back(current_path);
+            if(opt.max_result > 0 && vec.size() >= opt.max_result)
+                return false;
         }
         return true;
     };
 
-    walk_options options(recursive);
-    options.skip_permission_denied = true;
-    options.continue_on_error      = true;
+    walk_options options(opt.recursive);
+    options.max_depth              = opt.max_depth;
+    options.skip_permission_denied = opt.skip_permission_denied;
+    options.continue_on_error      = opt.continue_on_error;
+    auto err_handler = [&](const std::string &, const std::error_code &err) {
+        if(opt.skip_permission_denied
+           && (err == std::errc::permission_denied || err.value() == EACCES
+               || err.value() == EPERM))
+            return true;
 
-    if(recursive)
+        if(opt.continue_on_error)
+        {
+            if(!ec)
+                ec = err;
+
+            return true;
+        }
+        if(!ec)
+            ec = err;
+
+        return false;
+    };
+
+    if(opt.recursive)
     {
-        detail::walk_impl<fs::recursive_directory_iterator>(
-            path,
-            callback,
-            options,
-            ec,
-            [](const std::string &, const std::error_code &) { return true; });
+        detail::walk_impl<fs::recursive_directory_iterator>(path,
+                                                            callback,
+                                                            options,
+                                                            ec,
+                                                            err_handler);
     } else
     {
-        detail::walk_impl<fs::directory_iterator>(
-            path,
-            callback,
-            options,
-            ec,
-            [](const std::string &, const std::error_code &) { return true; });
+        detail::walk_impl<fs::directory_iterator>(path,
+                                                  callback,
+                                                  options,
+                                                  ec,
+                                                  err_handler);
     }
 
     return vec;
 }
 
-inline std::vector<std::string>
-find_by_regex(const std::string &path,
-              const std::string &pattern,
-              bool               recursive = false,
-              match_target       target    = match_target::filename)
+inline std::vector<std::string> find_by_regex(const std::string &path,
+                                              const std::string &pattern,
+                                              find_options       opt)
 {
     std::error_code ec;
-    auto            vec =
-        hj::filepath::find_by_regex(path, pattern, recursive, target, ec);
+    auto            vec = hj::filepath::find_by_regex(path, pattern, opt, ec);
     if(ec)
     {
         throw std::filesystem::filesystem_error("find_by_regex failed",
@@ -631,30 +790,128 @@ find_by_regex(const std::string &path,
     return vec;
 }
 
-inline bool make_dir(const std::string &path, bool recursive = true)
-{
-    return recursive ? fs::create_directories(path)
-                     : fs::create_directory(path);
-}
-
 inline bool
-make_dir(const std::string &path, bool recursive, std::error_code &ec) noexcept
+mkdir(const std::string &path, mkdir_options opt, std::error_code &ec) noexcept
 {
-    return recursive ? fs::create_directories(path, ec)
-                     : fs::create_directory(path, ec);
+    ec.clear();
+    fs::path p(path);
+    bool     path_exists = fs::exists(p, ec);
+    if(ec)
+        return false;
+
+    if(path_exists)
+    {
+        bool is_dir = fs::is_directory(p, ec);
+        if(ec)
+            return false;
+
+        if(is_dir)
+        {
+            if(opt.succ_if_exist)
+            {
+                return true;
+            } else
+            {
+                ec = std::make_error_code(std::errc::file_exists);
+                return false;
+            }
+        } else
+        {
+            ec = std::make_error_code(std::errc::file_exists);
+            return false;
+        }
+    }
+
+    if(opt.recursive)
+        fs::create_directories(p, ec);
+    else
+        fs::create_directory(p, ec);
+
+    return !ec;
 }
 
-inline bool create_file(const std::string &file)
+inline bool mkdir(const std::string &path, mkdir_options opt = {})
 {
-    if(fs::exists(file))
-        return false;
+    std::error_code ec;
+    bool            res = hj::filepath::mkdir(path, opt, ec);
+    if(ec && !opt.succ_if_exist)
+        throw std::filesystem::filesystem_error("mkdir failed", path, ec);
 
-    std::ofstream ofs(file);
-    if(!ofs.is_open())
-        return false;
+    return res;
+}
 
-    ofs.close();
-    return true;
+inline bool touch(const std::string &file, std::error_code &ec) noexcept
+{
+    ec.clear();
+    fs::path p(file);
+
+#if defined(_WIN32) || defined(_WIN64)
+    HANDLE hFile =
+        CreateFileW(p.wstring().c_str(),
+                    GENERIC_WRITE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    nullptr,
+                    CREATE_NEW,
+                    FILE_ATTRIBUTE_NORMAL,
+                    nullptr);
+    if(hFile != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(hFile);
+        return true;
+    }
+
+    DWORD err = GetLastError();
+    if(err == ERROR_FILE_EXISTS || err == ERROR_ALREADY_EXISTS)
+    {
+        hFile =
+            CreateFileW(p.wstring().c_str(),
+                        FILE_WRITE_ATTRIBUTES,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                        nullptr,
+                        OPEN_EXISTING,
+                        FILE_FLAG_BACKUP_SEMANTICS,
+                        nullptr);
+        if(hFile != INVALID_HANDLE_VALUE)
+        {
+            SYSTEMTIME st;
+            GetSystemTime(&st);
+            FILETIME ft;
+            SystemTimeToFileTime(&st, &ft);
+            BOOL ok = SetFileTime(hFile, nullptr, nullptr, &ft);
+            CloseHandle(hFile);
+            if(ok)
+                return true;
+        }
+    }
+    ec.assign(static_cast<int>(GetLastError()), std::system_category());
+    return false;
+#else
+    int fd = open(p.string().c_str(), O_WRONLY | O_CREAT | O_EXCL, 0666);
+    if(fd >= 0)
+    {
+        close(fd);
+        return true;
+    }
+
+    if(errno == EEXIST)
+    {
+        if(utimes(p.string().c_str(), nullptr) == 0)
+            return true;
+    }
+    ec.assign(errno, std::system_category());
+    return false;
+#endif
+}
+
+inline bool touch(const std::string &file)
+{
+    std::error_code ec;
+    bool            res = touch(file, ec);
+    if(ec)
+    {
+        throw std::filesystem::filesystem_error("touch failed", file, ec);
+    }
+    return res;
 }
 
 inline bool
@@ -664,7 +921,7 @@ copy_dir(const std::string &from, const std::string &to, bool overwrite = true)
     auto            f_from = fs::path(from);
     auto            f_to   = fs::path(to);
 
-    if(!fs::exists(f_from, ec) || !fs::is_directory(f_from, ec) || ec)
+    if(!fs::is_directory(f_from, ec) || ec)
         return false;
 
     auto options =
@@ -685,7 +942,7 @@ inline bool copy_dir(const std::string &from,
 {
     auto f_from = fs::path(from);
     auto f_to   = fs::path(to);
-    if(!fs::exists(f_from, ec) || !fs::is_directory(f_from, ec) || ec)
+    if(!fs::is_directory(f_from, ec) || ec)
         return false;
 
     auto options =
@@ -699,21 +956,24 @@ inline bool copy_dir(const std::string &from,
     return !ec;
 }
 
-inline bool copy_file(const std::string &from, const std::string &to)
-{
-    fs::copy_file(from, to);
-    return fs::exists(to);
-}
-
 inline bool copy_file(const std::string &from,
                       const std::string &to,
                       std::error_code   &ec) noexcept
 {
+    ec.clear();
     fs::copy_file(from, to, ec);
-    if(ec)
-        return false;
+    return !ec;
+}
 
-    return fs::exists(to, ec);
+inline bool copy_file(const std::string &from, const std::string &to)
+{
+    std::error_code ec;
+    bool            res = copy_file(from, to, ec);
+    if(ec)
+    {
+        throw std::filesystem::filesystem_error("copy_file failed", from, ec);
+    }
+    return res;
 }
 
 inline bool remove(const std::string &filepath)
@@ -730,13 +990,13 @@ inline bool remove(const std::string &filepath, std::error_code &ec) noexcept
     return fs::remove(fpath, ec);
 }
 
-inline std::uintmax_t remove_all(const std::string &filepath)
+inline std::optional<std::uintmax_t> remove_all(const std::string &filepath)
 {
     std::error_code ec;
     auto            fpath = fs::path(filepath);
     auto            count = fs::remove_all(fpath, ec);
     if(ec)
-        return static_cast<std::uintmax_t>(-1);
+        return std::nullopt;
 
     return count;
 }

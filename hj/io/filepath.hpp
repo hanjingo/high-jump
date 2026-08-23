@@ -217,8 +217,10 @@ inline void walk_impl(const std::string &path,
             {
                 current_path = it->path().string();
             }
-            catch(...)
+            catch(const fs::filesystem_error &)
             {
+                ec = std::make_error_code(std::errc::io_error);
+                break;
             }
 
             const bool handled = err_handler(current_path, ec);
@@ -532,6 +534,7 @@ list(const std::string &path, list_options opt, std::error_code &ec) noexcept
 {
     std::vector<std::string> vec;
     ec.clear();
+    std::error_code first_ec;
     auto fs_options = opt.skip_permission_denied
                           ? fs::directory_options::skip_permission_denied
                           : fs::directory_options::none;
@@ -553,9 +556,13 @@ list(const std::string &path, list_options opt, std::error_code &ec) noexcept
                 continue;
             }
 
+            if(!first_ec)
+                first_ec = ec;
+
             if(!opt.continue_on_error)
                 break;
 
+            ec.clear();
             it.increment(ec);
             continue;
         }
@@ -563,6 +570,9 @@ list(const std::string &path, list_options opt, std::error_code &ec) noexcept
         vec.emplace_back(it->path().string());
         it.increment(ec);
     }
+
+    if(first_ec)
+        ec = first_ec;
 
     return vec;
 }
@@ -795,20 +805,16 @@ mkdir(const std::string &path, mkdir_options opt, std::error_code &ec) noexcept
 {
     ec.clear();
     fs::path p(path);
-    bool     path_exists = fs::exists(p, ec);
-    if(ec)
-        return false;
-
-    if(path_exists)
+    bool     created = opt.recursive ? fs::create_directories(p, ec)
+                                     : fs::create_directory(p, ec);
+    if(!ec && !created)
     {
-        bool is_dir = fs::is_directory(p, ec);
-        if(ec)
-            return false;
-
-        if(is_dir)
+        std::error_code temp_ec;
+        if(fs::is_directory(p, temp_ec))
         {
             if(opt.succ_if_exist)
             {
+                ec.clear();
                 return true;
             } else
             {
@@ -822,12 +828,26 @@ mkdir(const std::string &path, mkdir_options opt, std::error_code &ec) noexcept
         }
     }
 
-    if(opt.recursive)
-        fs::create_directories(p, ec);
-    else
-        fs::create_directory(p, ec);
+    if(ec)
+    {
+        std::error_code temp_ec;
+        if(fs::is_directory(p, temp_ec))
+        {
+            if(opt.succ_if_exist)
+            {
+                ec.clear();
+                return true;
+            } else
+            {
+                if(ec.value() == 0)
+                    ec = std::make_error_code(std::errc::file_exists);
+                return false;
+            }
+        }
+        return false;
+    }
 
-    return !ec;
+    return true;
 }
 
 inline bool mkdir(const std::string &path, mkdir_options opt = {})
@@ -915,7 +935,7 @@ inline bool touch(const std::string &file)
 }
 
 inline bool
-copy_dir(const std::string &from, const std::string &to, bool overwrite = true)
+copy_dir(const std::string &from, const std::string &to, bool overwrite = false)
 {
     std::error_code ec;
     auto            f_from = fs::path(from);
@@ -976,29 +996,21 @@ inline bool copy_file(const std::string &from, const std::string &to)
     return res;
 }
 
-inline bool remove(const std::string &filepath)
-{
-    std::error_code ec;
-    auto            fpath = fs::path(filepath);
-    bool            res   = fs::remove(fpath, ec);
-    return res && !ec;
-}
-
 inline bool remove(const std::string &filepath, std::error_code &ec) noexcept
 {
     auto fpath = fs::path(filepath);
     return fs::remove(fpath, ec);
 }
 
-inline std::optional<std::uintmax_t> remove_all(const std::string &filepath)
+inline bool remove(const std::string &filepath)
 {
     std::error_code ec;
-    auto            fpath = fs::path(filepath);
-    auto            count = fs::remove_all(fpath, ec);
+    bool            res = remove(filepath, ec);
     if(ec)
-        return std::nullopt;
-
-    return count;
+    {
+        throw std::filesystem::filesystem_error("remove failed", filepath, ec);
+    }
+    return res;
 }
 
 inline std::uintmax_t remove_all(const std::string &filepath,
@@ -1008,13 +1020,17 @@ inline std::uintmax_t remove_all(const std::string &filepath,
     return fs::remove_all(fpath, ec);
 }
 
-inline bool rename(const std::string &from, const std::string &to)
+inline std::optional<std::uintmax_t> remove_all(const std::string &filepath)
 {
     std::error_code ec;
-    auto            f_from = fs::path(from);
-    auto            f_to   = fs::path(to);
-    fs::rename(f_from, f_to, ec);
-    return !ec;
+    auto            count = hj::filepath::remove_all(filepath, ec);
+    if(ec)
+    {
+        throw std::filesystem::filesystem_error("remove_all failed",
+                                                filepath,
+                                                ec);
+    }
+    return count;
 }
 
 inline bool rename(const std::string &from,
@@ -1026,6 +1042,17 @@ inline bool rename(const std::string &from,
 
     fs::rename(f_from, f_to, ec);
     return !ec;
+}
+
+inline bool rename(const std::string &from, const std::string &to)
+{
+    std::error_code ec;
+    bool            res = rename(from, to, ec);
+    if(ec)
+    {
+        throw std::filesystem::filesystem_error("rename failed", from, ec);
+    }
+    return res;
 }
 
 } // namespace filepath

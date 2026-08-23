@@ -27,6 +27,23 @@
 #include <algorithm>
 #include <utility>
 
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#ifndef _IOVEC_DEFINED
+#define _IOVEC_DEFINED
+struct iovec
+{
+    void  *iov_base;
+    size_t iov_len;
+};
+#endif
+#else
+#include <sys/uio.h>
+#endif
+
 namespace hj
 {
 
@@ -67,6 +84,7 @@ class chain_buffer
 
     explicit chain_buffer(size_t block_size = DEFAULT_BLOCK_SIZE)
         : _block_size(block_size)
+        , _head_index(0)
         , _total_size(0)
     {
         if(_block_size == 0)
@@ -79,6 +97,7 @@ class chain_buffer
 
     chain_buffer(chain_buffer &&other) noexcept
         : _block_size(other._block_size)
+        , _head_index(other._head_index)
         , _blocks(std::move(other._blocks))
         , _total_size(other._total_size)
     {
@@ -90,6 +109,7 @@ class chain_buffer
         if(this != &other)
         {
             _block_size = other._block_size;
+            _head_index = other._head_index;
             _blocks     = std::move(other._blocks);
             _total_size = other._total_size;
             other.release();
@@ -105,6 +125,35 @@ class chain_buffer
     size_t size() const { return _total_size; }
     size_t block_size() const { return _block_size; }
     bool   empty() const { return _total_size == 0; }
+    size_t block_count() const noexcept { return _blocks.size(); }
+    size_t readable_size() const noexcept { return _total_size; }
+
+    std::vector<struct iovec> iovecs() const
+    {
+        std::vector<struct iovec> vec;
+        if(_total_size == 0)
+            return vec;
+
+        for(size_t i = _head_index; i < _blocks.size(); ++i)
+        {
+            const auto &blk = _blocks[i];
+            if(blk.readable_size() > 0)
+            {
+                struct iovec iov;
+#if defined(_WIN32)
+                iov.iov_len  = static_cast<ULONG>(blk.readable_size());
+                iov.iov_base = reinterpret_cast<char *>(
+                    const_cast<uint8_t *>(blk.readable_data()));
+#else
+                iov.iov_base = const_cast<void *>(
+                    static_cast<const void *>(blk.readable_data()));
+                iov.iov_len = blk.readable_size();
+#endif
+                vec.push_back(iov);
+            }
+        }
+        return vec;
+    }
 
     void append(const void *data, size_t len)
     {
@@ -127,7 +176,15 @@ class chain_buffer
         while(len > 0)
         {
             if(_blocks.empty() || _blocks.back().size == _block_size)
+            {
+                if(_head_index > 0 && _head_index >= _blocks.size())
+                {
+                    _blocks.clear();
+                    _head_index = 0;
+                }
+
                 _blocks.emplace_back(_block_size);
+            }
 
             auto  &back_blk = _blocks.back();
             size_t space    = back_blk.capacity - back_blk.size;
@@ -144,6 +201,12 @@ class chain_buffer
 
     void append(chain_buffer &other)
     {
+        if(this == &other)
+        {
+            throw std::invalid_argument(
+                "chain_buffer::append: cannot append buffer to itself");
+        }
+
         if(other.empty())
             return;
 
@@ -156,27 +219,29 @@ class chain_buffer
 
     void append(chain_buffer &&other)
     {
+        if(this == &other)
+        {
+            throw std::invalid_argument("chain_buffer::append: cannot append "
+                                        "buffer to itself (rvalue)");
+        }
+
         if(other.empty())
             return;
 
-        if(_blocks.size() == 1 && _blocks[0].size == 0 && _total_size == 0)
+        if(empty())
         {
             _blocks     = std::move(other._blocks);
+            _head_index = other._head_index;
             _total_size = other._total_size;
             other.release();
             return;
         }
 
-        for(auto &blk : other._blocks)
-        {
-            if(blk.readable_size() > 0)
-            {
-                _blocks.push_back(std::move(blk));
-            }
-        }
+        other.for_each_segment([this](const uint8_t *data, size_t size) {
+            this->append(data, size);
+        });
 
-        _total_size += other._total_size;
-        other.release();
+        other.clear();
     }
 
     template <typename Callback>
@@ -185,8 +250,9 @@ class chain_buffer
         if(_total_size == 0)
             return;
 
-        for(const auto &blk : _blocks)
+        for(size_t i = _head_index; i < _blocks.size(); ++i)
         {
+            const auto &blk = _blocks[i];
             if(blk.readable_size() > 0)
             {
                 std::forward<Callback>(cb)(blk.readable_data(),
@@ -220,9 +286,9 @@ class chain_buffer
         len                 = (len < _total_size) ? len : _total_size;
         size_t original_len = len;
 
-        while(len > 0 && !_blocks.empty())
+        while(len > 0 && _head_index < _blocks.size())
         {
-            auto  &blk   = _blocks.front();
+            auto  &blk   = _blocks[_head_index];
             size_t avail = blk.readable_size();
             if(len < avail)
             {
@@ -233,16 +299,13 @@ class chain_buffer
             {
                 consumed += avail;
                 len -= avail;
-                _blocks.erase(_blocks.begin());
+                _head_index++;
             }
         }
 
         _total_size -= consumed;
-
-        if(_blocks.empty())
-        {
-            _blocks.emplace_back(_block_size);
-        }
+        if(_total_size == 0)
+            clear();
 
         return original_len;
     }
@@ -254,22 +317,24 @@ class chain_buffer
             blk.size        = 0;
             blk.read_offset = 0;
         }
+        _head_index = 0;
         if(_blocks.empty())
-        {
             _blocks.emplace_back(_block_size);
-        }
+
         _total_size = 0;
     }
 
     void release()
     {
         _blocks.clear();
+        _head_index = 0;
         _blocks.emplace_back(_block_size);
         _total_size = 0;
     }
 
   private:
     size_t                    _block_size;
+    size_t                    _head_index;
     std::vector<buffer_block> _blocks;
     size_t                    _total_size;
 };

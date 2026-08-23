@@ -25,6 +25,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>
+#include <utility>
 
 namespace hj
 {
@@ -37,11 +38,13 @@ class chain_buffer
         std::unique_ptr<uint8_t[]> data;
         size_t                     capacity;
         size_t                     size;
+        size_t                     read_offset;
 
         explicit buffer_block(size_t cap)
             : data(new uint8_t[cap])
             , capacity(cap)
             , size(0)
+            , read_offset(0)
         {
         }
 
@@ -50,6 +53,13 @@ class chain_buffer
 
         buffer_block(const buffer_block &)            = delete;
         buffer_block &operator=(const buffer_block &) = delete;
+
+        const uint8_t *readable_data() const
+        {
+            return data.get() + read_offset;
+        }
+        uint8_t *readable_data() { return data.get() + read_offset; }
+        size_t   readable_size() const { return size - read_offset; }
     };
 
   public:
@@ -58,14 +68,34 @@ class chain_buffer
     explicit chain_buffer(size_t block_size = DEFAULT_BLOCK_SIZE)
         : _block_size(block_size)
         , _total_size(0)
-        , _read_pos(0)
-        , _read_block(0)
     {
+        if(_block_size == 0)
+        {
+            throw std::invalid_argument(
+                "chain_buffer: block_size must be greater than zero");
+        }
         _blocks.emplace_back(_block_size);
     }
 
-    chain_buffer(chain_buffer &&) noexcept            = default;
-    chain_buffer &operator=(chain_buffer &&) noexcept = default;
+    chain_buffer(chain_buffer &&other) noexcept
+        : _block_size(other._block_size)
+        , _blocks(std::move(other._blocks))
+        , _total_size(other._total_size)
+    {
+        other.release();
+    }
+
+    chain_buffer &operator=(chain_buffer &&other) noexcept
+    {
+        if(this != &other)
+        {
+            _block_size = other._block_size;
+            _blocks     = std::move(other._blocks);
+            _total_size = other._total_size;
+            other.release();
+        }
+        return *this;
+    }
 
     chain_buffer(const chain_buffer &)            = delete;
     chain_buffer &operator=(const chain_buffer &) = delete;
@@ -80,6 +110,18 @@ class chain_buffer
     {
         if(len == 0)
             return;
+
+        if(data == nullptr)
+        {
+            throw std::invalid_argument("chain_buffer::append: data pointer "
+                                        "cannot be nullptr when len > 0");
+        }
+
+        if(len > SIZE_MAX - _total_size)
+        {
+            throw std::overflow_error(
+                "chain_buffer::append: total size overflow");
+        }
 
         const uint8_t *p = static_cast<const uint8_t *>(data);
         while(len > 0)
@@ -105,105 +147,131 @@ class chain_buffer
         if(other.empty())
             return;
 
-        if(_read_block == 0 && _read_pos == 0 && _blocks.size() == 1
-           && _blocks[0].size == 0)
+        other.for_each_segment([this](const uint8_t *data, size_t size) {
+            this->append(data, size);
+        });
+
+        other.clear();
+    }
+
+    void append(chain_buffer &&other)
+    {
+        if(other.empty())
+            return;
+
+        if(_blocks.size() == 1 && _blocks[0].size == 0 && _total_size == 0)
         {
             _blocks     = std::move(other._blocks);
             _total_size = other._total_size;
-            other.clear();
-        } else
+            other.release();
+            return;
+        }
+
+        for(auto &blk : other._blocks)
         {
-            for(auto &blk : other._blocks)
+            if(blk.readable_size() > 0)
             {
-                if(blk.size > 0)
-                {
-                    append(blk.data.get(), blk.size);
-                }
+                _blocks.push_back(std::move(blk));
             }
-            other.clear();
+        }
+
+        _total_size += other._total_size;
+        other.release();
+    }
+
+    template <typename Callback>
+    void for_each_segment(Callback &&cb) const
+    {
+        if(_total_size == 0)
+            return;
+
+        for(const auto &blk : _blocks)
+        {
+            if(blk.readable_size() > 0)
+            {
+                std::forward<Callback>(cb)(blk.readable_data(),
+                                           blk.readable_size());
+            }
         }
     }
 
-    void   append(chain_buffer &&other) { append(other); }
-    size_t read(void *out, size_t len)
+    size_t peek(void *out, size_t len) const
     {
-        size_t   copied  = 0;
-        size_t   blk_idx = _read_block;
-        size_t   pos     = _read_pos;
-        uint8_t *p       = static_cast<uint8_t *>(out);
+        size_t   copied = 0;
+        uint8_t *p      = static_cast<uint8_t *>(out);
 
-        while(len > 0 && blk_idx < _blocks.size())
-        {
-            const auto &blk = _blocks[blk_idx];
-            if(pos >= blk.size)
-            {
-                ++blk_idx;
-                pos = 0;
-                continue;
-            }
-
-            size_t avail   = blk.size - pos;
-            size_t to_copy = (std::min) (avail, len);
-            std::memcpy(p + copied, blk.data.get() + pos, to_copy);
+        for_each_segment([&](const uint8_t *data, size_t size) {
+            if(len == 0)
+                return;
+            size_t to_copy = (std::min) (size, len);
+            std::memcpy(p + copied, data, to_copy);
             copied += to_copy;
             len -= to_copy;
-            pos += to_copy;
-        }
+        });
+
         return copied;
     }
 
-    // Consume up to len bytes from the buffer. If len > size(), only available bytes are consumed.
-    // Returns the actual number of bytes consumed. (Compatible with boost::asio/beast semantics)
+    size_t read(void *out, size_t len) const { return peek(out, len); }
+
     size_t consume(size_t len)
     {
-        size_t consumed = 0;
-        len             = (len < _total_size) ? len : _total_size;
+        size_t consumed     = 0;
+        len                 = (len < _total_size) ? len : _total_size;
+        size_t original_len = len;
+
         while(len > 0 && !_blocks.empty())
         {
-            auto  &blk   = _blocks[_read_block];
-            size_t avail = blk.size - _read_pos;
+            auto  &blk   = _blocks.front();
+            size_t avail = blk.readable_size();
             if(len < avail)
             {
+                blk.read_offset += len;
                 consumed += len;
-                _read_pos += len;
-                _total_size -= len;
-                return consumed;
+                len = 0;
             } else
             {
                 consumed += avail;
                 len -= avail;
-                _total_size -= avail;
-                ++_read_block;
-                _read_pos = 0;
+                _blocks.erase(_blocks.begin());
             }
         }
 
-        if(_read_block > 0)
+        _total_size -= consumed;
+
+        if(_blocks.empty())
         {
-            _blocks.erase(_blocks.begin(), _blocks.begin() + _read_block);
-            _read_block = 0;
+            _blocks.emplace_back(_block_size);
         }
 
-        return consumed;
+        return original_len;
     }
 
-    // Clear the buffer
     void clear()
+    {
+        for(auto &blk : _blocks)
+        {
+            blk.size        = 0;
+            blk.read_offset = 0;
+        }
+        if(_blocks.empty())
+        {
+            _blocks.emplace_back(_block_size);
+        }
+        _total_size = 0;
+    }
+
+    void release()
     {
         _blocks.clear();
         _blocks.emplace_back(_block_size);
         _total_size = 0;
-        _read_pos   = 0;
-        _read_block = 0;
     }
 
   private:
     size_t                    _block_size;
     std::vector<buffer_block> _blocks;
     size_t                    _total_size;
-
-    size_t _read_pos;
-    size_t _read_block;
 };
 
 } // namespace hj

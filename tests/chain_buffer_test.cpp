@@ -106,11 +106,34 @@ TEST(chain_buffer, clear_reuse)
 {
     chain_buffer buf;
     std::string  d = "abc";
+
     buf.append(d.data(), d.size());
+
+    const uint8_t *first_block_ptr = nullptr;
+    buf.for_each_segment([&first_block_ptr](const uint8_t *data, size_t size) {
+        if(first_block_ptr == nullptr && size > 0)
+        {
+            first_block_ptr = data;
+        }
+    });
+
+    ASSERT_NE(first_block_ptr, nullptr);
+
     buf.clear();
     ASSERT_TRUE(buf.empty());
+
     buf.append(d.data(), d.size());
-    ASSERT_EQ(buf.size(), 3u);
+
+    const uint8_t *second_block_ptr = nullptr;
+    buf.for_each_segment([&second_block_ptr](const uint8_t *data, size_t size) {
+        if(second_block_ptr == nullptr && size > 0)
+        {
+            second_block_ptr = data;
+        }
+    });
+
+    ASSERT_EQ(first_block_ptr, second_block_ptr);
+
     char   out[8] = {0};
     size_t n      = buf.read(out, sizeof(out));
     ASSERT_EQ(n, 3u);

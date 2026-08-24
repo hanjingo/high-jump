@@ -82,8 +82,10 @@ TEST(thread_pool, multi_thread_enqueue)
 
 TEST(thread_pool, enqueue_exception)
 {
-    hj::thread_pool tp{1};
+    hj::thread_pool tp{1, [](const std::exception_ptr &) {}};
+
     auto fut = tp.enqueue([]() -> int { throw std::runtime_error("fail"); });
+
     ASSERT_THROW(fut.get(), std::runtime_error);
 }
 

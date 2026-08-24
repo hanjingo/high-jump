@@ -1,5 +1,5 @@
 // Origin:     https://github.com/progschj/ThreadPool
-// Altered By: hehehunanchina@live.com
+// Refactored for Industrial Standards with Modern Const Correctness and Precise Thread Metrics
 
 #ifndef THREAD_POOL_HPP
 #define THREAD_POOL_HPP
@@ -13,199 +13,450 @@
 #include <future>
 #include <functional>
 #include <stdexcept>
-#include <iostream>
+#include <exception>
 #include <string>
-
 #include <unordered_set>
+#include <utility>
+#include <type_traits>
+#include <algorithm>
+#include <cstddef>
 
 #if defined(_WIN32)
-#if defined(_WIN32) && !defined(NOMINMAX)
+#if !defined(NOMINMAX)
 #define NOMINMAX
 #endif
 #include <windows.h>
-
-#elif __APPLE__
-#include <sys/param.h>
-#include <sys/sysctl.h>
-
-#elif __linux__
+#elif defined(__linux__)
 #include <unistd.h>
 #include <pthread.h>
-
-#else
+#include <sched.h>
 #endif
 
 namespace hj
 {
 
+// SBO (Small Buffer Optimization) move-only task wrapper
+class move_task
+{
+    static constexpr std::size_t SBO_SIZE = 64;
+
+    struct vtable_t
+    {
+        void (*call)(void *);
+        void (*destroy)(void *) noexcept;
+        void (*move)(void *src, void *dst) noexcept;
+    };
+
+    template <typename F>
+    struct sbo_handler
+    {
+        static void call(void *ptr) { (*static_cast<F *>(ptr))(); }
+        static void destroy(void *ptr) noexcept { static_cast<F *>(ptr)->~F(); }
+        static void move(void *src, void *dst) noexcept
+        {
+            new(dst) F(std::move(*static_cast<F *>(src)));
+            destroy(src);
+        }
+    };
+
+    template <typename F>
+    struct heap_handler
+    {
+        static void call(void *ptr) { (**static_cast<F **>(ptr))(); }
+        static void destroy(void *ptr) noexcept
+        {
+            delete *static_cast<F **>(ptr);
+        }
+        static void move(void *src, void *dst) noexcept
+        {
+            *static_cast<F **>(dst) = *static_cast<F **>(src);
+            *static_cast<F **>(src) = nullptr;
+        }
+    };
+
+    const vtable_t *_vptr = nullptr;
+    alignas(std::max_align_t) char _buffer[SBO_SIZE];
+
+  public:
+    move_task() noexcept = default;
+
+    template <typename F,
+              typename = typename std::enable_if<
+                  !std::is_same<typename std::decay<F>::type,
+                                move_task>::value>::type>
+    move_task(F &&f)
+    {
+        using DecayedF = typename std::decay<F>::type;
+
+        constexpr bool fits_sbo =
+            (sizeof(DecayedF) <= SBO_SIZE)
+            && (alignof(DecayedF) <= alignof(std::max_align_t));
+
+        if(fits_sbo)
+        {
+            static const vtable_t vtable = {&sbo_handler<DecayedF>::call,
+                                            &sbo_handler<DecayedF>::destroy,
+                                            &sbo_handler<DecayedF>::move};
+            new(_buffer) DecayedF(std::forward<F>(f));
+            _vptr = &vtable;
+        } else
+        {
+            static const vtable_t vtable = {&heap_handler<DecayedF>::call,
+                                            &heap_handler<DecayedF>::destroy,
+                                            &heap_handler<DecayedF>::move};
+            *reinterpret_cast<DecayedF **>(_buffer) =
+                new DecayedF(std::forward<F>(f));
+            _vptr = &vtable;
+        }
+    }
+
+    ~move_task()
+    {
+        if(_vptr)
+        {
+            _vptr->destroy(_buffer);
+        }
+    }
+
+    move_task(move_task &&other) noexcept
+    {
+        if(other._vptr)
+        {
+            _vptr = other._vptr;
+            _vptr->move(other._buffer, _buffer);
+            other._vptr = nullptr;
+        }
+    }
+
+    move_task &operator=(move_task &&other) noexcept
+    {
+        if(this != &other)
+        {
+            if(_vptr)
+            {
+                _vptr->destroy(_buffer);
+            }
+            _vptr = other._vptr;
+            if(_vptr)
+            {
+                _vptr->move(other._buffer, _buffer);
+                other._vptr = nullptr;
+            }
+        }
+        return *this;
+    }
+
+    move_task(const move_task &)            = delete;
+    move_task &operator=(const move_task &) = delete;
+
+    void operator()()
+    {
+        if(_vptr)
+        {
+            _vptr->call(_buffer);
+        }
+    }
+
+    explicit operator bool() const noexcept { return _vptr != nullptr; }
+};
+
 class thread_pool
 {
   public:
-    using task_t = std::function<void()>;
+    using exception_handler_t = std::function<void(const std::exception_ptr &)>;
 
   public:
     explicit thread_pool(
-        unsigned long nthread = std::thread::hardware_concurrency())
-        : _is_stop{false}
+        unsigned long       nthread = std::thread::hardware_concurrency(),
+        exception_handler_t handler = nullptr)
+        : _configured_threads{(nthread < 1) ? 1 : nthread}
+        , _is_stop{false}
+        , _exception_handler(std::move(handler))
     {
-        nthread = (nthread < 1) ? 1 : nthread;
-        for(size_t i = 0; i < nthread; ++i)
-            _init_work();
+        _workers.reserve(_configured_threads);
+
+        try
+        {
+            for(size_t i = 0; i < _configured_threads; ++i)
+            {
+                _init_work(-1);
+            }
+        }
+        catch(...)
+        {
+            shutdown();
+            throw;
+        }
     }
 
-    explicit thread_pool(const std::unordered_set<unsigned int> cores)
-        : _is_stop{false}
+    explicit thread_pool(const std::unordered_set<unsigned int> &cores,
+                         exception_handler_t handler = nullptr)
+        : _configured_threads{cores.size()}
+        , _is_stop{false}
+        , _exception_handler(std::move(handler))
     {
-        for(auto core : cores)
-            _init_work(core);
+        if(cores.empty())
+        {
+            throw std::invalid_argument("cores set cannot be empty");
+        }
+
+        _workers.reserve(cores.size());
+
+        try
+        {
+            for(auto core : cores)
+            {
+                _init_work(static_cast<int>(core));
+            }
+        }
+        catch(...)
+        {
+            shutdown();
+            throw;
+        }
     }
 
-    inline std::size_t size() { return _workers.size(); }
+    thread_pool(const thread_pool &)            = delete;
+    thread_pool &operator=(const thread_pool &) = delete;
+    thread_pool(thread_pool &&)                 = delete;
+    thread_pool &operator=(thread_pool &&)      = delete;
 
-    // add new work item to the pool
+    ~thread_pool() { shutdown(); }
+
+    std::size_t size() const noexcept { return _configured_threads; }
+
+    std::size_t thread_count() const noexcept { return size(); }
+
+    std::size_t active_thread_count() const noexcept
+    {
+        std::unique_lock<std::mutex> lock(_mu);
+        return _workers.size();
+    }
+
+    void set_exception_handler(exception_handler_t handler)
+    {
+        std::unique_lock<std::mutex> lock(_mu);
+        _exception_handler = std::move(handler);
+    }
+
     template <class F, class... Args>
-#if __cplusplus >= 201703L || (defined(_MSC_VER) && _MSC_VER >= 1910)
     auto enqueue(F &&f, Args &&...args)
-        -> std::future<typename std::invoke_result<F, Args...>::type>
+        -> std::future<std::invoke_result_t<F, Args...>>
     {
-        using return_type = typename std::invoke_result<F, Args...>::type;
-#else
-    auto enqueue(F &&f, Args &&...args)
-        -> std::future<typename std::result_of<F(Args...)>::type>
-    {
-        using return_type = typename std::result_of<F(Args...)>::type;
-#endif
+        using return_type = std::invoke_result_t<F, Args...>;
+        auto p            = std::make_shared<std::promise<return_type>>();
+        std::future<return_type> res = p->get_future();
+        auto task_wrapper = [func = std::forward<F>(f),
+                             args_tuple =
+                                 std::make_tuple(std::forward<Args>(args)...),
+                             p]() mutable {
+            try
+            {
+                if constexpr(std::is_void_v<return_type>)
+                {
+                    std::apply(std::move(func), std::move(args_tuple));
+                    p->set_value();
+                } else
+                {
+                    p->set_value(
+                        std::apply(std::move(func), std::move(args_tuple)));
+                }
+            }
+            catch(...)
+            {
+                p->set_exception(std::current_exception());
+                throw;
+            }
+        };
 
-        auto task = std::make_shared<std::packaged_task<return_type()>>(
-            std::bind(std::forward<F>(f), std::forward<Args>(args)...));
-
-        std::future<return_type> res = task->get_future();
-
-        // lock begin
         {
             std::unique_lock<std::mutex> lock(_mu);
-
-            // don't allow enqueueing after stopping the pool
             if(_is_stop)
                 return std::future<return_type>();
 
-            _tasks.emplace([task]() { (*task)(); });
+            _tasks.emplace(move_task(std::move(task_wrapper)));
         }
-        // lock end
 
         _cond.notify_one();
         return res;
     }
 
-    void clear()
+    std::size_t cancel_pending()
     {
-        // lock begin
-        {
-            std::unique_lock<std::mutex> lock(_mu);
-            _is_stop = true;
-        }
-        // lock end
-
-        _cond.notify_all();
-        for(std::thread &worker : _workers)
-            if(worker.joinable())
-            {
-                worker.join();
-            }
-
-        _is_stop = false;
+        std::unique_lock<std::mutex> lock(_mu);
+        std::size_t                  count = _tasks.size();
+        std::queue<move_task>        empty;
+        std::swap(_tasks, empty);
+        return count;
     }
 
-    // the destructor joins all threads
-    inline ~thread_pool()
+    [[deprecated("Use cancel_pending() instead to explicitly reflect "
+                 "broken_promise semantics.")]]
+    std::size_t clear_pending_tasks()
     {
-        // lock begin
+        return cancel_pending();
+    }
+
+    void shutdown()
+    {
+        std::vector<std::thread> workers_to_join;
         {
             std::unique_lock<std::mutex> lock(_mu);
+            if(_is_stop)
+            {
+                return;
+            }
             _is_stop = true;
+            workers_to_join.swap(_workers);
         }
-        // lock end
 
         _cond.notify_all();
-        for(std::thread &worker : _workers)
+
+        const auto current_id = std::this_thread::get_id();
+
+        for(std::thread &worker : workers_to_join)
+        {
             if(worker.joinable())
             {
-                worker.join();
+                if(worker.get_id() == current_id)
+                {
+                    worker.detach();
+                } else
+                {
+                    worker.join();
+                }
             }
+        }
     }
 
   private:
-    void _init_work(const int core = -1)
+    void _init_work(const int core)
     {
-        _workers.emplace_back([this, core]() {
-            // Set the thread affinity to the specified core
-            if(core > -1 && !_bind_core(core))
-                throw std::runtime_error("Failed to bind thread to core "
-                                         + std::to_string(core));
+        std::promise<void> init_promise;
+        std::future<void>  init_future = init_promise.get_future();
 
-            for(;;)
-            {
-                std::function<void()> task;
-
-                // lock begin
+        _workers.emplace_back(
+            [this, core, p = std::move(init_promise)]() mutable {
+                if(core > -1)
                 {
-                    std::unique_lock<std::mutex> lock(this->_mu);
-                    this->_cond.wait(lock, [this]() {
-                        return this->_is_stop || !this->_tasks.empty();
-                    });
-                    if(this->_is_stop && this->_tasks.empty())
+                    if(!_bind_core(static_cast<unsigned int>(core)))
+                    {
+                        p.set_exception(std::make_exception_ptr(
+                            std::runtime_error("Failed to bind thread to core: "
+                                               + std::to_string(core))));
                         return;
+                    }
+                }
 
-                    task = std::move(this->_tasks.front());
-                    this->_tasks.pop();
-                }
-                // lock end
+                p.set_value();
 
-                try
+                for(;;)
                 {
-                    task();
+                    move_task task;
+
+                    {
+                        std::unique_lock<std::mutex> lock(this->_mu);
+                        this->_cond.wait(lock, [this]() {
+                            return this->_is_stop || !this->_tasks.empty();
+                        });
+
+                        if(this->_is_stop && this->_tasks.empty())
+                            return;
+
+                        task = std::move(this->_tasks.front());
+                        this->_tasks.pop();
+                    }
+
+                    if(task)
+                    {
+                        try
+                        {
+                            task();
+                        }
+                        catch(...)
+                        {
+                            exception_handler_t handler_copy;
+                            {
+                                std::lock_guard<std::mutex> lock(this->_mu);
+                                handler_copy = this->_exception_handler;
+                            }
+
+                            if(handler_copy)
+                                handler_copy(std::current_exception());
+                            else
+                                std::terminate();
+                        }
+                    }
                 }
-                catch(...)
-                {
-                    std::cerr << "RUN THREAD POOL TASK EXCEPTION" << std::endl;
-                }
-            }
-        });
+            });
+
+        init_future.get();
     }
 
-    bool _bind_core(const unsigned int core)
+    bool _bind_core(const unsigned int global_core)
     {
 #if defined(_WIN32)
-        HANDLE    hThread = GetCurrentThread();
-        DWORD_PTR mask =
-            SetThreadAffinityMask(hThread, (DWORD_PTR) (1LLU << core));
-        return (mask != 0);
+        HANDLE hThread = GetCurrentThread();
 
-#elif __linux__
+        WORD  num_groups       = GetActiveProcessorGroupCount();
+        DWORD accumulated_cpus = 0;
+        WORD  target_group     = 0;
+        BYTE  relative_core    = 0;
+        bool  found            = false;
+
+        for(WORD g = 0; g < num_groups; ++g)
+        {
+            DWORD group_cpus = GetActiveProcessorCount(g);
+            if(global_core < accumulated_cpus + group_cpus)
+            {
+                target_group = g;
+                relative_core =
+                    static_cast<BYTE>(global_core - accumulated_cpus);
+                found = true;
+                break;
+            }
+            accumulated_cpus += group_cpus;
+        }
+
+        if(!found)
+        {
+            return false;
+        }
+
+        GROUP_AFFINITY groupAffinity;
+        ZeroMemory(&groupAffinity, sizeof(GROUP_AFFINITY));
+        groupAffinity.Group = target_group;
+        groupAffinity.Mask  = static_cast<KAFFINITY>(1ULL << relative_core);
+        return SetThreadGroupAffinity(hThread, &groupAffinity, NULL) != FALSE;
+
+#elif defined(__linux__)
+        if(global_core >= CPU_SETSIZE)
+        {
+            return false;
+        }
+
         cpu_set_t mask;
         CPU_ZERO(&mask);
-        CPU_SET(core, &mask);
+        CPU_SET(global_core, &mask);
         return (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask)
-                >= 0);
+                == 0);
 
 #else
-    return true; // macOS and other systems do not support setting thread affinity
-
+        (void) global_core;
+        return true;
 #endif
     }
 
   private:
-    thread_pool(const thread_pool &)            = delete;
-    thread_pool &operator=(const thread_pool &) = delete;
-
-  private:
+    const std::size_t        _configured_threads;
     std::vector<std::thread> _workers;
-    std::queue<task_t>       _tasks;
-    std::mutex               _mu;
+    std::queue<move_task>    _tasks;
+    mutable std::mutex       _mu;
     std::condition_variable  _cond;
     bool                     _is_stop = false;
+    exception_handler_t      _exception_handler;
 };
 
-}
+} // namespace hj
 
-#endif
+#endif // THREAD_POOL_HPP

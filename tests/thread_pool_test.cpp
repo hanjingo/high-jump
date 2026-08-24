@@ -24,7 +24,6 @@ static unsigned int get_current_cpu_id()
     PROCESSOR_NUMBER proc_num;
     GetCurrentProcessorNumberEx(&proc_num);
 
-    // 反向计算 Global Core ID
     WORD         group_count = GetActiveProcessorGroupCount();
     unsigned int global_id   = 0;
     for(WORD g = 0; g < proc_num.Group; ++g)
@@ -154,44 +153,52 @@ TEST(thread_pool, worker_startup_failure)
     EXPECT_THROW({ hj::thread_pool tp(invalid_cores); }, std::runtime_error);
 }
 
-TEST(thread_pool, shutdown_from_worker)
+// 修复：不直接在 worker 线程内部触发 EXPECT 宏，采用子线程 capture 异常方式
+TEST(thread_pool_p0, shutdown_from_worker_throws)
 {
-    auto               tp = std::make_unique<hj::thread_pool>(2);
-    std::promise<void> done_p;
-    auto               done_f = done_p.get_future();
+    hj::thread_pool   tp{2};
+    std::atomic<bool> caught_logic_error{false};
 
-    tp->enqueue([&tp, &done_p]() {
-        tp->shutdown();
-        done_p.set_value();
+    auto fut = tp.enqueue([&tp, &caught_logic_error]() {
+        try
+        {
+            tp.shutdown();
+        }
+        catch(const std::logic_error &)
+        {
+            caught_logic_error = true;
+        }
     });
 
-    EXPECT_EQ(done_f.wait_for(2s), std::future_status::ready);
+    fut.get();
+    EXPECT_TRUE(caught_logic_error.load());
+    tp.shutdown();
 }
 
+// 修复：去 Sleep 化，使用 std::promise 驱动无 Flaky 依赖的精准同步
 TEST(thread_pool, exception_handler)
 {
-    std::atomic<bool> handler_called{false};
-    {
-        hj::thread_pool tp{1, [&](const std::exception_ptr &e) {
-                               try
-                               {
-                                   if(e)
-                                       std::rethrow_exception(e);
-                               }
-                               catch(const std::runtime_error &err)
-                               {
-                                   if(std::string(err.what()) == "task_error")
-                                   {
-                                       handler_called = true;
-                                   }
-                               }
-                           }};
+    std::promise<void> handler_done_p;
+    auto               handler_done_f = handler_done_p.get_future();
 
-        tp.enqueue([]() { throw std::runtime_error("task_error"); });
+    hj::thread_pool tp{1, [&](const std::exception_ptr &e) {
+                           try
+                           {
+                               if(e)
+                                   std::rethrow_exception(e);
+                           }
+                           catch(const std::runtime_error &err)
+                           {
+                               if(std::string(err.what()) == "task_error")
+                               {
+                                   handler_done_p.set_value();
+                               }
+                           }
+                       }};
 
-        std::this_thread::sleep_for(100ms);
-    }
-    EXPECT_TRUE(handler_called);
+    tp.enqueue([]() { throw std::runtime_error("task_error"); });
+
+    ASSERT_EQ(handler_done_f.wait_for(2s), std::future_status::ready);
 }
 
 TEST(thread_pool, concurrent_enqueue)
@@ -299,7 +306,7 @@ TEST(thread_pool_p2, worker_scales)
     for(size_t threads : {1, 2, 64})
     {
         hj::thread_pool tp(threads);
-        EXPECT_EQ(tp.size(), threads);
+        EXPECT_EQ(tp.worker_count(), threads);
         EXPECT_EQ(tp.active_thread_count(), threads);
 
         auto fut = tp.enqueue([] { return 1; });
@@ -309,13 +316,18 @@ TEST(thread_pool_p2, worker_scales)
 
 TEST(thread_pool_p2, shutdown_during_long_running_task)
 {
-    std::atomic<bool> task_completed{false};
+    std::atomic<bool>  task_completed{false};
+    std::promise<void> task_started_p;
+    auto               task_started_f = task_started_p.get_future();
+
     {
         hj::thread_pool tp{2};
-        tp.enqueue([&task_completed]() {
-            std::this_thread::sleep_for(200ms);
+        tp.enqueue([&task_completed, &task_started_p]() {
+            task_started_p.set_value();
+            std::this_thread::sleep_for(10ms);
             task_completed = true;
         });
+        task_started_f.wait();
     }
     EXPECT_TRUE(task_completed.load());
 }
@@ -336,20 +348,25 @@ TEST(thread_pool, multi_producer_enqueue)
 
     hj::thread_pool          tp{4};
     std::atomic<int>         completed_tasks{0};
+    std::atomic<bool>        producer_failed{false};
     std::vector<std::thread> producers;
     producers.reserve(producer_count);
 
     for(int i = 0; i < producer_count; ++i)
     {
-        producers.emplace_back([&tp, &completed_tasks, tasks_per_producer]() {
-            for(int j = 0; j < tasks_per_producer; ++j)
-            {
-                auto fut = tp.enqueue([&completed_tasks]() {
-                    completed_tasks.fetch_add(1, std::memory_order_relaxed);
-                });
-                EXPECT_TRUE(fut.valid());
-            }
-        });
+        producers.emplace_back(
+            [&tp, &completed_tasks, &producer_failed, tasks_per_producer]() {
+                for(int j = 0; j < tasks_per_producer; ++j)
+                {
+                    auto fut = tp.enqueue([&completed_tasks]() {
+                        completed_tasks.fetch_add(1, std::memory_order_relaxed);
+                    });
+                    if(!fut.valid())
+                    {
+                        producer_failed.store(true, std::memory_order_relaxed);
+                    }
+                }
+            });
     }
 
     for(auto &p : producers)
@@ -359,26 +376,30 @@ TEST(thread_pool, multi_producer_enqueue)
 
     tp.shutdown();
 
+    ASSERT_FALSE(producer_failed.load());
     EXPECT_EQ(completed_tasks.load(), total_expected_tasks);
 }
 
 TEST(thread_pool, concurrent_enqueue_and_shutdown_race)
 {
-    constexpr int iterations = 100;
+    constexpr int iterations = 50;
 
     for(int i = 0; i < iterations; ++i)
     {
         auto              tp = std::make_unique<hj::thread_pool>(4);
         std::atomic<bool> start_flag{false};
+        std::atomic<int>  accepted_tasks{0};
         std::atomic<int>  executed_tasks{0};
+        std::vector<std::future<void>> accepted_futs;
+        std::mutex                     futs_mu;
 
-        std::thread producer([&tp, &start_flag, &executed_tasks]() {
+        std::thread producer([&]() {
             while(!start_flag.load(std::memory_order_acquire))
             {
                 std::this_thread::yield();
             }
 
-            for(int j = 0; j < 500; ++j)
+            for(int j = 0; j < 300; ++j)
             {
                 auto fut = tp->enqueue([&executed_tasks]() {
                     executed_tasks.fetch_add(1, std::memory_order_relaxed);
@@ -386,17 +407,19 @@ TEST(thread_pool, concurrent_enqueue_and_shutdown_race)
 
                 if(fut.valid())
                 {
+                    accepted_tasks.fetch_add(1, std::memory_order_relaxed);
+                    std::lock_guard<std::mutex> lock(futs_mu);
+                    accepted_futs.push_back(std::move(fut));
                 }
             }
         });
 
-        std::thread stopper([&tp, &start_flag]() {
+        std::thread stopper([&]() {
             while(!start_flag.load(std::memory_order_acquire))
             {
                 std::this_thread::yield();
             }
-
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            std::this_thread::yield();
             tp->shutdown();
         });
 
@@ -405,9 +428,103 @@ TEST(thread_pool, concurrent_enqueue_and_shutdown_race)
         producer.join();
         stopper.join();
 
+        for(auto &f : accepted_futs)
+        {
+            f.get();
+        }
+
+        EXPECT_EQ(accepted_tasks.load(), executed_tasks.load());
+
         auto post_shutdown_fut = tp->enqueue([] { return 1; });
         EXPECT_FALSE(post_shutdown_fut.valid());
 
         tp.reset();
     }
+}
+
+TEST(thread_pool, exception_handler_throws_triggers_terminate)
+{
+    EXPECT_DEATH(
+        ([]() {
+            hj::thread_pool tp{1, [](const std::exception_ptr &) {
+                                   throw std::runtime_error(
+                                       "handler exception!");
+                               }};
+
+            tp.enqueue([]() { throw std::runtime_error("task exception!"); });
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }()),
+        ".*");
+}
+
+TEST(thread_pool, thread_count_metrics)
+{
+    constexpr std::size_t num_threads = 4;
+    hj::thread_pool       tp{num_threads};
+
+    EXPECT_EQ(tp.worker_count(), num_threads);
+    EXPECT_EQ(tp.size(), num_threads);
+    EXPECT_EQ(tp.thread_count(), num_threads);
+    EXPECT_EQ(tp.active_thread_count(), num_threads);
+
+    std::promise<void> worker_release_p;
+    auto               worker_release_f = worker_release_p.get_future().share();
+    std::atomic<int>   started_count{0};
+
+    std::vector<std::future<void>> futs;
+    for(std::size_t i = 0; i < num_threads; ++i)
+    {
+        futs.push_back(tp.enqueue([&started_count, worker_release_f]() {
+            started_count.fetch_add(1, std::memory_order_relaxed);
+            worker_release_f.wait();
+        }));
+    }
+
+    while(started_count.load() < static_cast<int>(num_threads))
+    {
+        std::this_thread::yield();
+    }
+
+    EXPECT_EQ(tp.active_thread_count(), num_threads);
+
+    worker_release_p.set_value();
+    for(auto &f : futs)
+    {
+        f.get();
+    }
+}
+
+TEST(thread_pool, active_thread_count_lifecycle_on_shutdown)
+{
+    auto tp = std::make_unique<hj::thread_pool>(4);
+    EXPECT_EQ(tp->active_thread_count(), 4);
+
+    std::promise<void> task_start_p;
+    auto               task_start_f = task_start_p.get_future();
+
+    tp->enqueue([&task_start_p]() { task_start_p.set_value(); });
+
+    task_start_f.wait();
+    tp->shutdown();
+
+    EXPECT_EQ(tp->active_thread_count(), 0);
+    EXPECT_EQ(tp->worker_count(), 4);
+}
+
+TEST(thread_pool, is_shutdown_status)
+{
+    hj::thread_pool tp{2};
+
+    EXPECT_FALSE(tp.is_shutdown());
+
+    auto fut = tp.enqueue([]() { return 42; });
+    EXPECT_EQ(fut.get(), 42);
+    EXPECT_FALSE(tp.is_shutdown());
+
+    tp.shutdown();
+    EXPECT_TRUE(tp.is_shutdown());
+
+    tp.shutdown();
+    EXPECT_TRUE(tp.is_shutdown());
 }

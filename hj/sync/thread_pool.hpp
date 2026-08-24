@@ -20,6 +20,7 @@
 #include <type_traits>
 #include <algorithm>
 #include <cstddef>
+#include <atomic>
 
 #if defined(_WIN32)
 #if !defined(NOMINMAX)
@@ -223,14 +224,17 @@ class thread_pool
 
     ~thread_pool() { shutdown(); }
 
-    std::size_t size() const noexcept { return _configured_threads; }
-
-    std::size_t thread_count() const noexcept { return size(); }
-
+    std::size_t worker_count() const noexcept { return _configured_threads; }
+    std::size_t size() const noexcept { return worker_count(); }
+    std::size_t thread_count() const noexcept { return worker_count(); }
     std::size_t active_thread_count() const noexcept
     {
-        std::unique_lock<std::mutex> lock(_mu);
-        return _workers.size();
+        return _active_threads.load(std::memory_order_relaxed);
+    }
+
+    bool is_shutdown() const noexcept
+    {
+        return _is_stop.load(std::memory_order_acquire);
     }
 
     void set_exception_handler(exception_handler_t handler)
@@ -271,7 +275,7 @@ class thread_pool
 
         {
             std::unique_lock<std::mutex> lock(_mu);
-            if(_is_stop)
+            if(_is_stop.load(std::memory_order_relaxed))
                 return std::future<return_type>();
 
             _tasks.emplace(move_task(std::move(task_wrapper)));
@@ -297,35 +301,42 @@ class thread_pool
         return cancel_pending();
     }
 
+    bool is_worker_thread() const noexcept
+    {
+        const auto                  current_id = std::this_thread::get_id();
+        std::lock_guard<std::mutex> lock(_mu);
+        return _worker_ids.find(current_id) != _worker_ids.end();
+    }
+
     void shutdown()
     {
-        std::vector<std::thread> workers_to_join;
         {
-            std::unique_lock<std::mutex> lock(_mu);
-            if(_is_stop)
+            std::lock_guard<std::mutex> lock(_mu);
+            if(_worker_ids.find(std::this_thread::get_id())
+               != _worker_ids.end())
             {
-                return;
+                throw std::logic_error(
+                    "thread_pool::shutdown() cannot be called from a worker "
+                    "thread inside the pool.");
             }
-            _is_stop = true;
-            workers_to_join.swap(_workers);
+
+            if(_is_stop.load(std::memory_order_relaxed))
+                return;
+
+            _is_stop.store(true, std::memory_order_release);
         }
 
         _cond.notify_all();
-
-        const auto current_id = std::this_thread::get_id();
-
-        for(std::thread &worker : workers_to_join)
+        for(std::thread &worker : _workers)
         {
             if(worker.joinable())
-            {
-                if(worker.get_id() == current_id)
-                {
-                    worker.detach();
-                } else
-                {
-                    worker.join();
-                }
-            }
+                worker.join();
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            _workers.clear();
+            _worker_ids.clear();
         }
     }
 
@@ -335,60 +346,88 @@ class thread_pool
         std::promise<void> init_promise;
         std::future<void>  init_future = init_promise.get_future();
 
-        _workers.emplace_back(
-            [this, core, p = std::move(init_promise)]() mutable {
-                if(core > -1)
+        _workers.emplace_back([this,
+                               core,
+                               p = std::move(init_promise)]() mutable {
+            struct active_guard
+            {
+                std::atomic<std::size_t> &counter;
+                active_guard(std::atomic<std::size_t> &c)
+                    : counter(c)
                 {
-                    if(!_bind_core(static_cast<unsigned int>(core)))
-                    {
-                        p.set_exception(std::make_exception_ptr(
-                            std::runtime_error("Failed to bind thread to core: "
-                                               + std::to_string(core))));
+                    counter.fetch_add(1, std::memory_order_relaxed);
+                }
+                ~active_guard()
+                {
+                    counter.fetch_sub(1, std::memory_order_relaxed);
+                }
+            } guard(this->_active_threads);
+
+            {
+                std::lock_guard<std::mutex> lock(this->_mu);
+                this->_worker_ids.insert(std::this_thread::get_id());
+            }
+
+            if(core > -1)
+            {
+                if(!_bind_core(static_cast<unsigned int>(core)))
+                {
+                    p.set_exception(std::make_exception_ptr(
+                        std::runtime_error("Failed to bind thread to core: "
+                                           + std::to_string(core))));
+                    return;
+                }
+            }
+
+            p.set_value();
+
+            for(;;)
+            {
+                move_task task;
+                {
+                    std::unique_lock<std::mutex> lock(this->_mu);
+                    this->_cond.wait(lock, [this]() {
+                        return this->_is_stop.load(std::memory_order_relaxed)
+                               || !this->_tasks.empty();
+                    });
+
+                    if(this->_is_stop.load(std::memory_order_relaxed)
+                       && this->_tasks.empty())
                         return;
-                    }
+
+                    task = std::move(this->_tasks.front());
+                    this->_tasks.pop();
                 }
 
-                p.set_value();
-
-                for(;;)
+                if(task)
                 {
-                    move_task task;
-
+                    try
                     {
-                        std::unique_lock<std::mutex> lock(this->_mu);
-                        this->_cond.wait(lock, [this]() {
-                            return this->_is_stop || !this->_tasks.empty();
-                        });
-
-                        if(this->_is_stop && this->_tasks.empty())
-                            return;
-
-                        task = std::move(this->_tasks.front());
-                        this->_tasks.pop();
+                        task();
                     }
-
-                    if(task)
+                    catch(...)
                     {
+                        exception_handler_t handler_copy;
+                        {
+                            std::lock_guard<std::mutex> lock(this->_mu);
+                            handler_copy = this->_exception_handler;
+                        }
+
+                        if(!handler_copy)
+                            std::terminate();
+
                         try
                         {
-                            task();
+                            handler_copy(std::current_exception());
                         }
                         catch(...)
                         {
-                            exception_handler_t handler_copy;
-                            {
-                                std::lock_guard<std::mutex> lock(this->_mu);
-                                handler_copy = this->_exception_handler;
-                            }
-
-                            if(handler_copy)
-                                handler_copy(std::current_exception());
-                            else
-                                std::terminate();
+                            std::terminate();
                         }
                     }
                 }
-            });
+            }
+        });
 
         init_future.get();
     }
@@ -448,13 +487,15 @@ class thread_pool
     }
 
   private:
-    const std::size_t        _configured_threads;
-    std::vector<std::thread> _workers;
-    std::queue<move_task>    _tasks;
-    mutable std::mutex       _mu;
-    std::condition_variable  _cond;
-    bool                     _is_stop = false;
-    exception_handler_t      _exception_handler;
+    const std::size_t                   _configured_threads;
+    std::atomic<std::size_t>            _active_threads{0};
+    std::vector<std::thread>            _workers;
+    std::unordered_set<std::thread::id> _worker_ids;
+    std::queue<move_task>               _tasks;
+    mutable std::mutex                  _mu;
+    std::condition_variable             _cond;
+    std::atomic<bool>                   _is_stop{false};
+    exception_handler_t                 _exception_handler;
 };
 
 } // namespace hj

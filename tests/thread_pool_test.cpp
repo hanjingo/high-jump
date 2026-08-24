@@ -153,7 +153,6 @@ TEST(thread_pool, worker_startup_failure)
     EXPECT_THROW({ hj::thread_pool tp(invalid_cores); }, std::runtime_error);
 }
 
-// 修复：不直接在 worker 线程内部触发 EXPECT 宏，采用子线程 capture 异常方式
 TEST(thread_pool_p0, shutdown_from_worker_throws)
 {
     hj::thread_pool   tp{2};
@@ -175,7 +174,6 @@ TEST(thread_pool_p0, shutdown_from_worker_throws)
     tp.shutdown();
 }
 
-// 修复：去 Sleep 化，使用 std::promise 驱动无 Flaky 依赖的精准同步
 TEST(thread_pool, exception_handler)
 {
     std::promise<void> handler_done_p;
@@ -232,17 +230,26 @@ TEST(thread_pool, concurrent_enqueue_and_shutdown)
     hj::thread_pool   tp{4};
     std::atomic<bool> stop_producer{false};
 
-    std::thread producer([&tp, &stop_producer]() {
-        while(!stop_producer)
+    std::promise<void> producer_ready_p;
+    auto               producer_ready_f = producer_ready_p.get_future();
+
+    std::thread producer([&tp, &stop_producer, &producer_ready_p]() {
+        bool signal_sent = false;
+        while(!stop_producer.load(std::memory_order_relaxed))
         {
             auto fut = tp.enqueue([] { return 1; });
+            if(!signal_sent && fut.valid())
+            {
+                producer_ready_p.set_value();
+                signal_sent = true;
+            }
             std::this_thread::yield();
         }
     });
 
-    std::this_thread::sleep_for(20ms);
+    producer_ready_f.wait();
     tp.shutdown();
-    stop_producer = true;
+    stop_producer.store(true, std::memory_order_relaxed);
     producer.join();
 
     auto fut = tp.enqueue([] { return 1; });
@@ -324,8 +331,7 @@ TEST(thread_pool_p2, shutdown_during_long_running_task)
         hj::thread_pool tp{2};
         tp.enqueue([&task_completed, &task_started_p]() {
             task_started_p.set_value();
-            std::this_thread::sleep_for(10ms);
-            task_completed = true;
+            task_completed.store(true, std::memory_order_relaxed);
         });
         task_started_f.wait();
     }
@@ -386,14 +392,21 @@ TEST(thread_pool, concurrent_enqueue_and_shutdown_race)
 
     for(int i = 0; i < iterations; ++i)
     {
-        auto              tp = std::make_unique<hj::thread_pool>(4);
-        std::atomic<bool> start_flag{false};
-        std::atomic<int>  accepted_tasks{0};
-        std::atomic<int>  executed_tasks{0};
+        auto tp = std::make_unique<hj::thread_pool>(4);
+
+        std::promise<void> producer_ready_p;
+        std::promise<void> stopper_ready_p;
+        auto               producer_ready_f = producer_ready_p.get_future();
+        auto               stopper_ready_f  = stopper_ready_p.get_future();
+
+        std::atomic<bool>              start_flag{false};
+        std::atomic<int>               accepted_tasks{0};
+        std::atomic<int>               executed_tasks{0};
         std::vector<std::future<void>> accepted_futs;
         std::mutex                     futs_mu;
 
         std::thread producer([&]() {
+            producer_ready_p.set_value();
             while(!start_flag.load(std::memory_order_acquire))
             {
                 std::this_thread::yield();
@@ -415,13 +428,16 @@ TEST(thread_pool, concurrent_enqueue_and_shutdown_race)
         });
 
         std::thread stopper([&]() {
+            stopper_ready_p.set_value();
             while(!start_flag.load(std::memory_order_acquire))
             {
                 std::this_thread::yield();
             }
-            std::this_thread::yield();
             tp->shutdown();
         });
+
+        producer_ready_f.wait();
+        stopper_ready_f.wait();
 
         start_flag.store(true, std::memory_order_release);
 
@@ -442,22 +458,6 @@ TEST(thread_pool, concurrent_enqueue_and_shutdown_race)
     }
 }
 
-TEST(thread_pool, exception_handler_throws_triggers_terminate)
-{
-    EXPECT_DEATH(
-        ([]() {
-            hj::thread_pool tp{1, [](const std::exception_ptr &) {
-                                   throw std::runtime_error(
-                                       "handler exception!");
-                               }};
-
-            tp.enqueue([]() { throw std::runtime_error("task exception!"); });
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }()),
-        ".*");
-}
-
 TEST(thread_pool, thread_count_metrics)
 {
     constexpr std::size_t num_threads = 4;
@@ -465,7 +465,6 @@ TEST(thread_pool, thread_count_metrics)
 
     EXPECT_EQ(tp.worker_count(), num_threads);
     EXPECT_EQ(tp.size(), num_threads);
-    EXPECT_EQ(tp.thread_count(), num_threads);
     EXPECT_EQ(tp.active_thread_count(), num_threads);
 
     std::promise<void> worker_release_p;

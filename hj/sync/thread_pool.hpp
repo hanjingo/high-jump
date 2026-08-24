@@ -21,6 +21,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <atomic>
+#include <tuple>
+#include <new>
 
 #if defined(_WIN32)
 #if !defined(NOMINMAX)
@@ -91,7 +93,8 @@ class move_task
 
         constexpr bool fits_sbo =
             (sizeof(DecayedF) <= SBO_SIZE)
-            && (alignof(DecayedF) <= alignof(std::max_align_t));
+            && (alignof(DecayedF) <= alignof(std::max_align_t))
+            && std::is_nothrow_move_constructible_v<DecayedF>;
 
         if(fits_sbo)
         {
@@ -161,12 +164,28 @@ class move_task
     explicit operator bool() const noexcept { return _vptr != nullptr; }
 };
 
+/**
+ * @brief Thread pool managing worker threads for concurrent task execution.
+ *
+ * @note **EXCEPTION POLICY & CONTRACT**:
+ *  - When a task executed inside the pool throws an exception, the exception is stored in the
+ *    returned `std::future`. Caller can observe it by calling `future.get()`.
+ *  - **CRITICAL**: If a task throws an exception AND no exception handler is installed via 
+ *    `set_exception_handler()` / constructor, `std::terminate()` will be invoked immediately.
+ *  - Ignoring the returned `std::future` without calling `.get()` on a throwing task **WILL** terminate 
+ *    the process unless a fallback `exception_handler_t` is set. Unobserved task exceptions are fatal!
+ */
 class thread_pool
 {
   public:
     using exception_handler_t = std::function<void(const std::exception_ptr &)>;
 
   public:
+    /**
+     * @brief Constructs a thread pool with a specified number of threads.
+     * @param nthread The number of worker threads to create. Defaults to hardware concurrency.
+     * @param handler Optional global exception callback for unhandled task exceptions.
+     */
     explicit thread_pool(
         unsigned long       nthread = std::thread::hardware_concurrency(),
         exception_handler_t handler = nullptr)
@@ -190,6 +209,11 @@ class thread_pool
         }
     }
 
+    /**
+     * @brief Constructs a thread pool with core affinity binding.
+     * @param cores A set of global logical core IDs to bind worker threads to.
+     * @param handler Optional global exception callback for unhandled task exceptions.
+     */
     explicit thread_pool(const std::unordered_set<unsigned int> &cores,
                          exception_handler_t handler = nullptr)
         : _configured_threads{cores.size()}
@@ -226,7 +250,6 @@ class thread_pool
 
     std::size_t worker_count() const noexcept { return _configured_threads; }
     std::size_t size() const noexcept { return worker_count(); }
-    std::size_t thread_count() const noexcept { return worker_count(); }
     std::size_t active_thread_count() const noexcept
     {
         return _active_threads.load(std::memory_order_relaxed);
@@ -237,12 +260,28 @@ class thread_pool
         return _is_stop.load(std::memory_order_acquire);
     }
 
+    /**
+     * @brief Sets or updates the global exception handler for unhandled task exceptions.
+     * @param handler Callback to receive `std::exception_ptr` when a task throws.
+     */
     void set_exception_handler(exception_handler_t handler)
     {
         std::unique_lock<std::mutex> lock(_mu);
         _exception_handler = std::move(handler);
     }
 
+    /**
+     * @brief Enqueues a callable for execution by the thread pool.
+     * @tparam F Callable type.
+     * @tparam Args Argument types.
+     * @param f Function or lambda to execute.
+     * @param args Arguments to pass to the function.
+     * @return std::future holding the asynchronous result or exception.
+     *
+     * @warning If the callable throws an exception during execution, it will be stored in 
+     *          the returned `std::future`. If `future.get()` is not called and no custom 
+     *          `exception_handler_t` was configured, `std::terminate()` will be called!
+     */
     template <class F, class... Args>
     auto enqueue(F &&f, Args &&...args)
         -> std::future<std::invoke_result_t<F, Args...>>

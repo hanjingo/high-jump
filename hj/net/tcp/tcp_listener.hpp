@@ -128,7 +128,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
             return nullptr;
 
         err_t err;
-        auto  sock = new sock_t(_io);
+        auto  sock = std::make_unique<sock_t>(_io);
         try
         {
             _acceptor->accept(*sock, err);
@@ -142,8 +142,10 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
         if(err.failed())
             return nullptr;
 
-        auto ret = std::make_shared<tcp_socket>(_io, sock);
-        ret->set_conn_status(tcp_socket::state::connected);
+        auto ret =
+            std::make_shared<tcp_socket>(_io,
+                                         std::move(sock),
+                                         hj::tcp_socket::state::connected);
         return ret;
     }
 
@@ -209,8 +211,12 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
         if(!_acceptor)
             return;
 
-        auto base = new sock_t(_io);
-        auto sock = std::make_shared<tcp_socket>(_io, base);
+        auto base = std::make_unique<sock_t>(_io);
+        auto sock =
+            std::make_shared<tcp_socket>(_io,
+                                         std::move(base),
+                                         hj::tcp_socket::state::connecting);
+        sock->status_chg(tcp_socket::state::connecting);
         try
         {
             _acceptor->async_accept(*base, [fn, sock](const err_t &err) {
@@ -222,7 +228,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
                     return;
                 }
 
-                sock->set_conn_status(tcp_socket::state::connected);
+                sock->status_chg(tcp_socket::state::connected);
                 if(fn)
                     fn(err, sock);
             });

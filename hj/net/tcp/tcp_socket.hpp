@@ -49,6 +49,13 @@ namespace hj
 class tcp_socket : public std::enable_shared_from_this<tcp_socket>
 {
   public:
+    enum class state
+    {
+        closed,
+        connecting,
+        connected
+    };
+
     using tcp_socket_ptr_t = std::shared_ptr<tcp_socket>;
     using io_t             = boost::asio::io_context;
 #if BOOST_VERSION < 108700
@@ -56,9 +63,9 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
 #endif
     using err_t = boost::system::error_code;
 
-    using const_buffer_t = boost::asio::const_buffer;
-    using multi_buffer_t = boost::asio::mutable_buffer;
-    using streambuf_t    = boost::asio::streambuf;
+    using const_buffer_t   = boost::asio::const_buffer;
+    using mutable_buffer_t = boost::asio::mutable_buffer;
+    using streambuf_t      = boost::asio::streambuf;
 
     using sock_t = boost::asio::ip::tcp::socket;
 #if BOOST_VERSION < 108700
@@ -75,7 +82,6 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
     using opt_no_delay    = boost::asio::ip::tcp::no_delay;
     using opt_send_buf_sz = boost::asio::ip::tcp::socket::send_buffer_size;
     using opt_recv_buf_sz = boost::asio::ip::tcp::socket::receive_buffer_size;
-    using opt_reuse_addr  = boost::asio::ip::tcp::socket::reuse_address;
     using opt_keep_alive  = boost::asio::ip::tcp::socket::keep_alive;
     using opt_broadcast   = boost::asio::ip::tcp::socket::broadcast;
 
@@ -106,62 +112,95 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
     inline io_t &io() { return _io; }
 
     template <typename T>
-    inline bool set_option(T opt)
+    inline err_t set_option(T opt) noexcept
     {
-        if(!_sock || !_sock->is_open())
-            return false;
-
         err_t err;
         _sock->set_option(opt, err);
-        if(!err.failed())
-            return true;
-
-        std::cerr << err << std::endl;
-        return false;
+        return err;
     }
 
-    inline bool is_connected() const noexcept
-    {
-        return _sock && _is_connected.load();
-    }
-
-    inline bool check_connected() noexcept
+    inline err_t non_blocking(bool mode) noexcept
     {
         err_t err;
-        return check_connected(err);
+        if(_sock)
+            _sock->non_blocking(mode, err);
+        else
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::not_connected);
+        return err;
     }
 
-    inline bool check_connected(err_t &err) noexcept
+    inline bool  is_open() const noexcept { return _sock && _sock->is_open(); }
+    inline state stat() const noexcept { return _state.load(); }
+
+    bool set_conn_status(state stat) noexcept
     {
+        auto old = _state.load();
+        return _state.compare_exchange_strong(old, stat);
+    }
+
+    err_t set_read_timeout(std::chrono::milliseconds ms) noexcept
+    {
+        err_t err;
         if(!_sock)
-            return false;
+            return boost::system::errc::make_error_code(
+                boost::system::errc::not_connected);
 
-        _sock->remote_endpoint(err);
-        return !err.failed();
-    }
-
-    bool
-    connect(const char               *ip,
-            uint16_t                  port,
-            std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
-            int                       try_times = 1)
-    {
-#if BOOST_VERSION < 108700
-        endpoint_t ep{address_t::from_string(ip), port};
+#ifdef _WIN32
+        DWORD timeout = static_cast<DWORD>(ms.count());
+        ::setsockopt(_sock->native_handle(),
+                     SOL_SOCKET,
+                     SO_RCVTIMEO,
+                     reinterpret_cast<const char *>(&timeout),
+                     sizeof(timeout));
 #else
-        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+        struct timeval tv;
+        tv.tv_sec  = static_cast<long>(ms.count() / 1000);
+        tv.tv_usec = static_cast<long>((ms.count() % 1000) * 1000);
+        ::setsockopt(_sock->native_handle(),
+                     SOL_SOCKET,
+                     SO_RCVTIMEO,
+                     &tv,
+                     sizeof(tv));
 #endif
-        return connect(ep, timeout, try_times);
+        return err;
     }
 
-    bool
+    err_t set_write_timeout(std::chrono::milliseconds ms) noexcept
+    {
+        err_t err;
+        if(!_sock)
+            return boost::system::errc::make_error_code(
+                boost::system::errc::not_connected);
+
+#ifdef _WIN32
+        DWORD timeout = static_cast<DWORD>(ms.count());
+        ::setsockopt(_sock->native_handle(),
+                     SOL_SOCKET,
+                     SO_SNDTIMEO,
+                     reinterpret_cast<const char *>(&timeout),
+                     sizeof(timeout));
+#else
+        struct timeval tv;
+        tv.tv_sec  = static_cast<long>(ms.count() / 1000);
+        tv.tv_usec = static_cast<long>((ms.count() % 1000) * 1000);
+        ::setsockopt(_sock->native_handle(),
+                     SOL_SOCKET,
+                     SO_SNDTIMEO,
+                     &tv,
+                     sizeof(tv));
+#endif
+        return err;
+    }
+
+    err_t
     connect(endpoint_t                ep,
             std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
             int                       try_times = 1)
     {
         for(int i = 0; i < try_times; ++i)
         {
-            set_conn_status(false);
+            set_conn_status(state::connecting);
             if(_sock && _sock->is_open())
                 _sock->close();
 
@@ -181,31 +220,46 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
 
                     if(!err.failed())
                     {
-                        this->set_conn_status(true);
+                        this->set_conn_status(state::connected);
                         success.exchange(true);
                     } else
-                        this->set_conn_status(false);
+                        this->set_conn_status(state::closed);
 
                     timer.cancel();
                 });
 
-            timer.async_wait([this, &finished](const err_t &err) {
-                (void) err; // ignore timer error
+            timer.async_wait([this, &finished](const err_t &tm_err) {
+                (void) tm_err; // ignore timer error
                 if(finished.exchange(true))
                     return;
 
                 if(this->_sock)
                     this->_sock->close();
 
-                this->set_conn_status(false);
+                this->set_conn_status(state::closed);
             });
 
             _io.restart();
             _io.run();
             if(success.load())
-                return true;
+                return {};
         }
-        return false;
+        return boost::system::errc::make_error_code(
+            boost::system::errc::connection_refused);
+    }
+
+    err_t
+    connect(const char               *ip,
+            uint16_t                  port,
+            std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
+            int                       try_times = 1)
+    {
+#if BOOST_VERSION < 108700
+        endpoint_t ep{address_t::from_string(ip), port};
+#else
+        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+#endif
+        return connect(ep, timeout, try_times);
     }
 
     void async_connect(const char *ip, const uint16_t port, conn_handler_t &&fn)
@@ -220,7 +274,7 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
 
     void async_connect(endpoint_t ep, conn_handler_t &&fn)
     {
-        if(is_connected())
+        if(_state.load() == state::connected)
         {
             fn(boost::system::errc::make_error_code(
                 boost::system::errc::already_connected));
@@ -233,172 +287,211 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
         _sock = std::make_unique<sock_t>(_io);
         _sock->async_connect(ep, [this, fn](const err_t &err) {
             if(!err.failed())
-                this->set_conn_status(true);
+                this->set_conn_status(state::connected);
             else
-                this->set_conn_status(false);
+                this->set_conn_status(state::closed);
 
             if(fn)
                 fn(err);
         });
     }
 
-    void disconnect()
+    err_t close()
     {
-        if(!is_connected())
-            return;
-
-        _disconnect_anyway();
-    }
-
-    size_t send(const const_buffer_t &buf)
-    {
-        if(!is_connected())
-            return 0;
-
-        try
+        if(_state.load() != state::connected)
         {
-            return _sock->send(buf);
+            return boost::system::errc::make_error_code(
+                boost::system::errc::not_connected);
         }
-        catch(const std::exception &e)
-        {
-            std::cerr << "send exception: " << e.what() << std::endl;
-            return 0;
-        }
-        catch(...)
-        {
-            std::cerr << "send unknown exception" << std::endl;
-            return 0;
-        }
-    }
-
-    size_t send(const unsigned char *data, size_t len)
-    {
-        return send(boost::asio::buffer(data, len));
-    }
-
-    void async_send(const const_buffer_t &buf, send_handler_t &&fn)
-    {
-        if(!is_connected())
-        {
-            fn(boost::system::errc::make_error_code(
-                   boost::system::errc::not_connected),
-               0);
-            return;
-        }
-
-        try
-        {
-            _sock->async_send(buf, std::move(fn));
-        }
-        catch(const std::exception &e)
-        {
-            std::cerr << "async_send exception: " << e.what() << std::endl;
-            return;
-        }
-        catch(...)
-        {
-            std::cerr << "async_send unknown exception" << std::endl;
-            return;
-        }
-    }
-
-    void async_send(const unsigned char *data, size_t len, send_handler_t &&fn)
-    {
-        if(!is_connected())
-        {
-            fn(boost::system::errc::make_error_code(
-                   boost::system::errc::not_connected),
-               0);
-            return;
-        }
-
-        return async_send(boost::asio::buffer(data, len), std::move(fn));
-    }
-
-    size_t recv(multi_buffer_t &buf)
-    {
-        if(!is_connected())
-            return 0;
 
         err_t err;
-        auto  sz = _sock->read_some(buf, err);
-        if(err.failed())
-            assert(false);
+        set_conn_status(state::closed);
+        if(_sock && _sock->is_open())
+        {
+            boost::asio::socket_base::linger opt;
+            _sock->get_option(opt, err);
+            if(!err && (!opt.enabled() || opt.timeout() > 0))
+                _sock->shutdown(sock_t::shutdown_both, err);
 
-        return sz;
+            _sock->close(err);
+            _sock.reset();
+        }
+
+        return err;
     }
 
-    size_t recv(unsigned char *data, size_t len)
+    size_t write(const const_buffer_t &buf, err_t &err) noexcept
     {
-        multi_buffer_t buf{data, len};
-        return recv(buf);
-    }
-
-    size_t recv_until(streambuf_t &buf, size_t least)
-    {
-        if(!is_connected())
+        if(_state.load() != state::connected)
+        {
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::not_connected);
             return 0;
+        }
 
-        err_t err;
-        auto  sz = boost::asio::read(*_sock,
-                                     buf,
-                                     boost::asio::transfer_at_least(least),
-                                     err);
-        if(err.failed())
-            assert(false);
-
-        return sz;
+        return boost::asio::write(*_sock, buf, err);
     }
 
-    void async_recv(multi_buffer_t &buf, recv_handler_t &&fn)
+    size_t write(const unsigned char *data, size_t len, err_t &err) noexcept
+    {
+        return write(boost::asio::buffer(data, len), err);
+    }
+
+    void async_write(
+        const const_buffer_t     &buf,
+        send_handler_t          &&fn,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(3000))
     {
         auto cb = std::move(fn);
-        if(!is_connected())
+        if(_state.load() != state::connected)
         {
-            cb(boost::system::errc::make_error_code(
-                   boost::system::errc::not_connected),
-               0);
+            if(cb)
+                cb(boost::system::errc::make_error_code(
+                       boost::system::errc::not_connected),
+                   0);
             return;
         }
 
-        _sock->async_read_some(buf, cb);
+        auto timer = std::make_shared<steady_timer_t>(_io);
+        timer->expires_after(timeout);
+
+        auto done = std::make_shared<std::atomic_bool>(false);
+
+        boost::asio::async_write(
+            *_sock,
+            buf,
+            [this, timer, done, cb](const err_t &err, std::size_t bytes) {
+                if(done->exchange(true))
+                    return;
+
+                timer->cancel();
+                if(cb)
+                    cb(err, bytes);
+            });
+
+        timer->async_wait([this, done, cb](const err_t &timer_err) {
+            if(timer_err == boost::asio::error::operation_aborted)
+                return;
+
+            if(done->exchange(true))
+                return;
+
+            err_t ec;
+            if(this->_sock)
+                this->_sock->cancel(ec);
+
+            if(cb)
+                cb(boost::system::errc::make_error_code(
+                       boost::system::errc::timed_out),
+                   0);
+        });
     }
 
-    void async_recv(unsigned char *data, size_t len, recv_handler_t &&fn)
+    void async_write(
+        const unsigned char      *data,
+        size_t                    len,
+        send_handler_t          &&fn,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(3000))
     {
-        multi_buffer_t buf{data, len};
-        async_recv(buf, std::move(fn));
+        return async_write(boost::asio::buffer(data, len),
+                           std::move(fn),
+                           timeout);
     }
 
-    bool set_conn_status(bool is_connected) noexcept
+    size_t read(mutable_buffer_t &buf, err_t &err) noexcept
     {
-        bool old = _is_connected.load();
-        return _is_connected.compare_exchange_strong(old, is_connected);
+        if(_state.load() != state::connected)
+        {
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::not_connected);
+            return 0;
+        }
+
+        return _sock->read_some(buf, err);
     }
 
-    void close()
+    size_t read(unsigned char *data, size_t len, err_t &err) noexcept
     {
-        if(!is_connected())
+        mutable_buffer_t buf{data, len};
+        return read(buf, err);
+    }
+
+    size_t read_until(streambuf_t &buf, size_t least, err_t &err) noexcept
+    {
+        if(_state.load() != state::connected)
+        {
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::not_connected);
+            return 0;
+        }
+
+        return boost::asio::read(*_sock,
+                                 buf,
+                                 boost::asio::transfer_at_least(least),
+                                 err);
+    }
+
+    void async_read(
+        mutable_buffer_t         &buf,
+        recv_handler_t          &&fn,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(3000))
+    {
+        auto cb = std::move(fn);
+        if(_state.load() != state::connected)
+        {
+            if(cb)
+                cb(boost::system::errc::make_error_code(
+                       boost::system::errc::not_connected),
+                   0);
             return;
+        }
 
-        _disconnect_anyway();
+        auto timer = std::make_shared<steady_timer_t>(_io);
+        timer->expires_after(timeout);
+        auto done = std::make_shared<std::atomic_bool>(false);
+        _sock->async_read_some(
+            buf,
+            [this, timer, done, cb](const err_t &err, std::size_t bytes) {
+                if(done->exchange(true))
+                    return;
+
+                timer->cancel();
+                if(cb)
+                    cb(err, bytes);
+            });
+
+        timer->async_wait([this, done, cb](const err_t &timer_err) {
+            if(timer_err == boost::asio::error::operation_aborted)
+                return;
+
+            if(done->exchange(true))
+                return;
+
+            err_t ec;
+            if(this->_sock)
+                this->_sock->cancel(ec);
+
+            if(cb)
+                cb(boost::system::errc::make_error_code(
+                       boost::system::errc::timed_out),
+                   0);
+        });
     }
 
-  private:
-    void _disconnect_anyway()
+    void async_read(
+        unsigned char            *data,
+        size_t                    len,
+        recv_handler_t          &&fn,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(3000))
     {
-        set_conn_status(false);
-        if(_sock && _sock->is_open())
-            _sock->close();
-
-        if(_sock)
-            _sock.reset();
+        mutable_buffer_t buf{data, len};
+        async_read(buf, std::move(fn), timeout);
     }
 
   private:
     io_t                   &_io;
     std::unique_ptr<sock_t> _sock;
-    std::atomic_bool        _is_connected{false};
+    std::atomic<state>      _state{state::closed};
 };
 
 }

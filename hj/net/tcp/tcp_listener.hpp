@@ -143,7 +143,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
             return nullptr;
 
         auto ret = std::make_shared<tcp_socket>(_io, sock);
-        ret->set_conn_status(true);
+        ret->set_conn_status(tcp_socket::state::connected);
         return ret;
     }
 
@@ -222,7 +222,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
                     return;
                 }
 
-                sock->set_conn_status(true);
+                sock->set_conn_status(tcp_socket::state::connected);
                 if(fn)
                     fn(err, sock);
             });

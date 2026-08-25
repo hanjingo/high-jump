@@ -4,7 +4,6 @@
 #include <memory>
 #include <functional>
 #include <atomic>
-#include <iostream>
 #include <utility>
 #include <cstdint>
 #include <mutex>
@@ -89,62 +88,22 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
 
     err_t open(const protocol_t &protocol = protocol_t::v4())
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
-
-        err_t ec;
-        if(_acceptor && _acceptor->is_open())
-            _close_unlocked();
-
-        _acceptor = std::make_unique<acceptor_t>(_io);
-        _acceptor->open(protocol, ec);
-        if(!ec)
-        {
-            _state.store(state::opened, std::memory_order_release);
-        }
-        return ec;
+        std::lock_guard<std::mutex> lock(_mu);
+        return _open(protocol);
     }
 
     template <typename Option>
     err_t set_option(const Option &opt)
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
-
-        err_t err;
-        if(!_acceptor || !_acceptor->is_open() || is_closed())
-        {
-            err = boost::system::errc::make_error_code(
-                boost::system::errc::bad_file_descriptor);
-            return err;
-        }
-
-        _acceptor->set_option(opt, err);
-        return err;
+        std::lock_guard<std::mutex> lock(_mu);
+        return _set_option(opt);
     }
 
     err_t listen(const endpoint_t &ep,
                  int backlog = boost::asio::socket_base::max_listen_connections)
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
-
-        err_t ec;
-        if(!_acceptor || !_acceptor->is_open())
-        {
-            ec = open(ep.protocol());
-            if(ec)
-                return ec;
-        }
-
-        _acceptor->bind(ep, ec);
-        if(ec)
-            return ec;
-
-        _acceptor->listen(backlog, ec);
-        if(ec)
-            return ec;
-
-        _binded_endpoint = ep;
-        _state.store(state::listening, std::memory_order_release);
-        return ec;
+        std::lock_guard<std::mutex> lock(_mu);
+        return _listen(ep, backlog);
     }
 
     err_t listen(uint16_t port,
@@ -168,38 +127,75 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
 
     std::shared_ptr<tcp_socket> accept(err_t &err)
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
+        std::shared_ptr<acceptor_t> safe_acceptor;
 
-        if(!is_listening() || !_acceptor)
         {
-            err = boost::system::errc::make_error_code(
-                boost::system::errc::not_connected);
-            return nullptr;
+            std::lock_guard<std::mutex> lock(_mu);
+            if(!is_listening() || !_acceptor || !_acceptor->is_open())
+            {
+                err = boost::system::errc::make_error_code(
+                    boost::system::errc::not_connected);
+                return nullptr;
+            }
+            safe_acceptor = _acceptor;
         }
 
         auto sock = std::make_unique<sock_t>(_io);
-        _acceptor->accept(*sock, err);
+        safe_acceptor->accept(*sock, err);
+
         if(err.failed())
             return nullptr;
 
-        hj::tcp_socket::state stat = hj::tcp_socket::state::closed;
-        if(sock && sock->is_open())
-            stat = hj::tcp_socket::state::connected;
+        if(is_closed())
+        {
+            err = boost::asio::error::operation_aborted;
+            return nullptr;
+        }
+
+        hj::tcp_socket::state stat = (sock && sock->is_open())
+                                         ? hj::tcp_socket::state::connected
+                                         : hj::tcp_socket::state::closed;
 
         return std::make_shared<tcp_socket>(_io, std::move(sock), stat);
     }
 
     std::shared_ptr<tcp_socket> accept(const endpoint_t &ep, err_t &err)
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
+        std::shared_ptr<acceptor_t> safe_acceptor;
 
-        if(_binded_endpoint != ep || !is_listening())
         {
-            err = listen(ep);
-            if(err.failed())
-                return nullptr;
+            std::lock_guard<std::mutex> lock(_mu);
+
+            if(is_listening() && _binded_endpoint != ep)
+                _close();
+
+            if(!is_listening())
+            {
+                err = _listen(ep);
+                if(err.failed())
+                    return nullptr;
+            }
+
+            safe_acceptor = _acceptor;
         }
-        return accept(err);
+
+        auto sock = std::make_unique<sock_t>(_io);
+        safe_acceptor->accept(*sock, err);
+
+        if(err.failed())
+            return nullptr;
+
+        if(is_closed())
+        {
+            err = boost::asio::error::operation_aborted;
+            return nullptr;
+        }
+
+        hj::tcp_socket::state stat = (sock && sock->is_open())
+                                         ? hj::tcp_socket::state::connected
+                                         : hj::tcp_socket::state::closed;
+
+        return std::make_shared<tcp_socket>(_io, std::move(sock), stat);
     }
 
     std::shared_ptr<tcp_socket> accept(uint16_t port, err_t &err)
@@ -224,42 +220,9 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
 
     void async_accept(accept_handler_t fn)
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
+        std::lock_guard<std::mutex> lock(_mu);
 
-        if(!is_listening() || !_acceptor)
-        {
-            if(fn)
-            {
-                err_t err = boost::asio::error::make_error_code(
-                    boost::asio::error::bad_descriptor);
-                fn(err, nullptr);
-            }
-            return;
-        }
-
-        auto  sock_base = std::make_unique<sock_t>(_io);
-        auto *raw_sock  = sock_base.get();
-        auto &io_ref    = _io;
-
-        _acceptor->async_accept(
-            *raw_sock,
-            [&io_ref, fn = std::move(fn), base = std::move(sock_base)](
-                const err_t &err) mutable {
-                if(err.failed())
-                {
-                    if(fn)
-                        fn(err, nullptr);
-                    return;
-                }
-
-                auto sock = std::make_shared<tcp_socket>(
-                    io_ref,
-                    std::move(base),
-                    hj::tcp_socket::state::connected);
-
-                if(fn)
-                    fn(err, std::move(sock));
-            });
+        _async_accept(std::move(fn));
     }
 
     void async_accept(uint16_t port) { async_accept(port, _accept_handler); }
@@ -282,7 +245,11 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
         if(ec)
         {
             if(fn)
-                fn(ec, nullptr);
+            {
+                boost::asio::post(_io, [fn = std::move(fn), ec]() {
+                    fn(ec, nullptr);
+                });
+            }
             return;
         }
         async_accept(endpoint_t{addr, port}, std::move(fn));
@@ -292,40 +259,45 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
 
     void async_accept(endpoint_t ep, accept_handler_t fn)
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
+        std::lock_guard<std::mutex> lock(_mu);
 
-        if(_binded_endpoint != ep || !is_listening())
+        if(is_listening() && _binded_endpoint != ep)
         {
-            err_t err = listen(ep);
+            _close();
+        }
+
+        if(!is_listening())
+        {
+            err_t err = _listen(ep);
             if(err.failed())
             {
                 if(fn)
-                    fn(err, nullptr);
+                {
+                    boost::asio::post(_io, [fn = std::move(fn), err]() {
+                        fn(err, nullptr);
+                    });
+                }
                 return;
             }
         }
 
-        async_accept(std::move(fn));
+        _async_accept(std::move(fn));
     }
 
-    void cancel()
+    err_t cancel()
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
-        if(_acceptor && _acceptor->is_open())
-        {
-            err_t ec;
-            _acceptor->cancel(ec);
-        }
+        std::lock_guard<std::mutex> lock(_mu);
+        return _cancel();
     }
 
     void close()
     {
-        std::lock_guard<std::recursive_mutex> lock(_mtx);
-        _close_unlocked();
+        std::lock_guard<std::mutex> lock(_mu);
+        _close();
     }
 
   private:
-    void _close_unlocked()
+    void _close()
     {
         auto expected = _state.load(std::memory_order_relaxed);
         if(expected == state::closed)
@@ -352,13 +324,127 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
 #endif
     }
 
+    err_t _open(const protocol_t &protocol)
+    {
+        if(_acceptor && _acceptor->is_open())
+            return boost::asio::error::already_open;
+
+        err_t ec;
+        _acceptor = std::make_shared<acceptor_t>(_io);
+        _acceptor->open(protocol, ec);
+        if(!ec)
+            _state.store(state::opened, std::memory_order_release);
+        else
+            _acceptor.reset();
+
+        return ec;
+    }
+
+    template <typename Option>
+    err_t _set_option(const Option &opt)
+    {
+        err_t err;
+        if(!_acceptor || !_acceptor->is_open() || is_closed())
+        {
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::bad_file_descriptor);
+            return err;
+        }
+
+        _acceptor->set_option(opt, err);
+        return err;
+    }
+
+    err_t
+    _listen(const endpoint_t &ep,
+            int backlog = boost::asio::socket_base::max_listen_connections)
+    {
+        if(is_listening())
+            return boost::asio::error::already_started;
+
+        err_t ec;
+        if(!_acceptor || !_acceptor->is_open())
+        {
+            ec = _open(ep.protocol());
+            if(ec)
+                return ec;
+        }
+
+        _acceptor->bind(ep, ec);
+        if(ec)
+            return ec;
+
+        _acceptor->listen(backlog, ec);
+        if(ec)
+            return ec;
+
+        _binded_endpoint = ep;
+        _state.store(state::listening, std::memory_order_release);
+        return ec;
+    }
+
+    void _async_accept(accept_handler_t fn)
+    {
+        if(!is_listening() || !_acceptor)
+        {
+            if(fn)
+            {
+                err_t err = boost::asio::error::make_error_code(
+                    boost::asio::error::bad_descriptor);
+
+                boost::asio::post(_io, [fn = std::move(fn), err]() {
+                    fn(err, nullptr);
+                });
+            }
+            return;
+        }
+
+        auto  sock_base = std::make_unique<sock_t>(_io);
+        auto *raw_sock  = sock_base.get();
+        auto &io_ref    = _io;
+
+        _acceptor->async_accept(
+            *raw_sock,
+            [&io_ref, fn = std::move(fn), base = std::move(sock_base)](
+                const err_t &err) mutable {
+                if(err.failed())
+                {
+                    if(fn)
+                        fn(err, nullptr);
+
+                    return;
+                }
+
+                auto sock = std::make_shared<tcp_socket>(
+                    io_ref,
+                    std::move(base),
+                    hj::tcp_socket::state::connected);
+
+                if(fn)
+                    fn(err, std::move(sock));
+            });
+    }
+
+    err_t _cancel()
+    {
+        if(!_acceptor || !_acceptor->is_open() || is_closed())
+        {
+            return boost::system::errc::make_error_code(
+                boost::system::errc::bad_file_descriptor);
+        }
+
+        err_t ec;
+        _acceptor->cancel(ec);
+        return ec;
+    }
+
   private:
-    io_t                        &_io;
-    mutable std::recursive_mutex _mtx;
-    std::unique_ptr<acceptor_t>  _acceptor;
-    endpoint_t                   _binded_endpoint;
-    std::atomic<state>           _state{state::init};
-    accept_handler_t             _accept_handler;
+    io_t                       &_io;
+    mutable std::mutex          _mu;
+    std::shared_ptr<acceptor_t> _acceptor;
+    endpoint_t                  _binded_endpoint;
+    std::atomic<state>          _state{state::init};
+    accept_handler_t            _accept_handler;
 };
 
 } // namespace hj

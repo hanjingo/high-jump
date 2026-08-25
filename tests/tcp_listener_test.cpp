@@ -270,6 +270,10 @@ TEST(tcp_listener, invalid_ip_parse)
                          ASSERT_EQ(err, boost::asio::error::invalid_argument);
                      });
 
+    ASSERT_FALSE(called.load());
+
+    io.poll();
+
     ASSERT_TRUE(called.load());
 }
 
@@ -338,4 +342,106 @@ TEST(tcp_listener, stack_object_lifecycle)
 
     io.run();
     ASSERT_TRUE(callback_executed.load());
+}
+
+TEST(tcp_listener, concurrent_close_while_running)
+{
+    hj::tcp_listener::io_t io;
+    auto                   work_guard = boost::asio::make_work_guard(io);
+
+    std::thread io_thread([&io]() { io.run(); });
+
+    auto li = hj::tcp_listener::create(io);
+    ASSERT_FALSE(li->listen(12020).failed());
+
+    std::atomic<bool> stop{false};
+    std::atomic<int>  executed_count{0};
+
+    std::thread accept_thread([&]() {
+        while(!stop.load())
+        {
+            li->async_accept([&executed_count](const hj::tcp_listener::err_t &,
+                                               auto) { executed_count++; });
+            std::this_thread::yield();
+        }
+    });
+
+    std::thread close_thread([&]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        li->close();
+        stop.store(true);
+    });
+
+    accept_thread.join();
+    close_thread.join();
+
+    work_guard.reset();
+    io_thread.join();
+
+    ASSERT_TRUE(li->is_closed());
+}
+
+TEST(tcp_listener, multithread_mixed_stress)
+{
+    hj::tcp_listener::io_t io;
+
+    auto                     work_guard = boost::asio::make_work_guard(io);
+    std::vector<std::thread> io_workers;
+    for(int i = 0; i < 4; ++i)
+    {
+        io_workers.emplace_back([&io]() { io.run(); });
+    }
+
+    auto              li = hj::tcp_listener::create(io);
+    std::atomic<bool> stop{false};
+
+    std::thread t_accept([&]() {
+        while(!stop.load())
+        {
+            li->async_accept(12021,
+                             [](const hj::tcp_listener::err_t &, auto) {});
+            std::this_thread::yield();
+        }
+    });
+
+    std::thread t_cancel([&]() {
+        while(!stop.load())
+        {
+            li->cancel();
+            std::this_thread::yield();
+        }
+    });
+
+    std::thread t_listen([&]() {
+        while(!stop.load())
+        {
+            li->listen(12021);
+            std::this_thread::yield();
+        }
+    });
+
+    std::thread t_close([&]() {
+        for(int i = 0; i < 50; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            li->close();
+            li->open();
+        }
+        stop.store(true);
+    });
+
+    t_accept.join();
+    t_cancel.join();
+    t_listen.join();
+    t_close.join();
+
+    li->close();
+    work_guard.reset();
+    for(auto &worker : io_workers)
+    {
+        if(worker.joinable())
+            worker.join();
+    }
+
+    ASSERT_TRUE(li->is_closed());
 }

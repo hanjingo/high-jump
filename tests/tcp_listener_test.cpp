@@ -18,19 +18,19 @@ TEST(tcp_listener, state_transition)
     hj::tcp_listener::io_t io;
     auto                   li = hj::tcp_listener::create(io);
 
-    ASSERT_EQ(li->current_state(), hj::tcp_listener::state::init);
+    ASSERT_EQ(li->status(), hj::tcp_listener::state::init);
     ASSERT_FALSE(li->is_listening());
     ASSERT_FALSE(li->is_closed());
 
     ASSERT_FALSE(li->open().failed());
-    ASSERT_EQ(li->current_state(), hj::tcp_listener::state::opened);
+    ASSERT_EQ(li->status(), hj::tcp_listener::state::opened);
 
     ASSERT_FALSE(li->listen(11999).failed());
-    ASSERT_EQ(li->current_state(), hj::tcp_listener::state::listening);
+    ASSERT_EQ(li->status(), hj::tcp_listener::state::listening);
     ASSERT_TRUE(li->is_listening());
 
     li->close();
-    ASSERT_EQ(li->current_state(), hj::tcp_listener::state::closed);
+    ASSERT_EQ(li->status(), hj::tcp_listener::state::closed);
     ASSERT_TRUE(li->is_closed());
 }
 

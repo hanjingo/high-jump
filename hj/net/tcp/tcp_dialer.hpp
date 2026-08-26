@@ -19,170 +19,344 @@
 #ifndef TCP_DIALER_HPP
 #define TCP_DIALER_HPP
 
-// #include <unordered_set>
-// #include <mutex>
-// #include <functional>
-// #include <boost/version.hpp>
-// #include <hj/net/tcp/tcp_socket.hpp>
+#include <unordered_set>
+#include <vector>
+#include <mutex>
+#include <functional>
+#include <string>
+#include <memory>
+#include <system_error>
+#include <utility>
+#include <boost/asio/post.hpp>
+#include <boost/version.hpp>
+#include <hj/net/tcp/tcp_socket.hpp>
 
-// #ifndef TCP_DIALER_MAX_SIZE
-// #define TCP_DIALER_MAX_SIZE 1024
-// #endif
+namespace hj
+{
 
-// namespace hj
-// {
+class tcp_dialer
+{
+  public:
+    static constexpr std::size_t dial_max_size = 1024;
 
-// class tcp_dialer : public std::enable_shared_from_this<tcp_dialer>
-// {
-//   public:
-//     using io_t            = hj::tcp_socket::io_t;
-//     using err_t           = hj::tcp_socket::err_t;
-//     using sock_ptr_t      = std::shared_ptr<hj::tcp_socket>;
-//     using dial_handler_t  = std::function<void(const err_t &, sock_ptr_t)>;
-//     using range_handler_t = std::function<bool(sock_ptr_t)>;
+    enum class state
+    {
+        open,
+        closing,
+        closed
+    };
 
-//   public:
-//     explicit tcp_dialer(io_t &io, std::size_t max_size = TCP_DIALER_MAX_SIZE)
-//         : _io{io}
-//         , _max_size{max_size}
-//     {
-//     }
+    using io_t            = hj::tcp_socket::io_t;
+    using err_t           = hj::tcp_socket::err_t;
+    using endpoint_t      = boost::asio::ip::tcp::endpoint;
+    using raw_sock_t      = boost::asio::ip::tcp::socket;
+    using sock_ptr_t      = std::shared_ptr<hj::tcp_socket>;
+    using dial_handler_t  = std::function<void(const err_t &, sock_ptr_t)>;
+    using range_handler_t = std::function<bool(sock_ptr_t)>;
 
-//     virtual ~tcp_dialer() { close(); }
+  public:
+    explicit tcp_dialer(io_t &io, std::size_t max_size = dial_max_size)
+        : _io{io}
+        , _max_size{max_size}
+    {
+        if(_max_size == 0)
+            throw std::invalid_argument("max_size must be greater than 0");
+    }
 
-//     tcp_dialer()                              = delete;
-//     tcp_dialer(const tcp_dialer &)            = delete;
-//     tcp_dialer &operator=(const tcp_dialer &) = delete;
-//     tcp_dialer(tcp_dialer &&)                 = default;
-//     tcp_dialer &operator=(tcp_dialer &&)      = default;
+    ~tcp_dialer() { close(); }
 
-//     inline std::size_t size() const noexcept
-//     {
-//         std::lock_guard<std::mutex> lock(_mu);
-//         return _socks.size();
-//     }
+    tcp_dialer()                              = delete;
+    tcp_dialer(const tcp_dialer &)            = delete;
+    tcp_dialer &operator=(const tcp_dialer &) = delete;
+    tcp_dialer(tcp_dialer &&)                 = delete;
+    tcp_dialer &operator=(tcp_dialer &&)      = delete;
 
-//     inline bool is_exist(sock_ptr_t sock) const noexcept
-//     {
-//         std::lock_guard<std::mutex> lock(_mu);
-//         return _socks.find(sock) != _socks.end();
-//     }
+    [[nodiscard]] bool is_open() const noexcept
+    {
+        return _state.load(std::memory_order_relaxed) == state::open;
+    }
 
-//     sock_ptr_t
-//     dial(const char               *ip,
-//          const std::uint16_t       port,
-//          std::chrono::milliseconds timeout   = std::chrono::milliseconds(2000),
-//          int                       try_times = 1)
-//     {
-//         if(size() > _max_size)
-//             return nullptr;
+    inline state status() const noexcept
+    {
+        return _state.load(std::memory_order_relaxed);
+    }
 
-//         auto sock = std::make_shared<tcp_socket>(_io);
-//         try
-//         {
-//             if(sock->connect(ip, port, timeout, try_times))
-//             {
-//                 return _add(sock) ? sock : nullptr;
-//             }
-//         }
-//         catch(const std::exception &e)
-//         {
-//             std::cerr << "dial exception: " << e.what() << std::endl;
-//         }
+    inline std::size_t size() const noexcept
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        return _socks.size();
+    }
 
-//         return nullptr;
-//     }
+    inline bool is_exist(sock_ptr_t sock) const noexcept
+    {
+        if(!sock)
+            return false;
 
-//     void async_dial(const char *ip, const uint16_t port, dial_handler_t &&fn)
-//     {
-//         if(size() > _max_size)
-//         {
-//             fn(make_error_code(std::errc::no_buffer_space), nullptr);
-//             return;
-//         }
+        std::lock_guard<std::mutex> lock(_mu);
+        return _socks.find(sock) != _socks.end();
+    }
 
-//         auto sock = std::make_shared<tcp_socket>(_io);
-//         sock->async_connect(
-//             ip,
-//             port,
-//             [this, sock, fn = std::move(fn)](const err_t &err) mutable {
-//                 if(!err)
-//                 {
-//                     this->_add(sock);
-//                     if(fn)
-//                         fn(err, sock);
-//                 } else
-//                 {
-//                     if(fn)
-//                         fn(err, nullptr);
-//                 }
-//             });
-//     }
+    sock_ptr_t
+    dial(endpoint_t                ep,
+         err_t                    &err,
+         std::chrono::milliseconds timeout  = std::chrono::milliseconds(2000),
+         int                       attempts = 1)
+    {
+        if(attempts <= 0)
+            throw std::invalid_argument("attempts must be greater than 0");
 
-//     void range(range_handler_t &&handler)
-//     {
-//         if(!handler)
-//             return;
+        if(!is_open())
+        {
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::bad_file_descriptor);
+            return nullptr;
+        }
 
-//         std::lock_guard<std::mutex> lock(_mu);
-//         for(auto sock : _socks)
-//         {
-//             try
-//             {
-//                 if(!handler(sock))
-//                     return;
-//             }
-//             catch(...)
-//             {
-//             }
-//         }
-//     }
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            if(_socks.size() >= _max_size)
+            {
+                err = boost::system::errc::make_error_code(
+                    boost::system::errc::no_buffer_space);
+                return nullptr;
+            }
+        }
 
-//     void remove(sock_ptr_t sock)
-//     {
-//         if(!sock || !is_exist(sock))
-//             return;
+        auto sock = std::make_shared<tcp_socket>(_io);
+        err       = sock->connect(ep, timeout, attempts);
+        if(!err.failed())
+        {
+            if(_add(sock))
+                return sock;
 
-//         if(sock->is_connected())
-//             sock->close();
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::operation_not_permitted);
+            sock->close();
+        }
 
-//         _del(sock);
-//     }
+        return nullptr;
+    }
 
-//     void close()
-//     {
-//         std::lock_guard<std::mutex> lock(_mu);
-//         for(auto &sock : _socks)
-//         {
-//             if(sock)
-//                 sock->close();
-//         }
-//         _socks.clear();
-//     }
+    sock_ptr_t
+    dial(const char               *ip,
+         const std::uint16_t       port,
+         err_t                    &err,
+         std::chrono::milliseconds timeout  = std::chrono::milliseconds(2000),
+         int                       attempts = 1)
+    {
+        endpoint_t ep;
+        try
+        {
+            std::string ip_str = ip ? ip : "";
+#if BOOST_VERSION < 108700
+            ep = endpoint_t(address_t::from_string(ip_str), port);
+#else
+            ep = endpoint_t(boost::asio::ip::make_address(ip_str), port);
+#endif
+        }
+        catch(const std::exception &e)
+        {
+            err = boost::system::errc::make_error_code(
+                boost::system::errc::invalid_argument);
+            return nullptr;
+        }
 
-//   private:
-//     bool _add(sock_ptr_t sock)
-//     {
-//         std::lock_guard<std::mutex> lock(_mu);
-//         if(_socks.size() > _max_size)
-//             return false;
+        return dial(ep, err, timeout, attempts);
+    }
 
-//         return _socks.insert(sock).second;
-//     }
+    void async_dial(endpoint_t ep, dial_handler_t &&fn)
+    {
+        if(!fn)
+            return;
 
-//     bool _del(sock_ptr_t sock)
-//     {
-//         std::lock_guard<std::mutex> lock(_mu);
-//         return _socks.erase(sock) > 0;
-//     }
+        if(!is_open())
+        {
+            if(fn)
+                fn(boost::system::errc::make_error_code(
+                       boost::system::errc::bad_file_descriptor),
+                   nullptr);
+            return;
+        }
 
-//   private:
-//     io_t                          &_io;
-//     std::unordered_set<sock_ptr_t> _socks;
-//     mutable std::mutex             _mu;
-//     std::size_t                    _max_size;
-// };
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            if(_socks.size() >= _max_size)
+            {
+                boost::asio::post(_io, [fn = std::move(fn)]() {
+                    fn(boost::system::errc::make_error_code(
+                           boost::system::errc::no_buffer_space),
+                       nullptr);
+                });
+                return;
+            }
+        }
 
-// }
+        auto  sock_base = std::make_unique<raw_sock_t>(_io);
+        auto *raw_sock  = sock_base.get();
+        auto &io_ref    = _io;
+        auto  sock =
+            std::make_shared<tcp_socket>(io_ref,
+                                         std::move(sock_base),
+                                         hj::tcp_socket::state::connecting);
+
+        if(!_add(sock))
+        {
+            boost::asio::post(_io, [fn = std::move(fn)]() {
+                fn(boost::system::errc::make_error_code(
+                       boost::system::errc::operation_not_permitted),
+                   nullptr);
+            });
+            return;
+        }
+
+        raw_sock->async_connect(
+            ep,
+            [&io_ref, fn = std::move(fn), sock = std::move(sock)](
+                const err_t &err) mutable {
+                if(err.failed())
+                {
+                    if(fn)
+                        fn(err, nullptr);
+
+                    return;
+                }
+
+                if(fn)
+                    fn(err, std::move(sock));
+            });
+    }
+
+    void async_dial(const char *ip, const uint16_t port, dial_handler_t &&fn)
+    {
+        endpoint_t ep;
+        try
+        {
+            std::string ip_str = ip ? ip : "";
+#if BOOST_VERSION < 108700
+            ep = endpoint_t(address_t::from_string(ip_str), port);
+#else
+            ep = endpoint_t(boost::asio::ip::make_address(ip_str), port);
+#endif
+        }
+        catch(const std::exception &e)
+        {
+            boost::asio::post(_io, [fn = std::move(fn)]() {
+                fn(boost::system::errc::make_error_code(
+                       boost::system::errc::invalid_argument),
+                   nullptr);
+            });
+            return;
+        }
+
+        async_dial(ep, std::move(fn));
+    }
+
+    err_t range(range_handler_t &&handler)
+    {
+        if(!handler)
+            return boost::system::errc::make_error_code(
+                boost::system::errc::invalid_argument);
+
+        std::vector<sock_ptr_t> snapshot;
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            snapshot.reserve(_socks.size());
+            snapshot.assign(_socks.begin(), _socks.end());
+        }
+
+        for(const auto &sock : snapshot)
+        {
+            if(!is_open())
+                return boost::system::errc::make_error_code(
+                    boost::system::errc::operation_canceled);
+
+            try
+            {
+                if(!handler(sock))
+                    return boost::system::errc::make_error_code(
+                        boost::system::errc::operation_canceled);
+            }
+            catch(const err_t &e)
+            {
+                return e;
+            }
+            catch(const std::exception &)
+            {
+                return boost::system::errc::make_error_code(
+                    boost::system::errc::operation_canceled);
+            }
+            catch(...)
+            {
+                return boost::system::errc::make_error_code(
+                    boost::system::errc::operation_canceled);
+            }
+        }
+        return err_t{};
+    }
+
+    bool remove(sock_ptr_t sock) noexcept
+    {
+        if(!sock)
+            return false;
+
+        if(_del(sock))
+        {
+            sock->close();
+            return true;
+        }
+        return false;
+    }
+
+    void close()
+    {
+        state expected = state::open;
+        if(!_state.compare_exchange_strong(expected,
+                                           state::closing,
+                                           std::memory_order_acq_rel))
+            return;
+
+        std::unordered_set<sock_ptr_t> socks_to_close;
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            socks_to_close.swap(_socks);
+        }
+
+        for(auto &sock : socks_to_close)
+        {
+            if(sock)
+                sock->close();
+        }
+        _state.store(state::closed, std::memory_order_release);
+    }
+
+  private:
+    bool _add(sock_ptr_t sock)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        if(!is_open())
+            return false;
+
+        if(_socks.size() >= _max_size)
+            return false;
+
+        return _socks.insert(sock).second;
+    }
+
+    bool _del(sock_ptr_t sock)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        return _socks.erase(sock) > 0;
+    }
+
+
+  private:
+    io_t                          &_io;
+    std::size_t                    _max_size;
+    mutable std::mutex             _mu;
+    std::atomic<state>             _state{state::open};
+    std::unordered_set<sock_ptr_t> _socks;
+};
+
+}
 
 #endif

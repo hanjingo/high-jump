@@ -81,7 +81,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
         return _state.load(std::memory_order_relaxed) == state::listening;
     }
 
-    [[nodiscard]] state current_state() const noexcept
+    [[nodiscard]] state status() const noexcept
     {
         return _state.load(std::memory_order_relaxed);
     }

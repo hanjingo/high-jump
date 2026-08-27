@@ -49,7 +49,7 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
     using mutable_buffer_t = boost::asio::mutable_buffer;
     using streambuf_t      = boost::asio::streambuf;
 
-    using sock_t     = boost::asio::ip::tcp::socket;
+    using raw_sock_t = boost::asio::ip::tcp::socket;
     using address_t  = boost::asio::ip::address;
     using endpoint_t = boost::asio::ip::tcp::endpoint;
 
@@ -60,38 +60,47 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
     using opt_recv_buf_sz = boost::asio::ip::tcp::socket::receive_buffer_size;
     using opt_keep_alive  = boost::asio::ip::tcp::socket::keep_alive;
 
-    using conn_handler_t = std::function<void(const err_t &)>;
+    using conn_handler_t  = std::function<void(const err_t &)>;
+    using write_handler_t = std::function<void(const err_t &, std::size_t)>;
+    using read_handler_t  = std::function<void(const err_t &, std::size_t)>;
+
+  private:
+    struct tcp_socket_key
+    {
+        explicit tcp_socket_key() = default;
+    };
 
   public:
-    explicit tcp_socket(io_t &io)
-        : _io{io}
-        , _sock{std::make_unique<sock_t>(io)}
-        , _state{state::closed}
-    {
-    }
-
-    explicit tcp_socket(io_t                   &io,
-                        std::unique_ptr<sock_t> sock,
-                        state initial_state = state::connected)
-        : _io{io}
-        , _sock{sock ? std::move(sock) : std::make_unique<sock_t>(io)}
-        , _state{initial_state}
-    {
-    }
-
-    ~tcp_socket() noexcept { close(); }
-
     tcp_socket()                              = delete;
     tcp_socket(const tcp_socket &)            = delete;
     tcp_socket &operator=(const tcp_socket &) = delete;
     tcp_socket(tcp_socket &&)                 = delete;
     tcp_socket &operator=(tcp_socket &&)      = delete;
 
+    explicit tcp_socket(tcp_socket_key, io_t &io)
+        : _io{io}
+        , _sock{std::make_unique<raw_sock_t>(io)}
+        , _state{state::closed}
+    {
+    }
+
+    explicit tcp_socket(tcp_socket_key,
+                        io_t                       &io,
+                        std::unique_ptr<raw_sock_t> sock,
+                        state initial_state = state::connected)
+        : _io{io}
+        , _sock{sock ? std::move(sock) : std::make_unique<raw_sock_t>(io)}
+        , _state{initial_state}
+    {
+    }
+
+    ~tcp_socket() noexcept { close(); }
+
     template <typename... Args>
     static std::shared_ptr<tcp_socket> make_shared(Args &&...args)
     {
-        return std::shared_ptr<tcp_socket>(
-            new tcp_socket(std::forward<Args>(args)...));
+        return std::make_shared<hj::tcp_socket>(tcp_socket_key{},
+                                                std::forward<Args>(args)...);
     }
 
     inline io_t &io() noexcept { return _io; }
@@ -147,8 +156,8 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
                     continue;
             }
 
-            _sock            = std::make_unique<sock_t>(_io);
-            sock_t *raw_sock = _sock.get();
+            _sock                = std::make_unique<raw_sock_t>(_io);
+            raw_sock_t *raw_sock = _sock.get();
 
             boost::asio::steady_timer timer(_io);
             timer.expires_after(timeout);
@@ -217,7 +226,7 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
         return connect(ep, timeout, attempts);
     }
 
-    template <typename Handler>
+    template <typename Handler = conn_handler_t>
     void async_connect(endpoint_t ep, Handler &&fn)
     {
         auto err = _status_chg(state::connecting);
@@ -242,7 +251,7 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
             }
         }
 
-        _sock                               = std::make_unique<sock_t>(_io);
+        _sock                               = std::make_unique<raw_sock_t>(_io);
         std::weak_ptr<tcp_socket> weak_self = weak_from_this();
         _sock->async_connect(
             ep,
@@ -264,7 +273,7 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
             });
     }
 
-    template <typename Handler>
+    template <typename Handler = conn_handler_t>
     void async_connect(const char *ip, const uint16_t port, Handler &&fn)
     {
         endpoint_t ep;
@@ -298,7 +307,7 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
         err_t err;
         if(_sock && _sock->is_open())
         {
-            _sock->shutdown(sock_t::shutdown_both, err);
+            _sock->shutdown(raw_sock_t::shutdown_both, err);
         }
         return err;
     }
@@ -332,6 +341,48 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
     size_t write(const unsigned char *data, size_t len, err_t &err)
     {
         return write(boost::asio::buffer(data, len), err);
+    }
+
+    template <typename Handler = write_handler_t>
+    void async_write(const_buffer_t buf, Handler &&fn)
+    {
+        if(_state.load() != state::connected)
+        {
+            boost::asio::post(_io, [fn = std::forward<Handler>(fn)]() mutable {
+                fn(boost::system::errc::make_error_code(
+                       boost::system::errc::not_connected),
+                   0);
+            });
+            return;
+        }
+
+        std::weak_ptr<tcp_socket> weak_self = weak_from_this();
+        boost::asio::async_write(
+            *_sock,
+            buf,
+            [weak_self,
+             fn = std::forward<Handler>(fn)](const err_t &err,
+                                             size_t bytes_transferred) mutable {
+                if(auto self = weak_self.lock())
+                {
+                    if(err.failed())
+                        self->_status_chg(state::closed);
+
+                    fn(err, bytes_transferred);
+                } else
+                {
+                    fn(boost::asio::error::make_error_code(
+                           boost::asio::error::operation_aborted),
+                       0);
+                }
+            });
+    }
+
+    template <typename Handler = write_handler_t>
+    void async_write(const unsigned char *data, size_t len, Handler &&fn)
+    {
+        return async_write(boost::asio::buffer(data, len),
+                           std::forward<Handler>(fn));
     }
 
     size_t read(mutable_buffer_t &buf, err_t &err)
@@ -388,6 +439,47 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
         return sz;
     }
 
+    template <typename Handler = read_handler_t>
+    void async_read(mutable_buffer_t buf, Handler &&fn)
+    {
+        if(_state.load() != state::connected)
+        {
+            boost::asio::post(_io, [fn = std::forward<Handler>(fn)]() mutable {
+                fn(boost::system::errc::make_error_code(
+                       boost::system::errc::not_connected),
+                   0);
+            });
+            return;
+        }
+
+        std::weak_ptr<tcp_socket> weak_self = weak_from_this();
+        _sock->async_read_some(
+            buf,
+            [weak_self,
+             fn = std::forward<Handler>(fn)](const err_t &err,
+                                             size_t bytes_transferred) mutable {
+                if(auto self = weak_self.lock())
+                {
+                    if(err.failed())
+                        self->_status_chg(state::closed);
+
+                    fn(err, bytes_transferred);
+                } else
+                {
+                    fn(boost::asio::error::make_error_code(
+                           boost::asio::error::operation_aborted),
+                       0);
+                }
+            });
+    }
+
+    template <typename Handler = read_handler_t>
+    void async_read(unsigned char *data, size_t len, Handler &&fn)
+    {
+        mutable_buffer_t buf{data, len};
+        async_read(buf, std::forward<Handler>(fn));
+    }
+
   private:
     void _on_io_error(const err_t &err) noexcept
     {
@@ -438,9 +530,9 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
     }
 
   private:
-    io_t                   &_io;
-    std::unique_ptr<sock_t> _sock;
-    std::atomic<state>      _state{state::closed};
+    io_t                       &_io;
+    std::unique_ptr<raw_sock_t> _sock;
+    std::atomic<state>          _state{state::closed};
 };
 
 } // namespace hj

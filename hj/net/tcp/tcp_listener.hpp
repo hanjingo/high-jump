@@ -25,10 +25,10 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
     using address_t = boost::asio::ip::address;
 #endif
 
-    using io_t       = tcp_socket::io_t;
-    using err_t      = tcp_socket::err_t;
-    using sock_t     = tcp_socket::sock_t;
-    using endpoint_t = tcp_socket::endpoint_t;
+    using io_t       = boost::asio::io_context;
+    using err_t      = boost::system::error_code;
+    using raw_sock_t = boost::asio::ip::tcp::socket;
+    using endpoint_t = boost::asio::ip::tcp::endpoint;
     using protocol_t = boost::asio::ip::tcp;
     using acceptor_t = boost::asio::ip::tcp::acceptor;
 
@@ -47,10 +47,9 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
 
   public:
     template <typename... Args>
-    static std::shared_ptr<tcp_listener> create(Args &&...args)
+    static std::shared_ptr<tcp_listener> make_shared(Args &&...args)
     {
-        return std::shared_ptr<tcp_listener>(
-            new tcp_listener(std::forward<Args>(args)...));
+        return std::make_shared<tcp_listener>(std::forward<Args>(args)...);
     }
 
     explicit tcp_listener(io_t &io) noexcept
@@ -140,7 +139,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
             safe_acceptor = _acceptor;
         }
 
-        auto sock = std::make_unique<sock_t>(_io);
+        auto sock = std::make_unique<raw_sock_t>(_io);
         safe_acceptor->accept(*sock, err);
 
         if(err.failed())
@@ -156,7 +155,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
                                          ? hj::tcp_socket::state::connected
                                          : hj::tcp_socket::state::closed;
 
-        return std::make_shared<tcp_socket>(_io, std::move(sock), stat);
+        return tcp_socket::make_shared(_io, std::move(sock), stat);
     }
 
     std::shared_ptr<tcp_socket> accept(const endpoint_t &ep, err_t &err)
@@ -179,7 +178,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
             safe_acceptor = _acceptor;
         }
 
-        auto sock = std::make_unique<sock_t>(_io);
+        auto sock = std::make_unique<raw_sock_t>(_io);
         safe_acceptor->accept(*sock, err);
 
         if(err.failed())
@@ -195,7 +194,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
                                          ? hj::tcp_socket::state::connected
                                          : hj::tcp_socket::state::closed;
 
-        return std::make_shared<tcp_socket>(_io, std::move(sock), stat);
+        return tcp_socket::make_shared(_io, std::move(sock), stat);
     }
 
     std::shared_ptr<tcp_socket> accept(uint16_t port, err_t &err)
@@ -399,7 +398,7 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
             return;
         }
 
-        auto  sock_base = std::make_unique<sock_t>(_io);
+        auto  sock_base = std::make_unique<raw_sock_t>(_io);
         auto *raw_sock  = sock_base.get();
         auto &io_ref    = _io;
 
@@ -415,10 +414,10 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
                     return;
                 }
 
-                auto sock = std::make_shared<tcp_socket>(
-                    io_ref,
-                    std::move(base),
-                    hj::tcp_socket::state::connected);
+                auto sock =
+                    tcp_socket::make_shared(io_ref,
+                                            std::move(base),
+                                            hj::tcp_socket::state::connected);
 
                 if(fn)
                     fn(err, std::move(sock));

@@ -46,8 +46,8 @@ class tcp_dialer
         closed
     };
 
-    using io_t            = hj::tcp_socket::io_t;
-    using err_t           = hj::tcp_socket::err_t;
+    using io_t            = boost::asio::io_context;
+    using err_t           = boost::system::error_code;
     using endpoint_t      = boost::asio::ip::tcp::endpoint;
     using raw_sock_t      = boost::asio::ip::tcp::socket;
     using sock_ptr_t      = std::shared_ptr<hj::tcp_socket>;
@@ -122,7 +122,7 @@ class tcp_dialer
             }
         }
 
-        auto sock = std::make_shared<tcp_socket>(_io);
+        auto sock = tcp_socket::make_shared(_io);
         err       = sock->connect(ep, timeout, attempts);
         if(!err.failed())
         {
@@ -194,10 +194,9 @@ class tcp_dialer
         auto  sock_base = std::make_unique<raw_sock_t>(_io);
         auto *raw_sock  = sock_base.get();
         auto &io_ref    = _io;
-        auto  sock =
-            std::make_shared<tcp_socket>(io_ref,
-                                         std::move(sock_base),
-                                         hj::tcp_socket::state::connecting);
+        auto  sock = tcp_socket::make_shared(io_ref,
+                                             std::move(sock_base),
+                                             hj::tcp_socket::state::connecting);
 
         if(!_add(sock))
         {

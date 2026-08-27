@@ -7,7 +7,7 @@
 TEST(tcp_listener, is_closed)
 {
     hj::tcp_listener::io_t io;
-    auto                   li = hj::tcp_listener::create(io);
+    auto                   li = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(li->is_closed());
     li->close();
     ASSERT_TRUE(li->is_closed());
@@ -16,7 +16,7 @@ TEST(tcp_listener, is_closed)
 TEST(tcp_listener, state_transition)
 {
     hj::tcp_listener::io_t io;
-    auto                   li = hj::tcp_listener::create(io);
+    auto                   li = hj::tcp_listener::make_shared(io);
 
     ASSERT_EQ(li->status(), hj::tcp_listener::state::init);
     ASSERT_FALSE(li->is_listening());
@@ -40,7 +40,7 @@ TEST(tcp_listener, set_option)
 
     std::thread t([&listening]() {
         hj::tcp_listener::io_t io;
-        auto                   li = hj::tcp_listener::create(io);
+        auto                   li = hj::tcp_listener::make_shared(io);
 
         ASSERT_TRUE(
             li->set_option(hj::tcp_listener::opt_reuse_addr(true)).failed());
@@ -69,8 +69,8 @@ TEST(tcp_listener, set_option)
     }
 
     hj::tcp_socket::io_t io;
-    hj::tcp_socket       sock{io};
-    ASSERT_FALSE(sock.connect("127.0.0.1", 12000).failed());
+    auto                 sock = hj::tcp_socket::make_shared(io);
+    ASSERT_FALSE(sock->connect("127.0.0.1", 12000).failed());
 
     t.join();
 }
@@ -81,7 +81,7 @@ TEST(tcp_listener, accept)
 
     std::thread t([&listening]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
 
         hj::tcp_listener::err_t unlisten_err;
         ASSERT_EQ(li->accept(unlisten_err), nullptr);
@@ -108,11 +108,13 @@ TEST(tcp_listener, accept)
 
     hj::tcp_socket::io_t io;
 
-    hj::tcp_socket sock0{io};
-    ASSERT_FALSE(sock0.connect("127.0.0.1", 12001).failed());
+    //hj::tcp_socket sock0{io};
+    auto sock0 = hj::tcp_socket::make_shared(io);
+    ASSERT_FALSE(sock0->connect("127.0.0.1", 12001).failed());
 
-    hj::tcp_socket sock1{io};
-    ASSERT_FALSE(sock1.connect("127.0.0.1", 12001).failed());
+    //hj::tcp_socket sock1{io};
+    auto sock1 = hj::tcp_socket::make_shared(io);
+    ASSERT_FALSE(sock1->connect("127.0.0.1", 12001).failed());
 
     t.join();
 }
@@ -121,10 +123,10 @@ TEST(tcp_listener, accept_endpoint_error_semantics_threaded)
 {
     hj::tcp_listener::io_t io;
 
-    auto l1 = hj::tcp_listener::create(io);
+    auto l1 = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(l1->listen(12005).failed());
 
-    auto l2 = hj::tcp_listener::create(io);
+    auto l2 = hj::tcp_listener::make_shared(io);
 
     hj::tcp_listener::err_t err = boost::system::errc::make_error_code(
         boost::system::errc::permission_denied);
@@ -146,7 +148,7 @@ TEST(tcp_listener, async_accept)
 
     std::thread t1([]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
 
         ASSERT_FALSE(li->listen(12002).failed());
 
@@ -165,7 +167,7 @@ TEST(tcp_listener, async_accept)
 
     std::thread t2([]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
 
         ASSERT_FALSE(li->listen(12003).failed());
 
@@ -185,17 +187,21 @@ TEST(tcp_listener, async_accept)
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     hj::tcp_socket::io_t io;
-    hj::tcp_socket       sock{io};
-    sock.connect("127.0.0.1", 12002);
+    //hj::tcp_socket       sock{io};
+    auto sock = hj::tcp_socket::make_shared(io);
+    sock->connect("127.0.0.1", 12002);
 
-    hj::tcp_socket sock1{io};
-    sock1.connect("127.0.0.1", 12002);
+    //hj::tcp_socket sock1{io};
+    auto sock1 = hj::tcp_socket::make_shared(io);
+    sock1->connect("127.0.0.1", 12002);
 
-    hj::tcp_socket sock2{io};
-    sock2.connect("127.0.0.1", 12003);
+    //hj::tcp_socket sock2{io};
+    auto sock2 = hj::tcp_socket::make_shared(io);
+    sock2->connect("127.0.0.1", 12003);
 
-    hj::tcp_socket sock3{io};
-    sock3.connect("127.0.0.1", 12003);
+    //hj::tcp_socket sock3{io};
+    auto sock3 = hj::tcp_socket::make_shared(io);
+    sock3->connect("127.0.0.1", 12003);
 
     t1.join();
     t2.join();
@@ -206,7 +212,7 @@ TEST(tcp_listener, async_accept)
 TEST(tcp_listener, close)
 {
     hj::tcp_socket::io_t io;
-    auto                 li = hj::tcp_listener::create(io);
+    auto                 li = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(li->is_closed());
     li->close();
     ASSERT_TRUE(li->is_closed());
@@ -217,7 +223,7 @@ TEST(tcp_listener, close)
 TEST(tcp_listener, concurrent_close_safety)
 {
     hj::tcp_socket::io_t io;
-    auto                 li = hj::tcp_listener::create(io);
+    auto                 li = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(li->listen(12006).failed());
 
     std::atomic<bool> stop{false};
@@ -245,10 +251,10 @@ TEST(tcp_listener, concurrent_close_safety)
 TEST(tcp_listener, port_conflict)
 {
     hj::tcp_listener::io_t io;
-    auto                   l1 = hj::tcp_listener::create(io);
+    auto                   l1 = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(l1->listen(12000).failed());
 
-    auto                    l2  = hj::tcp_listener::create(io);
+    auto                    l2  = hj::tcp_listener::make_shared(io);
     hj::tcp_listener::err_t err = l2->listen(12000);
 
     ASSERT_TRUE(err.failed());
@@ -258,7 +264,7 @@ TEST(tcp_listener, port_conflict)
 TEST(tcp_listener, invalid_ip_parse)
 {
     hj::tcp_listener::io_t io;
-    auto                   li = hj::tcp_listener::create(io);
+    auto                   li = hj::tcp_listener::make_shared(io);
 
     std::atomic<bool> called{false};
     li->async_accept("999.999.999.999",
@@ -280,7 +286,7 @@ TEST(tcp_listener, invalid_ip_parse)
 TEST(tcp_listener, close_pending_accept)
 {
     hj::tcp_listener::io_t io;
-    auto                   li = hj::tcp_listener::create(io);
+    auto                   li = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(li->listen(12010).failed());
 
     std::atomic<bool> callback_executed{false};
@@ -305,7 +311,7 @@ TEST(tcp_listener, destructor_with_pending_accept)
     std::atomic<bool>      callback_executed{false};
 
     {
-        auto li = hj::tcp_listener::create(io);
+        auto li = hj::tcp_listener::make_shared(io);
         ASSERT_FALSE(li->listen(12011).failed());
 
         li->async_accept([&](const hj::tcp_listener::err_t  &err,
@@ -351,7 +357,7 @@ TEST(tcp_listener, concurrent_close_while_running)
 
     std::thread io_thread([&io]() { io.run(); });
 
-    auto li = hj::tcp_listener::create(io);
+    auto li = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(li->listen(12020).failed());
 
     std::atomic<bool> stop{false};
@@ -392,7 +398,7 @@ TEST(tcp_listener, multithread_mixed_stress)
         io_workers.emplace_back([&io]() { io.run(); });
     }
 
-    auto              li = hj::tcp_listener::create(io);
+    auto              li = hj::tcp_listener::make_shared(io);
     std::atomic<bool> stop{false};
 
     std::thread t_accept([&]() {

@@ -55,7 +55,7 @@ TEST(tcp_dialer, dial_max_size)
 {
     std::thread t([]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
         ASSERT_FALSE(li->listen(11010));
         hj::tcp_dialer::err_t err;
         auto                  sock = li->accept(err);
@@ -117,7 +117,7 @@ TEST(tcp_dialer, async_dial_max_size)
 {
     std::thread t([]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
         ASSERT_FALSE(li->listen(11014));
         hj::tcp_dialer::err_t err;
 
@@ -159,7 +159,7 @@ TEST(tcp_dialer, async_dial_close_race)
 {
     std::thread t([]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
         ASSERT_FALSE(li->listen(11011));
         hj::tcp_dialer::err_t err;
         auto                  sock = li->accept(err);
@@ -220,7 +220,7 @@ TEST(tcp_dialer, remove_unknown_and_null)
 
     EXPECT_FALSE(dialer.remove(nullptr));
 
-    auto dummy_sock = std::make_shared<hj::tcp_socket>(io);
+    auto dummy_sock = hj::tcp_socket::make_shared(io);
     EXPECT_FALSE(dialer.remove(dummy_sock));
 }
 
@@ -228,7 +228,7 @@ TEST(tcp_dialer, range_stop_and_exception)
 {
     std::thread t([]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
         ASSERT_FALSE(li->listen(11012));
         for(int i = 0; i < 3; i++)
         {
@@ -286,7 +286,7 @@ TEST(tcp_dialer, concurrent_close_and_dial)
 
     std::thread t_server([&]() {
         hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::create(io);
+        auto                 li = hj::tcp_listener::make_shared(io);
         if(li->listen(11013))
             return;
         while(!stop_signal)

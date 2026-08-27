@@ -32,7 +32,7 @@
 namespace hj
 {
 
-class tcp_socket
+class tcp_socket : public std::enable_shared_from_this<tcp_socket>
 {
   public:
     enum class state
@@ -60,6 +60,8 @@ class tcp_socket
     using opt_recv_buf_sz = boost::asio::ip::tcp::socket::receive_buffer_size;
     using opt_keep_alive  = boost::asio::ip::tcp::socket::keep_alive;
 
+    using conn_handler_t = std::function<void(const err_t &)>;
+
   public:
     explicit tcp_socket(io_t &io)
         : _io{io}
@@ -84,6 +86,13 @@ class tcp_socket
     tcp_socket &operator=(const tcp_socket &) = delete;
     tcp_socket(tcp_socket &&)                 = delete;
     tcp_socket &operator=(tcp_socket &&)      = delete;
+
+    template <typename... Args>
+    static std::shared_ptr<tcp_socket> make_shared(Args &&...args)
+    {
+        return std::shared_ptr<tcp_socket>(
+            new tcp_socket(std::forward<Args>(args)...));
+    }
 
     inline io_t &io() noexcept { return _io; }
 
@@ -112,30 +121,6 @@ class tcp_socket
 
     inline bool  is_open() const noexcept { return _sock && _sock->is_open(); }
     inline state status() const noexcept { return _state.load(); }
-    bool         status_chg(state to) noexcept
-    {
-        state from = _state.load();
-        switch(from)
-        {
-            case state::closed: {
-                if(to == state::connected)
-                    return false;
-
-                break;
-            }
-            case state::connecting: {
-                break;
-            }
-            case state::connected: {
-                if(to == state::connected || to == state::connecting)
-                    return false;
-
-                break;
-            }
-        }
-        return _state.compare_exchange_strong(from, to);
-    }
-
     err_t
     connect(endpoint_t                ep,
             std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
@@ -148,24 +133,18 @@ class tcp_socket
         }
 
         err_t last_err;
-
         for(int i = 0; i < attempts; ++i)
         {
-            if(!status_chg(state::connecting))
-            {
-                state current = _state.load();
-                if(current == state::connected)
-                    return boost::system::errc::make_error_code(
-                        boost::system::errc::already_connected);
-                if(current == state::connecting && i == 0)
-                    return boost::system::errc::make_error_code(
-                        boost::system::errc::operation_in_progress);
-            }
+            last_err = _status_chg(state::connecting);
+            if(last_err.failed())
+                return last_err;
 
             if(_sock && _sock->is_open())
             {
                 err_t ec;
                 _sock->close(ec);
+                if(ec.failed())
+                    continue;
             }
 
             _sock            = std::make_unique<sock_t>(_io);
@@ -201,14 +180,13 @@ class tcp_socket
                     boost::system::errc::timed_out);
             } else if(!connect_ec)
             {
-                status_chg(state::connected);
-                return {};
+                return _status_chg(state::connected);
             } else
             {
                 last_err = connect_ec;
             }
 
-            status_chg(state::closed);
+            _status_chg(state::closed);
         }
 
         return last_err;
@@ -220,12 +198,95 @@ class tcp_socket
             std::chrono::milliseconds timeout = std::chrono::milliseconds(2000),
             int                       attempts = 1)
     {
+        endpoint_t ep;
+        try
+        {
+            std::string ip_str = ip ? ip : "";
 #if BOOST_VERSION < 108700
-        endpoint_t ep{address_t::from_string(ip), port};
+            ep = endpoint_t(address_t::from_string(ip_str), port);
 #else
-        endpoint_t ep{boost::asio::ip::make_address(ip), port};
+            ep = endpoint_t(boost::asio::ip::make_address(ip_str), port);
 #endif
+        }
+        catch(const std::exception &e)
+        {
+            return boost::system::errc::make_error_code(
+                boost::system::errc::invalid_argument);
+        }
+
         return connect(ep, timeout, attempts);
+    }
+
+    template <typename Handler>
+    void async_connect(endpoint_t ep, Handler &&fn)
+    {
+        auto err = _status_chg(state::connecting);
+        if(err.failed())
+        {
+            boost::asio::post(
+                _io,
+                [err, fn = std::forward<Handler>(fn)]() mutable { fn(err); });
+            return;
+        }
+
+        if(_sock && _sock->is_open())
+        {
+            err_t ec;
+            _sock->close(ec);
+            if(ec.failed())
+            {
+                boost::asio::post(
+                    _io,
+                    [fn = std::forward<Handler>(fn), ec]() mutable { fn(ec); });
+                return;
+            }
+        }
+
+        _sock                               = std::make_unique<sock_t>(_io);
+        std::weak_ptr<tcp_socket> weak_self = weak_from_this();
+        _sock->async_connect(
+            ep,
+            [weak_self,
+             fn = std::forward<Handler>(fn)](const err_t &err) mutable {
+                if(auto self = weak_self.lock())
+                {
+                    if(err.failed())
+                        self->_status_chg(state::closed);
+                    else
+                        self->_status_chg(state::connected);
+
+                    fn(err);
+                } else
+                {
+                    fn(boost::asio::error::make_error_code(
+                        boost::asio::error::operation_aborted));
+                }
+            });
+    }
+
+    template <typename Handler>
+    void async_connect(const char *ip, const uint16_t port, Handler &&fn)
+    {
+        endpoint_t ep;
+        try
+        {
+            std::string ip_str = ip ? ip : "";
+#if BOOST_VERSION < 108700
+            ep = endpoint_t(address_t::from_string(ip_str), port);
+#else
+            ep = endpoint_t(boost::asio::ip::make_address(ip_str), port);
+#endif
+        }
+        catch(const std::exception &e)
+        {
+            boost::asio::post(_io, [fn = std::forward<Handler>(fn)]() mutable {
+                fn(boost::system::errc::make_error_code(
+                    boost::system::errc::invalid_argument));
+            });
+            return;
+        }
+
+        async_connect(ep, std::forward<Handler>(fn));
     }
 
     err_t shutdown()
@@ -342,6 +403,38 @@ class tcp_socket
         {
             close();
         }
+    }
+
+    err_t _status_chg(state to) noexcept
+    {
+        state from = _state.load();
+        switch(from)
+        {
+            case state::closed: {
+                if(to == state::connected)
+                    return boost::system::errc::make_error_code(
+                        boost::system::errc::operation_not_permitted);
+                break;
+            }
+            case state::connecting: {
+                if(to == state::connecting)
+                    return boost::system::errc::make_error_code(
+                        boost::system::errc::operation_in_progress);
+
+                break;
+            }
+            case state::connected: {
+                if(to == state::connected || to == state::connecting)
+                    return boost::system::errc::make_error_code(
+                        boost::system::errc::already_connected);
+
+                break;
+            }
+        }
+        return _state.compare_exchange_strong(from, to)
+                   ? err_t{}
+                   : boost::system::errc::make_error_code(
+                         boost::system::errc::operation_not_permitted);
     }
 
   private:

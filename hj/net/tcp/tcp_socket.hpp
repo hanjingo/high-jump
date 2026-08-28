@@ -103,7 +103,8 @@ class tcp_socket : public std::enable_shared_from_this<tcp_socket>
                                                 std::forward<Args>(args)...);
     }
 
-    inline io_t &io() noexcept { return _io; }
+    inline io_t       &io() noexcept { return _io; }
+    inline raw_sock_t &raw_socket() noexcept { return *_sock; }
 
     template <typename T>
     inline err_t set_option(T opt) noexcept

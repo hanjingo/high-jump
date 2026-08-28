@@ -13,6 +13,34 @@
 namespace
 {
 
+constexpr auto TEST_TIMEOUT = std::chrono::seconds(5);
+
+template <typename T>
+T get_future_with_timeout(std::future<T>      &fut,
+                          std::chrono::seconds timeout = TEST_TIMEOUT)
+{
+    if(fut.wait_for(timeout) != std::future_status::ready)
+    {
+        ADD_FAILURE() << "Timed out waiting for future (limit: "
+                      << timeout.count() << "s)";
+        return T{};
+    }
+    return fut.get();
+}
+
+inline void
+wait_future_with_timeout(std::future<void>   &fut,
+                         std::chrono::seconds timeout = TEST_TIMEOUT)
+{
+    if(fut.wait_for(timeout) != std::future_status::ready)
+    {
+        ADD_FAILURE() << "Timed out waiting for future (limit: "
+                      << timeout.count() << "s)";
+        return;
+    }
+    fut.get();
+}
+
 class test_tcp_server
 {
   public:
@@ -75,11 +103,11 @@ TEST(tcp_conn, send_boundary_conditions)
     hj::tcp_conn::io_t io;
     auto               conn = hj::tcp_conn::make_shared(io);
 
-    hj::tcp_conn::msg_buffer_t empty_buf;
+    hj::tcp_conn::buffer_t empty_buf;
     conn->send(empty_buf);
     conn->send(nullptr, 0);
 
-    hj::tcp_conn::msg_buffer_t test_buf = {'h', 'e', 'l', 'l', 'o'};
+    hj::tcp_conn::buffer_t test_buf = {'h', 'e', 'l', 'l', 'o'};
     conn->send(test_buf);
     conn->send(test_buf.data(), test_buf.size());
 
@@ -96,29 +124,55 @@ TEST(tcp_conn, async_connect_success_and_read)
     auto listener = hj::tcp_listener::make_shared(io);
     listener->listen(test_port);
 
-    std::promise<void> accept_promise;
-    auto               accept_future = accept_promise.get_future();
+    std::promise<void> server_done_promise;
+    auto               server_done_future = server_done_promise.get_future();
 
-    std::thread server_thread([&listener, &accept_promise]() {
+    std::thread server_thread([&listener, &server_done_promise]() {
         hj::tcp_listener::err_t err;
         auto                    server_sock = listener->accept(err);
-        ASSERT_FALSE(err.failed());
-        ASSERT_NE(server_sock, nullptr);
 
-        std::string resp = "pong";
-        server_sock->write(boost::asio::buffer(resp), err);
-        accept_promise.set_value();
+        EXPECT_FALSE(err.failed());
+        EXPECT_NE(server_sock, nullptr);
+
+        if(!err.failed() && server_sock)
+        {
+            std::string resp = "pong";
+            server_sock->write(boost::asio::buffer(resp), err);
+
+            char buf[128] = {0};
+            server_sock->read(boost::asio::buffer(buf, sizeof(buf)), err);
+        }
+        server_done_promise.set_value();
     });
 
     auto                      conn = hj::tcp_conn::make_shared(io);
+    std::promise<std::string> write_promise;
+    auto                      write_future = write_promise.get_future();
     std::promise<std::string> read_promise;
     auto                      read_future = read_promise.get_future();
 
-    conn->set_read_callback([&read_promise](hj::tcp_conn::conn_ptr_t     c,
-                                            hj::tcp_conn::msg_buffer_t &&buf) {
-        std::string recved(buf.begin(), buf.end());
-        read_promise.set_value(recved);
-    });
+    std::atomic<bool> write_set{false};
+    std::atomic<bool> read_set{false};
+
+    conn->set_write_callback(
+        [&write_promise, &write_set](hj::tcp_conn::conn_ptr_t c,
+                                     hj::tcp_conn::buffer_t &&buf) {
+            if(!write_set.exchange(true))
+            {
+                std::string sended(buf.begin(), buf.end());
+                write_promise.set_value(sended);
+            }
+        });
+
+    conn->set_read_callback(
+        [&read_promise, &read_set](hj::tcp_conn::conn_ptr_t c,
+                                   hj::tcp_conn::buffer_t &&buf) {
+            if(!read_set.exchange(true))
+            {
+                std::string recved(buf.begin(), buf.end());
+                read_promise.set_value(recved);
+            }
+        });
 
     std::promise<hj::tcp_conn::err_t> conn_promise;
     auto                              conn_future = conn_promise.get_future();
@@ -132,17 +186,28 @@ TEST(tcp_conn, async_connect_success_and_read)
 
     std::thread io_thread([&io]() { io.run(); });
 
-    auto conn_err = conn_future.get();
+    auto conn_err = get_future_with_timeout(conn_future);
     EXPECT_FALSE(conn_err.failed());
 
-    accept_future.wait();
-    auto recved_data = read_future.get();
+    std::string send_msg = "ping";
+    conn->send(reinterpret_cast<const std::uint8_t *>(send_msg.data()),
+               send_msg.size());
+
+    auto recved_data = get_future_with_timeout(read_future);
     EXPECT_EQ(recved_data, "pong");
+
+    auto sended_data = get_future_with_timeout(write_future);
+    EXPECT_EQ(sended_data, "ping");
+
+    wait_future_with_timeout(server_done_future);
 
     conn->close();
     listener->close();
+
     if(server_thread.joinable())
         server_thread.join();
+
+    io.stop();
     if(io_thread.joinable())
         io_thread.join();
 }
@@ -164,7 +229,7 @@ TEST(tcp_conn, async_connect_failure_invalid_port)
 
     std::thread io_thread([&io]() { io.run(); });
 
-    auto err = conn_future.get();
+    auto err = get_future_with_timeout(conn_future);
     EXPECT_TRUE(err.failed());
 
     if(io_thread.joinable())
@@ -197,16 +262,20 @@ TEST(tcp_conn, async_send_and_receive_multi_packets)
                                &server_done_promise]() {
         hj::tcp_listener::err_t err;
         auto                    server_sock = listener->accept(err);
-        ASSERT_FALSE(err.failed());
+        EXPECT_FALSE(err.failed());
 
-        while(total_received.size() < expected_total_len && !err.failed())
+        if(server_sock)
         {
-            char        buf[128] = {0};
-            std::size_t sz =
-                server_sock->read(boost::asio::buffer(buf, sizeof(buf)), err);
-            if(!err.failed() && sz > 0)
+            while(total_received.size() < expected_total_len && !err.failed())
             {
-                total_received.append(buf, sz);
+                char        buf[128] = {0};
+                std::size_t sz =
+                    server_sock->read(boost::asio::buffer(buf, sizeof(buf)),
+                                      err);
+                if(!err.failed() && sz > 0)
+                {
+                    total_received.append(buf, sz);
+                }
             }
         }
         server_done_promise.set_value();
@@ -221,21 +290,21 @@ TEST(tcp_conn, async_send_and_receive_multi_packets)
         test_port,
         [&conn_connected_promise](hj::tcp_conn::conn_ptr_t   c,
                                   const hj::tcp_conn::err_t &ec) {
-            ASSERT_FALSE(ec.failed());
+            EXPECT_FALSE(ec.failed());
             conn_connected_promise.set_value();
         });
 
     std::thread io_thread([&io]() { io.run(); });
 
-    conn_connected_future.wait();
+    wait_future_with_timeout(conn_connected_future);
 
     conn->send(reinterpret_cast<const std::uint8_t *>(msg1.data()),
                msg1.size());
-    conn->send(hj::tcp_conn::msg_buffer_t(msg2.begin(), msg2.end()));
+    conn->send(hj::tcp_conn::buffer_t(msg2.begin(), msg2.end()));
     conn->send(reinterpret_cast<const std::uint8_t *>(msg3.data()),
                msg3.size());
 
-    server_done_future.wait();
+    wait_future_with_timeout(server_done_future);
 
     EXPECT_EQ(total_received, msg1 + msg2 + msg3);
 
@@ -260,8 +329,9 @@ TEST(tcp_conn, server_abrupt_close_triggers_error_cb)
     std::thread server_thread([&listener]() {
         hj::tcp_listener::err_t err;
         auto                    server_sock = listener->accept(err);
-        ASSERT_FALSE(err.failed());
-        server_sock->close();
+        EXPECT_FALSE(err.failed());
+        if(server_sock)
+            server_sock->close();
     });
 
     auto                              conn = hj::tcp_conn::make_shared(io);
@@ -280,7 +350,7 @@ TEST(tcp_conn, server_abrupt_close_triggers_error_cb)
 
     std::thread io_thread([&io]() { io.run(); });
 
-    auto error_code = err_future.get();
+    auto error_code = get_future_with_timeout(err_future);
     EXPECT_TRUE(error_code.failed());
 
     listener->close();
@@ -310,10 +380,10 @@ TEST(tcp_conn, close_idempotency_and_ops_on_closed_conn)
 
     io.poll();
 
-    auto err = conn_future.get();
+    auto err = get_future_with_timeout(conn_future);
     EXPECT_TRUE(err.failed());
 
-    conn->send(hj::tcp_conn::msg_buffer_t{'t', 'e', 's', 't'});
+    conn->send(hj::tcp_conn::buffer_t{'t', 'e', 's', 't'});
 }
 
 TEST(tcp_conn, concurrent_send_and_close_thread_safety)
@@ -356,7 +426,7 @@ TEST(tcp_conn, concurrent_send_and_close_thread_safety)
         io_threads.emplace_back([&io]() { io.run(); });
     }
 
-    conn_future.wait();
+    wait_future_with_timeout(conn_future);
 
     constexpr int            send_threads_count = 3;
     constexpr int            msgs_per_thread    = 500;
@@ -435,23 +505,24 @@ TEST(tcp_conn, concurrent_callback_setting_and_invocation)
 
     std::thread io_thread([&io]() { io.run(); });
 
-    conn_future.wait();
+    wait_future_with_timeout(conn_future);
 
     std::atomic<int> cb_counter{0};
     std::thread      setter_thread([conn, &cb_counter]() {
         for(int i = 0; i < 200; ++i)
         {
-            conn->set_read_callback(
-                [&cb_counter](hj::tcp_conn::conn_ptr_t,
-                              hj::tcp_conn::msg_buffer_t &&) {
-                    cb_counter.fetch_add(1, std::memory_order_relaxed);
-                });
+            conn->set_read_callback([&cb_counter](hj::tcp_conn::conn_ptr_t,
+                                                  hj::tcp_conn::buffer_t &&) {
+                cb_counter.fetch_add(1, std::memory_order_relaxed);
+            });
             std::this_thread::sleep_for(std::chrono::microseconds(50));
         }
     });
 
     if(setter_thread.joinable())
         setter_thread.join();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     server_running.store(false);
     conn->close();
@@ -462,7 +533,7 @@ TEST(tcp_conn, concurrent_callback_setting_and_invocation)
     if(io_thread.joinable())
         io_thread.join();
 
-    EXPECT_GE(cb_counter.load(), 0);
+    EXPECT_GT(cb_counter.load(), 0);
 }
 
 TEST(tcp_conn, duplicate_async_connect)
@@ -483,6 +554,9 @@ TEST(tcp_conn, duplicate_async_connect)
     std::promise<hj::tcp_conn::err_t> first_conn_promise;
     std::promise<hj::tcp_conn::err_t> second_conn_promise;
 
+    auto first_conn_future  = first_conn_promise.get_future();
+    auto second_conn_future = second_conn_promise.get_future();
+
     conn->async_connect("127.0.0.1",
                         test_port,
                         [&first_conn_promise](hj::tcp_conn::conn_ptr_t,
@@ -499,8 +573,8 @@ TEST(tcp_conn, duplicate_async_connect)
 
     std::thread io_thread([&io]() { io.run(); });
 
-    auto first_err  = first_conn_promise.get_future().get();
-    auto second_err = second_conn_promise.get_future().get();
+    auto first_err  = get_future_with_timeout(first_conn_future);
+    auto second_err = get_future_with_timeout(second_conn_future);
 
     EXPECT_FALSE(first_err.failed());
     EXPECT_TRUE(second_err.failed());
@@ -519,7 +593,9 @@ TEST(tcp_conn, duplicate_async_connect)
 
 TEST(tcp_conn, concurrent_send_close_reset_race)
 {
-    hj::tcp_conn::io_t  io;
+    hj::tcp_conn::io_t io;
+    auto               work_guard = boost::asio::make_work_guard(io);
+
     const std::uint16_t test_port = 10027;
 
     auto listener = hj::tcp_listener::make_shared(io);
@@ -550,7 +626,7 @@ TEST(tcp_conn, concurrent_send_close_reset_race)
         });
 
     std::thread io_thread([&io]() { io.run(); });
-    conn_future.wait();
+    wait_future_with_timeout(conn_future);
 
     std::thread thread_a([conn]() {
         for(int i = 0; i < 300; ++i)
@@ -566,7 +642,7 @@ TEST(tcp_conn, concurrent_send_close_reset_race)
         conn->close();
     });
 
-    std::thread thread_c([&conn]() {
+    std::thread thread_c([conn]() mutable {
         std::this_thread::sleep_for(std::chrono::microseconds(100));
         conn.reset();
     });
@@ -578,11 +654,70 @@ TEST(tcp_conn, concurrent_send_close_reset_race)
     if(thread_c.joinable())
         thread_c.join();
 
+    conn.reset();
+
     listener->close();
     if(server_thread.joinable())
         server_thread.join();
+
+    work_guard.reset();
+
     if(io_thread.joinable())
         io_thread.join();
 
     SUCCEED();
+}
+
+TEST(tcp_conn, destruction_with_outstanding_async_ops)
+{
+    hj::tcp_conn::io_t  io;
+    const std::uint16_t test_port = 10028;
+
+    auto listener = hj::tcp_listener::make_shared(io);
+    listener->listen(test_port);
+
+    std::thread server_thread([&listener]() {
+        hj::tcp_listener::err_t err;
+        auto                    server_sock = listener->accept(err);
+        if(server_sock)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            server_sock->close();
+        }
+    });
+
+    std::weak_ptr<hj::tcp_conn> weak_conn;
+
+    {
+        auto conn = hj::tcp_conn::make_shared(io);
+        weak_conn = conn;
+
+        std::promise<void> connected_promise;
+        auto               connected_future = connected_promise.get_future();
+
+        conn->async_connect("127.0.0.1",
+                            test_port,
+                            [&connected_promise](hj::tcp_conn::conn_ptr_t,
+                                                 const hj::tcp_conn::err_t &) {
+                                connected_promise.set_value();
+                            });
+
+        std::thread io_thread([&io]() { io.run(); });
+        wait_future_with_timeout(connected_future);
+
+        std::string payload = "outstanding_data_test";
+        conn->send(reinterpret_cast<const std::uint8_t *>(payload.data()),
+                   payload.size());
+
+        conn.reset();
+
+        if(io_thread.joinable())
+            io_thread.join();
+    }
+
+    EXPECT_TRUE(weak_conn.expired());
+
+    listener->close();
+    if(server_thread.joinable())
+        server_thread.join();
 }

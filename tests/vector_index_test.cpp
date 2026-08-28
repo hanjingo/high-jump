@@ -33,12 +33,104 @@ void cleanup_test_files(const std::vector<std::string> &files)
     }
 }
 
+TEST(vector_index, basic_properties)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    EXPECT_EQ(index.dimension(), 0);
+    EXPECT_FALSE(index.is_trained());
+    EXPECT_TRUE(index.empty());
+
+    index.build(4);
+    EXPECT_EQ(index.dimension(), 4);
+    EXPECT_TRUE(index.is_trained());
+    EXPECT_TRUE(index.empty());
+    EXPECT_EQ(index.metric_type(),
+              hj::vector_index<hj::vindex_flat_l2_t>::metric::l2);
+
+    const float vectors[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    index.add(1, vectors, 4);
+    EXPECT_FALSE(index.empty());
+}
+
 TEST(vector_index, build)
 {
     hj::vector_index<hj::vindex_flat_l2_t> index;
     index.build(2);
 
     EXPECT_EQ(index.total(), 0u);
+}
+
+TEST(vector_index, build_factory)
+{
+    hj::vector_index<faiss::Index> index;
+
+    EXPECT_EQ(index.build_factory(-1, "Flat"),
+              hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(index.build_factory(128, nullptr),
+              hj::vector_index_errc::invalid_argument);
+
+    auto ec = index.build_factory(
+        64,
+        "Flat",
+        hj::vector_index<faiss::Index>::metric::inner_product);
+    EXPECT_FALSE(ec);
+    EXPECT_EQ(index.dimension(), 64);
+    EXPECT_EQ(index.metric_type(),
+              hj::vector_index<faiss::Index>::metric::inner_product);
+
+    hj::vector_index<hj::vindex_flat_l2_t> typed_index;
+    ec = typed_index.build_factory(64, "HNSW32");
+    EXPECT_EQ(ec, hj::vector_index_errc::type_mismatch);
+}
+
+TEST(vector_index, train_and_is_trained)
+{
+    hj::vector_index<faiss::Index> ivf_index;
+    ASSERT_FALSE(ivf_index.build_factory(4, "IVF2,Flat"));
+
+    EXPECT_FALSE(ivf_index.is_trained());
+
+    const float raw_vectors[] = {1.0f,
+                                 0.0f,
+                                 0.0f,
+                                 0.0f,
+                                 0.0f,
+                                 1.0f,
+                                 0.0f,
+                                 0.0f,
+                                 0.0f,
+                                 0.0f,
+                                 1.0f,
+                                 0.0f,
+                                 0.0f,
+                                 0.0f,
+                                 0.0f,
+                                 1.0f};
+    EXPECT_EQ(ivf_index.add(4, raw_vectors, 16),
+              hj::vector_index_errc::not_trained);
+
+    float        dists[1];
+    faiss::idx_t idxs[1];
+    EXPECT_EQ(ivf_index.search(1, raw_vectors, 1, dists, idxs),
+              hj::vector_index_errc::not_trained);
+
+    EXPECT_EQ(ivf_index.train(0, raw_vectors),
+              hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(ivf_index.train(4, nullptr),
+              hj::vector_index_errc::invalid_argument);
+
+    std::vector<float> mismatch_vecs = {1.0f, 2.0f, 3.0f};
+    EXPECT_EQ(ivf_index.train(mismatch_vecs),
+              hj::vector_index_errc::dimension_mismatch);
+
+    std::vector<float> train_vecs(raw_vectors, raw_vectors + 16);
+    EXPECT_FALSE(ivf_index.train(train_vecs));
+    EXPECT_TRUE(ivf_index.is_trained());
+
+    EXPECT_FALSE(ivf_index.train(train_vecs));
+
+    EXPECT_FALSE(ivf_index.add(4, raw_vectors, 16));
+    EXPECT_EQ(ivf_index.total(), 4);
 }
 
 TEST(vector_index, add)
@@ -1327,6 +1419,29 @@ TEST(vector_index, get_vector_no_deadlock)
     EXPECT_FLOAT_EQ(raw_vec[1], 1.0f);
 }
 
+TEST(vector_index, with_index_lambda)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+
+    EXPECT_THROW(index.with_index([](auto &raw_idx) { (void) raw_idx; }),
+                 std::runtime_error);
+
+    index.build(2);
+    const float vectors[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    index.add(2, vectors, 4);
+
+    index.with_index([](faiss::IndexFlatL2 &raw_idx) {
+        EXPECT_EQ(raw_idx.ntotal, 2);
+        raw_idx.reset();
+    });
+    EXPECT_EQ(index.total(), 0);
+
+    index.add(2, vectors, 4);
+    size_t fetched_ntotal = index.with_index_read(
+        [](const faiss::IndexFlatL2 &raw_idx) { return raw_idx.ntotal; });
+    EXPECT_EQ(fetched_ntotal, 2);
+}
+
 TEST(vector_index, concurrent_search_shared_instance)
 {
     hj::vector_index<hj::vindex_flat_l2_t> index;
@@ -1541,7 +1656,7 @@ TEST(vector_index, reconstruct_batch_buffer_capacity_protection)
                                        keys,
                                        small_buffer.data(),
                                        small_buffer.size());
-    EXPECT_EQ(err, hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(err, hj::vector_index_errc::capacity_exceeded);
 
     std::vector<float> exact_buffer(8);
     err = index.reconstruct_batch(2,
@@ -1567,7 +1682,7 @@ TEST(vector_index, add_buffer_capacity_protection)
         {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
 
     auto err = index.add(2, incomplete_data.data(), incomplete_data.size());
-    EXPECT_EQ(err, hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(err, hj::vector_index_errc::capacity_exceeded);
 
     std::vector<float> valid_data =
         {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
@@ -1578,6 +1693,27 @@ TEST(vector_index, add_buffer_capacity_protection)
     err = index.add(valid_data);
     EXPECT_FALSE(err);
     EXPECT_EQ(index.total(), 4);
+}
+
+TEST(vector_index, merge_from)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> idx1;
+    hj::vector_index<hj::vindex_flat_l2_t> idx2;
+
+    idx1.build(2);
+    idx2.build(2);
+
+    const float vecs1[] = {1.0f, 0.0f};
+    const float vecs2[] = {0.0f, 1.0f};
+
+    idx1.add(1, vecs1, 2);
+    idx2.add(1, vecs2, 2);
+
+    EXPECT_EQ(idx1.merge_from(idx1), hj::vector_index_errc::invalid_argument);
+
+    EXPECT_FALSE(idx1.merge_from(idx2));
+    EXPECT_EQ(idx1.total(), 2);
+    EXPECT_EQ(idx2.total(), 0);
 }
 
 TEST(vector_index, merge_from_unsupported_index_handling)
@@ -1624,4 +1760,69 @@ TEST(vector_index, catch_all_exception_barrier)
         std::error_code ec = trigger_unknown_exception();
         EXPECT_EQ(ec, hj::vector_index_errc::faiss_exception);
     });
+}
+
+TEST(vector_index, reconstruct_series)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(2);
+
+    const float vectors[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+    index.add(3, vectors, 6);
+
+    float rec_one[2] = {0.0f};
+    EXPECT_FALSE(index.reconstruct(1, rec_one));
+    EXPECT_FLOAT_EQ(rec_one[0], 3.0f);
+    EXPECT_FLOAT_EQ(rec_one[1], 4.0f);
+
+    EXPECT_EQ(index.reconstruct(0, nullptr),
+              hj::vector_index_errc::invalid_argument);
+
+    hj::vindex_idx_t keys[]       = {2, 0};
+    float            rec_batch[4] = {0.0f};
+
+    EXPECT_EQ(index.reconstruct_batch(2, keys, rec_batch, 3),
+              hj::vector_index_errc::capacity_exceeded);
+
+    EXPECT_FALSE(index.reconstruct_batch(2, keys, rec_batch, 4));
+    EXPECT_FLOAT_EQ(rec_batch[0], 5.0f);
+    EXPECT_FLOAT_EQ(rec_batch[1], 6.0f);
+    EXPECT_FLOAT_EQ(rec_batch[2], 1.0f);
+    EXPECT_FLOAT_EQ(rec_batch[3], 2.0f);
+
+    std::vector<float> rec_vec;
+    EXPECT_FALSE(index.reconstruct_batch(2, keys, rec_vec));
+    ASSERT_EQ(rec_vec.size(), 4u);
+    EXPECT_FLOAT_EQ(rec_vec[0], 5.0f);
+    EXPECT_FLOAT_EQ(rec_vec[3], 2.0f);
+
+    float rec_n[4] = {0.0f};
+    EXPECT_FALSE(index.reconstruct_n(1, 2, rec_n, 4));
+    EXPECT_FLOAT_EQ(rec_n[0], 3.0f);
+    EXPECT_FLOAT_EQ(rec_n[1], 4.0f);
+    EXPECT_FLOAT_EQ(rec_n[2], 5.0f);
+    EXPECT_FLOAT_EQ(rec_n[3], 6.0f);
+}
+
+TEST(vector_index, save_durable)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    create_test_index(index);
+
+    const std::string filename = "test_save_durable.faissindex";
+    cleanup_test_files({filename});
+
+    EXPECT_EQ(index.save_durable(nullptr),
+              hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(index.save_durable(""), hj::vector_index_errc::invalid_argument);
+
+    EXPECT_FALSE(index.save_durable(filename.c_str()));
+    EXPECT_TRUE(std::filesystem::exists(filename));
+    EXPECT_GT(std::filesystem::file_size(filename), 0u);
+
+    hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
+    EXPECT_FALSE(loaded_index.load(filename.c_str()));
+    EXPECT_EQ(loaded_index.total(), 3u);
+
+    cleanup_test_files({filename});
 }

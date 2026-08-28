@@ -6,20 +6,25 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <random>
 #include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
+#include <system_error>
+#include <stdexcept>
+#include <cstdint>
 
 #include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexIDMap.h>
-#include <faiss/index_factory.h>
-#include <faiss/index_io.h>
+#include <faiss/clone_index.h>
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/io.h>
+#include <faiss/index_factory.h>
+#include <faiss/index_io.h>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -28,11 +33,9 @@
 
 #include <process.h>
 #include <windows.h>
-#define GETPID() _getpid()
 #else
 #include <fcntl.h>
 #include <unistd.h>
-#define GETPID() getpid()
 #endif
 
 namespace hj
@@ -50,28 +53,49 @@ using vindex_range_search_result_t = typename faiss::RangeSearchResult;
 enum class vector_index_errc
 {
     success = 0,
+
     invalid_argument,
     null_index,
+    out_of_range,
+
     type_mismatch,
-    faiss_exception,
+    unsupported_operation,
+    not_trained,
+    dimension_mismatch,
+    capacity_exceeded,
+
+    serialization_error,
     file_not_found,
     file_empty,
     io_error,
-    out_of_range
+    permission_denied,
+
+    faiss_exception
 };
 
 namespace detail
 {
+
+inline auto process_id() noexcept
+{
+#if defined(_WIN32)
+    return ::_getpid();
+#else
+    return ::getpid();
+#endif
+}
+
 inline bool sync_file(const std::string &path) noexcept
 {
 #if defined(_WIN32)
-    HANDLE hFile = CreateFileA(path.c_str(),
-                               GENERIC_WRITE,
-                               FILE_SHARE_READ | FILE_SHARE_WRITE,
-                               NULL,
-                               OPEN_EXISTING,
-                               FILE_ATTRIBUTE_NORMAL,
-                               NULL);
+    std::wstring wpath = std::filesystem::path(path).wstring();
+    HANDLE       hFile = CreateFileW(wpath.c_str(),
+                                     GENERIC_WRITE,
+                                     FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                     NULL,
+                                     OPEN_EXISTING,
+                                     FILE_ATTRIBUTE_NORMAL,
+                                     NULL);
     if(hFile == INVALID_HANDLE_VALUE)
         return false;
     bool success = FlushFileBuffers(hFile);
@@ -106,8 +130,9 @@ inline bool atomic_rename(const std::string &temp_path,
                           const std::string &target_path) noexcept
 {
 #if defined(_WIN32)
-    std::wstring wtemp(temp_path.begin(), temp_path.end());
-    std::wstring wtarget(target_path.begin(), target_path.end());
+    std::wstring wtemp   = std::filesystem::path(temp_path).wstring();
+    std::wstring wtarget = std::filesystem::path(target_path).wstring();
+
     return MoveFileExW(wtemp.c_str(),
                        wtarget.c_str(),
                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)
@@ -131,21 +156,34 @@ class vector_index_category : public std::error_category
             case vector_index_errc::success:
                 return "Success";
             case vector_index_errc::invalid_argument:
-                return "Invalid argument (nullptr or illegal dimension/count)";
+                return "Invalid argument (nullptr or illegal parameter)";
             case vector_index_errc::null_index:
                 return "Underlying index pointer is nullptr";
+            case vector_index_errc::out_of_range:
+                return "Index or ID out of range";
             case vector_index_errc::type_mismatch:
-                return "Index type mismatch or downcast failed";
-            case vector_index_errc::faiss_exception:
-                return "Internal Faiss exception caught";
+                return "Index C++ type downcast failed (type mismatch)";
+            case vector_index_errc::unsupported_operation:
+                return "Operation not supported by the current underlying "
+                       "index type";
+            case vector_index_errc::not_trained:
+                return "Underlying index is not trained yet";
+            case vector_index_errc::dimension_mismatch:
+                return "Input vector dimension mismatch";
+            case vector_index_errc::capacity_exceeded:
+                return "Buffer or storage capacity exceeded";
+            case vector_index_errc::serialization_error:
+                return "Serialization or deserialization failed";
             case vector_index_errc::file_not_found:
                 return "File does not exist";
             case vector_index_errc::file_empty:
                 return "File is empty or corrupted";
             case vector_index_errc::io_error:
-                return "I/O operation failed (sync or rename error)";
-            case vector_index_errc::out_of_range:
-                return "Index out of range";
+                return "I/O operation failed (read/write/sync/rename error)";
+            case vector_index_errc::permission_denied:
+                return "Permission denied for file or directory operation";
+            case vector_index_errc::faiss_exception:
+                return "Internal Faiss exception caught";
             default:
                 return "Unknown index error";
         }
@@ -230,6 +268,43 @@ class vector_index
 
     ~vector_index() = default;
 
+    vindex_dimension_t dimension() const noexcept
+    {
+        std::shared_lock<std::shared_mutex> lock(_rw_mutex);
+        return _index ? _index->d : 0;
+    }
+
+    metric metric_type() const noexcept
+    {
+        std::shared_lock<std::shared_mutex> lock(_rw_mutex);
+        return _index ? static_cast<metric>(_index->metric_type) : metric::l2;
+    }
+
+    bool is_trained() const noexcept
+    {
+        std::shared_lock<std::shared_mutex> lock(_rw_mutex);
+        return _index ? _index->is_trained : false;
+    }
+
+    bool empty() const noexcept
+    {
+        std::shared_lock<std::shared_mutex> lock(_rw_mutex);
+        return !_index || _index->ntotal == 0;
+    }
+
+    vindex_count_t total() const
+    {
+        std::shared_lock<std::shared_mutex> lock(_rw_mutex);
+        return _index ? _index->ntotal : 0;
+    }
+
+    void reset()
+    {
+        std::unique_lock<std::shared_mutex> lock(_rw_mutex);
+        if(_index)
+            _index->reset();
+    }
+
     [[deprecated("Use with_index() for thread-safety, or unsafe_get_index() if "
                  "you explicitly handle synchronization.")]]
     T *get_index()
@@ -246,6 +321,34 @@ class vector_index
     T       *unsafe_get_index() noexcept { return _index.get(); }
     const T *unsafe_get_index() const noexcept { return _index.get(); }
 
+    /**
+     * @brief Provides exclusive (write-locked) thread-safe access to the underlying FAISS index.
+     * 
+     * @tparam F Callable type (lambda, function object, function pointer).
+     * @param fn Callback function accepting `T&` as its parameter.
+     * @return decltype(auto) The return value of the callback function `fn`.
+     * 
+     * @warning **Deadlock Warning (Alien Code Contract)**:
+     * DO NOT invoke any public member functions of this `vector_index` instance (e.g., `this->search()`, 
+     * `this->total()`, `this->add()`) inside the callback. Doing so will result in a recursive locking 
+     * deadlock because `std::shared_mutex` is non-recursive.
+     * 
+     * @note **Correct Usage**:
+     * Access and operate directly on the raw `T&` reference passed into the callback.
+     * 
+     * @code{.cpp}
+     * // ✅ Correct: Directly manipulate the inner FAISS index reference
+     * index.with_index([](auto& raw_faiss_idx) {
+     *     auto count = raw_faiss_idx.ntotal; // Safe: Direct access to underlying member
+     *     raw_faiss_idx.reset();             // Safe: Direct call to FAISS API
+     * });
+     * 
+     * // ❌ Incorrect: Calling member methods of vector_index inside the callback causes DEADLOCK!
+     * index.with_index([&](auto& raw_faiss_idx) {
+     *     auto total = index.total();        // DEADLOCK! Re-acquires shared_lock while holding unique_lock
+     * });
+     * @endcode
+     */
     template <typename F>
     decltype(auto) with_index(F &&fn)
     {
@@ -257,6 +360,29 @@ class vector_index
         return std::forward<F>(fn)(*_index);
     }
 
+    /**
+     * @brief Provides shared (read-locked) thread-safe access to the underlying FAISS index.
+     * 
+     * @tparam F Callable type (lambda, function object, function pointer).
+     * @param fn Callback function accepting `const T&` as its parameter.
+     * @return decltype(auto) The return value of the callback function `fn`.
+     * 
+     * @warning **Deadlock Warning (Alien Code Contract)**:
+     * DO NOT invoke any public member functions of this `vector_index` instance (e.g., `this->search()`, 
+     * `this->total()`) inside the callback. Re-entering read-lock routines while a writer thread is 
+     * waiting will trigger thread starvation deadlocks.
+     * 
+     * @note **Correct Usage**:
+     * Access and operate directly on the const raw `const T&` reference passed into the callback.
+     * 
+     * @code{.cpp}
+     * // ✅ Correct: Read directly from the inner FAISS index reference
+     * index.with_index_read([](const auto& raw_faiss_idx) {
+     *     auto count = raw_faiss_idx.ntotal;
+     *     // Perform custom batch operations directly on raw_faiss_idx
+     * });
+     * @endcode
+     */
     template <typename F>
     decltype(auto) with_index_read(F &&fn) const
     {
@@ -287,19 +413,6 @@ class vector_index
         _index = std::make_unique<T>(std::forward<Args>(args)...);
     }
 
-    /**
-     * @brief Builds an index dynamically using FAISS's index_factory string description.
-     * 
-     * @note Template Constraint & Polymorphism:
-     * `faiss::index_factory` returns a generic pointer `faiss::Index*`. 
-     * This method is ONLY valid if the constructed index satisfies the IS-A relationship 
-     * with the class template parameter `T` (i.e., `dynamic_cast<T*>(raw_idx)` succeeds).
-     * 
-     * For example, calling `build_factory("IVF256,Flat")` on `vector_index<faiss::IndexFlatL2>` 
-     * will result in a failure returning `vector_index_errc::type_mismatch` because 
-     * `faiss::IndexIVFFlat` does not derive from `faiss::IndexFlatL2`.
-     * If generic factory string instantiation is needed, use `vector_index<faiss::Index>`.
-     */
     std::error_code
     build_factory(int dim, const char *description, metric m = metric::l2)
     {
@@ -316,7 +429,6 @@ class vector_index
             if(!raw_idx)
                 return vector_index_errc::faiss_exception;
 
-            // Ensures the factory result is-a T. Returns type_mismatch if cast fails.
             T *typed_idx = dynamic_cast<T *>(raw_idx);
             if(!typed_idx)
             {
@@ -333,9 +445,7 @@ class vector_index
         }
     }
 
-    std::error_code add(vindex_count_t vectors_num,
-                        const float   *vectors,
-                        size_t         vectors_capacity)
+    std::error_code train(vindex_count_t vectors_num, const float *vectors)
     {
         if(!vectors || vectors_num <= 0)
             return vector_index_errc::invalid_argument;
@@ -347,19 +457,17 @@ class vector_index
         if(_index->d <= 0)
             return vector_index_errc::invalid_argument;
 
-        const size_t req_n = static_cast<size_t>(vectors_num);
-        const size_t dim   = static_cast<size_t>(_index->d);
-
-        if(req_n > std::numeric_limits<size_t>::max() / dim)
-            return vector_index_errc::out_of_range;
-
-        if(vectors_capacity < req_n * dim)
-            return vector_index_errc::invalid_argument;
+        if(_index->is_trained)
+            return vector_index_errc::success;
 
         try
         {
-            _index->add(vectors_num, vectors);
+            _index->train(vectors_num, vectors);
             return vector_index_errc::success;
+        }
+        catch(const faiss::FaissException &)
+        {
+            return vector_index_errc::faiss_exception;
         }
         catch(const std::exception &)
         {
@@ -367,8 +475,11 @@ class vector_index
         }
     }
 
-    std::error_code add(const std::vector<float> &vectors)
+    std::error_code train(const std::vector<float> &vectors)
     {
+        if(vectors.empty())
+            return vector_index_errc::invalid_argument;
+
         std::shared_lock<std::shared_mutex> lock(_rw_mutex);
         if(!_index)
             return vector_index_errc::null_index;
@@ -377,14 +488,47 @@ class vector_index
             return vector_index_errc::invalid_argument;
 
         const size_t dim = static_cast<size_t>(_index->d);
-        if(vectors.size() % dim != 0 || vectors.empty())
-            return vector_index_errc::invalid_argument;
+        if(vectors.size() % dim != 0)
+            return vector_index_errc::dimension_mismatch;
 
         const vindex_count_t vectors_num =
             static_cast<vindex_count_t>(vectors.size() / dim);
 
         lock.unlock();
-        return add(vectors_num, vectors.data(), vectors.size());
+        return train(vectors_num, vectors.data());
+    }
+
+    std::error_code add(vindex_count_t vectors_num,
+                        const float   *vectors,
+                        size_t         vectors_capacity)
+    {
+        if(!vectors || vectors_num <= 0)
+            return vector_index_errc::invalid_argument;
+
+        std::unique_lock<std::shared_mutex> lock(_rw_mutex);
+        return _add(vectors_num, vectors, vectors_capacity);
+    }
+
+    std::error_code add(const std::vector<float> &vectors)
+    {
+        if(vectors.empty())
+            return vector_index_errc::invalid_argument;
+
+        std::unique_lock<std::shared_mutex> lock(_rw_mutex);
+        if(!_index)
+            return vector_index_errc::null_index;
+
+        if(_index->d <= 0)
+            return vector_index_errc::invalid_argument;
+
+        const size_t dim = static_cast<size_t>(_index->d);
+        if(vectors.size() % dim != 0)
+            return vector_index_errc::dimension_mismatch;
+
+        const vindex_count_t vectors_num =
+            static_cast<vindex_count_t>(vectors.size() / dim);
+
+        return _add(vectors_num, vectors.data(), vectors.size());
     }
 
     std::error_code add_with_ids(vindex_count_t      vectors_num,
@@ -403,6 +547,9 @@ class vector_index
         if(_index->d <= 0)
             return vector_index_errc::invalid_argument;
 
+        if(!_index->is_trained)
+            return vector_index_errc::not_trained;
+
         const size_t req_n = static_cast<size_t>(vectors_num);
         const size_t dim   = static_cast<size_t>(_index->d);
 
@@ -410,7 +557,7 @@ class vector_index
             return vector_index_errc::out_of_range;
 
         if(vectors_capacity < req_n * dim || ids_capacity < req_n)
-            return vector_index_errc::invalid_argument;
+            return vector_index_errc::capacity_exceeded;
 
         try
         {
@@ -419,7 +566,7 @@ class vector_index
         }
         catch(const faiss::FaissException &)
         {
-            return vector_index_errc::type_mismatch;
+            return vector_index_errc::unsupported_operation;
         }
         catch(const std::exception &)
         {
@@ -427,23 +574,12 @@ class vector_index
         }
     }
 
-    /**
-     * @brief Merges the contents of another index into this index.
-     * 
-     * @param other The source index wrapper to merge from.
-     * @param add_id Offset to be added to the IDs of the merged vectors (used by specific index types like IndexIVF).
-     * @return std::error_code `success` on success, `null_index` if either index is null, 
-     *         or `faiss_exception` / `type_mismatch` if the underlying FAISS index unsupported or failed to merge.
-     * 
-     * @note **API Availability Notice:**
-     * `merge_from` availability is index-type dependent. Not all FAISS index types support merging.
-     * - Flat indexes (e.g., `faiss::IndexFlat`) and IndexIVF support this operation natively.
-     * - Unimplemented index types will throw a FAISS runtime exception (or `faiss::FaissException`), 
-     *   which is caught internally and safely mapped to `vector_index_errc::faiss_exception` (or `type_mismatch`).
-     */
     std::error_code merge_from(const vector_index<T> &other,
                                vindex_idx_t           add_id = 0) noexcept
     {
+        if(this == &other)
+            return vector_index_errc::invalid_argument;
+
         std::unique_lock<std::shared_mutex> lock_this(_rw_mutex,
                                                       std::defer_lock);
         std::shared_lock<std::shared_mutex> lock_other(other._rw_mutex,
@@ -453,6 +589,12 @@ class vector_index
         if(!_index || !other._index)
             return vector_index_errc::null_index;
 
+        if(!_index->is_trained || !other._index->is_trained)
+            return vector_index_errc::not_trained;
+
+        if(_index->d != other._index->d)
+            return vector_index_errc::dimension_mismatch;
+
         try
         {
             _index->merge_from(*other._index, add_id);
@@ -460,11 +602,7 @@ class vector_index
         }
         catch(const faiss::FaissException &)
         {
-            return vector_index_errc::type_mismatch;
-        }
-        catch(const std::exception &)
-        {
-            return vector_index_errc::faiss_exception;
+            return vector_index_errc::unsupported_operation;
         }
         catch(...)
         {
@@ -504,7 +642,7 @@ class vector_index
             return vector_index_errc::out_of_range;
 
         if(vectors_capacity < req_n * dim)
-            return vector_index_errc::invalid_argument;
+            return vector_index_errc::capacity_exceeded;
 
         return _reconstruct_batch(n, keys, vectors);
     }
@@ -531,7 +669,7 @@ class vector_index
             return vector_index_errc::out_of_range;
 
         if(vectors_capacity < req_ni * dim)
-            return vector_index_errc::invalid_argument;
+            return vector_index_errc::capacity_exceeded;
 
         return _reconstruct_n(i0, ni, vectors);
     }
@@ -563,7 +701,7 @@ class vector_index
         }
         catch(...)
         {
-            return vector_index_errc::faiss_exception;
+            return vector_index_errc::capacity_exceeded;
         }
 
         return _reconstruct_batch(n, keys, vectors.data());
@@ -582,6 +720,9 @@ class vector_index
         std::shared_lock<std::shared_mutex> lock(_rw_mutex);
         if(!_index)
             return vector_index_errc::null_index;
+
+        if(!_index->is_trained)
+            return vector_index_errc::not_trained;
 
         try
         {
@@ -605,6 +746,9 @@ class vector_index
         std::shared_lock<std::shared_mutex> lock(_rw_mutex);
         if(!_index)
             return vector_index_errc::null_index;
+
+        if(!_index->is_trained)
+            return vector_index_errc::not_trained;
 
         try
         {
@@ -630,6 +774,10 @@ class vector_index
             buffer = std::move(writer.data);
             return vector_index_errc::success;
         }
+        catch(const faiss::FaissException &)
+        {
+            return vector_index_errc::serialization_error;
+        }
         catch(...)
         {
             return vector_index_errc::faiss_exception;
@@ -649,7 +797,7 @@ class vector_index
 
             faiss::Index *idx = faiss::read_index(&reader);
             if(!idx)
-                return vector_index_errc::faiss_exception;
+                return vector_index_errc::serialization_error;
 
             T *typed_idx = dynamic_cast<T *>(idx);
             if(!typed_idx)
@@ -661,6 +809,10 @@ class vector_index
             std::unique_lock<std::shared_mutex> lock(_rw_mutex);
             _index.reset(typed_idx);
             return vector_index_errc::success;
+        }
+        catch(const faiss::FaissException &)
+        {
+            return vector_index_errc::serialization_error;
         }
         catch(...)
         {
@@ -693,27 +845,43 @@ class vector_index
         if(filename == nullptr || filename[0] == '\0')
             return vector_index_errc::invalid_argument;
 
-        std::shared_lock<std::shared_mutex> lock(_rw_mutex);
-        if(!_index)
-            return vector_index_errc::null_index;
+        std::unique_ptr<faiss::Index> index_snapshot;
+        {
+            std::shared_lock<std::shared_mutex> lock(_rw_mutex);
+            if(!_index)
+                return vector_index_errc::null_index;
+
+            try
+            {
+                index_snapshot.reset(faiss::clone_index(_index.get()));
+            }
+            catch(...)
+            {
+                return vector_index_errc::faiss_exception;
+            }
+        }
 
         static std::atomic<uint64_t> seq_counter{0};
         auto now = std::chrono::steady_clock::now().time_since_epoch().count();
         std::string temp_file = std::string(filename) + ".tmp."
-                                + std::to_string(GETPID()) + "."
+                                + std::to_string(detail::process_id()) + "."
                                 + std::to_string(now) + "."
                                 + std::to_string(seq_counter.fetch_add(1));
 
         try
         {
-            faiss::write_index(_index.get(), temp_file.c_str());
+            faiss::write_index(index_snapshot.get(), temp_file.c_str());
 
             std::error_code ec;
             auto            sz = std::filesystem::file_size(temp_file, ec);
-            if(ec || sz == 0)
+            if(ec)
             {
-                if(std::filesystem::exists(temp_file))
-                    std::filesystem::remove(temp_file);
+                std::filesystem::remove(temp_file, ec);
+                return vector_index_errc::io_error;
+            }
+            if(sz == 0)
+            {
+                std::filesystem::remove(temp_file, ec);
                 return vector_index_errc::file_empty;
             }
 
@@ -729,9 +897,7 @@ class vector_index
         catch(...)
         {
             if(std::filesystem::exists(temp_file))
-            {
                 std::filesystem::remove(temp_file);
-            }
             return vector_index_errc::io_error;
         }
     }
@@ -748,7 +914,7 @@ class vector_index
         static std::atomic<uint64_t> seq_counter{0};
         auto now = std::chrono::steady_clock::now().time_since_epoch().count();
         std::string temp_file = std::string(filename) + ".tmp."
-                                + std::to_string(GETPID()) + "."
+                                + std::to_string(detail::process_id()) + "."
                                 + std::to_string(now) + "."
                                 + std::to_string(seq_counter.fetch_add(1));
 
@@ -758,10 +924,14 @@ class vector_index
 
             std::error_code ec;
             auto            sz = std::filesystem::file_size(temp_file, ec);
-            if(ec || sz == 0)
+            if(ec)
             {
-                if(std::filesystem::exists(temp_file))
-                    std::filesystem::remove(temp_file);
+                std::filesystem::remove(temp_file, ec);
+                return vector_index_errc::io_error;
+            }
+            if(sz == 0)
+            {
+                std::filesystem::remove(temp_file, ec);
                 return vector_index_errc::file_empty;
             }
 
@@ -804,17 +974,32 @@ class vector_index
             return vector_index_errc::invalid_argument;
 
         std::error_code ec;
-        if(!std::filesystem::exists(filename, ec))
-            return vector_index_errc::file_not_found;
 
-        if(std::filesystem::file_size(filename, ec) == 0)
+        if(!std::filesystem::exists(filename, ec))
+        {
+            if(ec == std::errc::permission_denied)
+                return vector_index_errc::permission_denied;
+
+            return vector_index_errc::file_not_found;
+        }
+
+        auto sz = std::filesystem::file_size(filename, ec);
+        if(ec)
+        {
+            if(ec == std::errc::permission_denied)
+                return vector_index_errc::permission_denied;
+
+            return vector_index_errc::io_error;
+        }
+
+        if(sz == 0)
             return vector_index_errc::file_empty;
 
         try
         {
             faiss::Index *idx = faiss::read_index(filename);
             if(!idx)
-                return vector_index_errc::faiss_exception;
+                return vector_index_errc::serialization_error;
 
             T *typed_idx = dynamic_cast<T *>(idx);
             if(!typed_idx)
@@ -826,6 +1011,10 @@ class vector_index
             std::unique_lock<std::shared_mutex> lock(_rw_mutex);
             _index.reset(typed_idx);
             return vector_index_errc::success;
+        }
+        catch(const faiss::FaissException &)
+        {
+            return vector_index_errc::serialization_error;
         }
         catch(...)
         {
@@ -847,22 +1036,24 @@ class vector_index
         std::shared_lock<std::shared_mutex> lock(_rw_mutex);
         if(!_index)
             return vector_index_errc::null_index;
+
         if(index >= static_cast<size_t>(_index->ntotal))
             return vector_index_errc::out_of_range;
+
+        auto *id_map2 = dynamic_cast<const faiss::IndexIDMap2 *>(_index.get());
+        if(id_map2 && id_map2->index)
+        {
+            return _reconstruct_raw(id_map2->index,
+                                    static_cast<vindex_idx_t>(index),
+                                    vec);
+        }
 
         auto *id_map = dynamic_cast<const faiss::IndexIDMap *>(_index.get());
         if(id_map && id_map->index)
         {
-            try
-            {
-                id_map->index->reconstruct(static_cast<vindex_idx_t>(index),
-                                           vec);
-                return vector_index_errc::success;
-            }
-            catch(...)
-            {
-                return vector_index_errc::faiss_exception;
-            }
+            return _reconstruct_raw(id_map->index,
+                                    static_cast<vindex_idx_t>(index),
+                                    vec);
         }
 
         return _reconstruct(static_cast<vindex_idx_t>(index), vec);
@@ -874,23 +1065,26 @@ class vector_index
         std::shared_lock<std::shared_mutex> lock(_rw_mutex);
         if(!_index)
             return vector_index_errc::null_index;
+
         if(index >= static_cast<size_t>(_index->ntotal))
             return vector_index_errc::out_of_range;
 
         vec.resize(static_cast<size_t>(_index->d));
+
+        auto *id_map2 = dynamic_cast<const faiss::IndexIDMap2 *>(_index.get());
+        if(id_map2 && id_map2->index)
+        {
+            return _reconstruct_raw(id_map2->index,
+                                    static_cast<vindex_idx_t>(index),
+                                    vec.data());
+        }
+
         auto *id_map = dynamic_cast<const faiss::IndexIDMap *>(_index.get());
         if(id_map && id_map->index)
         {
-            try
-            {
-                id_map->index->reconstruct(static_cast<vindex_idx_t>(index),
-                                           vec.data());
-                return vector_index_errc::success;
-            }
-            catch(...)
-            {
-                return vector_index_errc::faiss_exception;
-            }
+            return _reconstruct_raw(id_map->index,
+                                    static_cast<vindex_idx_t>(index),
+                                    vec.data());
         }
 
         return _reconstruct(static_cast<vindex_idx_t>(index), vec.data());
@@ -905,6 +1099,24 @@ class vector_index
         if(!_index)
             return vector_index_errc::null_index;
 
+        auto *id_map2 = dynamic_cast<const faiss::IndexIDMap2 *>(_index.get());
+        if(id_map2)
+        {
+            try
+            {
+                id_map2->reconstruct(id, vec);
+                return vector_index_errc::success;
+            }
+            catch(const faiss::FaissException &)
+            {
+                return vector_index_errc::out_of_range;
+            }
+            catch(...)
+            {
+                return vector_index_errc::faiss_exception;
+            }
+        }
+
         auto *id_map = dynamic_cast<const faiss::IndexIDMap *>(_index.get());
         if(id_map)
         {
@@ -924,21 +1136,10 @@ class vector_index
             if(target_idx < 0)
                 return vector_index_errc::out_of_range;
 
-            try
-            {
-                id_map->index->reconstruct(target_idx, vec);
-                return vector_index_errc::success;
-            }
-            catch(...)
-            {
-                return vector_index_errc::faiss_exception;
-            }
+            return _reconstruct_raw(id_map->index, target_idx, vec);
         }
 
-        if(id < 0 || id >= _index->ntotal)
-            return vector_index_errc::out_of_range;
-
-        return _reconstruct(id, vec);
+        return vector_index_errc::unsupported_operation;
     }
 
     std::error_code get_vector_by_id(vindex_idx_t        id,
@@ -950,6 +1151,24 @@ class vector_index
 
         vec.resize(static_cast<size_t>(_index->d));
 
+        auto *id_map2 = dynamic_cast<const faiss::IndexIDMap2 *>(_index.get());
+        if(id_map2)
+        {
+            try
+            {
+                id_map2->reconstruct(id, vec.data());
+                return vector_index_errc::success;
+            }
+            catch(const faiss::FaissException &)
+            {
+                return vector_index_errc::out_of_range;
+            }
+            catch(...)
+            {
+                return vector_index_errc::faiss_exception;
+            }
+        }
+
         auto *id_map = dynamic_cast<const faiss::IndexIDMap *>(_index.get());
         if(id_map)
         {
@@ -969,21 +1188,10 @@ class vector_index
             if(target_idx < 0)
                 return vector_index_errc::out_of_range;
 
-            try
-            {
-                id_map->index->reconstruct(target_idx, vec.data());
-                return vector_index_errc::success;
-            }
-            catch(...)
-            {
-                return vector_index_errc::faiss_exception;
-            }
+            return _reconstruct_raw(id_map->index, target_idx, vec.data());
         }
 
-        if(id < 0 || id >= _index->ntotal)
-            return vector_index_errc::out_of_range;
-
-        return _reconstruct(id, vec.data());
+        return vector_index_errc::unsupported_operation;
     }
 
     std::error_code get_all_vectors(std::vector<float> &vectors) const
@@ -1014,26 +1222,50 @@ class vector_index
         }
         catch(...)
         {
-            return vector_index_errc::faiss_exception;
+            return vector_index_errc::capacity_exceeded;
         }
 
         return _reconstruct_n(0, _index->ntotal, vectors.data());
     }
 
-    void reset()
-    {
-        std::unique_lock<std::shared_mutex> lock(_rw_mutex);
-        if(_index)
-            _index->reset();
-    }
-
-    vindex_count_t total() const
-    {
-        std::shared_lock<std::shared_mutex> lock(_rw_mutex);
-        return _index ? _index->ntotal : 0;
-    }
-
   private:
+    std::error_code _add(vindex_count_t vectors_num,
+                         const float   *vectors,
+                         size_t         vectors_capacity)
+    {
+        if(!_index)
+            return vector_index_errc::null_index;
+
+        if(_index->d <= 0)
+            return vector_index_errc::invalid_argument;
+
+        if(!_index->is_trained)
+            return vector_index_errc::not_trained;
+
+        const size_t req_n = static_cast<size_t>(vectors_num);
+        const size_t dim   = static_cast<size_t>(_index->d);
+
+        if(req_n > std::numeric_limits<size_t>::max() / dim)
+            return vector_index_errc::out_of_range;
+
+        if(vectors_capacity < req_n * dim)
+            return vector_index_errc::capacity_exceeded;
+
+        try
+        {
+            _index->add(vectors_num, vectors);
+            return vector_index_errc::success;
+        }
+        catch(const faiss::FaissException &)
+        {
+            return vector_index_errc::faiss_exception;
+        }
+        catch(const std::exception &)
+        {
+            return vector_index_errc::faiss_exception;
+        }
+    }
+
     std::error_code _reconstruct(vindex_idx_t key, float *vector) const noexcept
     {
         if(!_index || !vector)
@@ -1082,6 +1314,24 @@ class vector_index
         try
         {
             _index->reconstruct_n(i0, ni, vectors);
+            return vector_index_errc::success;
+        }
+        catch(...)
+        {
+            return vector_index_errc::faiss_exception;
+        }
+    }
+
+    std::error_code _reconstruct_raw(faiss::Index *raw_idx,
+                                     vindex_idx_t  key,
+                                     float        *vector) const noexcept
+    {
+        if(!raw_idx || !vector)
+            return vector_index_errc::invalid_argument;
+
+        try
+        {
+            raw_idx->reconstruct(key, vector);
             return vector_index_errc::success;
         }
         catch(...)

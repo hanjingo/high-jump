@@ -1,29 +1,11 @@
-/*
- *  This file is part of high-jump(hj).
- *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
- *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef TCP_CONN_HPP
 #define TCP_CONN_HPP
 
-#include <atomic>
 #include <chrono>
 #include <deque>
 #include <functional>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -38,7 +20,16 @@ namespace hj
 class tcp_conn : public std::enable_shared_from_this<tcp_conn>
 {
   public:
-    static constexpr std::size_t max_pack_sz = 65535;
+    enum class state
+    {
+        idle,
+        connecting,
+        connected,
+        closing,
+        closed
+    };
+
+    static constexpr std::size_t read_buffer_size = 65535;
 
     using io_t  = boost::asio::io_context;
     using err_t = boost::system::error_code;
@@ -66,6 +57,7 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
         : _io(io)
         , _strand{boost::asio::make_strand(io)}
         , _sock{nullptr}
+        , _state{state::idle}
     {
     }
 
@@ -73,16 +65,18 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
         : _io(io)
         , _strand{boost::asio::make_strand(io)}
         , _sock{std::move(sock)}
+        , _state{state::idle}
     {
+        if(_sock && _sock->status() == hj::tcp_socket::state::connected)
+            _state = state::connected;
     }
 
     ~tcp_conn() noexcept
     {
-        _closed.store(true, std::memory_order_release);
+        _state = state::closed;
         if(_sock)
-        {
             _sock->close();
-        }
+
         _send_queue.clear();
     }
 
@@ -100,68 +94,93 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
         return conn;
     }
 
-    bool is_connected() const noexcept
+    void set_read_callback(read_handler_t cb)
     {
-        return _sock != nullptr
-               && _sock->status() == hj::tcp_socket::state::connected;
+        conn_ptr_t self = shared_from_this();
+        if(!self)
+            return;
+
+        boost::asio::dispatch(
+            _strand,
+            [this, self = std::move(self), cb = std::move(cb)]() mutable {
+                if(_is_closed())
+                    return;
+                _read_cb = std::move(cb);
+                _try_start_read();
+            });
     }
 
-    bool is_closed() const noexcept
+    void set_error_callback(err_handler_t cb)
     {
-        return _closed.load(std::memory_order_acquire);
-    }
+        conn_ptr_t self = shared_from_this();
+        if(!self)
+            return;
 
-    void set_read_callback(read_handler_t cb) { _read_cb = std::move(cb); }
-    void set_error_callback(err_handler_t cb) { _err_cb = std::move(cb); }
-
-    void run()
-    {
-        auto self = shared_from_this();
-        boost::asio::dispatch(_strand, [this, self]() {
-            if(!_closed && is_connected())
-            {
-                _read();
-            }
-        });
+        boost::asio::dispatch(
+            _strand,
+            [this, self = std::move(self), cb = std::move(cb)]() mutable {
+                if(_is_closed())
+                    return;
+                _err_cb = std::move(cb);
+            });
     }
 
     void
     async_connect(const char *ip, std::uint16_t port, conn_handler_t handler)
     {
-        auto self = shared_from_this();
+        conn_ptr_t self = shared_from_this();
+        if(!self)
+            return;
+
         boost::asio::dispatch(
             _strand,
             [this,
-             self,
-             ip_str = std::string(ip),
+             self   = std::move(self),
+             ip_str = std::string(ip ? ip : ""),
              port,
              handler = std::move(handler)]() mutable {
-                if(_closed.load())
+                if(_state != state::idle)
                 {
                     if(handler)
+                    {
                         handler(self,
                                 boost::system::errc::make_error_code(
-                                    boost::system::errc::bad_file_descriptor));
+                                    boost::system::errc::already_connected));
+                    }
                     return;
                 }
 
+                _state = state::connecting;
+
                 if(!_sock)
+                {
                     _sock = tcp_socket::make_shared(_io);
+                }
 
-                _sock->async_connect(ip_str.c_str(),
-                                     port,
-                                     [this, self, handler = std::move(handler)](
-                                         const err_t &ec) {
-                                         boost::asio::dispatch(
-                                             _strand,
-                                             [this, self, handler, ec]() {
-                                                 if(!ec)
-                                                     _read();
+                _sock->async_connect(
+                    ip_str.c_str(),
+                    port,
+                    boost::asio::bind_executor(
+                        _strand,
+                        [this, self, handler = std::move(handler)](
+                            const err_t &ec) {
+                            if(_is_closed())
+                                return;
 
-                                                 if(handler)
-                                                     handler(self, ec);
-                                             });
-                                     });
+                            if(!ec)
+                            {
+                                _state = state::connected;
+                                _try_start_read();
+                            } else
+                            {
+                                _state = state::closed;
+                            }
+
+                            if(handler)
+                            {
+                                handler(self, ec);
+                            }
+                        }));
             });
     }
 
@@ -170,18 +189,22 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
         if(data.empty())
             return;
 
-        auto self = shared_from_this();
-        boost::asio::dispatch(_strand,
-                              [this, self, data = std::move(data)]() mutable {
-                                  if(_closed || !is_connected())
-                                      return;
+        conn_ptr_t self = shared_from_this();
+        if(!self)
+            return;
 
-                                  bool write_in_progress = !_send_queue.empty();
-                                  _send_queue.push_back(std::move(data));
+        boost::asio::dispatch(
+            _strand,
+            [this, self = std::move(self), data = std::move(data)]() mutable {
+                if(!_is_connected())
+                    return;
 
-                                  if(!write_in_progress)
-                                      _write();
-                              });
+                bool write_in_progress = !_send_queue.empty();
+                _send_queue.push_back(std::move(data));
+
+                if(!write_in_progress)
+                    _write();
+            });
     }
 
     void send(const std::uint8_t *data, std::size_t len)
@@ -194,31 +217,13 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
 
     void close()
     {
-        bool expected = false;
-        if(!_closed.compare_exchange_strong(expected, true))
-        {
+        conn_ptr_t self = shared_from_this();
+        if(!self)
             return;
-        }
 
-        try
-        {
-            auto self = shared_from_this();
-            boost::asio::dispatch(_strand, [this, self]() {
-                _send_queue.clear();
-                if(_sock)
-                {
-                    _sock->close();
-                }
-            });
-        }
-        catch(const std::bad_weak_ptr &)
-        {
-            _send_queue.clear();
-            if(_sock)
-            {
-                _sock->close();
-            }
-        }
+        boost::asio::dispatch(_strand, [this, self = std::move(self)]() {
+            _do_close();
+        });
     }
 
   private:
@@ -230,18 +235,49 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
         }
     }
 
+    bool _is_connected() const noexcept { return _state == state::connected; }
+
+    bool _is_closed() const noexcept
+    {
+        return _state == state::closing || _state == state::closed;
+    }
+
+    void _do_close()
+    {
+        if(_is_closed())
+            return;
+
+        _state = state::closed;
+        if(_sock)
+        {
+            _sock->close();
+        }
+        _send_queue.clear();
+    }
+
+    void _try_start_read()
+    {
+        if(_is_connected() && !_read_started)
+        {
+            _read_started = true;
+            _read();
+        }
+    }
+
     void _read()
     {
         auto self = shared_from_this();
-        _recv_buf.resize(max_pack_sz);
+        _recv_buf.resize(read_buffer_size);
 
         _sock->async_read(
             boost::asio::buffer(_recv_buf),
             boost::asio::bind_executor(
                 _strand,
                 [this, self](const err_t &ec, std::size_t bytes_transferred) {
-                    if(_closed)
+                    if(_is_closed())
+                    {
                         return;
+                    }
 
                     if(!ec && bytes_transferred > 0)
                     {
@@ -259,42 +295,43 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
 
     void _write()
     {
-        auto        self        = shared_from_this();
-        const auto &current_msg = _send_queue.front();
+        if(_send_queue.empty())
+            return;
 
-        _sock->async_write(
-            boost::asio::buffer(current_msg),
-            boost::asio::bind_executor(
-                _strand,
-                [this, self](const err_t &ec, std::size_t bytes_transferred) {
-                    if(_closed)
-                        return;
+        auto self = shared_from_this();
 
-                    if(!ec)
-                    {
-                        _send_queue.pop_front();
-                        if(!_send_queue.empty())
-                        {
-                            _write();
-                        }
-                    } else
-                    {
-                        _handle_error(ec);
-                    }
-                }));
+        _sock->async_write(boost::asio::buffer(_send_queue.front()),
+                           boost::asio::bind_executor(
+                               _strand,
+                               [this, self](const err_t &ec,
+                                            std::size_t /*bytes_transferred*/) {
+                                   if(!_send_queue.empty())
+                                   {
+                                       _send_queue.pop_front();
+                                   }
+
+                                   if(_is_closed())
+                                       return;
+
+                                   if(!ec)
+                                   {
+                                       if(!_send_queue.empty())
+                                       {
+                                           _write();
+                                       }
+                                   } else
+                                   {
+                                       _handle_error(ec);
+                                   }
+                               }));
     }
 
     void _handle_error(const err_t &ec)
     {
-        if(_closed.exchange(true))
+        if(_is_closed())
             return;
 
-        if(_sock)
-        {
-            _sock->close();
-        }
-
-        _send_queue.clear();
+        _do_close();
 
         if(_err_cb)
         {
@@ -303,10 +340,13 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
     }
 
   private:
-    io_t             &_io;
-    strand_t          _strand;
-    sock_ptr_t        _sock;
-    std::atomic<bool> _closed{false};
+    io_t      &_io;
+    strand_t   _strand;
+    sock_ptr_t _sock;
+
+    state _state{state::idle};
+
+    bool _read_started{false};
 
     std::deque<msg_buffer_t> _send_queue;
     msg_buffer_t             _recv_buf;

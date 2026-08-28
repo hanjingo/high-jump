@@ -25,13 +25,12 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
         idle,
         connecting,
         connected,
-        closing,
         closed
     };
 
     static constexpr std::size_t read_buffer_size = 65535;
-    // 默认高水位限制：64 MB
-    static constexpr std::size_t default_max_pending_bytes = 64 * 1024 * 1024;
+    static constexpr std::size_t default_max_outstanding_bytes =
+        64 * 1024 * 1024;
 
     using io_t  = boost::asio::io_context;
     using err_t = boost::system::error_code;
@@ -42,7 +41,7 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
 
     using buffer_t = std::vector<std::uint8_t>;
 
-    using write_handler_t = std::function<void(conn_ptr_t, buffer_t &&)>;
+    using write_handler_t = std::function<void(conn_ptr_t, const buffer_t &)>;
     using read_handler_t  = std::function<void(conn_ptr_t, buffer_t &&)>;
     using err_handler_t   = std::function<void(conn_ptr_t, const err_t &)>;
     using conn_handler_t  = std::function<void(conn_ptr_t, const err_t &)>;
@@ -82,7 +81,7 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
                 _sock->close();
             }
             _send_queue.clear();
-            _pending_write_bytes = 0;
+            _outstanding_write_bytes = 0;
         }
         catch(...)
         {
@@ -103,14 +102,18 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
         return conn;
     }
 
-    void set_max_pending_write_bytes(std::size_t max_bytes) noexcept
+    void set_max_outstanding_write_bytes(std::size_t max_bytes)
     {
-        _max_pending_bytes = max_bytes;
-    }
+        conn_ptr_t self = shared_from_this();
+        if(!self)
+            return;
 
-    std::size_t pending_write_bytes() const noexcept
-    {
-        return _pending_write_bytes;
+        boost::asio::dispatch(_strand,
+                              [this, self = std::move(self), max_bytes]() {
+                                  if(_is_closed())
+                                      return;
+                                  _max_outstanding_bytes = max_bytes;
+                              });
     }
 
     void set_write_callback(write_handler_t cb)
@@ -213,11 +216,11 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
             });
     }
 
-    bool send(buffer_t data)
+    void send(buffer_t data)
     {
         conn_ptr_t self = shared_from_this();
         if(!self)
-            return false;
+            return;
 
         const std::size_t data_size = data.size();
 
@@ -245,7 +248,9 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
                     return;
                 }
 
-                if(_pending_write_bytes + data_size > _max_pending_bytes)
+                if(data_size > _max_outstanding_bytes
+                   || _outstanding_write_bytes
+                          > _max_outstanding_bytes - data_size)
                 {
                     if(_err_cb)
                     {
@@ -256,7 +261,7 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
                     return;
                 }
 
-                _pending_write_bytes += data_size;
+                _outstanding_write_bytes += data_size;
                 bool write_in_progress = !_send_queue.empty();
                 _send_queue.push_back(std::move(data));
 
@@ -264,16 +269,30 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
                     _write();
             });
 
-        return true;
+        return;
     }
 
-    bool send(const std::uint8_t *data, std::size_t len)
+    void send(const std::uint8_t *data, std::size_t len)
     {
         if(!data || len == 0)
-            return false;
+        {
+            conn_ptr_t self = shared_from_this();
+            if(!self)
+                return;
+
+            boost::asio::dispatch(
+                _strand,
+                [this, self = std::move(self)]() mutable {
+                    if(_err_cb)
+                        _err_cb(self,
+                                boost::system::errc::make_error_code(
+                                    boost::system::errc::invalid_argument));
+                });
+            return;
+        }
 
         buffer_t buf(data, data + len);
-        return send(std::move(buf));
+        send(std::move(buf));
     }
 
     void close()
@@ -296,10 +315,7 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
 
     bool _is_connected() const noexcept { return _state == state::connected; }
 
-    bool _is_closed() const noexcept
-    {
-        return _state == state::closing || _state == state::closed;
-    }
+    bool _is_closed() const noexcept { return _state == state::closed; }
 
     void _do_close()
     {
@@ -311,7 +327,7 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
             _sock->close();
 
         _send_queue.clear();
-        _pending_write_bytes = 0;
+        _outstanding_write_bytes = 0;
     }
 
     void _try_start_read()
@@ -369,21 +385,20 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
             boost::asio::buffer(*current_buf),
             boost::asio::bind_executor(
                 _strand,
-                [this, self, current_buf](
-                    const err_t &ec,
-                    std::size_t  bytes_transferred) mutable {
+                [this, self, current_buf](const err_t &ec,
+                                          std::size_t  bytes_transferred) {
                     if(_is_closed())
                         return;
 
-                    if(_pending_write_bytes >= current_buf->size())
-                        _pending_write_bytes -= current_buf->size();
+                    if(_outstanding_write_bytes >= current_buf->size())
+                        _outstanding_write_bytes -= current_buf->size();
                     else
-                        _pending_write_bytes = 0;
+                        _outstanding_write_bytes = 0;
 
                     if(!ec)
                     {
                         if(_write_cb)
-                            _write_cb(self, std::move(*current_buf));
+                            _write_cb(self, *current_buf);
 
                         if(!_send_queue.empty() && !_is_closed())
                             _write();
@@ -413,8 +428,8 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
 
     bool _read_started{false};
 
-    std::size_t _max_pending_bytes{default_max_pending_bytes};
-    std::size_t _pending_write_bytes{0};
+    std::size_t _max_outstanding_bytes{default_max_outstanding_bytes};
+    std::size_t _outstanding_write_bytes{0};
 
     std::deque<buffer_t> _send_queue;
     buffer_t             _recv_buf;

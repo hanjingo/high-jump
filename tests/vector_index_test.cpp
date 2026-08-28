@@ -11,7 +11,7 @@ void create_test_index(hj::vector_index<hj::vindex_flat_l2_t> &index)
 {
     index.build(2);
     const float vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
 }
 
 void cleanup_test_files(const std::vector<std::string> &files)
@@ -55,7 +55,7 @@ TEST(vector_index, add)
         1.0f,
         1.0f,
     };
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
     EXPECT_EQ(index.total(), 3u);
 }
 
@@ -72,7 +72,7 @@ TEST(vector_index, search)
         1.0f,
         1.0f,
     };
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
 
     const float  query[] = {1.0f, 0.0f};
     float        distances[2]{};
@@ -101,7 +101,7 @@ TEST(vector_index, range_search)
     };
     const float query[] = {1.0f, 0.0f};
 
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
 
     hj::vindex_range_search_result_t result(1, true);
     index.range_search(1, query, 1.1f, &result);
@@ -116,6 +116,58 @@ TEST(vector_index, range_search)
 
     EXPECT_TRUE(has_0);
     EXPECT_TRUE(has_2);
+}
+
+TEST(vector_index, search_error_codes)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    const float                            query[] = {1.0f, 0.0f};
+    float                                  distances[2]{};
+    faiss::idx_t                           indexs[2]{};
+
+    auto ec = index.search(1, query, 2, distances, indexs);
+    EXPECT_EQ(ec, hj::vector_index_errc::null_index);
+
+    index.build(2);
+
+    EXPECT_EQ(index.search(0, query, 2, distances, indexs),
+              hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(index.search(1, nullptr, 2, distances, indexs),
+              hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(index.search(1, query, 0, distances, indexs),
+              hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(index.search(1, query, 2, nullptr, indexs),
+              hj::vector_index_errc::invalid_argument);
+
+    const float vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+    index.add(3, vectors, 6);
+
+    ec = index.search(1, query, 2, distances, indexs);
+    EXPECT_FALSE(ec);
+    EXPECT_EQ(indexs[0], 0);
+}
+
+TEST(vector_index, range_search_error_codes)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    const float                            query[] = {1.0f, 0.0f};
+    hj::vindex_range_search_result_t       result(1, true);
+
+    EXPECT_EQ(index.range_search(1, query, 1.1f, &result),
+              hj::vector_index_errc::null_index);
+
+    index.build(2);
+
+    EXPECT_EQ(index.range_search(1, nullptr, 1.1f, &result),
+              hj::vector_index_errc::invalid_argument);
+    EXPECT_EQ(index.range_search(1, query, 1.1f, nullptr),
+              hj::vector_index_errc::invalid_argument);
+
+    const float vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+    index.add(3, vectors, 6);
+
+    auto ec = index.range_search(1, query, 1.1f, &result);
+    EXPECT_FALSE(ec);
 }
 
 TEST(vector_index, empty_search)
@@ -146,7 +198,7 @@ TEST(vector_index, multiple_queries)
         1.0f,
         1.0f,
     };
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
 
     const float queries[] = {
         1.0f,
@@ -181,7 +233,7 @@ TEST(vector_index, save)
         1.0f,
         1.0f,
     };
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
 
     // for relative path
     {
@@ -218,7 +270,7 @@ TEST(vector_index, save_s_success)
     const std::string filename = "test_save_s_success.faissindex";
     cleanup_test_files({filename});
 
-    EXPECT_TRUE(index.save_s(filename.c_str()));
+    EXPECT_FALSE(index.save_s(filename.c_str()));
     EXPECT_TRUE(std::filesystem::exists(filename));
     EXPECT_GT(std::filesystem::file_size(filename), 0);
 
@@ -233,10 +285,10 @@ TEST(vector_index, save_s_verify_integrity)
     const std::string filename = "test_save_s_verify.faissindex";
     cleanup_test_files({filename});
 
-    ASSERT_TRUE(index.save_s(filename.c_str()));
+    ASSERT_FALSE(index.save_s(filename.c_str()));
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    EXPECT_TRUE(loaded_index.load(filename.c_str()));
+    EXPECT_FALSE(loaded_index.load(filename.c_str()));
     EXPECT_EQ(loaded_index.total(), 3u);
 
     const float  query[] = {1.0f, 0.0f};
@@ -261,12 +313,12 @@ TEST(vector_index, save_s_empty_index)
     const std::string filename = "test_save_s_empty.faissindex";
     cleanup_test_files({filename});
 
-    EXPECT_TRUE(index.save_s(filename.c_str()));
+    EXPECT_FALSE(index.save_s(filename.c_str()));
     EXPECT_TRUE(std::filesystem::exists(filename));
     EXPECT_GT(std::filesystem::file_size(filename), 0);
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    EXPECT_TRUE(loaded_index.load(filename.c_str()));
+    EXPECT_FALSE(loaded_index.load(filename.c_str()));
     EXPECT_EQ(loaded_index.total(), 0u);
 
     cleanup_test_files({filename});
@@ -278,9 +330,9 @@ TEST(vector_index, save_s_invalid_path)
     create_test_index(index);
 
     const std::string invalid_filename = "/nonexistent/path/index.faissindex";
-    EXPECT_FALSE(index.save_s(invalid_filename.c_str()));
+    EXPECT_TRUE(index.save_s(invalid_filename.c_str()));
 
-    EXPECT_FALSE(index.save_s(""));
+    EXPECT_TRUE(index.save_s(""));
 }
 
 TEST(vector_index, save_s_overwrite)
@@ -291,19 +343,19 @@ TEST(vector_index, save_s_overwrite)
     const std::string filename = "test_save_s_overwrite.faissindex";
     cleanup_test_files({filename});
 
-    ASSERT_TRUE(index1.save_s(filename.c_str()));
+    ASSERT_FALSE(index1.save_s(filename.c_str()));
     auto size1 = std::filesystem::file_size(filename);
 
     index2.build(2);
     const float vectors2[] = {0.0f, 0.0f, 1.0f, 1.0f, 2.0f, 2.0f};
-    index2.add(3, vectors2);
-    EXPECT_TRUE(index2.save_s(filename.c_str()));
+    index2.add(3, vectors2, 6);
+    EXPECT_FALSE(index2.save_s(filename.c_str()));
     auto size2 = std::filesystem::file_size(filename);
 
     EXPECT_TRUE(std::filesystem::exists(filename));
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    ASSERT_TRUE(loaded_index.load(filename.c_str()));
+    ASSERT_FALSE(loaded_index.load(filename.c_str()));
     EXPECT_EQ(loaded_index.total(), 3u);
 
     const float  query[] = {0.0f, 0.0f};
@@ -323,13 +375,13 @@ TEST(vector_index, save_s_then_delete_original)
     const std::string filename = "test_save_s_delete.faissindex";
     cleanup_test_files({filename});
 
-    ASSERT_TRUE(index.save_s(filename.c_str()));
+    ASSERT_FALSE(index.save_s(filename.c_str()));
 
     index.reset();
     EXPECT_EQ(index.total(), 0u);
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    EXPECT_TRUE(loaded_index.load(filename.c_str()));
+    EXPECT_FALSE(loaded_index.load(filename.c_str()));
     EXPECT_EQ(loaded_index.total(), 3u);
 
     const float  query[] = {1.0f, 0.0f};
@@ -367,9 +419,9 @@ TEST(vector_index, save_s_concurrent)
                 vectors[i * 2]     = static_cast<float>(seed + i);
                 vectors[i * 2 + 1] = static_cast<float>(seed + i + 1);
             }
-            index.add(3, vectors.data());
+            index.add(3, vectors.data(), vectors.size());
 
-            if(index.save_s(filename.c_str()))
+            if(!index.save_s(filename.c_str()))
             {
                 count++;
             }
@@ -394,7 +446,7 @@ TEST(vector_index, save_s_concurrent)
     {
         EXPECT_TRUE(std::filesystem::exists(filename));
         hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-        EXPECT_TRUE(loaded_index.load(filename.c_str()));
+        EXPECT_FALSE(loaded_index.load(filename.c_str()));
         EXPECT_EQ(loaded_index.total(), 3u);
     }
 
@@ -408,7 +460,7 @@ TEST(vector_index, save_s_null_index)
     const std::string filename = "test_save_s_null.faissindex";
     cleanup_test_files({filename});
 
-    EXPECT_FALSE(index.save_s(filename.c_str()));
+    EXPECT_TRUE(index.save_s(filename.c_str()));
     EXPECT_FALSE(std::filesystem::exists(filename));
 
     cleanup_test_files({filename});
@@ -422,7 +474,7 @@ TEST(vector_index, save_s_atomic_write)
     const std::string filename = "test_save_s_atomic.faissindex";
     cleanup_test_files({filename});
 
-    EXPECT_TRUE(index.save_s(filename.c_str()));
+    EXPECT_FALSE(index.save_s(filename.c_str()));
 
     EXPECT_TRUE(std::filesystem::exists(filename));
     EXPECT_GT(std::filesystem::file_size(filename), 0);
@@ -440,38 +492,11 @@ TEST(vector_index, save_s_atomic_write)
     EXPECT_FALSE(has_temp_file);
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    EXPECT_TRUE(loaded_index.load(filename.c_str()));
+    EXPECT_FALSE(loaded_index.load(filename.c_str()));
     EXPECT_EQ(loaded_index.total(), 3u);
 
     cleanup_test_files({filename});
 }
-
-// TEST(vector_index, save_s_readonly_directory)
-// {
-//     hj::vector_index<hj::vindex_flat_l2_t> index;
-//     create_test_index(index);
-
-// #ifdef __unix__
-//     const std::string readonly_dir = "/tmp/readonly_test";
-//     if(!std::filesystem::exists(readonly_dir))
-//     {
-//         std::filesystem::create_directory(readonly_dir);
-//     }
-
-//     std::filesystem::permissions(readonly_dir,
-//                                  std::filesystem::perms::owner_read
-//                                      | std::filesystem::perms::group_read
-//                                      | std::filesystem::perms::others_read);
-
-//     const std::string filename = readonly_dir + "/test.faissindex";
-
-//     EXPECT_NO_THROW(index.save_s(filename.c_str()));
-
-//     std::filesystem::permissions(readonly_dir,
-//                                  std::filesystem::perms::owner_all);
-//     std::filesystem::remove_all(readonly_dir);
-// #endif
-// }
 
 TEST(vector_index, save_s_file_size_reasonable)
 {
@@ -484,12 +509,12 @@ TEST(vector_index, save_s_file_size_reasonable)
     {
         vectors[i] = static_cast<float>(i) / 100.0f;
     }
-    index.add(vector_count, vectors.data());
+    index.add(vector_count, vectors.data(), vectors.size());
 
     const std::string filename = "test_save_s_size.faissindex";
     cleanup_test_files({filename});
 
-    EXPECT_TRUE(index.save_s(filename.c_str()));
+    EXPECT_FALSE(index.save_s(filename.c_str()));
 
     auto file_size = std::filesystem::file_size(filename);
     EXPECT_GE(file_size, vector_count * 2 * 4);
@@ -512,14 +537,14 @@ TEST(vector_index, save_s_consistent_with_save)
     index1.save(filename_save.c_str());
     EXPECT_TRUE(std::filesystem::exists(filename_save));
 
-    EXPECT_TRUE(index2.save_s(filename_save_s.c_str()));
+    EXPECT_FALSE(index2.save_s(filename_save_s.c_str()));
     EXPECT_TRUE(std::filesystem::exists(filename_save_s));
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_from_save;
     hj::vector_index<hj::vindex_flat_l2_t> loaded_from_save_s;
 
-    EXPECT_TRUE(loaded_from_save.load(filename_save.c_str()));
-    EXPECT_TRUE(loaded_from_save_s.load(filename_save_s.c_str()));
+    EXPECT_FALSE(loaded_from_save.load(filename_save.c_str()));
+    EXPECT_FALSE(loaded_from_save_s.load(filename_save_s.c_str()));
 
     EXPECT_EQ(loaded_from_save.total(), loaded_from_save_s.total());
 
@@ -557,9 +582,9 @@ TEST(vector_index, save_s_disk_full_simulation)
         }
 
 
-        bool result = index.save_s(filename.c_str());
+        bool result = !index.save_s(filename.c_str());
 
-        EXPECT_NO_THROW(index.save_s(filename.c_str()));
+        EXPECT_TRUE(result);
         for(const auto &f : many_files)
         {
             std::filesystem::remove(f);
@@ -592,7 +617,7 @@ TEST(vector_index, load)
         1.0f,
         1.0f,
     };
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
 
     // for relative path
     {
@@ -604,7 +629,7 @@ TEST(vector_index, load)
         index.save(relative_filename.c_str());
 
         hj::vector_index<hj::vindex_flat_l2_t> relative_index;
-        EXPECT_TRUE(relative_index.load(relative_filename.c_str()));
+        EXPECT_FALSE(relative_index.load(relative_filename.c_str()));
         EXPECT_EQ(relative_index.total(), 3u);
         const float  query[] = {1.0f, 0.0f};
         float        distances[2]{};
@@ -627,7 +652,7 @@ TEST(vector_index, load)
         index.save(abs_filename.c_str());
 
         hj::vector_index<hj::vindex_flat_l2_t> abs_index;
-        EXPECT_TRUE(abs_index.load(abs_filename.c_str()));
+        EXPECT_FALSE(abs_index.load(abs_filename.c_str()));
         EXPECT_EQ(abs_index.total(), 3u);
         const float  query[] = {1.0f, 0.0f};
         float        distances[2]{};
@@ -646,10 +671,10 @@ TEST(vector_index, load_s_success)
     create_test_index(index);
     const std::string filename = "test_load_s_success.faissindex";
     cleanup_test_files({filename});
-    ASSERT_TRUE(index.save_s(filename.c_str()));
+    ASSERT_FALSE(index.save_s(filename.c_str()));
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    EXPECT_TRUE(loaded_index.load_s(filename.c_str()));
+    EXPECT_FALSE(loaded_index.load_s(filename.c_str()));
     EXPECT_EQ(loaded_index.total(), 3u);
 
     const float  query[] = {1.0f, 0.0f};
@@ -671,7 +696,7 @@ TEST(vector_index, load_s_file_not_found)
     const std::string filename = "nonexistent_file.faissindex";
     cleanup_test_files({filename});
 
-    EXPECT_FALSE(index.load_s(filename.c_str()));
+    EXPECT_TRUE(index.load_s(filename.c_str()));
     EXPECT_EQ(index.total(), 0u);
 }
 
@@ -685,7 +710,7 @@ TEST(vector_index, load_s_empty_file)
     ASSERT_TRUE(std::filesystem::exists(filename));
     ASSERT_EQ(std::filesystem::file_size(filename), 0u);
 
-    EXPECT_FALSE(index.load_s(filename.c_str()));
+    EXPECT_TRUE(index.load_s(filename.c_str()));
     EXPECT_EQ(index.total(), 0u);
 
     cleanup_test_files({filename});
@@ -703,7 +728,7 @@ TEST(vector_index, load_s_corrupted_file)
     ASSERT_TRUE(std::filesystem::exists(filename));
     ASSERT_GT(std::filesystem::file_size(filename), 0u);
 
-    EXPECT_FALSE(index.load_s(filename.c_str()));
+    EXPECT_TRUE(index.load_s(filename.c_str()));
     EXPECT_EQ(index.total(), 0u);
 
     cleanup_test_files({filename});
@@ -715,15 +740,15 @@ TEST(vector_index, load_s_replace_existing)
     create_test_index(index1);
     const std::string filename = "test_load_s_replace.faissindex";
     cleanup_test_files({filename});
-    ASSERT_TRUE(index1.save_s(filename.c_str()));
+    ASSERT_FALSE(index1.save_s(filename.c_str()));
 
     hj::vector_index<hj::vindex_flat_l2_t> index2;
     index2.build(2);
     const float vectors2[] = {0.0f, 0.0f, 1.0f, 1.0f, 2.0f, 2.0f};
-    index2.add(3, vectors2);
+    index2.add(3, vectors2, 6);
     EXPECT_EQ(index2.total(), 3u);
 
-    EXPECT_TRUE(index2.load_s(filename.c_str()));
+    EXPECT_FALSE(index2.load_s(filename.c_str()));
     EXPECT_EQ(index2.total(), 3u);
 
     const float  query[] = {1.0f, 0.0f};
@@ -743,9 +768,9 @@ TEST(vector_index, load_s_invalid_filename)
 {
     hj::vector_index<hj::vindex_flat_l2_t> index;
 
-    EXPECT_FALSE(index.load_s(nullptr));
+    EXPECT_TRUE(index.load_s(nullptr));
 
-    EXPECT_FALSE(index.load_s(""));
+    EXPECT_TRUE(index.load_s(""));
 
     EXPECT_EQ(index.total(), 0u);
 }
@@ -756,10 +781,10 @@ TEST(vector_index, load_s_type_mismatch)
     create_test_index(index_l2);
     const std::string filename = "test_load_s_type.faissindex";
     cleanup_test_files({filename});
-    ASSERT_TRUE(index_l2.save_s(filename.c_str()));
+    ASSERT_FALSE(index_l2.save_s(filename.c_str()));
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    EXPECT_TRUE(loaded_index.load_s(filename.c_str()));
+    EXPECT_FALSE(loaded_index.load_s(filename.c_str()));
     EXPECT_EQ(loaded_index.total(), 3u);
 
     cleanup_test_files({filename});
@@ -771,7 +796,7 @@ TEST(vector_index, load_s_concurrent)
     create_test_index(master_index);
     const std::string filename = "test_load_s_concurrent.faissindex";
     cleanup_test_files({filename});
-    ASSERT_TRUE(master_index.save_s(filename.c_str()));
+    ASSERT_FALSE(master_index.save_s(filename.c_str()));
 
     const int                thread_count = 4;
     std::vector<std::thread> threads;
@@ -779,7 +804,7 @@ TEST(vector_index, load_s_concurrent)
 
     auto load_task = [&filename, &success_count]() {
         hj::vector_index<hj::vindex_flat_l2_t> index;
-        if(index.load_s(filename.c_str()) && index.total() == 3u)
+        if(!index.load_s(filename.c_str()) && index.total() == 3u)
         {
             success_count++;
         }
@@ -805,15 +830,15 @@ TEST(vector_index, load_s_save_s_integration)
     hj::vector_index<hj::vindex_flat_l2_t> original;
     original.build(2);
     const float vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
-    original.add(3, vectors);
+    original.add(3, vectors, 6);
     EXPECT_EQ(original.total(), 3u);
 
     const std::string filename = "test_load_s_integration.faissindex";
     cleanup_test_files({filename});
-    ASSERT_TRUE(original.save_s(filename.c_str()));
+    ASSERT_FALSE(original.save_s(filename.c_str()));
 
     hj::vector_index<hj::vindex_flat_l2_t> loaded;
-    EXPECT_TRUE(loaded.load_s(filename.c_str()));
+    EXPECT_FALSE(loaded.load_s(filename.c_str()));
     EXPECT_EQ(loaded.total(), 3u);
 
     const float  query[] = {1.0f, 0.0f};
@@ -841,11 +866,11 @@ TEST(vector_index, load_s_performance)
     {
         vectors[i] = static_cast<float>(rand()) / RAND_MAX;
     }
-    index.add(vector_count, vectors.data());
+    index.add(vector_count, vectors.data(), vectors.size());
 
     const std::string filename = "test_load_s_perf.faissindex";
     cleanup_test_files({filename});
-    ASSERT_TRUE(index.save_s(filename.c_str()));
+    ASSERT_FALSE(index.save_s(filename.c_str()));
 
     auto file_size = std::filesystem::file_size(filename);
     std::cout << "Index file size: " << file_size / (1024 * 1024) << " MB"
@@ -853,7 +878,7 @@ TEST(vector_index, load_s_performance)
 
     auto start = std::chrono::high_resolution_clock::now();
     hj::vector_index<hj::vindex_flat_l2_t> loaded_index;
-    bool success = loaded_index.load_s(filename.c_str());
+    bool success = !loaded_index.load_s(filename.c_str());
     auto end     = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -879,7 +904,7 @@ TEST(vector_index, reset)
         1.0f,
         1.0f,
     };
-    index.add(3, vectors);
+    index.add(3, vectors, 6);
     EXPECT_EQ(index.total(), 3u);
 
     index.reset();
@@ -892,7 +917,7 @@ TEST(vector_index, serialize_success)
     create_test_index(index);
 
     std::vector<uint8_t> buffer;
-    EXPECT_TRUE(index.serialize(buffer));
+    EXPECT_FALSE(index.serialize(buffer));
     EXPECT_FALSE(buffer.empty());
 }
 
@@ -902,7 +927,7 @@ TEST(vector_index, serialize_empty_index)
     index.build(2);
 
     std::vector<uint8_t> buffer;
-    EXPECT_TRUE(index.serialize(buffer));
+    EXPECT_FALSE(index.serialize(buffer));
     EXPECT_FALSE(buffer.empty());
 }
 
@@ -910,7 +935,7 @@ TEST(vector_index, serialize_null_index)
 {
     hj::vector_index<hj::vindex_flat_l2_t> index;
     std::vector<uint8_t>                   buffer;
-    EXPECT_FALSE(index.serialize(buffer));
+    EXPECT_TRUE(index.serialize(buffer));
     EXPECT_TRUE(buffer.empty());
 }
 
@@ -920,10 +945,10 @@ TEST(vector_index, deserialize_success)
     create_test_index(original);
 
     std::vector<uint8_t> buffer;
-    ASSERT_TRUE(original.serialize(buffer));
+    ASSERT_FALSE(original.serialize(buffer));
 
     hj::vector_index<hj::vindex_flat_l2_t> restored;
-    EXPECT_TRUE(restored.deserialize(std::move(buffer)));
+    EXPECT_FALSE(restored.deserialize(std::move(buffer)));
     EXPECT_EQ(restored.total(), 3u);
 
     const float  query[] = {1.0f, 0.0f};
@@ -943,7 +968,7 @@ TEST(vector_index, deserialize_empty_buffer)
 {
     hj::vector_index<hj::vindex_flat_l2_t> index;
     std::vector<uint8_t>                   empty_buffer;
-    EXPECT_FALSE(index.deserialize(std::move(empty_buffer)));
+    EXPECT_TRUE(index.deserialize(std::move(empty_buffer)));
 }
 
 TEST(vector_index, deserialize_corrupted_buffer)
@@ -951,8 +976,7 @@ TEST(vector_index, deserialize_corrupted_buffer)
     hj::vector_index<hj::vindex_flat_l2_t> index;
     std::vector<uint8_t>                   corrupted = {0x01, 0x02, 0x03, 0x04};
 
-    EXPECT_THROW(index.deserialize(std::move(corrupted)),
-                 faiss::FaissException);
+    EXPECT_TRUE(index.deserialize(std::move(corrupted)));
 }
 
 TEST(vector_index, serialize_deserialize_roundtrip)
@@ -960,21 +984,21 @@ TEST(vector_index, serialize_deserialize_roundtrip)
     hj::vector_index<hj::vindex_flat_l2_t> original;
     original.build(2);
     const float vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 2.0f, 2.0f};
-    original.add(4, vectors);
+    original.add(4, vectors, 8);
     EXPECT_EQ(original.total(), 4u);
 
     std::vector<uint8_t> buffer;
-    ASSERT_TRUE(original.serialize(buffer));
+    EXPECT_FALSE(original.serialize(buffer));
 
     hj::vector_index<hj::vindex_flat_l2_t> restored;
-    ASSERT_TRUE(restored.deserialize(std::move(buffer)));
+    ASSERT_FALSE(restored.deserialize(std::move(buffer)));
     EXPECT_EQ(restored.total(), 4u);
 
     for(int i = 0; i < 4; i++)
     {
         std::vector<float> orig_vec, rest_vec;
-        ASSERT_TRUE(original.get_vector(i, orig_vec));
-        ASSERT_TRUE(restored.get_vector(i, rest_vec));
+        EXPECT_FALSE(original.get_vector_by_index(i, orig_vec));
+        EXPECT_FALSE(restored.get_vector_by_index(i, rest_vec));
 
         EXPECT_EQ(orig_vec.size(), rest_vec.size());
         for(size_t j = 0; j < orig_vec.size(); j++)
@@ -990,15 +1014,15 @@ TEST(vector_index, deserialize_overwrite_existing)
     create_test_index(index1);
 
     std::vector<uint8_t> buffer;
-    ASSERT_TRUE(index1.serialize(buffer));
+    ASSERT_FALSE(index1.serialize(buffer));
 
     hj::vector_index<hj::vindex_flat_l2_t> index2;
     index2.build(2);
     const float vectors2[] = {0.0f, 0.0f, 1.0f, 1.0f};
-    index2.add(2, vectors2);
+    index2.add(2, vectors2, 4);
     EXPECT_EQ(index2.total(), 2u);
 
-    EXPECT_TRUE(index2.deserialize(std::move(buffer)));
+    EXPECT_FALSE(index2.deserialize(std::move(buffer)));
     EXPECT_EQ(index2.total(), 3u);
 
     const float  query[] = {1.0f, 0.0f};
@@ -1014,16 +1038,16 @@ TEST(vector_index, get_vector_success)
     create_test_index(index);
 
     std::vector<float> vec;
-    EXPECT_TRUE(index.get_vector(0, vec));
+    EXPECT_FALSE(index.get_vector_by_index(0, vec));
     EXPECT_EQ(vec.size(), 2u);
     EXPECT_FLOAT_EQ(vec[0], 1.0f);
     EXPECT_FLOAT_EQ(vec[1], 0.0f);
 
-    EXPECT_TRUE(index.get_vector(1, vec));
+    EXPECT_FALSE(index.get_vector_by_index(1, vec));
     EXPECT_FLOAT_EQ(vec[0], 0.0f);
     EXPECT_FLOAT_EQ(vec[1], 1.0f);
 
-    EXPECT_TRUE(index.get_vector(2, vec));
+    EXPECT_FALSE(index.get_vector_by_index(2, vec));
     EXPECT_FLOAT_EQ(vec[0], 1.0f);
     EXPECT_FLOAT_EQ(vec[1], 1.0f);
 }
@@ -1034,8 +1058,8 @@ TEST(vector_index, get_vector_out_of_range)
     create_test_index(index);
 
     std::vector<float> vec;
-    EXPECT_FALSE(index.get_vector(3, vec));
-    EXPECT_FALSE(index.get_vector(-1, vec));
+    EXPECT_TRUE(index.get_vector_by_index(3, vec));
+    EXPECT_TRUE(index.get_vector_by_index(-1, vec));
 }
 
 TEST(vector_index, get_vector_empty_index)
@@ -1044,14 +1068,14 @@ TEST(vector_index, get_vector_empty_index)
     index.build(2);
 
     std::vector<float> vec;
-    EXPECT_FALSE(index.get_vector(0, vec));
+    EXPECT_TRUE(index.get_vector_by_index(0, vec));
 }
 
 TEST(vector_index, get_vector_null_index)
 {
     hj::vector_index<hj::vindex_flat_l2_t> index;
     std::vector<float>                     vec;
-    EXPECT_FALSE(index.get_vector(0, vec));
+    EXPECT_TRUE(index.get_vector_by_index(0, vec));
 }
 
 TEST(vector_index, get_vector_reuse_buffer)
@@ -1061,11 +1085,11 @@ TEST(vector_index, get_vector_reuse_buffer)
 
     std::vector<float> vec;
 
-    EXPECT_TRUE(index.get_vector(0, vec));
+    EXPECT_FALSE(index.get_vector_by_index(0, vec));
     EXPECT_EQ(vec.size(), 2u);
 
     size_t capacity = vec.capacity();
-    EXPECT_TRUE(index.get_vector(1, vec));
+    EXPECT_FALSE(index.get_vector_by_index(1, vec));
     EXPECT_EQ(vec.size(), 2u);
 }
 
@@ -1075,7 +1099,7 @@ TEST(vector_index, get_all_vectors_success)
     create_test_index(index);
 
     std::vector<float> all_vectors;
-    EXPECT_TRUE(index.get_all_vectors(all_vectors));
+    EXPECT_FALSE(index.get_all_vectors(all_vectors));
 
     EXPECT_EQ(all_vectors.size(), 6u);
 
@@ -1101,7 +1125,7 @@ TEST(vector_index, get_all_vectors_null_index)
 {
     hj::vector_index<hj::vindex_flat_l2_t> index;
     std::vector<float>                     all_vectors;
-    EXPECT_FALSE(index.get_all_vectors(all_vectors));
+    EXPECT_TRUE(index.get_all_vectors(all_vectors));
 }
 
 TEST(vector_index, get_all_vectors_large)
@@ -1116,12 +1140,12 @@ TEST(vector_index, get_all_vectors_large)
     {
         vectors[i] = static_cast<float>(rand()) / RAND_MAX;
     }
-    index.add(n, vectors.data());
+    index.add(n, vectors.data(), vectors.size());
     EXPECT_EQ(index.total(), n);
 
     std::vector<float> all_vectors;
     auto               start = std::chrono::high_resolution_clock::now();
-    EXPECT_TRUE(index.get_all_vectors(all_vectors));
+    EXPECT_FALSE(index.get_all_vectors(all_vectors));
     auto end = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -1145,12 +1169,12 @@ TEST(vector_index, get_vector_vs_get_all_vectors_consistency)
     create_test_index(index);
 
     std::vector<float> all_vectors;
-    ASSERT_TRUE(index.get_all_vectors(all_vectors));
+    ASSERT_FALSE(index.get_all_vectors(all_vectors));
 
     for(int i = 0; i < 3; i++)
     {
         std::vector<float> single_vec;
-        ASSERT_TRUE(index.get_vector(i, single_vec));
+        ASSERT_FALSE(index.get_vector_by_index(i, single_vec));
 
         for(size_t j = 0; j < single_vec.size(); j++)
         {
@@ -1165,19 +1189,19 @@ TEST(vector_index, serialize_deserialize_get_all_vectors_integration)
     hj::vector_index<hj::vindex_flat_l2_t> original;
     original.build(2);
     const float vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
-    original.add(3, vectors);
+    original.add(3, vectors, 6);
 
     std::vector<float> original_vectors;
-    ASSERT_TRUE(original.get_all_vectors(original_vectors));
+    ASSERT_FALSE(original.get_all_vectors(original_vectors));
 
     std::vector<uint8_t> buffer;
-    ASSERT_TRUE(original.serialize(buffer));
+    ASSERT_FALSE(original.serialize(buffer));
 
     hj::vector_index<hj::vindex_flat_l2_t> restored;
-    ASSERT_TRUE(restored.deserialize(std::move(buffer)));
+    ASSERT_FALSE(restored.deserialize(std::move(buffer)));
 
     std::vector<float> restored_vectors;
-    ASSERT_TRUE(restored.get_all_vectors(restored_vectors));
+    ASSERT_FALSE(restored.get_all_vectors(restored_vectors));
 
     EXPECT_EQ(original_vectors.size(), restored_vectors.size());
     for(size_t i = 0; i < original_vectors.size(); i++)
@@ -1194,7 +1218,7 @@ TEST(vector_index, add_with_ids_without_idmap)
     const float        vectors[] = {1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
     const faiss::idx_t ids[]     = {100, 200, 300};
 
-    EXPECT_FALSE(index.add_with_ids(3, vectors, ids));
+    EXPECT_TRUE(index.add_with_ids(3, vectors, 6, ids, 3));
 }
 
 TEST(vector_index, add_with_ids_empty)
@@ -1205,7 +1229,7 @@ TEST(vector_index, add_with_ids_empty)
     const float        vectors[] = {1.0f, 0.0f};
     const faiss::idx_t ids[]     = {100};
 
-    EXPECT_FALSE(index.add_with_ids(0, vectors, ids));
+    EXPECT_TRUE(index.add_with_ids(0, vectors, 2, ids, 1));
 }
 
 TEST(vector_index, add_with_ids_null_params)
@@ -1213,7 +1237,7 @@ TEST(vector_index, add_with_ids_null_params)
     hj::vector_index<hj::vindex_flat_l2_t> index;
     index.build(2);
 
-    EXPECT_FALSE(index.add_with_ids(1, nullptr, nullptr));
+    EXPECT_TRUE(index.add_with_ids(1, nullptr, 0, nullptr, 0));
 }
 
 TEST(vector_index, add_with_ids_null_index)
@@ -1223,7 +1247,7 @@ TEST(vector_index, add_with_ids_null_index)
     const float        vectors[] = {1.0f, 0.0f};
     const faiss::idx_t ids[]     = {100};
 
-    EXPECT_FALSE(index.add_with_ids(1, vectors, ids));
+    EXPECT_TRUE(index.add_with_ids(1, vectors, 2, ids, 1));
 }
 
 TEST(vector_index, add_with_ids_with_idmap)
@@ -1246,4 +1270,358 @@ TEST(vector_index, add_with_ids_with_idmap)
     idMap.search(1, query, 2, distances, indices);
 
     EXPECT_EQ(indices[0], 10);
+}
+
+TEST(vector_index, get_vector_by_id_vs_by_index)
+{
+    using idmap_index_t = hj::vector_index<faiss::IndexIDMap>;
+
+    auto base_flat = std::make_unique<faiss::IndexFlatL2>(2);
+    auto id_map    = std::make_unique<faiss::IndexIDMap>(base_flat.release());
+
+    idmap_index_t index(std::move(id_map));
+
+    // Ordinal 0 -> ID 100 -> [1.0, 0.0]
+    // Ordinal 1 -> ID 200 -> [0.0, 1.0]
+    const float        vectors[] = {1.0f, 0.0f, 0.0f, 1.0f};
+    const faiss::idx_t ids[]     = {100, 200};
+
+    ASSERT_FALSE(index.add_with_ids(2, vectors, 4, ids, 2));
+    EXPECT_EQ(index.total(), 2u);
+
+    std::vector<float> vec_by_id;
+    EXPECT_FALSE(index.get_vector_by_id(100, vec_by_id));
+    EXPECT_FLOAT_EQ(vec_by_id[0], 1.0f);
+    EXPECT_FLOAT_EQ(vec_by_id[1], 0.0f);
+
+    EXPECT_FALSE(index.get_vector_by_id(200, vec_by_id));
+    EXPECT_FLOAT_EQ(vec_by_id[0], 0.0f);
+    EXPECT_FLOAT_EQ(vec_by_id[1], 1.0f);
+
+    std::vector<float> vec_by_idx;
+    EXPECT_FALSE(index.get_vector_by_index(0, vec_by_idx));
+    EXPECT_FLOAT_EQ(vec_by_idx[0], 1.0f);
+
+    EXPECT_EQ(index.get_vector_by_index(2, vec_by_idx),
+              hj::vector_index_errc::out_of_range);
+}
+
+TEST(vector_index, get_vector_no_deadlock)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(2);
+
+    const float vectors[] = {1.0f, 0.0f, 0.0f, 1.0f};
+    ASSERT_FALSE(index.add(2, vectors, 4));
+
+    std::vector<float> vec;
+
+    auto status = index.get_vector_by_index(0, vec);
+    EXPECT_FALSE(status);
+    EXPECT_EQ(vec.size(), 2u);
+    EXPECT_FLOAT_EQ(vec[0], 1.0f);
+
+    float raw_vec[2] = {0.0f};
+    status           = index.get_vector_by_index(1, raw_vec);
+    EXPECT_FALSE(status);
+    EXPECT_FLOAT_EQ(raw_vec[1], 1.0f);
+}
+
+TEST(vector_index, concurrent_search_shared_instance)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(4);
+
+    const int          total_vectors = 1000;
+    std::vector<float> data(total_vectors * 4);
+    for(size_t i = 0; i < data.size(); ++i)
+    {
+        data[i] = static_cast<float>(i % 100) / 10.0f;
+    }
+    ASSERT_FALSE(index.add(total_vectors, data.data(), data.size()));
+
+    const int                       thread_count = 8;
+    const std::chrono::milliseconds test_duration(1000); // 运行 1s
+    std::atomic<bool>               stop_flag{false};
+    std::atomic<uint64_t>           total_searches{0};
+
+    auto search_task = [&]() {
+        std::mt19937 rng(
+            1337 + std::hash<std::thread::id>{}(std::this_thread::get_id()));
+        std::uniform_real_distribution<float> dist(0.0f, 10.0f);
+
+        while(!stop_flag.load(std::memory_order_relaxed))
+        {
+            float query[4] = {dist(rng), dist(rng), dist(rng), dist(rng)};
+            float distances[5];
+            faiss::idx_t indices[5];
+
+            auto err = index.search(1, query, 5, distances, indices);
+            EXPECT_FALSE(err);
+            total_searches.fetch_add(1, std::memory_order_relaxed);
+        }
+    };
+
+    std::vector<std::thread> threads;
+    for(int i = 0; i < thread_count; ++i)
+    {
+        threads.emplace_back(search_task);
+    }
+
+    std::this_thread::sleep_for(test_duration);
+    stop_flag.store(true);
+
+    for(auto &t : threads)
+    {
+        t.join();
+    }
+
+    EXPECT_GT(total_searches.load(), 0u);
+}
+
+TEST(vector_index, concurrent_search_and_add)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(2);
+
+    const float init_vecs[] = {1.0f, 1.0f};
+    ASSERT_FALSE(index.add(1, init_vecs, 2));
+
+    const int                       search_thread_count = 8;
+    const std::chrono::milliseconds test_duration(2000);
+    std::atomic<bool>               stop_flag{false};
+    std::atomic<uint64_t>           search_ops{0};
+    std::atomic<uint64_t>           add_ops{0};
+
+    auto reader_task = [&]() {
+        std::mt19937                          rng(std::random_device{}());
+        std::uniform_real_distribution<float> dist(-10.0f, 10.0f);
+
+        while(!stop_flag.load(std::memory_order_relaxed))
+        {
+            float        query[2] = {dist(rng), dist(rng)};
+            float        distances[2];
+            faiss::idx_t indices[2];
+
+            auto err = index.search(1, query, 2, distances, indices);
+            EXPECT_FALSE(err);
+
+            std::vector<float> vec;
+            index.get_vector_by_index(0, vec);
+
+            search_ops.fetch_add(1, std::memory_order_relaxed);
+        }
+    };
+
+    auto writer_task = [&]() {
+        std::mt19937                          rng(42);
+        std::uniform_real_distribution<float> dist(-10.0f, 10.0f);
+
+        while(!stop_flag.load(std::memory_order_relaxed))
+        {
+            float new_vec[2] = {dist(rng), dist(rng)};
+            auto  err        = index.add(1, new_vec, 2);
+            EXPECT_FALSE(err);
+
+            add_ops.fetch_add(1, std::memory_order_relaxed);
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+    };
+
+    std::vector<std::thread> threads;
+    for(int i = 0; i < search_thread_count; ++i)
+    {
+        threads.emplace_back(reader_task);
+    }
+    threads.emplace_back(writer_task);
+
+    std::this_thread::sleep_for(test_duration);
+    stop_flag.store(true);
+
+    for(auto &t : threads)
+    {
+        t.join();
+    }
+
+    EXPECT_GT(search_ops.load(), 0u);
+    EXPECT_GT(add_ops.load(), 0u);
+    EXPECT_EQ(index.total(), 1 + add_ops.load());
+}
+
+TEST(vector_index, concurrent_mixed_operations_stress)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(4);
+
+    const std::string test_file = "concurrent_stress_test.faissindex";
+    cleanup_test_files({test_file});
+
+    const std::chrono::milliseconds test_duration(2000);
+    std::atomic<bool>               stop_flag{false};
+
+    auto reader_task = [&]() {
+        float              query[4] = {0.5f, 0.5f, 0.5f, 0.5f};
+        float              dists[2];
+        faiss::idx_t       idxs[2];
+        std::vector<float> v;
+
+        while(!stop_flag.load(std::memory_order_relaxed))
+        {
+            index.search(1, query, 1, dists, idxs);
+            index.get_vector_by_index(0, v);
+            index.total();
+        }
+    };
+
+    auto writer_task = [&]() {
+        float vec[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+        while(!stop_flag.load(std::memory_order_relaxed))
+        {
+            index.add(1, vec, 4);
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        }
+    };
+
+    auto saver_task = [&]() {
+        while(!stop_flag.load(std::memory_order_relaxed))
+        {
+            index.save_atomic(test_file.c_str());
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    };
+
+    std::vector<std::thread> threads;
+    for(int i = 0; i < 4; ++i)
+        threads.emplace_back(reader_task);
+    for(int i = 0; i < 2; ++i)
+        threads.emplace_back(writer_task);
+    threads.emplace_back(saver_task);
+
+    std::this_thread::sleep_for(test_duration);
+    stop_flag.store(true);
+
+    for(auto &t : threads)
+    {
+        t.join();
+    }
+
+    EXPECT_NO_THROW(index.total());
+    cleanup_test_files({test_file});
+}
+
+TEST(vector_index, get_all_vectors_overflow_protection)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(128);
+
+    auto *faiss_idx = index.unsafe_get_index();
+
+    faiss_idx->ntotal = std::numeric_limits<int64_t>::max() / 2;
+    faiss_idx->d      = 128;
+
+    std::vector<float> vectors;
+    auto               status = index.get_all_vectors(vectors);
+
+    EXPECT_EQ(status, hj::vector_index_errc::out_of_range);
+}
+
+TEST(vector_index, reconstruct_batch_buffer_capacity_protection)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(4);
+
+    const float data[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+    ASSERT_FALSE(index.add(2, data, 8));
+
+    const faiss::idx_t keys[] = {0, 1};
+
+    std::vector<float> small_buffer(7);
+
+    auto err = index.reconstruct_batch(2,
+                                       keys,
+                                       small_buffer.data(),
+                                       small_buffer.size());
+    EXPECT_EQ(err, hj::vector_index_errc::invalid_argument);
+
+    std::vector<float> exact_buffer(8);
+    err = index.reconstruct_batch(2,
+                                  keys,
+                                  exact_buffer.data(),
+                                  exact_buffer.size());
+    EXPECT_FALSE(err);
+    EXPECT_FLOAT_EQ(exact_buffer[0], 1.0f);
+    EXPECT_FLOAT_EQ(exact_buffer[7], 8.0f);
+
+    std::vector<float> auto_vec;
+    err = index.reconstruct_batch(2, keys, auto_vec);
+    EXPECT_FALSE(err);
+    EXPECT_EQ(auto_vec.size(), 8u);
+}
+
+TEST(vector_index, add_buffer_capacity_protection)
+{
+    hj::vector_index<hj::vindex_flat_l2_t> index;
+    index.build(4);
+
+    std::vector<float> incomplete_data =
+        {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
+
+    auto err = index.add(2, incomplete_data.data(), incomplete_data.size());
+    EXPECT_EQ(err, hj::vector_index_errc::invalid_argument);
+
+    std::vector<float> valid_data =
+        {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+    err = index.add(2, valid_data.data(), valid_data.size());
+    EXPECT_FALSE(err);
+    EXPECT_EQ(index.total(), 2);
+
+    err = index.add(valid_data);
+    EXPECT_FALSE(err);
+    EXPECT_EQ(index.total(), 4);
+}
+
+TEST(vector_index, merge_from_unsupported_index_handling)
+{
+    hj::vector_index<faiss::IndexFlatL2> index_a;
+    hj::vector_index<faiss::IndexFlatL2> index_b;
+
+    index_a.build(4);
+    index_b.build(4);
+
+    std::vector<float> v1 = {1.0f, 2.0f, 3.0f, 4.0f};
+    std::vector<float> v2 = {5.0f, 6.0f, 7.0f, 8.0f};
+
+    EXPECT_FALSE(index_a.add(v1));
+    EXPECT_FALSE(index_b.add(v2));
+
+    auto err = index_a.merge_from(index_b);
+    EXPECT_FALSE(err);
+    EXPECT_EQ(index_a.total(), 2);
+}
+
+struct NonStdException
+{
+};
+
+TEST(vector_index, catch_all_exception_barrier)
+{
+    auto trigger_unknown_exception = []() -> std::error_code {
+        try
+        {
+            throw NonStdException{};
+        }
+        catch(const std::exception &)
+        {
+            return hj::vector_index_errc::faiss_exception;
+        }
+        catch(...)
+        {
+            return hj::vector_index_errc::faiss_exception;
+        }
+    };
+
+    EXPECT_NO_THROW({
+        std::error_code ec = trigger_unknown_exception();
+        EXPECT_EQ(ec, hj::vector_index_errc::faiss_exception);
+    });
 }

@@ -1,15 +1,20 @@
 #ifndef LLAMA_HPP
 #define LLAMA_HPP
 
-#include <llama.h>
-#include <memory>
-#include <cstdlib>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
-#include <string>
-#include <vector>
-#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
+#include <limits>
+#include <memory>
+#include <mutex>
 #include <stdexcept>
+#include <string>
+#include <system_error>
+#include <vector>
+
+#include "llama.h"
 
 namespace hj::llama
 {
@@ -172,6 +177,19 @@ class backend_mgr
     std::size_t _ref_count{0};
 };
 
+class backend_guard
+{
+  public:
+    backend_guard() { backend_mgr::instance().retain(); }
+    ~backend_guard() { backend_mgr::instance().release(); }
+
+    backend_guard(const backend_guard &)            = delete;
+    backend_guard &operator=(const backend_guard &) = delete;
+
+    backend_guard(backend_guard &&) noexcept            = default;
+    backend_guard &operator=(backend_guard &&) noexcept = default;
+};
+
 // Custom Deleters for C Pointers (RAII)
 struct llama_model_deleter
 {
@@ -225,15 +243,8 @@ static std::error_code validate_file_path(const std::filesystem::path &filename)
 
 } // namespace detail
 
-static inline void backend_init()
-{
-    llama_backend_init();
-}
-
-static inline void backend_free()
-{
-    llama_backend_free();
-}
+// 导出 backend_guard 到 hj::llama 命名空间
+using backend_guard = detail::backend_guard;
 
 static inline bool supports_mmap()
 {
@@ -255,40 +266,6 @@ static inline bool supports_rpc()
     return llama_supports_rpc();
 }
 
-class backend
-{
-  public:
-    backend() { detail::backend_mgr::instance().retain(); }
-
-    ~backend() { detail::backend_mgr::instance().release(); }
-
-    backend(const backend &)            = delete;
-    backend &operator=(const backend &) = delete;
-
-    backend(backend &&other) noexcept
-        : _owner(other._owner)
-    {
-        other._owner = false;
-    }
-
-    backend &operator=(backend &&other) noexcept
-    {
-        if(this != &other)
-        {
-            if(_owner)
-            {
-                detail::backend_mgr::instance().release();
-            }
-            _owner       = other._owner;
-            other._owner = false;
-        }
-        return *this;
-    }
-
-  private:
-    bool _owner{true};
-};
-
 class batch
 {
   public:
@@ -300,21 +277,29 @@ class batch
                 "hj::llama::batch: Invalid initialization arguments");
         }
 
+        _batch = llama_batch_init(n_tokens, embd, n_seq_max);
+        bool alloc_failed =
+            (embd > 0) ? (_batch.embd == nullptr) : (_batch.token == nullptr);
+        if(alloc_failed)
+        {
+            throw std::bad_alloc{};
+        }
+
         _capacity = n_tokens;
-        _batch    = llama_batch_init(n_tokens, embd, n_seq_max);
     }
 
     explicit batch(const std::vector<token_t> &tokens)
+        : batch(static_cast<int32_t>(tokens.size()), 0, 1)
     {
         if(tokens.empty())
         {
+            free_batch();
             throw std::invalid_argument(
                 "hj::llama::batch: Token vector cannot be empty");
         }
 
-        _capacity = static_cast<int32_t>(tokens.size());
-        _batch    = llama_batch_init(_capacity, 0, 1);
-        auto err  = set_tokens(tokens.data(), _capacity, 0);
+        auto err =
+            set_tokens(tokens.data(), static_cast<int32_t>(tokens.size()), 0);
         if(err)
         {
             free_batch();
@@ -323,16 +308,16 @@ class batch
     }
 
     batch(const token_t *tokens, int32_t n_tokens)
+        : batch(n_tokens, 0, 1)
     {
-        if(!tokens || n_tokens <= 0)
+        if(!tokens)
         {
-            throw std::invalid_argument("hj::llama::batch: Invalid token "
-                                        "pointer or non-positive n_tokens");
+            free_batch();
+            throw std::invalid_argument(
+                "hj::llama::batch: Invalid token pointer");
         }
 
-        _capacity = n_tokens;
-        _batch    = llama_batch_init(n_tokens, 0, 1);
-        auto err  = set_tokens(tokens, n_tokens, 0);
+        auto err = set_tokens(tokens, n_tokens, 0);
         if(err)
         {
             free_batch();
@@ -368,14 +353,12 @@ class batch
         return *this;
     }
 
-    llama_batch       &get() { return _batch; }
-    const llama_batch &get() const { return _batch; }
-
-    int32_t            size() const noexcept { return _batch.n_tokens; }
-    int32_t            capacity() const noexcept { return _capacity; }
-    bool               empty() const noexcept { return _batch.n_tokens == 0; }
-    llama_batch       *data() noexcept { return &_batch; }
+    const llama_batch &get() const noexcept { return _batch; }
     const llama_batch *data() const noexcept { return &_batch; }
+
+    int32_t size() const noexcept { return _batch.n_tokens; }
+    int32_t capacity() const noexcept { return _capacity; }
+    bool    empty() const noexcept { return _batch.n_tokens == 0; }
 
     void clear() noexcept { _batch.n_tokens = 0; }
 
@@ -532,7 +515,8 @@ class model
     model() = default;
 
     explicit model(llama_model *m)
-        : _model(m)
+        : _backend_guard(std::make_shared<detail::backend_guard>())
+        , _model(m)
     {
     }
 
@@ -578,23 +562,6 @@ class model
 
     llama_model *data() const { return _model.get(); }
 
-    // std::error_code load(const std::filesystem::path &filename,
-    //                      model_params_t params = llama_model_default_params())
-    // {
-    //     auto err = detail::validate_file_path(filename);
-    //     if(err)
-    //         return err;
-
-    //     _backend_guard = std::make_shared<backend>();
-    //     auto loaded =
-    //         llama_model_load_from_file(filename.string().c_str(), params);
-    //     if(!loaded)
-    //         return make_error_code(error_code::invalid_model);
-
-    //     _model.reset(loaded);
-    //     return err;
-    // }
-
     std::error_code load(const std::filesystem::path &filename,
                          model_params_t params = llama_model_default_params())
     {
@@ -602,12 +569,14 @@ class model
         if(err)
             return err;
 
+        auto guard = std::make_shared<detail::backend_guard>();
         auto loaded =
             llama_model_load_from_file(filename.string().c_str(), params);
 
         if(!loaded)
             return make_error_code(error_code::invalid_model);
 
+        _backend_guard = std::move(guard);
         _model.reset(loaded);
         return {};
     }
@@ -618,11 +587,12 @@ class model
         if(file == nullptr)
             return make_error_code(error_code::invalid_path);
 
-        _backend_guard = std::make_shared<backend>();
-        auto loaded    = llama_model_load_from_file_ptr(file, params);
+        auto guard  = std::make_shared<detail::backend_guard>();
+        auto loaded = llama_model_load_from_file_ptr(file, params);
         if(!loaded)
             return make_error_code(error_code::invalid_model);
 
+        _backend_guard = std::move(guard);
         _model.reset(loaded);
         return {};
     }
@@ -638,11 +608,12 @@ class model
                 return err;
         }
 
-        _backend_guard = std::make_shared<backend>();
-        auto loaded    = llama_model_load_from_splits(paths, n_paths, params);
+        auto guard  = std::make_shared<detail::backend_guard>();
+        auto loaded = llama_model_load_from_splits(paths, n_paths, params);
         if(!loaded)
             return make_error_code(error_code::invalid_model);
 
+        _backend_guard = std::move(guard);
         _model.reset(loaded);
         return {};
     }
@@ -655,24 +626,32 @@ class model
         if(filename.empty())
             return make_error_code(error_code::invalid_path);
 
-        llama_model_save_to_file(_model.get(), filename.string().c_str());
+        auto parent_path = filename.parent_path();
+        if(!parent_path.empty())
+        {
+            if(!std::filesystem::exists(parent_path))
+                return make_error_code(error_code::file_not_found);
 
+            // Check if the directory is write-accessible
+            std::error_code ec;
+            auto perms = std::filesystem::status(parent_path, ec).permissions();
+            if(!ec
+               && (perms & std::filesystem::perms::owner_write)
+                      == std::filesystem::perms::none)
+            {
+                return make_error_code(error_code::permission_denied);
+            }
+        }
+
+        if(std::filesystem::is_directory(filename))
+            return make_error_code(error_code::invalid_path);
+
+        llama_model_save_to_file(_model.get(), filename.string().c_str());
         auto err = detail::validate_file_path(filename);
         if(err)
-            return err;
+            return make_error_code(error_code::file_write_failure);
 
         return {};
-    }
-
-    [[deprecated("Manual freeing compromises associated contexts. Rely on RAII "
-                 "scope instead.")]]
-    bool free()
-    {
-        if(!_model)
-            return false;
-
-        _model.reset();
-        return true;
     }
 
     std::vector<token_t> tokenize(const std::string &prompt,
@@ -683,6 +662,13 @@ class model
         if(!_model)
         {
             err = make_error_code(error_code::invalid_model);
+            return {};
+        }
+
+        if(prompt.size()
+           > static_cast<std::size_t>(std::numeric_limits<int32_t>::max()))
+        {
+            err = make_error_code(error_code::buffer_overflow);
             return {};
         }
 
@@ -699,30 +685,39 @@ class model
             return {};
         }
 
-        auto n_tokens = llama_tokenize(vocab,
-                                       prompt.c_str(),
-                                       static_cast<int32_t>(prompt.length()),
-                                       nullptr,
-                                       0,
-                                       add_special,
-                                       parse_special);
-        n_tokens      = std::abs(n_tokens);
+        const auto prompt_len = static_cast<int32_t>(prompt.length());
+        auto       n_tokens   = llama_tokenize(vocab,
+                                               prompt.c_str(),
+                                               prompt_len,
+                                               nullptr,
+                                               0,
+                                               add_special,
+                                               parse_special);
+
+        if(n_tokens == 0)
+        {
+            err = make_error_code(error_code::backend_error);
+            return {};
+        }
+
+        const int32_t n_tokens_needed = (n_tokens < 0) ? -n_tokens : n_tokens;
+        std::vector<token_t> tokens(n_tokens_needed);
+        n_tokens = llama_tokenize(vocab,
+                                  prompt.c_str(),
+                                  prompt_len,
+                                  tokens.data(),
+                                  static_cast<int32_t>(tokens.size()),
+                                  add_special,
+                                  parse_special);
+
         if(n_tokens <= 0)
         {
             err = make_error_code(error_code::backend_error);
             return {};
         }
 
-        std::vector<token_t> tokens(n_tokens);
-        n_tokens = llama_tokenize(vocab,
-                                  prompt.c_str(),
-                                  static_cast<int32_t>(prompt.length()),
-                                  tokens.data(),
-                                  static_cast<int32_t>(tokens.size()),
-                                  add_special,
-                                  parse_special);
-        n_tokens = std::abs(n_tokens);
         tokens.resize(n_tokens);
+        err = make_error_code(error_code::success);
         return tokens;
     }
 
@@ -889,10 +884,19 @@ class model
     }
 
   private:
-    std::shared_ptr<backend> _backend_guard{nullptr};
+    std::shared_ptr<detail::backend_guard> _backend_guard{nullptr};
     std::unique_ptr<llama_model, detail::llama_model_deleter> _model{nullptr};
 };
 
+/**
+ * @brief Wrapper around llama_adapter_lora.
+ * 
+ * @note **Lifetime Contract**:
+ * `adapter_lora` does NOT own the underlying `model`. The `model` instance 
+ * MUST remain valid and outlive the `adapter_lora` for its entire lifetime.
+ * Accessing `adapter_lora` after the associated `model` is destructed 
+ * results in undefined behavior (Use-After-Free).
+ */
 class adapter_lora
 {
   public:
@@ -983,13 +987,23 @@ class adapter_lora
 class context
 {
   public:
-    context() = default;
+    context() noexcept = default;
 
-    context(const model &m, context_params_t params) { init(m, params); }
-
-    context(const model *m, context_params_t params) { init(m, params); }
-
-    ~context() = default;
+    context(const model &m, context_params_t params = default_params())
+    {
+        if(!m.data())
+        {
+            throw std::invalid_argument(
+                "hj::llama::context: Model is not initialized");
+        }
+        llama_context *raw_ctx = llama_init_from_model(m.data(), params);
+        if(!raw_ctx)
+        {
+            throw std::runtime_error(
+                "hj::llama::context: Failed to initialize llama_context");
+        }
+        _ctx.reset(raw_ctx);
+    }
 
     context(const context &)            = delete;
     context &operator=(const context &) = delete;
@@ -997,19 +1011,17 @@ class context
     context(context &&) noexcept            = default;
     context &operator=(context &&) noexcept = default;
 
+    ~context() = default;
+
     static context_params_t default_params()
     {
         return llama_context_default_params();
     }
 
-    llama_context *data() const { return _ctx.get(); }
+    llama_context *data() const noexcept { return _ctx.get(); }
+    explicit       operator bool() const noexcept { return _ctx != nullptr; }
 
-    explicit operator bool() const noexcept { return _ctx != nullptr; }
-
-    const llama_model *get_model() const
-    {
-        return _ctx ? llama_get_model(_ctx.get()) : nullptr;
-    }
+    void reset() noexcept { _ctx.reset(); }
 
     /// @brief Re-initializes the context with a new model/params.
     /// @details Guarantees Strong Exception Safety: If initialization fails,
@@ -1209,99 +1221,44 @@ struct sampler_options
     uint32_t seed = LLAMA_DEFAULT_SEED;
 
     bool force_greedy = false;
+
+    [[nodiscard]] std::error_code validate() const noexcept
+    {
+        if(top_p <= 0.0f || top_p > 1.0f)
+            return make_error_code(error_code::invalid_argument);
+
+        if(min_p < 0.0f || min_p > 1.0f)
+            return make_error_code(error_code::invalid_argument);
+
+        if(typical_p < 0.0f || typical_p > 1.0f)
+            return make_error_code(error_code::invalid_argument);
+
+        if(temperature < 0.0f)
+            return make_error_code(error_code::invalid_argument);
+
+        if(top_k < 0)
+            return make_error_code(error_code::invalid_argument);
+
+        if(penalty_last_n < 0)
+            return make_error_code(error_code::invalid_argument);
+
+        return make_error_code(error_code::success);
+    }
 };
 
 class sampler
 {
   public:
-    sampler() = default;
-
+    sampler() noexcept = default;
     explicit sampler(const sampler_options &opts,
                      sampler_chain_params_t chain_params =
                          llama_sampler_chain_default_params())
     {
-        _smpl.reset(llama_sampler_chain_init(chain_params));
-        if(!_smpl)
-            return;
-
-        if(opts.vocab && opts.grammar_str && strlen(opts.grammar_str) > 0)
+        auto err = init(opts, chain_params);
+        if(err)
         {
-            llama_sampler_chain_add(
-                _smpl.get(),
-                llama_sampler_init_grammar(opts.vocab,
-                                           opts.grammar_str,
-                                           opts.grammar_root));
+            throw std::runtime_error("hj::llama::sampler: " + err.message());
         }
-
-        if(opts.penalty_last_n > 0
-           && (opts.penalty_repeat != 1.0f || opts.penalty_frequency != 0.0f
-               || opts.penalty_present != 0.0f))
-        {
-            llama_sampler_chain_add(
-                _smpl.get(),
-                llama_sampler_init_penalties(opts.penalty_last_n,
-                                             opts.penalty_repeat,
-                                             opts.penalty_frequency,
-                                             opts.penalty_present));
-        }
-
-        if(opts.top_k > 0)
-        {
-            llama_sampler_chain_add(_smpl.get(),
-                                    llama_sampler_init_top_k(opts.top_k));
-        }
-        if(opts.typical_p < 1.0f)
-        {
-            llama_sampler_chain_add(
-                _smpl.get(),
-                llama_sampler_init_typical(opts.typical_p, 1));
-        }
-        if(opts.top_p < 1.0f)
-        {
-            llama_sampler_chain_add(
-                _smpl.get(),
-                llama_sampler_init_top_p(opts.top_p, opts.top_p_min_keep));
-        }
-        if(opts.min_p > 0.0f)
-        {
-            llama_sampler_chain_add(
-                _smpl.get(),
-                llama_sampler_init_min_p(opts.min_p, opts.min_p_min_keep));
-        }
-
-        if(opts.temperature > 0.0f && !opts.force_greedy)
-        {
-            if(opts.temp_ext_delta > 0.0f)
-            {
-                llama_sampler_chain_add(
-                    _smpl.get(),
-                    llama_sampler_init_temp_ext(opts.temperature,
-                                                opts.temp_ext_delta,
-                                                opts.temp_ext_exponent));
-            } else
-            {
-                llama_sampler_chain_add(
-                    _smpl.get(),
-                    llama_sampler_init_temp(opts.temperature));
-            }
-        }
-
-        if(opts.force_greedy || opts.temperature <= 0.0f)
-        {
-            llama_sampler_chain_add(_smpl.get(), llama_sampler_init_greedy());
-        } else
-        {
-            llama_sampler_chain_add(_smpl.get(),
-                                    llama_sampler_init_dist(opts.seed));
-        }
-    }
-
-    static sampler greedy()
-    {
-        sampler_options opts;
-        opts.force_greedy = true;
-        opts.temperature  = 0.0f;
-        return sampler(opts);
     }
 
     ~sampler() = default;
@@ -1312,15 +1269,134 @@ class sampler
     sampler(sampler &&) noexcept            = default;
     sampler &operator=(sampler &&) noexcept = default;
 
-    llama_sampler *data() const { return _smpl.get(); }
+    static sampler greedy()
+    {
+        sampler_options opts;
+        opts.force_greedy = true;
+        opts.temperature  = 0.0f;
+        return sampler(opts);
+    }
 
-    void reset()
+    std::error_code init(const sampler_options &opts,
+                         sampler_chain_params_t chain_params =
+                             llama_sampler_chain_default_params())
+    {
+        if(auto err = opts.validate(); err)
+            return err;
+
+        llama_sampler *raw_chain = llama_sampler_chain_init(chain_params);
+        if(!raw_chain)
+        {
+            return make_error_code(error_code::sampler_init_failed);
+        }
+
+        std::unique_ptr<llama_sampler, detail::llama_sampler_deleter> chain(
+            raw_chain);
+
+        if(opts.vocab && opts.grammar_str && std::strlen(opts.grammar_str) > 0)
+        {
+            auto *g = llama_sampler_init_grammar(opts.vocab,
+                                                 opts.grammar_str,
+                                                 opts.grammar_root);
+            if(!g)
+                return make_error_code(error_code::sampler_init_failed);
+            llama_sampler_chain_add(chain.get(), g);
+        }
+
+        if(opts.penalty_last_n > 0
+           && (opts.penalty_repeat != 1.0f || opts.penalty_frequency != 0.0f
+               || opts.penalty_present != 0.0f))
+        {
+            auto *p = llama_sampler_init_penalties(opts.penalty_last_n,
+                                                   opts.penalty_repeat,
+                                                   opts.penalty_frequency,
+                                                   opts.penalty_present);
+            if(!p)
+                return make_error_code(error_code::sampler_init_failed);
+            llama_sampler_chain_add(chain.get(), p);
+        }
+
+        if(opts.top_k > 0)
+        {
+            auto *tk = llama_sampler_init_top_k(opts.top_k);
+            if(!tk)
+                return make_error_code(error_code::sampler_init_failed);
+            llama_sampler_chain_add(chain.get(), tk);
+        }
+
+        if(opts.typical_p < 1.0f)
+        {
+            auto *tp = llama_sampler_init_typical(opts.typical_p, 1);
+            if(!tp)
+                return make_error_code(error_code::sampler_init_failed);
+            llama_sampler_chain_add(chain.get(), tp);
+        }
+
+        if(opts.top_p < 1.0f)
+        {
+            auto *tpp =
+                llama_sampler_init_top_p(opts.top_p, opts.top_p_min_keep);
+            if(!tpp)
+                return make_error_code(error_code::sampler_init_failed);
+            llama_sampler_chain_add(chain.get(), tpp);
+        }
+
+        if(opts.min_p > 0.0f)
+        {
+            auto *mp =
+                llama_sampler_init_min_p(opts.min_p, opts.min_p_min_keep);
+            if(!mp)
+                return make_error_code(error_code::sampler_init_failed);
+            llama_sampler_chain_add(chain.get(), mp);
+        }
+
+        if(opts.temperature > 0.0f && !opts.force_greedy)
+        {
+            llama_sampler *tm = nullptr;
+            if(opts.temp_ext_delta > 0.0f)
+            {
+                tm = llama_sampler_init_temp_ext(opts.temperature,
+                                                 opts.temp_ext_delta,
+                                                 opts.temp_ext_exponent);
+            } else
+            {
+                tm = llama_sampler_init_temp(opts.temperature);
+            }
+            if(!tm)
+                return make_error_code(error_code::sampler_init_failed);
+            llama_sampler_chain_add(chain.get(), tm);
+        }
+
+        llama_sampler *term = nullptr;
+        if(opts.force_greedy || opts.temperature <= 0.0f)
+        {
+            term = llama_sampler_init_greedy();
+        } else
+        {
+            term = llama_sampler_init_dist(opts.seed);
+        }
+
+        if(!term)
+            return make_error_code(error_code::sampler_init_failed);
+
+        llama_sampler_chain_add(chain.get(), term);
+        _smpl = std::move(chain);
+        return make_error_code(error_code::success);
+    }
+
+    llama_sampler *data() const noexcept { return _smpl.get(); }
+    explicit       operator bool() const noexcept { return _smpl != nullptr; }
+
+    void reset_chain() noexcept
     {
         if(_smpl)
             llama_sampler_reset(_smpl.get());
     }
 
-    token_t sample(context &ctx, const int32_t idx, std::error_code &err)
+    void reset() noexcept { reset_chain(); }
+
+    token_t
+    sample(context &ctx, const int32_t idx, std::error_code &err) noexcept
     {
         if(!_smpl)
         {
@@ -1334,16 +1410,17 @@ class sampler
             return -1;
         }
 
+        err.clear();
         return llama_sampler_sample(_smpl.get(), ctx.data(), idx);
     }
 
-    std::error_code accept(const token_t token)
+    std::error_code accept(const token_t token) noexcept
     {
         if(!_smpl)
             return make_error_code(error_code::invalid_state);
 
         llama_sampler_accept(_smpl.get(), token);
-        return {};
+        return make_error_code(error_code::success);
     }
 
   private:

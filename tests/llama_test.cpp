@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <vector>
 
 namespace
@@ -38,6 +39,26 @@ bool is_valid_gguf(const std::filesystem::path &model_path)
     in.read(magic, sizeof(magic));
     return in.gcount() == 4 && magic[0] == 'G' && magic[1] == 'G'
            && magic[2] == 'U' && magic[3] == 'F';
+}
+
+void make_read_only(const std::filesystem::path &p)
+{
+    std::error_code ec;
+    std::filesystem::permissions(p,
+                                 std::filesystem::perms::owner_read
+                                     | std::filesystem::perms::group_read
+                                     | std::filesystem::perms::others_read,
+                                 std::filesystem::perm_options::replace,
+                                 ec);
+}
+
+void make_writable(const std::filesystem::path &p)
+{
+    std::error_code ec;
+    std::filesystem::permissions(p,
+                                 std::filesystem::perms::owner_write,
+                                 std::filesystem::perm_options::add,
+                                 ec);
 }
 
 #define LOAD_FIXTURE_OR_SKIP(model_var)                                        \
@@ -284,7 +305,6 @@ TEST(llama_context, model_and_context_lifecycle)
 
     EXPECT_TRUE(ctx);
     EXPECT_NE(ctx.data(), nullptr);
-    EXPECT_EQ(ctx.get_model(), m.data());
     EXPECT_GT(ctx.n_ctx(), 0U);
 }
 
@@ -598,4 +618,188 @@ TEST(llama_adapter_lora, bind_to_context_single_and_multiple_scales)
 
     std::vector<hj::llama::adapter_lora> empty_loras;
     EXPECT_EQ(ctx.set_adapter_lora(empty_loras, nullptr), 0);
+}
+
+TEST(llama_backend, isolated_model_lifecycle)
+{
+    const auto fixture = find_llama_fixture();
+    if(fixture.empty())
+        GTEST_SKIP() << "Fixture missing";
+
+    {
+        hj::llama::model m;
+        auto             err = m.load(fixture);
+        EXPECT_FALSE(err);
+        EXPECT_NE(m.data(), nullptr);
+    }
+
+    {
+        hj::llama::model m2(fixture);
+        EXPECT_NE(m2.data(), nullptr);
+    }
+}
+
+TEST(llama_backend, model_load_without_manual_backend)
+{
+    hj::llama::model m;
+
+    auto err = m.load("/tmp/nonexistent_model_file_for_backend_test.gguf");
+
+    EXPECT_TRUE(err);
+    EXPECT_EQ(err, hj::llama::error_code::file_not_found);
+
+    EXPECT_EQ(m.data(), nullptr);
+}
+
+TEST(llama_backend, multiple_models_refcount_and_destruction)
+{
+    const auto fixture = find_llama_fixture();
+    if(fixture.empty())
+        GTEST_SKIP() << "Fixture missing";
+
+    hj::llama::model m1;
+    hj::llama::model m2;
+
+    ASSERT_FALSE(m1.load(fixture));
+    ASSERT_FALSE(m2.load(fixture));
+
+    ASSERT_NE(m1.data(), nullptr);
+    ASSERT_NE(m2.data(), nullptr);
+
+    m1 = hj::llama::model{};
+    EXPECT_EQ(m1.data(), nullptr);
+
+    EXPECT_NE(m2.data(), nullptr);
+    EXPECT_GT(m2.n_vocab(), 0);
+    EXPECT_GT(m2.n_params(), 0U);
+
+    std::error_code err;
+    auto            tokens = m2.tokenize("Hello test", true, false, err);
+    EXPECT_FALSE(err);
+    EXPECT_FALSE(tokens.empty());
+}
+
+TEST(llama_lifecycle, context_outlives_or_invalidates_model)
+{
+    const auto fixture = find_llama_fixture();
+    if(fixture.empty())
+        GTEST_SKIP() << "Fixture missing";
+
+    hj::llama::model m;
+    ASSERT_FALSE(m.load(fixture));
+
+    auto               params = hj::llama::context::default_params();
+    hj::llama::context ctx(m, params);
+    ASSERT_TRUE(ctx);
+
+    m = hj::llama::model{};
+    EXPECT_EQ(m.data(), nullptr);
+
+    EXPECT_NO_THROW({ ctx.reset(); });
+    EXPECT_FALSE(ctx);
+}
+
+TEST(llama_backend, thread_safety_and_free_race)
+{
+    const auto fixture = find_llama_fixture();
+    if(fixture.empty())
+        GTEST_SKIP() << "Fixture missing";
+
+    constexpr int num_iterations = 2;
+
+    for(int i = 0; i < num_iterations; ++i)
+    {
+        std::promise<void>       go;
+        std::shared_future<void> ready(go.get_future());
+
+        auto thread_a = std::async(std::launch::async, [ready, &fixture]() {
+            ready.wait();
+            hj::llama::model m;
+            (void) m.load(fixture);
+        });
+
+        auto thread_b = std::async(std::launch::async, [ready, &fixture]() {
+            ready.wait();
+            hj::llama::model m(fixture);
+            m = hj::llama::model{};
+        });
+
+        auto thread_c = std::async(std::launch::async, [ready, &fixture]() {
+            ready.wait();
+            hj::llama::backend_guard b;
+            hj::llama::model         m(fixture);
+            if(m.data())
+            {
+                hj::llama::context ctx(m);
+                (void) ctx.n_ctx();
+            }
+        });
+
+        go.set_value();
+
+        thread_a.get();
+        thread_b.get();
+        thread_c.get();
+    }
+}
+
+TEST(llama_model, save_failure_cases)
+{
+    LOAD_FIXTURE_OR_SKIP(m);
+
+    {
+        std::filesystem::path bad_path = std::filesystem::temp_directory_path()
+                                         / "non_existent_dir_12345"
+                                         / "model.gguf";
+
+        auto err = m.save(bad_path);
+        EXPECT_TRUE(err)
+            << "Saving to non-existent directory should return error";
+        EXPECT_EQ(err, hj::llama::error_code::file_not_found);
+    }
+
+    {
+        std::filesystem::path dir_path =
+            std::filesystem::temp_directory_path() / "test_dir_as_file";
+        std::filesystem::create_directories(dir_path);
+
+        auto err = m.save(dir_path);
+        EXPECT_TRUE(err) << "Saving to directory path should fail";
+
+        std::filesystem::remove(dir_path);
+    }
+
+    {
+        std::filesystem::path unreadable_dir =
+            std::filesystem::temp_directory_path() / "no_perm_dir";
+        std::filesystem::create_directories(unreadable_dir);
+
+        make_read_only(unreadable_dir);
+
+        std::filesystem::path target_file = unreadable_dir / "target.gguf";
+        auto                  err         = m.save(target_file);
+
+        EXPECT_TRUE(err);
+
+        make_writable(unreadable_dir);
+        std::filesystem::remove_all(unreadable_dir);
+    }
+
+    {
+        std::filesystem::path overwrite_file =
+            std::filesystem::temp_directory_path() / "overwrite_target.gguf";
+
+        {
+            std::ofstream ofs(overwrite_file);
+            ofs << "dummy data";
+        }
+        ASSERT_TRUE(std::filesystem::exists(overwrite_file));
+
+        auto err = m.save(overwrite_file);
+        EXPECT_FALSE(err) << "Overwriting existing file should succeed: "
+                          << err.message();
+        EXPECT_TRUE(std::filesystem::exists(overwrite_file));
+
+        std::filesystem::remove(overwrite_file);
+    }
 }

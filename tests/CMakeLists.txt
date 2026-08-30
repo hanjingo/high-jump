@@ -274,7 +274,7 @@ file(GLOB TEST_CONFIG_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/client.key"
     "${CMAKE_CURRENT_SOURCE_DIR}/server.crt"
     "${CMAKE_CURRENT_SOURCE_DIR}/server.key"
-    "${CMAKE_CURRENT_SOURCE_DIR}/TinyStories-656K-Q3_K_M.gguf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stories260K.gguf"
 )
 add_custom_target(copy_test_configs ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>

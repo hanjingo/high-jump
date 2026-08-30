@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
     // model_params.n_gpu_layers       = 99; // Offload all layers to GPU
 
     // // 3. Load the GGUF model
-    // const std::string model_path = "./TinyStories-656K-Q3_K_M.gguf";
+    // const std::string model_path = "./stories260K.gguf";
     // llama_model      *model =
     //     llama_load_model_from_file(model_path.c_str(), model_params);
     // if(model == nullptr)
@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
     hj::llama::backend_init();
 
     // Set model parameters & Load the GGUF model
-    hj::llama::model m{"./TinyStories-656K-Q3_K_M.gguf"};
+    hj::llama::model m{"./stories260K.gguf"};
     if(m.data() == nullptr)
     {
         std::cerr << "Error: Direct path to model failed to load." << std::endl;

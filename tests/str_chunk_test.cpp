@@ -26,11 +26,11 @@ TEST(str_chunk, split)
     ASSERT_EQ(single_result[0], "hello");
 
     // Test special characters
-    std::string      str = "TinyStories-656K-Q3_K_M;Qwen3-Embedding-0.6B-Q8_0";
+    std::string      str = "stories260K;Qwen3-Embedding-0.6B-Q8_0";
     std::string_view tag{";", 1};
     auto             items = hj::str::split(str, tag);
     ASSERT_TRUE(items.size() == 2);
-    ASSERT_TRUE(items[0] == "TinyStories-656K-Q3_K_M");
+    ASSERT_TRUE(items[0] == "stories260K");
     ASSERT_TRUE(items[1] == "Qwen3-Embedding-0.6B-Q8_0");
 }
 

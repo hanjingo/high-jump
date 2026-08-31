@@ -178,6 +178,7 @@ TEST(db_conn_pool, infinite_wait_acquire)
     t.join();
 
     EXPECT_TRUE(acquired.load());
+    EXPECT_NE(c, nullptr);
     EXPECT_EQ(pool->idle(), 0);
     EXPECT_EQ(pool->active(), 1);
 }

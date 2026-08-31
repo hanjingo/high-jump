@@ -302,6 +302,8 @@ class db_conn_pool : public std::enable_shared_from_this<db_conn_pool<Conn>>
             return;
 
         conn_ptr_t to_destroy;
+        bool       need_notify = false;
+
         {
             std::lock_guard<std::mutex> lock{_mu};
             if(!_closed.load())
@@ -309,21 +311,24 @@ class db_conn_pool : public std::enable_shared_from_this<db_conn_pool<Conn>>
                 if(_pool.size() < _min_size)
                 {
                     _pool.push(std::move(conn));
-                    _cond.notify_one();
-                    return;
+                    need_notify = true;
+                } else
+                {
+                    _total_cnt--;
+                    need_notify = true;
+                    to_destroy  = std::move(conn);
                 }
+            } else
+            {
+                if(_total_cnt > 0)
+                    _total_cnt--;
 
-                _total_cnt--;
-                _cond.notify_one();
                 to_destroy = std::move(conn);
-                return;
             }
-
-            if(_total_cnt > 0)
-                _total_cnt--;
-
-            to_destroy = std::move(conn);
         }
+
+        if(need_notify)
+            _cond.notify_one();
     }
 
   private:

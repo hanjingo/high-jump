@@ -3,18 +3,18 @@
 
 #include <grpc/grpc.h>
 #include <grpcpp/grpcpp.h>
-#include <grpcpp/impl/service_type.h>
-#include <string>
-#include <memory>
-#include <functional>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <system_error>
+
 #include <chrono>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <system_error>
+#include <thread>
+#include <utility>
 #include <variant>
 #include <vector>
-#include <iostream>
 
 namespace hj
 {
@@ -26,6 +26,7 @@ enum class grpc_errc
     already_started,
     channel_not_initialized,
     connection_timeout,
+    channel_shutdown,
     bind_failed,
     server_build_failed,
 };
@@ -51,12 +52,14 @@ class grpc_category final : public std::error_category
                 return "gRPC channel is not initialized";
             case grpc_errc::connection_timeout:
                 return "Timed out waiting for gRPC channel to become ready";
+            case grpc_errc::channel_shutdown:
+                return "gRPC channel is in SHUTDOWN state";
             case grpc_errc::bind_failed:
                 return "Failed to bind address or port (port already in use or "
                        "invalid address)";
             case grpc_errc::server_build_failed:
                 return "Failed to build and start gRPC server (internal gRPC "
-                       "failure)";
+                       "failure or invalid option)";
             default:
                 return "Unknown gRPC error code";
         }
@@ -68,13 +71,41 @@ inline const std::error_category &grpc_category_instance() noexcept
     static grpc_category inst;
     return inst;
 }
-} // namespace hj::detail
+} // namespace detail
 
 inline std::error_code make_error_code(grpc_errc e) noexcept
 {
     return std::error_code(static_cast<int>(e),
                            detail::grpc_category_instance());
 }
+
+struct grpc_server_diagnostic
+{
+    std::string     address;
+    int             selected_port;
+    std::error_code error;
+    std::string     details;
+
+    std::string to_string() const
+    {
+        std::ostringstream oss;
+        oss << "[gRPC Server Diagnostic] target address: '" << address
+            << "', bound port: " << selected_port
+            << ", error: " << error.message() << " (" << error.value() << ")";
+        if(!details.empty())
+        {
+            oss << ", details: " << details;
+        }
+        return oss.str();
+    }
+};
+
+inline std::ostream &operator<<(std::ostream                 &os,
+                                const grpc_server_diagnostic &diag)
+{
+    return os << diag.to_string();
+}
+
 } // namespace hj
 
 namespace std
@@ -87,6 +118,12 @@ struct is_error_code_enum<hj::grpc_errc> : std::true_type
 
 namespace hj
 {
+
+struct grpc_argument
+{
+    std::string                    key;
+    std::variant<int, std::string> value;
+};
 
 inline std::shared_ptr<grpc::ServerCredentials>
 make_tls_server_credentials(const std::string &pem_root_certs,
@@ -113,15 +150,13 @@ struct grpc_server_options
     int max_receive_message_size = -1;
     int max_send_message_size    = -1;
 
-    int keepalive_time_ms    = -1;
-    int keepalive_timeout_ms = -1;
-    int keepalive_permit_without_calls =
+    int keepalive_time_ms              = -1;
+    int keepalive_timeout_ms           = -1;
+    int keepalive_permit_without_calls = -1;
 
-        grpc_compression_algorithm compression_algorithm = GRPC_COMPRESS_NONE;
+    grpc_compression_algorithm compression_algorithm = GRPC_COMPRESS_NONE;
 
-    using custom_arg_t = std::variant<std::pair<std::string, int>,
-                                      std::pair<std::string, std::string>>;
-    std::vector<custom_arg_t> custom_arguments;
+    std::vector<grpc_argument> custom_arguments;
 
     grpc_server_options &set_max_receive_message_size(int size)
     {
@@ -154,20 +189,14 @@ struct grpc_server_options
 
     grpc_server_options &add_argument(const std::string &key, int value)
     {
-        custom_arguments.emplace_back(
-            std::in_place_type<std::pair<std::string, int>>,
-            key,
-            value);
+        custom_arguments.push_back(grpc_argument{key, value});
         return *this;
     }
 
     grpc_server_options &add_argument(const std::string &key,
                                       const std::string &value)
     {
-        custom_arguments.emplace_back(
-            std::in_place_type<std::pair<std::string, std::string>>,
-            key,
-            value);
+        custom_arguments.push_back(grpc_argument{key, value});
         return *this;
     }
 };
@@ -195,7 +224,6 @@ class grpc_server
     grpc_server(grpc_server &&)                 = delete;
     grpc_server &operator=(grpc_server &&)      = delete;
 
-    // Insecure credentials are intended for trusted/internal/test environments only.
     template <typename ServiceType>
     std::error_code
     start(const std::string                       &address,
@@ -205,13 +233,38 @@ class grpc_server
           const grpc_server_options &options = grpc_server_options())
     {
         if(!service)
+        {
+            set_diagnostic(address,
+                           0,
+                           make_error_code(grpc_errc::invalid_argument),
+                           "Service pointer is null");
             return make_error_code(grpc_errc::invalid_argument);
+        }
 
+        std::thread old_thread;
         {
             std::lock_guard<std::mutex> lock(_mutex);
             if(_state != state::stopped)
+            {
+                set_diagnostic(address,
+                               0,
+                               make_error_code(grpc_errc::already_started),
+                               "Server is not in stopped state");
                 return make_error_code(grpc_errc::already_started);
+            }
+
+            if(_server_thread.joinable())
+            {
+                old_thread = std::move(_server_thread);
+            }
+
+            _server.reset();
             _state = state::starting;
+        }
+
+        if(old_thread.joinable())
+        {
+            old_thread.join();
         }
 
         grpc::ServerBuilder builder;
@@ -241,19 +294,24 @@ class grpc_server
 
         for(const auto &arg : options.custom_arguments)
         {
-            if(std::holds_alternative<std::pair<std::string, int>>(arg))
-            {
-                const auto &[key, val] =
-                    std::get<std::pair<std::string, int>>(arg);
-                builder.AddChannelArgument(key, val);
-            } else if(std::holds_alternative<
-                          std::pair<std::string, std::string>>(arg))
-            {
-                const auto &[key, val] =
-                    std::get<std::pair<std::string, std::string>>(arg);
-                builder.AddChannelArgument(key, val);
-            }
+            std::visit(
+                [&builder, &arg](auto &&val) {
+                    builder.AddChannelArgument(arg.key, val);
+                },
+                arg.value);
         }
+
+        // hook for testing purposes to allow manipulation of the builder before building the server
+        std::function<void()> hook_to_call;
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            hook_to_call = _before_build_hook;
+        }
+        if(hook_to_call)
+        {
+            hook_to_call();
+        }
+        // hook end
 
         auto temp_server = builder.BuildAndStart();
         if(!temp_server)
@@ -261,21 +319,47 @@ class grpc_server
             std::lock_guard<std::mutex> lock(_mutex);
             _state = state::stopped;
             _cv.notify_all();
+
+            std::error_code err;
+            std::string     detail_msg;
+
             if(selected_port == 0)
             {
-                return make_error_code(grpc_errc::bind_failed);
+                err = make_error_code(grpc_errc::bind_failed);
+                detail_msg =
+                    "AddListeningPort failed for address: " + address
+                    + " (port in use, illegal IP, or permission denied)";
+            } else
+            {
+                err = make_error_code(grpc_errc::server_build_failed);
+                detail_msg =
+                    "BuildAndStart returned null despite valid port binding ("
+                    + std::to_string(selected_port) + ")";
             }
-            return make_error_code(grpc_errc::server_build_failed);
+
+            set_diagnostic(address, selected_port, err, detail_msg);
+            return err;
         }
 
         {
             std::lock_guard<std::mutex> lock(_mutex);
-            _server        = std::move(temp_server);
-            _state         = state::running;
+            _server = std::move(temp_server);
+            _state  = state::running;
+
+            set_diagnostic(address,
+                           selected_port,
+                           {},
+                           "Server running successfully");
+            _cv.notify_all();
+
             _server_thread = std::thread([server = _server.get(), this]() {
                 server->Wait();
+
                 std::lock_guard<std::mutex> lock(_mutex);
-                _state = state::stopped;
+                if(_state == state::running)
+                {
+                    _state = state::stopped;
+                }
                 _cv.notify_all();
             });
         }
@@ -289,9 +373,14 @@ class grpc_server
         std::thread                   local_thread;
 
         {
-            std::lock_guard<std::mutex> lock(_mutex);
-            if(_state == state::stopped || _state == state::stopping)
+            std::unique_lock<std::mutex> lock(_mutex);
+
+            _cv.wait(lock, [this] { return _state != state::starting; });
+
+            if(_state == state::stopping)
+            {
                 return {};
+            }
 
             _state       = state::stopping;
             local_server = std::move(_server);
@@ -306,6 +395,12 @@ class grpc_server
         if(local_thread.joinable())
         {
             local_thread.join();
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _state = state::stopped;
+            _cv.notify_all();
         }
 
         return {};
@@ -329,12 +424,34 @@ class grpc_server
         return _state;
     }
 
+    grpc_server_diagnostic last_diagnostic() const
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _diag;
+    }
+
+    void set_before_build_hook(std::function<void()> hook)
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _before_build_hook = std::move(hook);
+    }
+
   private:
+    void set_diagnostic(const std::string &address,
+                        int                port,
+                        std::error_code    err,
+                        const std::string &details)
+    {
+        _diag = grpc_server_diagnostic{address, port, err, details};
+    }
+
     std::unique_ptr<grpc::Server> _server;
     std::thread                   _server_thread;
     state                         _state;
     mutable std::mutex            _mutex;
     std::condition_variable       _cv;
+    grpc_server_diagnostic        _diag;
+    std::function<void()>         _before_build_hook;
 };
 
 struct grpc_channel_options
@@ -348,9 +465,7 @@ struct grpc_channel_options
 
     grpc_compression_algorithm compression_algorithm = GRPC_COMPRESS_NONE;
 
-    using custom_arg_t = std::variant<std::pair<std::string, int>,
-                                      std::pair<std::string, std::string>>;
-    std::vector<custom_arg_t> custom_arguments;
+    std::vector<grpc_argument> custom_arguments;
 
     grpc_channel_options &set_max_receive_message_size(int size)
     {
@@ -383,20 +498,14 @@ struct grpc_channel_options
 
     grpc_channel_options &add_argument(const std::string &key, int value)
     {
-        custom_arguments.emplace_back(
-            std::in_place_type<std::pair<std::string, int>>,
-            key,
-            value);
+        custom_arguments.push_back(grpc_argument{key, value});
         return *this;
     }
 
     grpc_channel_options &add_argument(const std::string &key,
                                        const std::string &value)
     {
-        custom_arguments.emplace_back(
-            std::in_place_type<std::pair<std::string, std::string>>,
-            key,
-            value);
+        custom_arguments.push_back(grpc_argument{key, value});
         return *this;
     }
 
@@ -420,47 +529,60 @@ struct grpc_channel_options
 
         for(const auto &arg : custom_arguments)
         {
-            if(std::holds_alternative<std::pair<std::string, int>>(arg))
-            {
-                const auto &[k, v] = std::get<std::pair<std::string, int>>(arg);
-                args.SetInt(k, v);
-            } else if(std::holds_alternative<
-                          std::pair<std::string, std::string>>(arg))
-            {
-                const auto &[k, v] =
-                    std::get<std::pair<std::string, std::string>>(arg);
-                args.SetString(k, v);
-            }
+            std::visit(
+                [&args, &arg](auto &&val) {
+                    using T = std::decay_t<decltype(val)>;
+                    if constexpr(std::is_same_v<T, int>)
+                    {
+                        args.SetInt(arg.key, val);
+                    } else if constexpr(std::is_same_v<T, std::string>)
+                    {
+                        args.SetString(arg.key, val);
+                    }
+                },
+                arg.value);
         }
         return args;
     }
 };
 
-class grpc_channel : public std::enable_shared_from_this<grpc_channel>
+class grpc_channel
 {
+  private:
+    struct grpc_channel_key
+    {
+        explicit grpc_channel_key() = default;
+    };
+
   public:
-    grpc_channel() = default;
+    explicit grpc_channel(grpc_channel_key) {}
 
     explicit grpc_channel(
+        grpc_channel_key,
         std::string                               target,
-        std::shared_ptr<grpc::ChannelCredentials> credentials =
-            grpc::InsecureChannelCredentials(),
+        std::shared_ptr<grpc::ChannelCredentials> credentials,
         const grpc_channel_options &options = grpc_channel_options())
     {
         init(std::move(target), std::move(credentials), options);
     }
 
-    static std::shared_ptr<grpc_channel>
-    create(const std::string                        &target,
-           std::shared_ptr<grpc::ChannelCredentials> credentials =
-               grpc::InsecureChannelCredentials(),
-           const grpc_channel_options &options = grpc_channel_options())
+    static std::shared_ptr<grpc_channel> make_shared()
     {
-        auto ch = std::make_shared<grpc_channel>();
-        if(!ch->init(target, credentials, options))
-        {
-            return nullptr;
-        }
+        return std::make_shared<hj::grpc_channel>(grpc_channel_key{});
+    }
+
+    static std::shared_ptr<grpc_channel>
+    make_shared(const std::string                        &target,
+                std::shared_ptr<grpc::ChannelCredentials> credentials,
+                const grpc_channel_options &options = grpc_channel_options())
+    {
+        auto ch = std::make_shared<grpc_channel>(grpc_channel_key{},
+                                                 target,
+                                                 credentials,
+                                                 options);
+        if(!target.empty())
+            ch->init(target, credentials, options);
+
         return ch;
     }
 
@@ -492,7 +614,13 @@ class grpc_channel : public std::enable_shared_from_this<grpc_channel>
         return _channel->GetState(try_to_connect);
     }
 
-    bool is_ready() const { return state(false) == GRPC_CHANNEL_READY; }
+    bool is_ready() const
+    {
+        if(!_channel)
+            return false;
+
+        return state(false) == GRPC_CHANNEL_READY;
+    }
 
     template <typename Rep, typename Period>
     std::error_code
@@ -506,30 +634,32 @@ class grpc_channel : public std::enable_shared_from_this<grpc_channel>
         while(true)
         {
             auto current_state = _channel->GetState(true /* try_to_connect */);
+
             if(current_state == GRPC_CHANNEL_READY)
             {
                 return {};
             }
+
             if(current_state == GRPC_CHANNEL_SHUTDOWN)
             {
-                return make_error_code(grpc_errc::connection_timeout);
+                return make_error_code(grpc_errc::channel_shutdown);
             }
+
             if(!_channel->WaitForStateChange(current_state, deadline))
             {
-                if(_channel->GetState(false) == GRPC_CHANNEL_READY)
+                auto last_state = _channel->GetState(false);
+                if(last_state == GRPC_CHANNEL_READY)
                 {
                     return {};
                 }
+
+                if(last_state == GRPC_CHANNEL_SHUTDOWN)
+                {
+                    return make_error_code(grpc_errc::channel_shutdown);
+                }
+
                 return make_error_code(grpc_errc::connection_timeout);
             }
-        }
-    }
-
-    void reset_connection()
-    {
-        if(_channel)
-        {
-            _channel->GetState(true /* try_to_connect */);
         }
     }
 

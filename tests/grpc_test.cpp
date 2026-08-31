@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#ifdef GRPC_ENABLE
 #include <hj/net/grpc.hpp>
 #include <grpcpp/grpcpp.h>
 #include <thread>
@@ -27,8 +26,8 @@ TestGrpcServiceImpl *g_service = new TestGrpcServiceImpl();
 TEST(grpc, say_hello_unary_call)
 {
     hj::grpc_server server;
-    std::string     address = "127.0.0.1:50051";
-    ASSERT_TRUE(server.start(address, g_service));
+    std::string     address = "127.0.0.1:50062";
+    ASSERT_FALSE(server.start(address, g_service));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     hj::grpc_channel channel;
@@ -46,5 +45,3 @@ TEST(grpc, say_hello_unary_call)
 
     server.stop();
 }
-
-#endif // GRPC_ENABLE

@@ -19,16 +19,17 @@
 #ifndef UDP_SOCKET_HPP
 #define UDP_SOCKET_HPP
 
-#include <iostream>
 #include <memory>
-#include <functional>
-#include <boost/version.hpp>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 #include <boost/asio.hpp>
+#include <boost/version.hpp>
 
-namespace hj
+namespace hj::udp
 {
-namespace udp
-{
+
 namespace opt
 {
 using send_buf_sz = boost::asio::ip::udp::socket::send_buffer_size;
@@ -38,299 +39,181 @@ using keep_alive  = boost::asio::ip::udp::socket::keep_alive;
 using broadcast   = boost::asio::ip::udp::socket::broadcast;
 } // namespace opt
 
-enum class error_code
-{
-    not_open,
-    invalid_argument,
-    other,
-};
-
-class error_category : public std::error_category
-{
-  public:
-    const char *name() const noexcept override { return "udp"; }
-    std::string message(int ev) const override
-    {
-        switch(static_cast<error_code>(ev))
-        {
-            case error_code::not_open:
-                return "Socket not open";
-            case error_code::invalid_argument:
-                return "Invalid argument";
-            case error_code::other:
-                return "Other error";
-            default:
-                return "Unknown error";
-        }
-    }
-};
-
-static inline std::error_code make_err(error_code e)
-{
-    static error_category cat;
-    return std::error_code(static_cast<int>(e), cat);
-}
-
-class socket : public std::enable_shared_from_this<hj::udp::socket>
+class socket final : public std::enable_shared_from_this<socket>
 {
   public:
     using executor_t     = boost::asio::any_io_executor;
     using err_t          = boost::system::error_code;
     using address_t      = boost::asio::ip::address;
-    using const_buffer_t = boost::asio::const_buffer;
-    using multi_buffer_t = boost::asio::mutable_buffer;
     using sock_t         = boost::asio::ip::udp::socket;
     using endpoint_t     = boost::asio::ip::udp::endpoint;
+    using const_buffer_t = boost::asio::const_buffer;
+    using multi_buffer_t = boost::asio::mutable_buffer;
 
-    using send_handler_t =
-        std::function<void(const std::error_code &, std::size_t)>;
-    using recv_handler_t =
-        std::function<void(const std::error_code &, std::size_t)>;
+    template <typename... Args>
+    static std::shared_ptr<socket> create(Args &&...args)
+    {
+        return std::shared_ptr<socket>(new socket(std::forward<Args>(args)...));
+    }
 
-    socket(executor_t exec, bool ipv6 = false)
-        : _exec(exec)
-        , _sock(std::make_unique<sock_t>(exec))
-    {
-        if(ipv6)
-            _sock->open(boost::asio::ip::udp::v6());
-        else
-            _sock->open(boost::asio::ip::udp::v4());
-    }
-    socket(executor_t exec, endpoint_t &ep)
-        : _exec(exec)
-        , _sock(std::make_unique<sock_t>(exec, ep))
-    {
-    }
-    socket(executor_t exec, const std::string &ip, const uint16_t port)
-        : _exec(exec)
-        , _sock(std::make_unique<sock_t>(exec, endpoint(ip, port)))
-    {
-    }
-    socket(executor_t exec, std::unique_ptr<sock_t> sock) noexcept
-        : _exec(exec)
-        , _sock(std::move(sock))
+    explicit socket(executor_t exec, bool ipv6 = false)
+        : _sock(exec,
+                ipv6 ? boost::asio::ip::udp::v6() : boost::asio::ip::udp::v4())
     {
     }
 
-    virtual ~socket() noexcept { close(); }
+    template <typename ExecutionContext,
+              typename = std::enable_if_t<
+                  std::is_convertible_v<ExecutionContext &,
+                                        boost::asio::execution_context &>>>
+    explicit socket(ExecutionContext &context, bool ipv6 = false)
+        : _sock(context,
+                ipv6 ? boost::asio::ip::udp::v6() : boost::asio::ip::udp::v4())
+    {
+    }
+
+    socket(executor_t exec, const endpoint_t &ep)
+        : _sock(exec, ep)
+    {
+    }
+
+    socket(executor_t exec, const std::string &ip, uint16_t port)
+        : _sock(exec, endpoint(ip, port))
+    {
+    }
+
+    explicit socket(sock_t &&raw_sock) noexcept
+        : _sock(std::move(raw_sock))
+    {
+    }
+
+    ~socket() noexcept = default;
 
     socket(const socket &)            = delete;
     socket &operator=(const socket &) = delete;
-    socket(socket &&)                 = default;
+    socket(socket &&) noexcept        = default;
     socket &operator=(socket &&)      = default;
 
-    inline bool is_open() const noexcept { return _sock && _sock->is_open(); }
-    inline bool is_connected() const noexcept
+    [[nodiscard]] bool is_open() const noexcept { return _sock.is_open(); }
+
+    [[nodiscard]] bool is_connected() const noexcept
     {
-        return is_open() && _sock->remote_endpoint().address() != address_t();
+        err_t ec;
+        _sock.remote_endpoint(ec);
+        return !ec;
     }
 
-    template <typename Opt>
-    inline void set_option(Opt opt, std::error_code &ec) noexcept
+    [[nodiscard]] sock_t       &native_handle() noexcept { return _sock; }
+    [[nodiscard]] const sock_t &native_handle() const noexcept { return _sock; }
+    [[nodiscard]] executor_t    get_executor() noexcept
     {
-        if(!is_open())
-        {
-            ec = make_err(error_code::not_open);
-            return;
-        }
-
-        err_t err;
-        _sock->set_option(opt, err);
-        ec = err;
+        return _sock.get_executor();
     }
 
-    void bind(const endpoint_t &ep, std::error_code &ec) noexcept
+    template <typename Option>
+    void set_option(const Option &option, err_t &ec) noexcept
     {
-        if(!is_open())
-        {
-            ec = make_err(error_code::not_open);
-            return;
-        }
-
-        if(ep.port() == 0)
-        {
-            ec = make_err(error_code::invalid_argument);
-            return;
-        }
-
-        err_t err;
-        _sock->bind(ep, err);
-        ec = err;
+        _sock.set_option(option, ec);
     }
 
-    void bind(const uint16_t port, std::error_code &ec) noexcept
+    void bind(const endpoint_t &ep, err_t &ec) noexcept { _sock.bind(ep, ec); }
+
+    void bind(uint16_t port, err_t &ec) noexcept
     {
         bind(endpoint("0.0.0.0", port), ec);
     }
 
-    void connect(const endpoint_t &ep, std::error_code &ec) noexcept
+    void connect(const endpoint_t &ep, err_t &ec) noexcept
     {
-        if(!is_open())
-        {
-            ec = make_err(error_code::not_open);
-            return;
-        }
-
-        err_t err;
-        _sock->connect(ep, err);
-        ec = err;
+        _sock.connect(ep, ec);
     }
 
-    void connect(const std::string &ip,
-                 const uint16_t     port,
-                 std::error_code   &ec) noexcept
+    void connect(const std::string &ip, uint16_t port, err_t &ec) noexcept
     {
-        return connect(endpoint(ip, port), ec);
+        connect(endpoint(ip, port), ec);
     }
 
-    void disconnect(std::error_code &ec) noexcept
+    void disconnect(err_t &ec) noexcept { _sock.close(ec); }
+
+    template <typename ConstBufferSequence>
+    size_t send_to(const ConstBufferSequence &buffers,
+                   const endpoint_t          &ep,
+                   err_t                     &ec) noexcept
     {
-        return connect(endpoint_t(), ec);
+        return _sock.send_to(buffers, ep, 0, ec);
     }
 
-    size_t send(const const_buffer_t &buf,
-                const endpoint_t     &ep,
-                std::error_code      &ec) noexcept
+    size_t send_to(const char       *data,
+                   size_t            len,
+                   const endpoint_t &ep,
+                   err_t            &ec) noexcept
     {
-        if(!is_open())
-        {
-            ec = make_err(error_code::not_open);
-            return 0;
-        }
-
-        err_t  err;
-        size_t len = _sock->send_to(buf, ep, 0, err);
-        ec         = err;
-        return err ? 0 : len;
+        return send_to(boost::asio::buffer(data, len), ep, ec);
     }
 
-    size_t send(const char       *data,
-                size_t            len,
-                const endpoint_t &ep,
-                std::error_code  &ec) noexcept
+    template <typename ConstBufferSequence>
+    size_t send(const ConstBufferSequence &buffers, err_t &ec) noexcept
     {
-        if(!data || len == 0)
-        {
-            ec = make_err(error_code::invalid_argument);
-            return 0;
-        }
-        return send(boost::asio::buffer(data, len), ep, ec);
+        return _sock.send(buffers, 0, ec);
     }
 
-    size_t send(const std::vector<const_buffer_t> &bufs,
-                const endpoint_t                  &ep,
-                std::error_code                   &ec) noexcept
+    template <typename MutableBufferSequence>
+    size_t receive_from(const MutableBufferSequence &buffers,
+                        endpoint_t                  &ep,
+                        err_t                       &ec) noexcept
     {
-        if(!is_open())
-        {
-            ec = make_err(error_code::not_open);
-            return 0;
-        }
-
-        err_t  err;
-        size_t len = _sock->send_to(bufs, ep, 0, err);
-        ec         = err;
-        return err ? 0 : len;
-    }
-
-    void async_send(const const_buffer_t &buf,
-                    const endpoint_t     &ep,
-                    send_handler_t      &&fn)
-    {
-        if(!is_open())
-        {
-            fn(make_err(error_code::not_open), 0);
-            return;
-        }
-        _sock->async_send_to(buf, ep, std::move(fn));
-    }
-
-    void async_send(const char       *data,
-                    size_t            len,
-                    const endpoint_t &ep,
-                    send_handler_t  &&fn)
-    {
-        if(!data || len == 0)
-        {
-            fn(make_err(error_code::invalid_argument), 0);
-            return;
-        }
-        async_send(boost::asio::buffer(data, len), ep, std::move(fn));
+        return _sock.receive_from(buffers, ep, 0, ec);
     }
 
     size_t
-    recv(multi_buffer_t &buf, endpoint_t &ep, std::error_code &ec) noexcept
+    receive_from(char *data, size_t len, endpoint_t &ep, err_t &ec) noexcept
     {
-        if(!is_open())
-        {
-            ec = make_err(error_code::not_open);
-            return 0;
-        }
-        err_t  err;
-        size_t recvd = _sock->receive_from(buf, ep, 0, err);
-        ec           = err;
-        return err ? 0 : recvd;
+        return receive_from(boost::asio::buffer(data, len), ep, ec);
     }
 
-    size_t
-    recv(char *data, size_t len, endpoint_t &ep, std::error_code &ec) noexcept
+    template <typename MutableBufferSequence>
+    size_t receive(const MutableBufferSequence &buffers, err_t &ec) noexcept
     {
-        if(!data || len == 0)
-        {
-            ec = make_err(error_code::invalid_argument);
-            return 0;
-        }
-
-        multi_buffer_t buf{data, len};
-        return recv(buf, ep, ec);
+        return _sock.receive(buffers, 0, ec);
     }
 
-    size_t recv(std::vector<multi_buffer_t> &bufs,
-                endpoint_t                  &ep,
-                std::error_code             &ec) noexcept
+    template <typename ConstBufferSequence, typename WriteHandler>
+    void async_send_to(const ConstBufferSequence &buffers,
+                       const endpoint_t          &ep,
+                       WriteHandler             &&handler)
     {
-        if(!is_open())
-        {
-            ec = make_err(error_code::not_open);
-            return 0;
-        }
-
-        err_t  err;
-        size_t recvd = _sock->receive_from(bufs, ep, 0, err);
-        ec           = err;
-        return err ? 0 : recvd;
+        auto self = shared_from_this();
+        _sock.async_send_to(buffers,
+                            ep,
+                            [self, fn = std::forward<WriteHandler>(handler)](
+                                const err_t &ec,
+                                std::size_t  bytes_transferred) mutable {
+                                fn(ec, bytes_transferred);
+                            });
     }
 
-    void async_recv(multi_buffer_t &buf, endpoint_t &ep, recv_handler_t &&fn)
+    template <typename MutableBufferSequence, typename ReadHandler>
+    void async_receive_from(const MutableBufferSequence &buffers,
+                            endpoint_t                  &ep,
+                            ReadHandler                &&handler)
     {
-        if(!is_open())
-        {
-            fn(make_err(error_code::not_open), 0);
-            return;
-        }
-        _sock->async_receive_from(buf, ep, std::move(fn));
+        auto self = shared_from_this();
+        _sock.async_receive_from(
+            buffers,
+            ep,
+            [self, fn = std::forward<ReadHandler>(handler)](
+                const err_t &ec,
+                std::size_t  bytes_transferred) mutable {
+                fn(ec, bytes_transferred);
+            });
     }
 
-    void async_recv(char *data, size_t len, endpoint_t &ep, recv_handler_t &&fn)
-    {
-        if(!data || len == 0)
-        {
-            fn(make_err(error_code::invalid_argument), 0);
-            return;
-        }
-
-        multi_buffer_t buf{data, len};
-        async_recv(buf, ep, std::move(fn));
-    }
+    void close(err_t &ec) noexcept { _sock.close(ec); }
 
     void close() noexcept
     {
-        if(_sock && _sock->is_open())
-        {
-            err_t ec;
-            _sock->close(ec);
-        }
-        _sock.reset();
+        err_t ec;
+        _sock.close(ec);
     }
 
     static address_t address(const std::string &ip)
@@ -348,11 +231,9 @@ class socket : public std::enable_shared_from_this<hj::udp::socket>
     }
 
   private:
-    executor_t              _exec;
-    std::unique_ptr<sock_t> _sock;
+    sock_t _sock;
 };
 
-} // namespace udp
-} // namespace hj
+} // namespace hj::udp
 
-#endif
+#endif // UDP_SOCKET_HPP

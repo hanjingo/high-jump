@@ -1,6 +1,7 @@
 #ifndef LLAMA_HPP
 #define LLAMA_HPP
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -12,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include "llama.h"
@@ -266,6 +268,13 @@ static inline bool supports_rpc()
     return llama_supports_rpc();
 }
 
+/**
+ * @brief Thread Safety Contract for `hj::llama::batch`:
+ *
+ * - All Operations (set_tokens(), set_logits(), clear()): [NOT THREAD-SAFE]
+ *   `batch` is a lightweight memory buffer container for batch evaluation.
+ *   Pass by value/move or use thread-local instances per inference step.
+ */
 class batch
 {
   public:
@@ -509,6 +518,21 @@ class memory_view
 
 using memory = memory_view;
 
+/**
+ * @brief Thread Safety Contract for `hj::llama::model`:
+ *
+ * - Read-only Metadata & Vocab Queries: [THREAD-SAFE]
+ *   Functions like n_embd(), n_vocab(), size(), desc(), token_is_eog(), etc., 
+ *   as well as const metadata queries, are thread-safe and can be called concurrently 
+ *   by multiple threads on the same `model` instance.
+ *
+ * - Tokenization (tokenize()): [THREAD-SAFE]
+ *   Underlying `llama_tokenize` calls with `llama_vocab` read from immutable vocabulary state.
+ *   Safe for concurrent invocation across threads.
+ *
+ * - State Modifying / Lifecycle Operations (load(), reset(), move/copy): [NOT THREAD-SAFE]
+ *   Mutating operations require external synchronization (e.g., exclusive access / std::unique_lock).
+ */
 class model
 {
   public:
@@ -542,7 +566,8 @@ class model
           set_tensor_data_fn set_tensor_data,
           void              *set_tensor_data_ud,
           model_params_t     params)
-        : _model(llama_model_init_from_user(
+        : _backend_guard(std::make_shared<detail::backend_guard>())
+        , _model(llama_model_init_from_user(
               metadata, set_tensor_data, set_tensor_data_ud, params))
     {
     }
@@ -618,6 +643,23 @@ class model
         return {};
     }
 
+    /**
+     * @brief Saves the underlying model to disk safely and atomically.
+     * 
+     * @details Standard C API llama_model_save_to_file() does not return a status code.
+     *          To prevent corruption of existing files and ensure cross-platform write capability,
+     *          this function performs an empirical write-test and atomic rename strategy:
+     *          1. Ensures parent path valid & target is not a directory.
+     *          2. Generates a unique temporary filename.
+     *          3. Empirical test: Attempts to open the temp file with write permissions 
+     *             to directly query system OS/ACL write access (avoiding unreliable std::filesystem::perms).
+     *          4. Invokes llama_model_save_to_file() on the temporary path.
+     *          5. Verifies temporary file creation and non-zero byte size.
+     *          6. Atomically renames temporary file to destination path, overwriting standard target.
+     * 
+     * @param filename Target file path.
+     * @return std::error_code Status of the save operation.
+     */
     std::error_code save(const std::filesystem::path &filename) const
     {
         if(!_model)
@@ -626,32 +668,68 @@ class model
         if(filename.empty())
             return make_error_code(error_code::invalid_path);
 
-        auto parent_path = filename.parent_path();
-        if(!parent_path.empty())
-        {
-            if(!std::filesystem::exists(parent_path))
-                return make_error_code(error_code::file_not_found);
+        std::error_code ec;
 
-            // Check if the directory is write-accessible
-            std::error_code ec;
-            auto perms = std::filesystem::status(parent_path, ec).permissions();
-            if(!ec
-               && (perms & std::filesystem::perms::owner_write)
-                      == std::filesystem::perms::none)
-            {
-                return make_error_code(error_code::permission_denied);
-            }
-        }
-
-        if(std::filesystem::is_directory(filename))
+        if(std::filesystem::is_directory(filename, ec))
             return make_error_code(error_code::invalid_path);
 
-        llama_model_save_to_file(_model.get(), filename.string().c_str());
-        auto err = detail::validate_file_path(filename);
-        if(err)
+        const auto parent_path = filename.parent_path();
+        const auto target_dir =
+            parent_path.empty() ? std::filesystem::current_path() : parent_path;
+
+        if(!std::filesystem::exists(target_dir, ec) || ec)
+            return make_error_code(error_code::file_not_found);
+
+        auto tmp_filename = filename;
+        tmp_filename += ".tmp." + std::to_string(std::rand());
+
+        struct tmp_cleaner
+        {
+            std::filesystem::path path;
+            ~tmp_cleaner()
+            {
+                if(!path.empty())
+                {
+                    std::error_code ignore_ec;
+                    std::filesystem::remove(path, ignore_ec);
+                }
+            }
+        } cleaner{tmp_filename};
+
+        {
+            FILE *test_fp = std::fopen(tmp_filename.string().c_str(), "wb");
+            if(!test_fp)
+            {
+                if(errno == EACCES || errno == EPERM)
+                {
+                    return make_error_code(error_code::permission_denied);
+                }
+                return make_error_code(error_code::file_write_failure);
+            }
+            std::fclose(test_fp);
+            std::filesystem::remove(tmp_filename, ec);
+        }
+
+        llama_model_save_to_file(_model.get(), tmp_filename.string().c_str());
+
+        if(!std::filesystem::is_regular_file(tmp_filename, ec) || ec)
             return make_error_code(error_code::file_write_failure);
 
-        return {};
+        auto file_size = std::filesystem::file_size(tmp_filename, ec);
+        if(ec || file_size == 0)
+            return make_error_code(error_code::file_write_failure);
+
+        std::filesystem::rename(tmp_filename, filename, ec);
+        if(ec)
+        {
+            if(ec.value() == static_cast<int>(std::errc::permission_denied))
+                return make_error_code(error_code::permission_denied);
+            return make_error_code(error_code::file_write_failure);
+        }
+
+        cleaner.path.clear();
+
+        return make_error_code(error_code::success);
     }
 
     std::vector<token_t> tokenize(const std::string &prompt,
@@ -662,6 +740,12 @@ class model
         if(!_model)
         {
             err = make_error_code(error_code::invalid_model);
+            return {};
+        }
+
+        if(prompt.empty())
+        {
+            err = make_error_code(error_code::success);
             return {};
         }
 
@@ -679,12 +763,6 @@ class model
             return {};
         }
 
-        if(prompt.empty())
-        {
-            err = make_error_code(error_code::success);
-            return {};
-        }
-
         const auto prompt_len = static_cast<int32_t>(prompt.length());
         auto       n_tokens   = llama_tokenize(vocab,
                                                prompt.c_str(),
@@ -696,7 +774,7 @@ class model
 
         if(n_tokens == 0)
         {
-            err = make_error_code(error_code::backend_error);
+            err = make_error_code(error_code::success);
             return {};
         }
 
@@ -709,10 +787,9 @@ class model
                                   static_cast<int32_t>(tokens.size()),
                                   add_special,
                                   parse_special);
-
-        if(n_tokens <= 0)
+        if(n_tokens < 0)
         {
-            err = make_error_code(error_code::backend_error);
+            err = make_error_code(error_code::buffer_overflow);
             return {};
         }
 
@@ -889,28 +966,31 @@ class model
 };
 
 /**
- * @brief Wrapper around llama_adapter_lora.
+ * @brief Thread Safety Contract for `hj::llama::adapter_lora`:
+ *
+ * - Metadata Queries & Data Pointer Access: [THREAD-SAFE]
+ *   Once initialized, LoRA adapter weights are read-only and thread-safe.
  * 
- * @note **Lifetime Contract**:
- * `adapter_lora` does NOT own the underlying `model`. The `model` instance 
- * MUST remain valid and outlive the `adapter_lora` for its entire lifetime.
- * Accessing `adapter_lora` after the associated `model` is destructed 
- * results in undefined behavior (Use-After-Free).
+ * - Initialization / Destruction (init(), reset()): [NOT THREAD-SAFE]
+ *   Requires external synchronization.
  */
 class adapter_lora
 {
   public:
     adapter_lora() = default;
 
-    adapter_lora(const model &m, const char *path_lora)
-        : _adapter((m.data() == nullptr || path_lora == nullptr)
-                       ? nullptr
-                       : llama_adapter_lora_init(m.data(), path_lora))
+    adapter_lora(std::shared_ptr<const model> m, const char *path_lora)
     {
+        if(auto err = init(std::move(m), path_lora); err)
+        {
+            throw std::runtime_error("hj::llama::adapter_lora: "
+                                     + err.message());
+        }
     }
 
-    explicit adapter_lora(adapter_lora_t *adapter)
-        : _adapter(adapter)
+    adapter_lora(const model &m, const char *path_lora)
+        : adapter_lora(std::shared_ptr<const model>(&m, [](const model *) {}),
+                       path_lora)
     {
     }
 
@@ -922,7 +1002,32 @@ class adapter_lora
     adapter_lora(adapter_lora &&) noexcept            = default;
     adapter_lora &operator=(adapter_lora &&) noexcept = default;
 
+    std::error_code init(std::shared_ptr<const model> m, const char *path_lora)
+    {
+        if(!m || !m->data() || !path_lora)
+        {
+            return make_error_code(error_code::invalid_argument);
+        }
+
+        adapter_lora_t *raw_adapter =
+            llama_adapter_lora_init(m->data(), path_lora);
+        if(!raw_adapter)
+        {
+            return make_error_code(error_code::backend_error);
+        }
+
+        _adapter.reset(raw_adapter);
+        _model = std::move(m);
+        return make_error_code(error_code::success);
+    }
+
     adapter_lora_t *data() const { return _adapter.get(); }
+
+    void reset() noexcept
+    {
+        _adapter.reset();
+        _model.reset();
+    }
 
     int32_t meta_val_str(const char *key, char *buf, size_t buf_size) const
     {
@@ -971,38 +1076,41 @@ class adapter_lora
     }
 
   private:
+    std::shared_ptr<const model> _model{nullptr};
     std::unique_ptr<adapter_lora_t, detail::llama_adapter_lora_deleter>
         _adapter{nullptr};
 };
 
 /**
- * @brief Wrapper around llama_context.
- * 
- * @note **Lifetime Contract**:
- * `context` does NOT own the underlying `model`. The `model` instance MUST 
- * remain valid and outlive the `context` for its entire lifetime.
- * Accessing `context` after the associated `model` is destructed or freed 
- * results in undefined behavior.
+ * @brief Thread Safety Contract for `hj::llama::context`:
+ *
+ * - All Operations (decode(), get_logits_ith(), state_set_data(), get_memory(), etc.): [NOT THREAD-SAFE]
+ *   A single `context` instance holds dynamic KV cache state and execution graphs.
+ *   It MUST NOT be accessed concurrently by multiple threads.
+ *
+ * - Concurrency Pattern:
+ *   1. [Multi-Context Multi-Thread]: Load ONE `model` once, create ONE `context` per thread/session.
+ *   2. [Single Context Shared]: If shared across HTTP Workers, external synchronization (e.g., std::mutex)
+ *      or a Task Queue / Context Pool MUST be used.
  */
 class context
 {
   public:
     context() noexcept = default;
 
-    context(const model &m, context_params_t params = default_params())
+    context(std::shared_ptr<const model> m,
+            context_params_t             params = default_params())
     {
-        if(!m.data())
+        if(auto err = init(std::move(m), params); err)
         {
-            throw std::invalid_argument(
-                "hj::llama::context: Model is not initialized");
+            throw std::runtime_error("hj::llama::context: " + err.message());
         }
-        llama_context *raw_ctx = llama_init_from_model(m.data(), params);
-        if(!raw_ctx)
-        {
-            throw std::runtime_error(
-                "hj::llama::context: Failed to initialize llama_context");
-        }
-        _ctx.reset(raw_ctx);
+    }
+
+    context(const model &m, context_params_t params = default_params())
+        : context(std::shared_ptr<const model>(&m, [](const model *) {}),
+                  params)
+    {
     }
 
     context(const context &)            = delete;
@@ -1021,28 +1129,40 @@ class context
     llama_context *data() const noexcept { return _ctx.get(); }
     explicit       operator bool() const noexcept { return _ctx != nullptr; }
 
-    void reset() noexcept { _ctx.reset(); }
+    void reset() noexcept
+    {
+        _ctx.reset();
+        _model.reset();
+    }
 
-    /// @brief Re-initializes the context with a new model/params.
+    /// @brief Re-initializes the context with a shared model pointer and params.
     /// @details Guarantees Strong Exception Safety: If initialization fails,
     ///          the old context state is completely untouched.
     /// @return std::error_code Indicating success or the failure reason.
-    std::error_code init(const model &m, context_params_t params)
+    std::error_code init(std::shared_ptr<const model> m,
+                         context_params_t             params)
     {
-        if(!m.data())
+        if(!m || !m->data())
         {
             return make_error_code(error_code::invalid_argument);
         }
 
         // Attempt new allocation before invalidating current resource
-        llama_context *new_raw = llama_init_from_model(m.data(), params);
+        llama_context *new_raw = llama_init_from_model(m->data(), params);
         if(!new_raw)
         {
             return make_error_code(error_code::backend_error);
         }
 
         _ctx.reset(new_raw);
+        _model = std::move(m);
         return make_error_code(error_code::success);
+    }
+
+    std::error_code init(const model &m, context_params_t params)
+    {
+        return init(std::shared_ptr<const model>(&m, [](const model *) {}),
+                    params);
     }
 
     std::error_code init(const model *m, context_params_t params)
@@ -1186,6 +1306,7 @@ class context
     }
 
   private:
+    std::shared_ptr<const model> _model{nullptr};
     std::unique_ptr<llama_context, detail::llama_context_deleter> _ctx{nullptr};
 };
 
@@ -1224,6 +1345,15 @@ struct sampler_options
 
     [[nodiscard]] std::error_code validate() const noexcept
     {
+        if(!std::isfinite(penalty_repeat) || !std::isfinite(penalty_frequency)
+           || !std::isfinite(penalty_present) || !std::isfinite(top_p)
+           || !std::isfinite(min_p) || !std::isfinite(typical_p)
+           || !std::isfinite(temperature) || !std::isfinite(temp_ext_delta)
+           || !std::isfinite(temp_ext_exponent))
+        {
+            return make_error_code(error_code::invalid_argument);
+        }
+
         if(top_p <= 0.0f || top_p > 1.0f)
             return make_error_code(error_code::invalid_argument);
 
@@ -1236,6 +1366,9 @@ struct sampler_options
         if(temperature < 0.0f)
             return make_error_code(error_code::invalid_argument);
 
+        if(temp_ext_delta < 0.0f)
+            return make_error_code(error_code::invalid_argument);
+
         if(top_k < 0)
             return make_error_code(error_code::invalid_argument);
 
@@ -1246,6 +1379,17 @@ struct sampler_options
     }
 };
 
+/**
+ * @brief Thread Safety Contract for `hj::llama::sampler`:
+ *
+ * - All Operations (sample(), accept(), reset(), reset_chain()): [NOT THREAD-SAFE]
+ *   Samplers maintain internal mutable state (e.g., penalty token history, RNG state, 
+ *   BNF grammar parsing state).
+ * 
+ * - Concurrency Pattern:
+ *   Instantiate one `sampler` chain per sequence/request or store it in thread-local storage (TLS).
+ *   Never share a `sampler` instance across dynamic concurrent requests without external locking.
+ */
 class sampler
 {
   public:

@@ -176,6 +176,11 @@ TEST(llama_model, tokenize_variants)
     EXPECT_FALSE(err);
     EXPECT_TRUE(empty_tokens.empty());
 
+    // Tokenize empty without special tokens
+    auto empty_tokens1 = m.tokenize("", false, false, err);
+    EXPECT_FALSE(err);
+    EXPECT_TRUE(empty_tokens1.empty());
+
     // Tokenize unicode
     auto unicode_tokens = m.tokenize("你好，世界！🌍", true, false, err);
     EXPECT_FALSE(err);
@@ -489,18 +494,20 @@ TEST(llama_adapter_lora, invalid_and_null_inputs)
 {
     LOAD_FIXTURE_OR_SKIP(m);
 
-    hj::llama::model        empty_model;
-    hj::llama::adapter_lora adapter1(empty_model, "/path/to/lora.gguf");
-    EXPECT_EQ(adapter1.data(), nullptr);
+    hj::llama::model empty_model;
 
-    hj::llama::adapter_lora adapter2(m, nullptr);
-    EXPECT_EQ(adapter2.data(), nullptr);
+    EXPECT_THROW(hj::llama::adapter_lora(empty_model, "/path/to/lora.gguf"),
+                 std::runtime_error);
 
-    hj::llama::adapter_lora adapter3(m, "/nonexistent/lora_adapter.gguf");
-    EXPECT_EQ(adapter3.data(), nullptr);
+    EXPECT_THROW(hj::llama::adapter_lora(m, nullptr), std::runtime_error);
+
+    EXPECT_THROW(hj::llama::adapter_lora(m, "/nonexistent/lora_adapter.gguf"),
+                 std::runtime_error);
 
     hj::llama::adapter_lora null_adapter;
-    char                    buffer[128] = {0};
+    EXPECT_EQ(null_adapter.data(), nullptr);
+
+    char buffer[128] = {0};
     EXPECT_EQ(null_adapter.meta_count(), -1);
     EXPECT_EQ(null_adapter.meta_val_str("general.name", buffer, sizeof(buffer)),
               -1);
@@ -769,6 +776,7 @@ TEST(llama_model, save_failure_cases)
         std::filesystem::remove(dir_path);
     }
 
+#ifndef _WIN32
     {
         std::filesystem::path unreadable_dir =
             std::filesystem::temp_directory_path() / "no_perm_dir";
@@ -784,6 +792,7 @@ TEST(llama_model, save_failure_cases)
         make_writable(unreadable_dir);
         std::filesystem::remove_all(unreadable_dir);
     }
+#endif
 
     {
         std::filesystem::path overwrite_file =

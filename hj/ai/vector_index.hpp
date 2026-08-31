@@ -144,7 +144,7 @@ inline bool atomic_rename(const std::string &temp_path,
 #endif
 }
 
-class vector_index_category : public std::error_category
+class vector_index_category final : public std::error_category
 {
   public:
     const char *name() const noexcept override { return "hj::vector_index"; }

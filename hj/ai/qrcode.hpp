@@ -19,25 +19,34 @@
 #ifndef QRCODE_HPP
 #define QRCODE_HPP
 
-#include <string>
-#include <vector>
-#include <fstream>
+#include <cctype>
+#include <charconv>
 #include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <limits>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <vector>
 
+#ifndef QUIRC_MAX_REGIONS
+#define QUIRC_MAX_REGIONS 4096
+#endif
 #include <qrencode.h>
 #include <quirc.h>
-#include <cstring>
-#include <cctype>
-#include <memory>
-#include <limits>
 
-namespace hj
+namespace hj::qrcode
 {
-namespace qrcode
-{
+
+constexpr size_t max_bitmap_pixels = 64 * 1024 * 1024;
 
 enum class error_code
 {
+    success = 0,
+
     invalid_text = 1,
     invalid_scale,
     invalid_margin,
@@ -54,26 +63,106 @@ enum class error_code
     token_value_convert_failed,
     token_value_out_of_range,
     token_empty,
+    no_qrcode_found,
+    decode_failed,
+    bitmap_too_large,
 };
 
-struct bitmap
+class bitmap
 {
-    int                  width{0};
-    int                  height{0};
-    std::vector<uint8_t> data;
+  public:
+    bitmap() = default;
+
+    bitmap(int w, int h, uint8_t fill_val = 255)
+    {
+        if(!resize(w, h, fill_val))
+        {
+            width_  = 0;
+            height_ = 0;
+            data_.clear();
+        }
+    }
+
+    [[nodiscard]] int width() const noexcept { return width_; }
+    [[nodiscard]] int height() const noexcept { return height_; }
+    [[nodiscard]] const std::vector<uint8_t> &data() const noexcept
+    {
+        return data_;
+    }
+    [[nodiscard]] std::vector<uint8_t> &data() noexcept { return data_; }
+
+    [[nodiscard]] bool empty() const noexcept { return data_.empty(); }
+
+    bool resize(int w, int h, uint8_t fill_val = 255)
+    {
+        if(w <= 0 || h <= 0)
+            return false;
+
+        const auto w64 = static_cast<uint64_t>(w);
+        const auto h64 = static_cast<uint64_t>(h);
+        const auto max_size =
+            static_cast<uint64_t>((std::numeric_limits<size_t>::max)());
+
+        if(w64 > max_size / h64)
+            return false;
+
+        const size_t total_pixels = static_cast<size_t>(w64 * h64);
+
+        if(total_pixels > max_bitmap_pixels)
+            return false;
+
+        try
+        {
+            data_.assign(total_pixels, fill_val);
+            width_  = w;
+            height_ = h;
+            return true;
+        }
+        catch(...)
+        {
+            return false;
+        }
+    }
+
+    [[nodiscard]] bool is_valid() const noexcept
+    {
+        if(width_ <= 0 || height_ <= 0)
+            return false;
+
+        const auto w64 = static_cast<uint64_t>(width_);
+        const auto h64 = static_cast<uint64_t>(height_);
+        const auto max_size =
+            static_cast<uint64_t>((std::numeric_limits<size_t>::max)());
+
+        if(w64 > max_size / h64)
+            return false;
+
+        const size_t total_pixels = static_cast<size_t>(w64 * h64);
+        if(total_pixels > max_bitmap_pixels)
+            return false;
+
+        return data_.size() == total_pixels;
+    }
+
+  private:
+    int                  width_{0};
+    int                  height_{0};
+    std::vector<uint8_t> data_;
 };
 
 namespace detail
 {
-class error_category : public std::error_category
+class error_category final : public std::error_category
 {
   public:
-    const char *name() const noexcept override { return "qrcode"; }
+    const char *name() const noexcept override { return "hj::qrcode"; }
 
     std::string message(int ev) const override
     {
         switch(static_cast<error_code>(ev))
         {
+            case error_code::success:
+                return "Success";
             case error_code::invalid_text:
                 return "Invalid text";
             case error_code::invalid_scale:
@@ -106,6 +195,12 @@ class error_category : public std::error_category
                 return "Token value out of range";
             case error_code::token_empty:
                 return "Token is empty";
+            case error_code::no_qrcode_found:
+                return "No QR code found in image";
+            case error_code::decode_failed:
+                return "Failed to decode detected QR code candidate(s)";
+            case error_code::bitmap_too_large:
+                return "Bitmap dimensions exceed maximum allowed limits";
             default:
                 return "Unknown error";
         }
@@ -119,12 +214,37 @@ class error_category : public std::error_category
     }
 };
 
-static inline std::error_code make_err(error_code e)
+inline const std::error_category &qrcode_err_category_instance()
 {
-    static error_category cat;
-    return std::error_code(static_cast<int>(e), cat);
+    static error_category instance;
+    return instance;
 }
+
+static inline bool parse_int(std::string_view sv, int &out_val)
+{
+    if(sv.empty())
+        return false;
+    auto res = std::from_chars(sv.data(), sv.data() + sv.size(), out_val);
+    return res.ec == std::errc{} && res.ptr == sv.data() + sv.size();
+}
+
 } // namespace detail
+
+inline std::error_code make_error_code(error_code e) noexcept
+{
+    return std::error_code(static_cast<int>(e),
+                           hj::qrcode::detail::qrcode_err_category_instance());
+}
+
+} // namespace hj::qrcode
+
+template <>
+struct std::is_error_code_enum<hj::qrcode::error_code> : std::true_type
+{
+};
+
+namespace hj::qrcode
+{
 
 class builder
 {
@@ -136,62 +256,73 @@ class builder
     builder(builder &&)                 = delete;
     builder &operator=(builder &&)      = delete;
 
-    static std::error_code encode(bitmap            &out,
-                                  const std::string &text,
-                                  const int          version  = 0,
-                                  const int          ec_level = QR_ECLEVEL_L,
-                                  const int          scale    = 4,
-                                  const int          margin   = 4)
+    static std::error_code encode(bitmap          &out,
+                                  std::string_view text,
+                                  int              version  = 0,
+                                  int              ec_level = QR_ECLEVEL_L,
+                                  int              scale    = 4,
+                                  int              margin   = 4)
     {
         if(text.empty())
-            return detail::make_err(error_code::invalid_text);
+            return make_error_code(error_code::invalid_text);
         if(scale <= 0)
-            return detail::make_err(error_code::invalid_scale);
+            return make_error_code(error_code::invalid_scale);
         if(margin < 0)
-            return detail::make_err(error_code::invalid_margin);
+            return make_error_code(error_code::invalid_margin);
 
-        // Use RAII for QRcode* so it's freed even on early returns
-        QRcode *raw_q = QRcode_encodeString(text.c_str(),
-                                            version,
-                                            static_cast<QRecLevel>(ec_level),
-                                            QR_MODE_8,
-                                            1);
+        QRcode *raw_q = QRcode_encodeData(
+            static_cast<int>(text.size()),
+            reinterpret_cast<const unsigned char *>(text.data()),
+            version,
+            static_cast<QRecLevel>(ec_level));
         if(!raw_q)
-            return detail::make_err(error_code::encode_failed);
+            return make_error_code(error_code::encode_failed);
 
         std::unique_ptr<QRcode, void (*)(QRcode *)> q(raw_q, [](QRcode *p) {
             if(p)
                 QRcode_free(p);
         });
 
-        const int modules = q->width; // number of modules per side
+        const int modules = q->width;
         if(modules <= 0)
-            return detail::make_err(error_code::encode_failed);
+            return make_error_code(error_code::encode_failed);
 
-        // calculate image size and check for overflow
-        const uint64_t side       = static_cast<uint64_t>(modules)
-                                    + 2ULL * static_cast<uint64_t>(margin);
-        const uint64_t img_size64 = side * static_cast<uint64_t>(scale);
+        const uint64_t margin64 = static_cast<uint64_t>(margin);
+        if(margin64 > (std::numeric_limits<uint64_t>::max)() / 2ULL)
+            return make_error_code(error_code::encode_failed);
+        const uint64_t double_margin = 2ULL * margin64;
+
+        const uint64_t modules64 = static_cast<uint64_t>(modules);
+        if(modules64 > (std::numeric_limits<uint64_t>::max)() - double_margin)
+            return make_error_code(error_code::encode_failed);
+        const uint64_t side = modules64 + double_margin;
+
+        const uint64_t scale64 = static_cast<uint64_t>(scale);
+        if(side > 0 && scale64 > (std::numeric_limits<uint64_t>::max)() / side)
+            return make_error_code(error_code::encode_failed);
+        const uint64_t img_size64 = side * scale64;
+
         if(img_size64 == 0)
-            return detail::make_err(error_code::encode_failed);
+            return make_error_code(error_code::encode_failed);
 
-        const uint64_t max_sz =
+        const uint64_t max_size_t =
             static_cast<uint64_t>((std::numeric_limits<size_t>::max)());
-        // if img_size64 cannot fit into size_t, fail
-        if(img_size64 > max_sz)
-            return detail::make_err(error_code::encode_failed);
+        const uint64_t max_int =
+            static_cast<uint64_t>((std::numeric_limits<int>::max)());
+        const uint64_t safe_max = (max_size_t < max_int) ? max_size_t : max_int;
 
-        // check multiplication overflow: img_size64 * img_size64 must not exceed max_sz
-        if(img_size64 > 0 && img_size64 > max_sz / img_size64)
-            return detail::make_err(error_code::encode_failed);
+        if(img_size64 > safe_max)
+            return make_error_code(error_code::encode_failed);
 
-        const size_t   img_size = static_cast<size_t>(img_size64);
-        const uint64_t pixels64 = img_size64 * img_size64; // safe now
-        const size_t   pixels   = static_cast<size_t>(pixels64);
+        if(img_size64 > safe_max / img_size64)
+            return make_error_code(error_code::encode_failed);
 
-        out.width  = static_cast<int>(img_size);
-        out.height = static_cast<int>(img_size);
-        out.data.assign(pixels, 255); // white background
+        const size_t img_size = static_cast<size_t>(img_size64);
+
+        if(!out.resize(static_cast<int>(img_size),
+                       static_cast<int>(img_size),
+                       255))
+            return make_error_code(error_code::encode_failed);
 
         for(int r = 0; r < modules; ++r)
         {
@@ -210,7 +341,7 @@ class builder
                 {
                     const size_t row = (y0 + static_cast<size_t>(y)) * img_size;
                     for(int x = 0; x < scale; ++x)
-                        out.data[row + x0 + static_cast<size_t>(x)] = 0;
+                        out.data()[row + x0 + static_cast<size_t>(x)] = 0;
                 }
             }
         }
@@ -218,29 +349,27 @@ class builder
         return std::error_code();
     }
 
-    static std::error_code encode(const std::string &pgm,
-                                  const std::string &text,
-                                  const int          version  = 0,
-                                  const int          ec_level = QR_ECLEVEL_L,
-                                  const int          scale    = 4,
-                                  const int          margin   = 4)
+    static std::error_code encode(const std::filesystem::path &path,
+                                  std::string_view             text,
+                                  int                          version = 0,
+                                  int ec_level = QR_ECLEVEL_L,
+                                  int scale    = 4,
+                                  int margin   = 4)
     {
         bitmap bm;
         auto   ec = encode(bm, text, version, ec_level, scale, margin);
         if(ec)
             return ec;
 
-        // Save as PGM file
-        std::ofstream ofs(pgm, std::ios::binary);
+        std::ofstream ofs(path, std::ios::binary);
         if(!ofs.is_open())
-            return detail::make_err(error_code::pgm_write_failed);
+            return make_error_code(error_code::pgm_write_failed);
 
-        // P5 header
-        ofs << "P5\n" << bm.width << " " << bm.height << "\n255\n";
-        ofs.write(reinterpret_cast<const char *>(bm.data.data()),
-                  bm.data.size());
+        ofs << "P5\n" << bm.width() << " " << bm.height() << "\n255\n";
+        ofs.write(reinterpret_cast<const char *>(bm.data().data()),
+                  bm.data().size());
         if(!ofs)
-            return detail::make_err(error_code::pgm_write_failed);
+            return make_error_code(error_code::pgm_write_failed);
         ofs.close();
         return std::error_code();
     }
@@ -259,9 +388,17 @@ class parser
     static std::error_code decode(std::vector<std::string> &results,
                                   const bitmap             &bm)
     {
-        if(bm.data.empty() || bm.width <= 0 || bm.height <= 0)
-            return detail::make_err(error_code::invalid_bitmap);
-        // RAII for quirc parser
+        results.clear();
+        if(!bm.is_valid())
+            return make_error_code(error_code::invalid_bitmap);
+
+        const auto   w64          = static_cast<uint64_t>(bm.width());
+        const auto   h64          = static_cast<uint64_t>(bm.height());
+        const size_t total_pixels = static_cast<size_t>(w64 * h64);
+
+        if(total_pixels > max_bitmap_pixels)
+            return make_error_code(error_code::bitmap_too_large);
+
         std::unique_ptr<struct quirc, void (*)(struct quirc *)> q(
             quirc_new(),
             [](struct quirc *p) {
@@ -269,84 +406,133 @@ class parser
                     quirc_destroy(p);
             });
         if(!q)
-            return detail::make_err(error_code::allocation_failed);
+            return make_error_code(error_code::allocation_failed);
 
-        if(quirc_resize(q.get(), bm.width, bm.height) < 0)
-            return detail::make_err(error_code::resize_failed);
+        if(quirc_resize(q.get(), bm.width(), bm.height()) < 0)
+            return make_error_code(error_code::resize_failed);
 
         int      w = 0, h = 0;
         uint8_t *buf = quirc_begin(q.get(), &w, &h);
         if(!buf)
-            return detail::make_err(error_code::begin_parse_failed);
+            return make_error_code(error_code::begin_parse_failed);
 
-        const size_t expect = static_cast<size_t>(w) * static_cast<size_t>(h);
-        if(bm.data.size() < expect)
-            return detail::make_err(error_code::bm_data_insufficient);
-
-        std::memcpy(buf, bm.data.data(), expect);
+        std::memcpy(buf, bm.data().data(), bm.data().size());
         quirc_end(q.get());
 
         const int count = quirc_count(q.get());
-        for(int i = 0; i < count; ++i)
+        if(count == 0)
+            return make_error_code(error_code::no_qrcode_found);
+
+        try
         {
-            struct quirc_code code;
-            struct quirc_data data;
-            quirc_extract(q.get(), i, &code);
-            if(quirc_decode(&code, &data) == 0)
-                results.emplace_back(reinterpret_cast<char *>(data.payload),
-                                     data.payload_len);
+            for(int i = 0; i < count; ++i)
+            {
+                struct quirc_code code;
+                struct quirc_data data;
+                quirc_extract(q.get(), i, &code);
+                if(quirc_decode(&code, &data) == 0)
+                    results.emplace_back(reinterpret_cast<char *>(data.payload),
+                                         data.payload_len);
+            }
         }
+        catch(...)
+        {
+            results.clear();
+            return make_error_code(error_code::allocation_failed);
+        }
+
+        if(results.empty())
+            return make_error_code(error_code::decode_failed);
 
         return std::error_code();
     }
 
-    static std::error_code decode(std::vector<std::string> &results,
-                                  const std::string        &pgm)
+    static std::error_code decode(std::vector<std::string>    &results,
+                                  const std::filesystem::path &path)
     {
-        std::ifstream ifs(pgm, std::ios::binary);
+        std::ifstream ifs(path, std::ios::binary);
         if(!ifs.is_open())
-            return detail::make_err(error_code::pgm_open_failed);
+        {
+            results.clear();
+            return make_error_code(error_code::pgm_open_failed);
+        }
 
         std::string magic;
         auto        ec = _read_token(magic, ifs);
         if(ec || magic != "P5")
-            return detail::make_err(error_code::magic_parse_failed);
+        {
+            results.clear();
+            return make_error_code(error_code::magic_parse_failed);
+        }
 
         std::string wtok, htok, maxvtok;
         ec = _read_token(wtok, ifs);
         if(ec)
+        {
+            results.clear();
             return ec;
+        }
 
         ec = _read_token(htok, ifs);
         if(ec)
+        {
+            results.clear();
             return ec;
+        }
 
         ec = _read_token(maxvtok, ifs);
         if(ec)
+        {
+            results.clear();
             return ec;
+        }
 
         int w = 0, h = 0, maxv = 0;
-        try
+        if(!detail::parse_int(wtok, w) || !detail::parse_int(htok, h)
+           || !detail::parse_int(maxvtok, maxv))
         {
-            w    = std::stoi(wtok);
-            h    = std::stoi(htok);
-            maxv = std::stoi(maxvtok);
-        }
-        catch(...)
-        {
-            return detail::make_err(error_code::token_value_convert_failed);
+            results.clear();
+            return make_error_code(error_code::token_value_convert_failed);
         }
 
-        if(w <= 0 || h <= 0 || maxv <= 0 || maxv > 255)
-            return detail::make_err(error_code::token_value_out_of_range);
+        if(w <= 0 || h <= 0 || maxv != 255)
+        {
+            results.clear();
+            return make_error_code(error_code::token_value_out_of_range);
+        }
 
-        bitmap bm;
-        bm.width  = w;
-        bm.height = h;
-        bm.data.resize(static_cast<size_t>(w) * static_cast<size_t>(h));
-        ifs.read(reinterpret_cast<char *>(bm.data.data()), bm.data.size());
+        const uint64_t w64 = static_cast<uint64_t>(w);
+        const uint64_t h64 = static_cast<uint64_t>(h);
+        const uint64_t max_size =
+            static_cast<uint64_t>((std::numeric_limits<size_t>::max)());
+
+        if(w64 > max_size / h64
+           || static_cast<size_t>(w64 * h64) > max_bitmap_pixels)
+        {
+            results.clear();
+            return make_error_code(error_code::bitmap_too_large);
+        }
+
+        bitmap bm(w, h);
+        if(!bm.is_valid())
+        {
+            results.clear();
+            return make_error_code(error_code::invalid_bitmap);
+        }
+
+        ifs.read(reinterpret_cast<char *>(bm.data().data()), bm.data().size());
         if(!ifs)
-            return detail::make_err(error_code::pgm_read_failed);
+        {
+            results.clear();
+            return make_error_code(error_code::pgm_read_failed);
+        }
+
+        char dummy;
+        if(ifs.get(dummy))
+        {
+            results.clear();
+            return make_error_code(error_code::pgm_read_failed);
+        }
 
         return decode(results, bm);
     }
@@ -373,7 +559,7 @@ class parser
         }
 
         if(tk.empty())
-            return detail::make_err(error_code::token_empty);
+            return make_error_code(error_code::token_empty);
 
         while(ifs.get(c))
         {
@@ -393,7 +579,6 @@ class parser
     };
 };
 
-} // namespace qrcode
-} // namespace hj
+} // namespace hj::qrcode
 
 #endif // QRCODE_HPP

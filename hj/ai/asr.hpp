@@ -29,7 +29,7 @@ enum class error_code
     inference_failed,
 };
 
-class asr_err_category : public std::error_category
+class asr_err_category final : public std::error_category
 {
   public:
     const char *name() const noexcept override { return "hj::asr"; }

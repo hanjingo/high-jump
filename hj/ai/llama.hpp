@@ -39,7 +39,7 @@ enum class error_code
     sampler_init_failed
 };
 
-class llama_err_category : public std::error_category
+class llama_err_category final : public std::error_category
 {
   public:
     const char *name() const noexcept override { return "hj::llama"; }

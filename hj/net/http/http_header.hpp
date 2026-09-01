@@ -19,7 +19,6 @@
 #ifndef HTTP_HEADER_HPP
 #define HTTP_HEADER_HPP
 
-#include <httplib.h>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -32,8 +31,23 @@
 #include <unordered_map>
 #include <vector>
 
+#include <httplib.h>
+
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#else
+typedef struct ssl_ctx_st SSL_CTX;
+#endif
+
 namespace hj::http
 {
+
+enum class tls_version
+{
+    tls_1_2,
+    tls_1_3
+};
 
 enum class http_method
 {
@@ -68,15 +82,22 @@ struct case_insensitive_equal;
 struct http_timeout;
 struct proxy_config;
 struct tls_config;
+struct ssl_config;
 struct http_request_metrics;
+struct http_server_metrics;
 class http_headers;
 struct http_response;
+struct http_client_response;
 struct retry_policy;
 struct http_request;
 
 using logger_callback = std::function<void(const http_request_metrics &)>;
 using query_params    = std::vector<std::pair<std::string, std::string>>;
 using http_handler = std::function<void(const http_request &, http_response &)>;
+
+using exception_handler      = std::function<void(
+    const http_request &, http_response &, std::exception_ptr)>;
+using server_metrics_handler = std::function<void(const http_server_metrics &)>;
 
 struct case_insensitive_hash
 {
@@ -167,6 +188,24 @@ struct tls_config
     std::string client_key_path;
 };
 
+struct ssl_config
+{
+    std::string cert_path;
+    std::string private_key_path;
+
+    bool        client_auth{false};
+    std::string ca_cert_path;
+    std::string ca_cert_dir;
+
+    tls_version min_version{tls_version::tls_1_2};
+    std::string cipher_suites;
+
+    bool enable_session_cache{true};
+    long session_timeout_sec{7200};
+
+    std::function<void(SSL_CTX *)> ssl_ctx_callback;
+};
+
 struct http_request_metrics
 {
     http_method               method{http_method::get};
@@ -178,6 +217,17 @@ struct http_request_metrics
     std::string               error_message;
     std::size_t               request_body_bytes{0};
     std::size_t               response_body_bytes{0};
+};
+
+struct http_server_metrics
+{
+    http_method               method{http_method::get};
+    std::string               path;
+    int                       status_code{200};
+    std::chrono::microseconds latency{0};
+    std::size_t               request_bytes{0};
+    std::size_t               response_bytes{0};
+    std::string               client_ip;
 };
 
 class http_headers
@@ -251,17 +301,23 @@ class http_headers
 
 struct http_response
 {
-    int          status_code{0};
+    int          status_code{200};
     std::string  body;
     http_headers headers;
+};
 
+struct http_client_response
+{
     bool        transport_success{false};
     http_error  error{http_error::none};
     std::string error_message;
 
+    http_response response;
+
     [[nodiscard]] bool ok() const noexcept
     {
-        return transport_success && status_code >= 200 && status_code < 300;
+        return transport_success && response.status_code >= 200
+               && response.status_code < 300;
     }
 
     [[nodiscard]] explicit operator bool() const noexcept { return ok(); }
@@ -277,17 +333,19 @@ struct retry_policy
     bool retry_only_if_idempotent{true};
     bool respect_retry_after{true};
 
-    std::function<bool(const http_response &)> should_retry_fn{
-        [](const http_response &res) {
+    std::function<bool(const http_client_response &)> should_retry_fn{
+        [](const http_client_response &res) {
             if(!res.transport_success)
             {
                 return res.error == http_error::connection
                        || res.error == http_error::protocol;
             }
 
-            return res.status_code == 429 || res.status_code == 500
-                   || res.status_code == 502 || res.status_code == 503
-                   || res.status_code == 504;
+            return res.response.status_code == 429
+                   || res.response.status_code == 500
+                   || res.response.status_code == 502
+                   || res.response.status_code == 503
+                   || res.response.status_code == 504;
         }};
 };
 
@@ -510,27 +568,27 @@ static http_error to_http_error(httplib::Error err) noexcept
     }
 }
 
-static http_response parse_response(const httplib::Result &res)
+static http_client_response parse_response(const httplib::Result &res)
 {
-    http_response response;
+    http_client_response client_resp;
     if(res)
     {
-        response.transport_success = true;
-        response.status_code       = res->status;
-        response.body              = res->body;
-        response.error             = http_error::none;
+        client_resp.transport_success    = true;
+        client_resp.response.status_code = res->status;
+        client_resp.response.body        = res->body;
+        client_resp.error                = http_error::none;
         for(const auto &header : res->headers)
         {
-            response.headers.append(header.first, header.second);
+            client_resp.response.headers.append(header.first, header.second);
         }
     } else
     {
-        response.transport_success = false;
-        response.status_code       = 0;
-        response.error             = to_http_error(res.error());
-        response.error_message     = httplib::to_string(res.error());
+        client_resp.transport_success    = false;
+        client_resp.response.status_code = 0;
+        client_resp.error                = to_http_error(res.error());
+        client_resp.error_message        = httplib::to_string(res.error());
     }
-    return response;
+    return client_resp;
 }
 
 inline void apply_response(const http_response &resp, httplib::Response &res)
@@ -547,6 +605,7 @@ inline void apply_response(const http_response &resp, httplib::Response &res)
 
     for(const auto &[k, v] : resp.headers)
     {
+        std::cerr << "apply header: " << k << " = " << v << std::endl;
         if(!case_insensitive_equal{}(k, "Content-Type"))
         {
             res.set_header(k.c_str(), v.c_str());

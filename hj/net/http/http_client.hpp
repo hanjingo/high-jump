@@ -125,14 +125,14 @@ class http_client
         _options.logger = std::move(cb);
     }
 
-    http_response request(const http_request &req)
+    http_client_response request(const http_request &req)
     {
         const auto start_time = std::chrono::steady_clock::now();
         const auto policy     = req.retry.value_or(_options.retry);
 
-        std::string   full_path = detail::build_full_path(req.path, req.query);
-        std::size_t   attempt   = 0;
-        http_response res;
+        std::string full_path = detail::build_full_path(req.path, req.query);
+        std::size_t attempt   = 0;
+        http_client_response res;
 
         while(true)
         {
@@ -161,13 +161,13 @@ class http_client
             http_request_metrics metrics;
             metrics.method              = req.method;
             metrics.url                 = _base_url + full_path;
-            metrics.status_code         = res.status_code;
+            metrics.status_code         = res.response.status_code;
             metrics.latency             = latency;
             metrics.retry_count         = attempt - 1;
             metrics.error               = res.error;
             metrics.error_message       = res.error_message;
             metrics.request_body_bytes  = req.body.size();
-            metrics.response_body_bytes = res.body.size();
+            metrics.response_body_bytes = res.response.body.size();
 
             try
             {
@@ -182,7 +182,8 @@ class http_client
         return res;
     }
 
-    http_response get(std::string_view path, const http_headers &headers = {})
+    http_client_response get(std::string_view    path,
+                             const http_headers &headers = {})
     {
         http_request req;
         req.method  = http_method::get;
@@ -191,10 +192,10 @@ class http_client
         return request(req);
     }
 
-    http_response post(std::string_view    path,
-                       std::string_view    body,
-                       std::string_view    content_type = "text/plain",
-                       const http_headers &headers      = {})
+    http_client_response post(std::string_view    path,
+                              std::string_view    body,
+                              std::string_view    content_type = "text/plain",
+                              const http_headers &headers      = {})
     {
         http_request req;
         req.method       = http_method::post;
@@ -205,10 +206,10 @@ class http_client
         return request(req);
     }
 
-    http_response put(std::string_view    path,
-                      std::string_view    body,
-                      std::string_view    content_type = {},
-                      const http_headers &headers      = {})
+    http_client_response put(std::string_view    path,
+                             std::string_view    body,
+                             std::string_view    content_type = {},
+                             const http_headers &headers      = {})
     {
         http_request req;
         req.method       = http_method::put;
@@ -219,10 +220,10 @@ class http_client
         return request(req);
     }
 
-    http_response patch(std::string_view    path,
-                        std::string_view    body,
-                        std::string_view    content_type = {},
-                        const http_headers &headers      = {})
+    http_client_response patch(std::string_view    path,
+                               std::string_view    body,
+                               std::string_view    content_type = {},
+                               const http_headers &headers      = {})
     {
         http_request req;
         req.method       = http_method::patch;
@@ -233,7 +234,8 @@ class http_client
         return request(req);
     }
 
-    http_response del(std::string_view path, const http_headers &headers = {})
+    http_client_response del(std::string_view    path,
+                             const http_headers &headers = {})
     {
         http_request req;
         req.method  = http_method::del;
@@ -242,7 +244,8 @@ class http_client
         return request(req);
     }
 
-    http_response head(std::string_view path, const http_headers &headers = {})
+    http_client_response head(std::string_view    path,
+                              const http_headers &headers = {})
     {
         http_request req;
         req.method  = http_method::head;
@@ -251,8 +254,8 @@ class http_client
         return request(req);
     }
 
-    http_response options(std::string_view    path,
-                          const http_headers &headers = {})
+    http_client_response options(std::string_view    path,
+                                 const http_headers &headers = {})
     {
         http_request req;
         req.method  = http_method::options;
@@ -261,21 +264,21 @@ class http_client
         return request(req);
     }
 
-    http_response post_json(std::string_view    path,
-                            std::string_view    json_body,
-                            const http_headers &headers = {})
+    http_client_response post_json(std::string_view    path,
+                                   std::string_view    json_body,
+                                   const http_headers &headers = {})
     {
         return post(path, json_body, "application/json", headers);
     }
 
-    http_response post_text(std::string_view    path,
-                            std::string_view    text_body,
-                            const http_headers &headers = {})
+    http_client_response post_text(std::string_view    path,
+                                   std::string_view    text_body,
+                                   const http_headers &headers = {})
     {
         return post(path, text_body, "text/plain", headers);
     }
 
-    http_response
+    http_client_response
     post_binary(std::string_view    path,
                 std::string_view    binary_body,
                 std::string_view    content_type = "application/octet-stream",
@@ -284,16 +287,16 @@ class http_client
         return post(path, binary_body, content_type, headers);
     }
 
-    http_response put_json(std::string_view    path,
-                           std::string_view    json_body,
-                           const http_headers &headers = {})
+    http_client_response put_json(std::string_view    path,
+                                  std::string_view    json_body,
+                                  const http_headers &headers = {})
     {
         return put(path, json_body, "application/json", headers);
     }
 
   private:
-    http_response _execute(const http_request &req,
-                           const std::string  &full_path)
+    http_client_response _execute(const http_request &req,
+                                  const std::string  &full_path)
     {
         auto req_headers = detail::to_httplib_headers(req.headers);
 
@@ -385,13 +388,13 @@ class http_client
         return std::nullopt;
     }
 
-    static void _sleep_backoff(std::size_t          attempt,
-                               const retry_policy  &policy,
-                               const http_response &res)
+    static void _sleep_backoff(std::size_t                 attempt,
+                               const retry_policy         &policy,
+                               const http_client_response &res)
     {
         if(policy.respect_retry_after && res.transport_success)
         {
-            auto retry_after_ms = _parse_retry_after(res.headers);
+            auto retry_after_ms = _parse_retry_after(res.response.headers);
             if(retry_after_ms.has_value())
             {
                 auto delay = std::min(retry_after_ms.value(), policy.max_delay);

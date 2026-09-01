@@ -9,11 +9,15 @@
 namespace hj::test
 {
 
-class HttpClientTest : public ::testing::Test
+class http_client_test : public ::testing::Test
 {
   protected:
     void SetUp() override
     {
+        _server.new_task_queue = [] { return new httplib::ThreadPool(8); };
+
+        _server.set_keep_alive_max_count(1);
+
         _port = _server.bind_to_any_port("127.0.0.1");
         ASSERT_GT(_port, 0)
             << "Failed to bind Mock Server to an ephemeral port.";
@@ -25,7 +29,10 @@ class HttpClientTest : public ::testing::Test
 
     void TearDown() override
     {
-        _server.stop();
+        if(_server.is_running())
+        {
+            _server.stop();
+        }
         if(_server_thread.joinable())
         {
             _server_thread.join();
@@ -38,7 +45,7 @@ class HttpClientTest : public ::testing::Test
     std::thread     _server_thread;
 };
 
-TEST_F(HttpClientTest, HttpStatusCodesAndOkSemantics)
+TEST_F(http_client_test, http_status_codes_and_ok_semantics)
 {
     _server.Get("/status/200",
                 [](const httplib::Request &, httplib::Response &res) {
@@ -95,7 +102,7 @@ TEST_F(HttpClientTest, HttpStatusCodesAndOkSemantics)
     {
         auto res = client.get("/status/" + std::to_string(code));
         EXPECT_TRUE(res.transport_success);
-        EXPECT_EQ(res.status_code, code);
+        EXPECT_EQ(res.response.status_code, code);
         EXPECT_TRUE(res.ok());
         EXPECT_TRUE(static_cast<bool>(res));
     }
@@ -104,13 +111,13 @@ TEST_F(HttpClientTest, HttpStatusCodesAndOkSemantics)
     {
         auto res = client.get("/status/" + std::to_string(code));
         EXPECT_TRUE(res.transport_success);
-        EXPECT_EQ(res.status_code, code);
+        EXPECT_EQ(res.response.status_code, code);
         EXPECT_FALSE(res.ok());
         EXPECT_FALSE(static_cast<bool>(res));
     }
 }
 
-TEST_F(HttpClientTest, ResponseHeadersParsing)
+TEST_F(http_client_test, response_headers_parsing)
 {
     _server.Get("/custom-headers",
                 [](const httplib::Request &, httplib::Response &res) {
@@ -122,12 +129,12 @@ TEST_F(HttpClientTest, ResponseHeadersParsing)
     auto                  res = client.get("/custom-headers");
 
     ASSERT_TRUE(res.ok());
-    EXPECT_EQ(res.headers.get("X-Test"), "hello");
-    EXPECT_EQ(res.headers.get("x-test"), "hello");
-    EXPECT_EQ(res.headers.get("X-Server-Time"), "2026-09-01");
+    EXPECT_EQ(res.response.headers.get("X-Test"), "hello");
+    EXPECT_EQ(res.response.headers.get("x-test"), "hello");
+    EXPECT_EQ(res.response.headers.get("X-Server-Time"), "2026-09-01");
 }
 
-TEST_F(HttpClientTest, RequestHeadersTransmission)
+TEST_F(http_client_test, request_headers_transmission)
 {
     std::string received_auth;
     _server.Get("/ping",
@@ -149,7 +156,7 @@ TEST_F(HttpClientTest, RequestHeadersTransmission)
     EXPECT_EQ(received_auth, "Bearer token-abc-123");
 }
 
-TEST_F(HttpClientTest, PostContentTypeHeaderValidation)
+TEST_F(http_client_test, post_content_type_header_validation)
 {
     std::string received_content_type;
     std::string received_body;
@@ -171,7 +178,7 @@ TEST_F(HttpClientTest, PostContentTypeHeaderValidation)
     EXPECT_EQ(received_body, R"({"key":"value"})");
 }
 
-TEST_F(HttpClientTest, EmptyResponseBodyHandling)
+TEST_F(http_client_test, empty_response_body_handling)
 {
     _server.Delete("/resource/1",
                    [](const httplib::Request &, httplib::Response &res) {
@@ -182,11 +189,11 @@ TEST_F(HttpClientTest, EmptyResponseBodyHandling)
     auto                  res = client.del("/resource/1");
 
     EXPECT_TRUE(res.ok());
-    EXPECT_EQ(res.status_code, 204);
-    EXPECT_TRUE(res.body.empty());
+    EXPECT_EQ(res.response.status_code, 204);
+    EXPECT_TRUE(res.response.body.empty());
 }
 
-TEST_F(HttpClientTest, ReadTimeoutBehavior)
+TEST_F(http_client_test, read_timeout_behavior)
 {
     _server.Get("/slow-response",
                 [](const httplib::Request &, httplib::Response &res) {
@@ -201,11 +208,10 @@ TEST_F(HttpClientTest, ReadTimeoutBehavior)
 
     EXPECT_FALSE(res.transport_success);
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.error,
-              hj::http::http_error::protocol); // 超时被判定为读协议/传输异常
+    EXPECT_EQ(res.error, hj::http::http_error::protocol);
 }
 
-TEST(HttpClientStandaloneTest, DnsFailureHandling)
+TEST_F(http_client_test, dns_failure_handling)
 {
     hj::http::http_client client("http://domain.invalid.nonexistent.test");
 
@@ -216,7 +222,7 @@ TEST(HttpClientStandaloneTest, DnsFailureHandling)
     EXPECT_EQ(res.error, hj::http::http_error::connection);
 }
 
-TEST_F(HttpClientTest, MoveSemanticsVerification)
+TEST_F(http_client_test, move_semantics_verification)
 {
     _server.Get("/move-test",
                 [](const httplib::Request &, httplib::Response &res) {
@@ -230,18 +236,18 @@ TEST_F(HttpClientTest, MoveSemanticsVerification)
 
     auto res2 = client2.get("/move-test");
     EXPECT_TRUE(res2.ok());
-    EXPECT_EQ(res2.body, "moved_ok");
+    EXPECT_EQ(res2.response.body, "moved_ok");
 
     hj::http::http_client client3(_base_url);
     client3 = std::move(client2);
 
     auto res3 = client3.get("/move-test");
     EXPECT_TRUE(res3.ok());
-    EXPECT_EQ(res3.body, "moved_ok");
+    EXPECT_EQ(res3.response.body, "moved_ok");
 }
 
 #ifdef HJ_ENABLE_HTTPS
-TEST(HttpClientSslTest, HttpsPublicEndpointConnection)
+TEST(http_client_ssl_test, https_public_endpoint_connection)
 {
     hj::http::http_client client("https://badssl.com");
 
@@ -256,7 +262,7 @@ TEST(HttpClientSslTest, HttpsPublicEndpointConnection)
 }
 #endif
 
-TEST_F(HttpClientTest, MetricsLoggerCallbackTest)
+TEST_F(http_client_test, metrics_logger_callback_test)
 {
     _server.Get("/ping", [](const httplib::Request &, httplib::Response &res) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -285,9 +291,7 @@ TEST_F(HttpClientTest, MetricsLoggerCallbackTest)
     EXPECT_GE(captured_metrics.latency.count(), 20000);
 }
 
-// ==================== 1. Retry 与 Idempotency 专项测试 ====================
-
-TEST_F(HttpClientTest, RetrySuccessAfterFailures)
+TEST_F(http_client_test, retry_success_after_failures)
 {
     std::atomic<int> attempt_count{0};
     _server.Get("/retry-success",
@@ -295,17 +299,17 @@ TEST_F(HttpClientTest, RetrySuccessAfterFailures)
                     int current = ++attempt_count;
                     if(current < 3)
                     {
-                        res.status = 500; // 前两次返回 500 触发重试
+                        res.status = 500;
                     } else
                     {
-                        res.status = 200; // 第三次成功
+                        res.status = 200;
                         res.body   = "success_on_third";
                     }
                 });
 
     hj::http::retry_policy policy;
     policy.max_retries   = 2;
-    policy.initial_delay = std::chrono::milliseconds(10); // 加快测试速度
+    policy.initial_delay = std::chrono::milliseconds(10);
 
     hj::http::http_client_options options;
     options.retry = policy;
@@ -314,18 +318,18 @@ TEST_F(HttpClientTest, RetrySuccessAfterFailures)
     auto                  res = client.get("/retry-success");
 
     EXPECT_TRUE(res.ok());
-    EXPECT_EQ(res.status_code, 200);
-    EXPECT_EQ(res.body, "success_on_third");
-    EXPECT_EQ(attempt_count.load(), 3); // 1次初始请求 + 2次重试 = 总共3次尝试
+    EXPECT_EQ(res.response.status_code, 200);
+    EXPECT_EQ(res.response.body, "success_on_third");
+    EXPECT_EQ(attempt_count.load(), 3);
 }
 
-TEST_F(HttpClientTest, RetryExhaustedFailure)
+TEST_F(http_client_test, retry_exhausted_failure)
 {
     std::atomic<int> attempt_count{0};
     _server.Get("/retry-fail",
                 [&](const httplib::Request &, httplib::Response &res) {
                     ++attempt_count;
-                    res.status = 500; // 持续返回 500
+                    res.status = 500;
                 });
 
     hj::http::retry_policy policy;
@@ -345,11 +349,11 @@ TEST_F(HttpClientTest, RetryExhaustedFailure)
     auto res = client.get("/retry-fail");
 
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.status_code, 500);
-    EXPECT_EQ(attempt_count.load(), 3); // 尝试了 3 次（1次初始 + 2次重试）
+    EXPECT_EQ(res.response.status_code, 500);
+    EXPECT_EQ(attempt_count.load(), 3);
 }
 
-TEST_F(HttpClientTest, PostDefaultNonIdempotentNoRetry)
+TEST_F(http_client_test, post_default_non_idempotent_no_retry)
 {
     std::atomic<int> attempt_count{0};
     _server.Post("/post-retry",
@@ -361,7 +365,7 @@ TEST_F(HttpClientTest, PostDefaultNonIdempotentNoRetry)
     hj::http::retry_policy policy;
     policy.max_retries              = 2;
     policy.initial_delay            = std::chrono::milliseconds(10);
-    policy.retry_only_if_idempotent = true; // 默认即为 true
+    policy.retry_only_if_idempotent = true;
 
     hj::http::http_client_options options;
     options.retry = policy;
@@ -370,10 +374,10 @@ TEST_F(HttpClientTest, PostDefaultNonIdempotentNoRetry)
     auto                  res = client.post("/post-retry", "data");
 
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(attempt_count.load(), 1); // POST 默认非幂等，不应重试
+    EXPECT_EQ(attempt_count.load(), 1);
 }
 
-TEST_F(HttpClientTest, PostForcedIdempotentAllowsRetry)
+TEST_F(http_client_test, post_forced_idempotent_allows_retry)
 {
     std::atomic<int> attempt_count{0};
     _server.Post("/post-idempotent-retry",
@@ -401,17 +405,16 @@ TEST_F(HttpClientTest, PostForcedIdempotentAllowsRetry)
     req.method        = hj::http::http_method::post;
     req.path          = "/post-idempotent-retry";
     req.body          = "data";
-    req.is_idempotent = true; // 显式标记为幂等请求
+    req.is_idempotent = true;
 
     auto res = client.request(req);
 
     EXPECT_TRUE(res.ok());
-    EXPECT_EQ(attempt_count.load(), 3); // 允许重试，最终成功
+    EXPECT_EQ(attempt_count.load(), 3);
 }
 
-TEST_F(HttpClientTest, TlsErrorNoRetry)
+TEST_F(http_client_test, tls_error_no_retry)
 {
-    // 1. 设置极短的超时，避免 OS Socket 重传导致卡死
     hj::http::http_timeout fast_timeout{std::chrono::milliseconds(50)};
 
     hj::http::retry_policy policy;
@@ -422,7 +425,6 @@ TEST_F(HttpClientTest, TlsErrorNoRetry)
     options.timeout = fast_timeout;
     options.retry   = policy;
 
-    // 2. 指向一个必定拒绝/无法连接的端口（如 127.0.0.1:1）
     hj::http::http_client client("http://127.0.0.1:1", std::move(options));
 
     auto start_time = std::chrono::steady_clock::now();
@@ -431,15 +433,13 @@ TEST_F(HttpClientTest, TlsErrorNoRetry)
                           std::chrono::steady_clock::now() - start_time)
                           .count();
 
-    // 3. 验证结果：请求失败，且没有因为 retry 导致运行时间翻倍
     EXPECT_FALSE(res.transport_success);
     EXPECT_EQ(res.error, hj::http::http_error::connection);
 
-    // 如果没有重试，耗时应该在 1 次超时左右（<< 200ms），而不是 3 次尝试（> 150ms + 延迟）
     EXPECT_LT(duration, 500);
 }
 
-TEST_F(HttpClientTest, RetryAfterHeaderRespecting)
+TEST_F(http_client_test, retry_after_header_respecting)
 {
     std::atomic<int> attempt_count{0};
     auto             start_time = std::chrono::steady_clock::now();
@@ -450,7 +450,7 @@ TEST_F(HttpClientTest, RetryAfterHeaderRespecting)
                     if(current == 1)
                     {
                         res.status = 429;
-                        res.set_header("Retry-After", "1"); // 要求等待 1 秒
+                        res.set_header("Retry-After", "1");
                     } else
                     {
                         res.status = 200;
@@ -477,13 +477,10 @@ TEST_F(HttpClientTest, RetryAfterHeaderRespecting)
     EXPECT_GE(duration, 900);
 }
 
-
-// ==================== 2. Query 参数编码与解析专项测试 ====================
-
-// ==================== 3. 高并发与超时隔离测试 ====================
-
-TEST_F(HttpClientTest, ConcurrentRequestsTimeoutIsolation)
+TEST_F(http_client_test, concurrent_requests_timeout_isolation)
 {
+    std::atomic<bool> slow_handler_done{false};
+
     _server.Get("/sleep-100ms",
                 [&](const httplib::Request &, httplib::Response &res) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -495,11 +492,11 @@ TEST_F(HttpClientTest, ConcurrentRequestsTimeoutIsolation)
                 [&](const httplib::Request &, httplib::Response &res) {
                     std::this_thread::sleep_for(
                         std::chrono::milliseconds(1000));
-                    res.status = 200;
-                    res.body   = "slow";
+                    res.status        = 200;
+                    res.body          = "slow";
+                    slow_handler_done = true;
                 });
 
-    // 线程 A：拥有独立的客户端 A，显式设定极短的自定义 timeout = 100ms
     auto future_a = std::async(std::launch::async, [&]() {
         hj::http::http_client client_a(
             _base_url,
@@ -507,15 +504,12 @@ TEST_F(HttpClientTest, ConcurrentRequestsTimeoutIsolation)
         hj::http::http_request req;
         req.method  = hj::http::http_method::get;
         req.path    = "/sleep-1000ms";
-        req.timeout = hj::http::http_timeout{
-            std::chrono::milliseconds(100)}; // 预期超时失败
+        req.timeout = hj::http::http_timeout{std::chrono::milliseconds(100)};
         return client_a.request(req);
     });
 
-    // 线程 B：拥有独立的客户端 B，使用默认的 3s timeout
     auto future_b = std::async(std::launch::async, [&]() {
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(10)); // 错开微小的时间片
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         hj::http::http_client client_b(
             _base_url,
             hj::http::http_timeout{std::chrono::milliseconds(3000)});
@@ -528,16 +522,19 @@ TEST_F(HttpClientTest, ConcurrentRequestsTimeoutIsolation)
     auto res_a = future_a.get();
     auto res_b = future_b.get();
 
-    // 验证线程 A 因为 100ms 超时而失败
     EXPECT_FALSE(res_a.transport_success);
 
-    // 验证线程 B 独立运行，成功返回
     EXPECT_TRUE(res_b.transport_success);
-    EXPECT_EQ(res_b.status_code, 200);
-    EXPECT_EQ(res_b.body, "fast");
+    EXPECT_EQ(res_b.response.status_code, 200);
+    EXPECT_EQ(res_b.response.body, "fast");
+
+    while(!slow_handler_done)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
 }
 
-TEST(HttpClientUrlTest, QueryParametersEncodingAndSorting)
+TEST(http_client_utils_test, query_parameters_encoding_and_sorting)
 {
     hj::http::query_params query{{"name", "Harry Potter"},
                                  {"q", "a+b"},
@@ -546,15 +543,13 @@ TEST(HttpClientUrlTest, QueryParametersEncodingAndSorting)
     std::string result_path =
         hj::http::detail::build_full_path("/search", query);
 
-    // 验证严格匹配 Percent-Encoding 标准以及参数按 key 排序后的字符串
     EXPECT_EQ(result_path,
               "/search?name=Harry%20Potter"
               "&q=a%2Bb"
               "&url=https%3A%2F%2Fexample.com%3Fa%3D1%26b%3D2");
 }
 
-// 2. 针对 HTTP 客户端真实发送与服务端接收的集成测试 (Integration Test)
-TEST_F(HttpClientTest, QueryParametersTransmissionAndParsing)
+TEST_F(http_client_test, query_parameters_transmission_and_parsing)
 {
     std::string received_name;
     std::string received_q;
@@ -562,7 +557,6 @@ TEST_F(HttpClientTest, QueryParametersTransmissionAndParsing)
 
     _server.Get("/echo-query",
                 [&](const httplib::Request &req, httplib::Response &res) {
-                    // 使用 httplib 提供的 params 映射表验证解包后的真实 Query 参数
                     if(req.has_param("name"))
                         received_name = req.get_param_value("name");
                     if(req.has_param("q"))
@@ -586,7 +580,6 @@ TEST_F(HttpClientTest, QueryParametersTransmissionAndParsing)
     auto res = client.request(req);
 
     EXPECT_TRUE(res.ok());
-    // 验证经过 HTTP 客户端发送、网络传输、Server 解析后，数据能够完整无损还原
     EXPECT_EQ(received_name, "Harry Potter");
     EXPECT_EQ(received_q, "a+b");
     EXPECT_EQ(received_url, "https://example.com?a=1&b=2");

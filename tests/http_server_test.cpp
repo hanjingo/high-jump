@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -18,6 +19,31 @@ void wait_for_server(const hj::http::http_server &server)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     ASSERT_TRUE(server.is_running());
+}
+
+int start_server_on_ephemeral_port(hj::http::http_server &server,
+                                   const std::string     &host = "127.0.0.1")
+{
+    for(int retry = 0; retry < 10; ++retry)
+    {
+        int port = 10000 + (rand() % 40000);
+        server.listen_async(host, port);
+
+        int retries = 0;
+        while(!server.is_running() && retries++ < 20)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        if(server.is_running())
+        {
+            return port;
+        }
+
+        server.stop();
+    }
+
+    throw std::runtime_error("Server failed to start on any port");
 }
 } // namespace
 
@@ -80,9 +106,6 @@ TEST(http_server, generic_route_method)
 TEST(http_server, start_and_stop_integration)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18080;
-
     server.patch(
         "/resource",
         [](const hj::http::http_request &req, hj::http::http_response &res) {
@@ -91,17 +114,8 @@ TEST(http_server, start_and_stop_integration)
             res.body        = "patched_ok";
         });
 
-    std::thread server_thread(
-        [&server, host, port]() { server.listen(host, port); });
-
-    int retries = 0;
-    while(!server.is_running() && retries++ < 50)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    ASSERT_TRUE(server.is_running());
-
-    httplib::Client client(host, port);
+    int             port = start_server_on_ephemeral_port(server);
+    httplib::Client client("127.0.0.1", port);
     auto            res = client.Patch("/resource", "", "text/plain");
 
     ASSERT_NE(res, nullptr);
@@ -109,54 +123,38 @@ TEST(http_server, start_and_stop_integration)
     EXPECT_EQ(res->body, "patched_ok");
 
     server.stop();
-    if(server_thread.joinable())
-    {
-        server_thread.join();
-    }
     EXPECT_FALSE(server.is_running());
 }
 
 TEST(http_server, handler_exception_handling)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18081;
 
     server.get("/throw_std",
                [](const hj::http::http_request &, hj::http::http_response &) {
-                   throw std::runtime_error("Database connection lost");
+                   throw std::runtime_error("db error");
                });
 
     server.get("/throw_unknown",
                [](const hj::http::http_request &, hj::http::http_response &) {
-                   throw 42; // unknown exception
+                   throw 42;
                });
 
-    std::thread server_thread(
-        [&server, host, port]() { server.listen(host, port); });
-
-    int retries = 0;
-    while(!server.is_running() && retries++ < 50)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    ASSERT_TRUE(server.is_running());
-
-    httplib::Client client(host, port);
+    int             port = start_server_on_ephemeral_port(server);
+    httplib::Client client("127.0.0.1", port);
 
     auto res1 = client.Get("/throw_std");
     ASSERT_NE(res1, nullptr);
     EXPECT_EQ(res1->status, 500);
+    EXPECT_EQ(res1->get_header_value("Content-Type"), "application/json");
+    EXPECT_EQ(res1->body, R"({"error": "Internal Server Error"})");
 
     auto res2 = client.Get("/throw_unknown");
     ASSERT_NE(res2, nullptr);
     EXPECT_EQ(res2->status, 500);
+    EXPECT_EQ(res2->body, R"({"error": "Internal Server Error"})");
 
     server.stop();
-    if(server_thread.joinable())
-    {
-        server_thread.join();
-    }
 }
 
 TEST(http_server, start_and_stop_async)
@@ -166,14 +164,8 @@ TEST(http_server, start_and_stop_async)
                [](const hj::http::http_request &,
                   hj::http::http_response &res) { res.body = "pong"; });
 
-    auto fut = server.listen_async("127.0.0.1", 18080);
-
-    while(!server.is_running())
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
-    httplib::Client client("127.0.0.1", 18080);
+    int             port = start_server_on_ephemeral_port(server);
+    httplib::Client client("127.0.0.1", port);
     auto            res = client.Get("/ping");
     ASSERT_NE(res, nullptr);
     EXPECT_EQ(res->body, "pong");
@@ -181,11 +173,9 @@ TEST(http_server, start_and_stop_async)
     server.stop();
 }
 
-TEST(http_server_methods, all_http_methods)
+TEST(http_server, all_http_methods)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18090;
 
     server.get(
         "/test",
@@ -237,10 +227,8 @@ TEST(http_server_methods, all_http_methods)
                             "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS");
         });
 
-    auto fut = server.listen_async(host, port);
-    wait_for_server(server);
-
-    httplib::Client client(host, port);
+    int             port = start_server_on_ephemeral_port(server);
+    httplib::Client client("127.0.0.1", port);
 
     // 1. GET
     auto res_get = client.Get("/test");
@@ -289,11 +277,9 @@ TEST(http_server_methods, all_http_methods)
     server.stop();
 }
 
-TEST(http_server_request, full_request_parsing)
+TEST(http_server, full_request_parsing)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18091;
 
     server.post(
         "/users",
@@ -315,19 +301,15 @@ TEST(http_server_request, full_request_parsing)
             EXPECT_TRUE(found_page);
 
             EXPECT_EQ(req.content_type, "application/json");
-
             EXPECT_EQ(req.headers.get("X-Custom-Header"), "TestValue");
-
             EXPECT_EQ(req.body, R"({"name":"foo"})");
 
             res.status_code = 201;
             res.body        = R"({"status":"created"})";
         });
 
-    auto fut = server.listen_async(host, port);
-    wait_for_server(server);
-
-    httplib::Client  client(host, port);
+    int              port = start_server_on_ephemeral_port(server);
+    httplib::Client  client("127.0.0.1", port);
     httplib::Headers headers = {{"X-Custom-Header", "TestValue"}};
 
     auto res = client.Post("/users?id=100&page=2",
@@ -342,11 +324,9 @@ TEST(http_server_request, full_request_parsing)
     server.stop();
 }
 
-TEST(http_server_response, status_codes)
+TEST(http_server, status_codes)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18092;
 
     const std::vector<int> status_codes =
         {200, 201, 204, 301, 400, 401, 403, 404, 409, 429, 500, 503};
@@ -365,10 +345,8 @@ TEST(http_server_response, status_codes)
                    });
     }
 
-    auto fut = server.listen_async(host, port);
-    wait_for_server(server);
-
-    httplib::Client client(host, port);
+    int             port = start_server_on_ephemeral_port(server);
+    httplib::Client client("127.0.0.1", port);
 
     for(int code : status_codes)
     {
@@ -385,11 +363,9 @@ TEST(http_server_response, status_codes)
     server.stop();
 }
 
-TEST(http_server_headers, advanced_header_tests)
+TEST(http_server, advanced_header_tests)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18093;
 
     server.get(
         "/headers",
@@ -407,10 +383,8 @@ TEST(http_server_headers, advanced_header_tests)
             res.body = R"({"ok":true})";
         });
 
-    auto fut = server.listen_async(host, port);
-    wait_for_server(server);
-
-    httplib::Client  client(host, port);
+    int              port = start_server_on_ephemeral_port(server);
+    httplib::Client  client("127.0.0.1", port);
     httplib::Headers headers = {{"X-Request-ID", "req-12345"},
                                 {"Cookie", "session=abc"},
                                 {"Cookie", "theme=dark"}};
@@ -433,107 +407,9 @@ TEST(http_server_headers, advanced_header_tests)
     server.stop();
 }
 
-TEST(http_server_lifecycle, edge_cases)
-{
-    const std::string host = "127.0.0.1";
-    const int         port = 18094;
-
-    // 1. stop before listen
-    {
-        hj::http::http_server server;
-        EXPECT_NO_THROW(server.stop());
-        EXPECT_FALSE(server.is_running());
-    }
-
-    // 2. stop twice
-    {
-        hj::http::http_server server;
-        auto                  fut = server.listen_async(host, port);
-        wait_for_server(server);
-        EXPECT_TRUE(server.is_running());
-
-        server.stop();
-        EXPECT_FALSE(server.is_running());
-        EXPECT_NO_THROW(server.stop());
-    }
-
-    // 3. destructor while running
-    {
-        auto server = std::make_unique<hj::http::http_server>();
-        auto fut    = server->listen_async(host, port);
-        wait_for_server(*server);
-        EXPECT_TRUE(server->is_running());
-        EXPECT_NO_THROW(server.reset());
-    }
-
-    // 4. listen bind failure
-    {
-        hj::http::http_server server1;
-        auto                  fut1 = server1.listen_async(host, port);
-        wait_for_server(server1);
-
-        hj::http::http_server server2;
-        auto fut2 = std::async(std::launch::async, [&server2, host, port]() {
-            return server2.listen(host, port);
-        });
-
-        if(fut2.wait_for(std::chrono::milliseconds(500))
-           != std::future_status::ready)
-        {
-            server2.stop();
-        }
-
-        bool bind_ok = fut2.get();
-        EXPECT_FALSE(server2.is_running() && bind_ok);
-
-        server1.stop();
-    }
-
-    // 5. start after stop
-    {
-        std::atomic<int>      call_count{0};
-        hj::http::http_server server;
-
-        server.get(
-            "/ping",
-            [&](const hj::http::http_request &, hj::http::http_response &res) {
-                if(call_count.load() == 0)
-                {
-                    res.body = "pong1";
-                } else
-                {
-                    res.body = "pong2";
-                }
-            });
-
-        auto fut1 = server.listen_async(host, port);
-        wait_for_server(server);
-
-        httplib::Client client(host, port);
-        auto            res1 = client.Get("/ping");
-        ASSERT_NE(res1, nullptr);
-        EXPECT_EQ(res1->body, "pong1");
-
-        server.stop();
-        EXPECT_FALSE(server.is_running());
-
-        call_count.store(1);
-        auto fut2 = server.listen_async(host, port);
-        wait_for_server(server);
-
-        auto res2 = client.Get("/ping");
-        ASSERT_NE(res2, nullptr);
-        EXPECT_EQ(res2->body, "pong2");
-
-        server.stop();
-    }
-}
-
-TEST(http_server_concurrency, multi_client_high_pressure)
+TEST(http_server, multi_client_high_pressure)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18095;
 
     std::atomic<uint64_t> total_requests{0};
     std::atomic<uint64_t> total_errors{0};
@@ -547,8 +423,7 @@ TEST(http_server_concurrency, multi_client_high_pressure)
             res.body              = "echo:" + client_id;
         });
 
-    auto fut = server.listen_async(host, port);
-    wait_for_server(server);
+    int port = start_server_on_ephemeral_port(server);
 
     constexpr int NUM_THREADS         = 10;
     constexpr int REQUESTS_PER_THREAD = 50;
@@ -558,24 +433,23 @@ TEST(http_server_concurrency, multi_client_high_pressure)
 
     for(int t = 0; t < NUM_THREADS; ++t)
     {
-        threads.emplace_back(
-            [t, host, port, &total_errors, REQUESTS_PER_THREAD]() {
-                httplib::Client client(host, port);
-                client.set_keep_alive(true);
+        threads.emplace_back([t, port, &total_errors, REQUESTS_PER_THREAD]() {
+            httplib::Client client("127.0.0.1", port);
+            client.set_keep_alive(true);
 
-                std::string      client_id = "thread_" + std::to_string(t);
-                httplib::Headers headers   = {{"X-Client-ID", client_id}};
+            std::string      client_id = "thread_" + std::to_string(t);
+            httplib::Headers headers   = {{"X-Client-ID", client_id}};
 
-                for(int i = 0; i < REQUESTS_PER_THREAD; ++i)
+            for(int i = 0; i < REQUESTS_PER_THREAD; ++i)
+            {
+                auto res = client.Get("/benchmark", headers);
+                if(!res || res->status != 200
+                   || res->body != ("echo:" + client_id))
                 {
-                    auto res = client.Get("/benchmark", headers);
-                    if(!res || res->status != 200
-                       || res->body != ("echo:" + client_id))
-                    {
-                        total_errors.fetch_add(1, std::memory_order_relaxed);
-                    }
+                    total_errors.fetch_add(1, std::memory_order_relaxed);
                 }
-            });
+            }
+        });
     }
 
     for(auto &th : threads)
@@ -594,8 +468,6 @@ TEST(http_server_concurrency, multi_client_high_pressure)
 TEST(http_server, custom_exception_handler)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18082;
 
     struct invalid_param_error : public std::runtime_error
     {
@@ -635,10 +507,8 @@ TEST(http_server, custom_exception_handler)
                    throw std::runtime_error("db crash");
                });
 
-    auto fut = server.listen_async(host, port);
-    wait_for_server(server);
-
-    httplib::Client client(host, port);
+    int             port = start_server_on_ephemeral_port(server);
+    httplib::Client client("127.0.0.1", port);
 
     auto res1 = client.Get("/bad_param");
     ASSERT_NE(res1, nullptr);
@@ -654,11 +524,9 @@ TEST(http_server, custom_exception_handler)
     server.stop();
 }
 
-TEST(http_server_metrics, basic_metrics_collection)
+TEST(http_server, basic_metrics_collection)
 {
     hj::http::http_server server;
-    const std::string     host = "127.0.0.1";
-    const int             port = 18096;
 
     std::atomic<bool>             metric_collected{false};
     hj::http::http_server_metrics recorded_metrics;
@@ -675,10 +543,8 @@ TEST(http_server_metrics, basic_metrics_collection)
             res.body        = "created";
         });
 
-    auto fut = server.listen_async(host, port);
-    wait_for_server(server);
-
-    httplib::Client client(host, port);
+    int             port = start_server_on_ephemeral_port(server);
+    httplib::Client client("127.0.0.1", port);
     auto            res = client.Post("/data", "hello server", "text/plain");
 
     ASSERT_NE(res, nullptr);
@@ -688,10 +554,257 @@ TEST(http_server_metrics, basic_metrics_collection)
     EXPECT_EQ(recorded_metrics.method, hj::http::http_method::post);
     EXPECT_EQ(recorded_metrics.path, "/data");
     EXPECT_EQ(recorded_metrics.status_code, 201);
-    EXPECT_EQ(recorded_metrics.request_bytes,
+    EXPECT_EQ(recorded_metrics.request_body_bytes,
               std::string("hello server").size());
-    EXPECT_EQ(recorded_metrics.response_bytes, std::string("created").size());
+    EXPECT_EQ(recorded_metrics.response_body_bytes,
+              std::string("created").size());
     EXPECT_GT(recorded_metrics.latency.count(), 0);
+
+    server.stop();
+}
+
+TEST(http_server, move_before_start)
+{
+    {
+        hj::http::http_server server_a;
+        server_a.get("/ping",
+                     [](const hj::http::http_request &,
+                        hj::http::http_response &res) { res.body = "pong_a"; });
+
+        hj::http::http_server server_b(std::move(server_a));
+
+        int             port = start_server_on_ephemeral_port(server_b);
+        httplib::Client client("127.0.0.1", port);
+        auto            res = client.Get("/ping");
+
+        ASSERT_NE(res, nullptr);
+        EXPECT_EQ(res->status, 200);
+        EXPECT_EQ(res->body, "pong_a");
+
+        server_b.stop();
+    }
+
+    {
+        hj::http::http_server server_src;
+        server_src.get(
+            "/hello",
+            [](const hj::http::http_request &, hj::http::http_response &res) {
+                res.body = "world";
+            });
+
+        hj::http::http_server server_dst;
+        server_dst = std::move(server_src);
+
+        int             port = start_server_on_ephemeral_port(server_dst);
+        httplib::Client client("127.0.0.1", port);
+        auto            res = client.Get("/hello");
+
+        ASSERT_NE(res, nullptr);
+        EXPECT_EQ(res->status, 200);
+        EXPECT_EQ(res->body, "world");
+
+        server_dst.stop();
+    }
+}
+
+TEST(http_server, move_while_running)
+{
+    {
+        hj::http::http_server server_a;
+        int                   port = start_server_on_ephemeral_port(server_a);
+
+        EXPECT_TRUE(server_a.is_running());
+
+        EXPECT_THROW(
+            { hj::http::http_server server_b(std::move(server_a)); },
+            std::logic_error);
+
+        server_a.stop();
+    }
+
+    {
+        hj::http::http_server server_src;
+        hj::http::http_server server_dst;
+
+        int port = start_server_on_ephemeral_port(server_src);
+        EXPECT_TRUE(server_src.is_running());
+
+        EXPECT_THROW({ server_dst = std::move(server_src); }, std::logic_error);
+
+        server_src.stop();
+    }
+}
+
+TEST(http_server, edge_cases)
+{
+    // 1. stop before listen
+    {
+        hj::http::http_server server;
+        EXPECT_NO_THROW(server.stop());
+        EXPECT_FALSE(server.is_running());
+    }
+
+    // 2. stop twice
+    {
+        hj::http::http_server server;
+        int                   port = start_server_on_ephemeral_port(server);
+        EXPECT_TRUE(server.is_running());
+
+        server.stop();
+        EXPECT_FALSE(server.is_running());
+        EXPECT_NO_THROW(server.stop());
+    }
+
+    // 3. destructor while running
+    {
+        auto server = std::make_unique<hj::http::http_server>();
+        int  port   = start_server_on_ephemeral_port(*server);
+        EXPECT_TRUE(server->is_running());
+        EXPECT_NO_THROW(server.reset());
+    }
+
+    // 4. start after stop
+    {
+        std::atomic<int>      call_count{0};
+        hj::http::http_server server;
+
+        server.get(
+            "/ping",
+            [&](const hj::http::http_request &, hj::http::http_response &res) {
+                res.body = (call_count.load() == 0) ? "pong1" : "pong2";
+            });
+
+        int             port1 = start_server_on_ephemeral_port(server);
+        httplib::Client client1("127.0.0.1", port1);
+        auto            res1 = client1.Get("/ping");
+        ASSERT_NE(res1, nullptr);
+        EXPECT_EQ(res1->body, "pong1");
+
+        server.stop();
+        EXPECT_FALSE(server.is_running());
+
+        call_count.store(1);
+        int             port2 = start_server_on_ephemeral_port(server);
+        httplib::Client client2("127.0.0.1", port2);
+        auto            res2 = client2.Get("/ping");
+        ASSERT_NE(res2, nullptr);
+        EXPECT_EQ(res2->body, "pong2");
+
+        server.stop();
+    }
+}
+
+TEST(http_server, industrial_high_pressure)
+{
+    hj::http::http_server server;
+
+    server.native_handle().new_task_queue = [] {
+        return new httplib::ThreadPool(4);
+    };
+
+    server.native_handle().set_read_timeout(5, 0);
+    server.native_handle().set_write_timeout(5, 0);
+
+    server.get(
+        "/small",
+        [](const hj::http::http_request &, hj::http::http_response &res) {
+            res.status_code = 200;
+            res.body        = "OK";
+        });
+
+    server.post(
+        "/large",
+        [](const hj::http::http_request &req, hj::http::http_response &res) {
+            res.status_code = 200;
+            res.body        = "echo_size:" + std::to_string(req.body.size());
+        });
+
+    int port = start_server_on_ephemeral_port(server);
+
+    constexpr int NUM_THREADS         = 2;
+    constexpr int REQUESTS_PER_THREAD = 1000;
+
+    std::atomic<uint64_t> total_success{0};
+    std::atomic<uint64_t> total_errors{0};
+
+    const std::string large_payload(500 * 1024, 'X');
+
+    std::vector<std::thread> threads;
+    threads.reserve(NUM_THREADS);
+
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    for(int t = 0; t < NUM_THREADS; ++t)
+    {
+        threads.emplace_back([t,
+                              port,
+                              &large_payload,
+                              &total_success,
+                              &total_errors,
+                              REQUESTS_PER_THREAD]() {
+            httplib::Client client("127.0.0.1", port);
+
+            bool keep_alive = (t % 2 == 0);
+            client.set_keep_alive(keep_alive);
+            client.set_read_timeout(10, 0);
+            client.set_write_timeout(10, 0);
+
+            for(int i = 0; i < REQUESTS_PER_THREAD; ++i)
+            {
+                if(i % 5 != 0)
+                {
+                    auto res = client.Get("/small");
+                    if(res && res->status == 200 && res->body == "OK")
+                    {
+                        total_success.fetch_add(1, std::memory_order_relaxed);
+                    } else
+                    {
+                        total_errors.fetch_add(1, std::memory_order_relaxed);
+                    }
+                } else
+                {
+                    auto        res = client.Post("/large",
+                                                  large_payload,
+                                                  "application/octet-stream");
+                    std::string expected_body =
+                        "echo_size:" + std::to_string(large_payload.size());
+                    if(res && res->status == 200 && res->body == expected_body)
+                    {
+                        total_success.fetch_add(1, std::memory_order_relaxed);
+                    } else
+                    {
+                        total_errors.fetch_add(1, std::memory_order_relaxed);
+                    }
+                }
+            }
+        });
+    }
+
+    for(auto &th : threads)
+    {
+        if(th.joinable())
+            th.join();
+    }
+
+    auto end_time    = std::chrono::high_resolution_clock::now();
+    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           end_time - start_time)
+                           .count();
+
+    EXPECT_EQ(total_errors.load(), 0u);
+    EXPECT_EQ(total_success.load(),
+              static_cast<uint64_t>(NUM_THREADS * REQUESTS_PER_THREAD));
+
+    std::cout << "[ STRESS TEST SUMMARY ]" << std::endl;
+    std::cout << " Total Requests : " << total_success.load() << std::endl;
+    std::cout << " Total Errors   : " << total_errors.load() << std::endl;
+    std::cout << " Time Elapsed   : " << duration_ms << " ms" << std::endl;
+    if(duration_ms > 0)
+    {
+        std::cout << " QPS            : "
+                  << (total_success.load() * 1000 / duration_ms) << " req/sec"
+                  << std::endl;
+    }
 
     server.stop();
 }

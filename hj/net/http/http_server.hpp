@@ -33,6 +33,22 @@
 
 namespace hj::http
 {
+
+/**
+ * @brief HTTP Server wrapper based on cpp-httplib.
+ * 
+ * @note Lifecycle & Thread Safety Policy:
+ * Server configuration (registering routes via get(), post(), route(), 
+ * and setting handlers like set_exception_handler(), set_metrics_handler()) 
+ * is NOT thread-safe. All configurations MUST be completed prior to calling 
+ * listen() or listen_async().
+ * 
+ * Once the server enters the RUNNING state, route mutation and configuration 
+ * modification are strictly prohibited to prevent data races and undefined behavior.
+ * 
+ * Lifecycle State Machine:
+ *   [ CONFIGURATION ] -> ( listen() / listen_async() ) -> [ RUNNING ]
+ */
 class http_server
 {
   private:
@@ -56,23 +72,32 @@ class http_server
     http_server(const http_server &)            = delete;
     http_server &operator=(const http_server &) = delete;
 
-    http_server(http_server &&other) noexcept
-        : _server(std::move(other._server))
-        , _worker_thread(std::move(other._worker_thread))
-        , _exception_handler(std::move(other._exception_handler))
-        , _routes(std::move(other._routes))
+    http_server(http_server &&other)
     {
+        if(other.is_running())
+            throw std::logic_error(
+                "Cannot move http_server while it is running");
+
+        _server            = std::move(other._server);
+        _worker_thread     = std::move(other._worker_thread);
+        _exception_handler = std::move(other._exception_handler);
+        _metrics_handler   = std::move(other._metrics_handler);
+        _routes            = std::move(other._routes);
     }
 
-    http_server &operator=(http_server &&other) noexcept
+    http_server &operator=(http_server &&other)
     {
         if(this != &other)
         {
             stop();
+            if(other.is_running())
+                throw std::logic_error(
+                    "Cannot move http_server while source is running");
 
             _server            = std::move(other._server);
             _worker_thread     = std::move(other._worker_thread);
             _exception_handler = std::move(other._exception_handler);
+            _metrics_handler   = std::move(other._metrics_handler);
             _routes            = std::move(other._routes);
         }
 
@@ -81,6 +106,12 @@ class http_server
 
     http_server &set_exception_handler(exception_handler handler)
     {
+        if(is_running())
+        {
+            throw std::logic_error(
+                "Cannot change exception_handler while server is running");
+        }
+
         if(handler)
         {
             _exception_handler = std::move(handler);
@@ -102,6 +133,12 @@ class http_server
     http_server &
     route(http_method m, std::string_view pattern, http_handler handler)
     {
+        if(is_running())
+        {
+            throw std::logic_error(
+                "Cannot mutate routes while server is running");
+        }
+
         if(pattern.empty() || !handler)
         {
             return *this;
@@ -209,7 +246,7 @@ class http_server
             }
             catch(const std::future_error &)
             {
-                // future 已经失效时忽略。
+                // ignore
             }
         });
 
@@ -243,28 +280,9 @@ class http_server
         resp.status_code = 500;
         resp.headers.set("Content-Type", "application/json");
 
-        try
-        {
-            if(ep)
-            {
-                std::rethrow_exception(ep);
-            }
-        }
-        catch(const std::exception &e)
-        {
-            resp.body = R"({"error": "Internal Server Error", "message": ")"
-                        + std::string(e.what()) + R"("})";
-        }
-        catch(...)
-        {
-            resp.body =
-                R"({"error": "Internal Server Error", "message": "Unknown error occurred"})";
-        }
+        resp.body = R"({"error": "Internal Server Error"})";
     }
 
-    /**
-     * @brief 获取或创建 GET/HEAD route entry
-     */
     route_ptr _get_or_create_route(const std::string &pattern)
     {
         auto it = _routes.find(pattern);
@@ -280,13 +298,6 @@ class http_server
         return entry;
     }
 
-    /**
-     * @brief 注册 GET handler
-     *
-     * GET/HEAD 共用一个 cpp-httplib Get() route。
-     *
-     * 只允许注册一次底层 route。
-     */
     void _register_get_handler(const std::string &pattern, http_handler handler)
     {
         auto entry = _get_or_create_route(pattern);
@@ -302,12 +313,6 @@ class http_server
         }
     }
 
-    /**
-     * @brief 注册 HEAD handler
-     *
-     * cpp-httplib 没有 Server::Head()，
-     * 因此 HEAD 必须挂在 Get() route 上。
-     */
     void _register_head_handler(const std::string &pattern,
                                 http_handler       handler)
     {
@@ -324,9 +329,6 @@ class http_server
         }
     }
 
-    /**
-     * @brief GET/HEAD 公共 dispatcher
-     */
     auto _make_get_head_adapter(const route_ptr &entry)
     {
         return [this, entry](const httplib::Request &raw_req,
@@ -337,26 +339,14 @@ class http_server
 
             if(req.method == http_method::head)
             {
-                /*
-                 * 如果用户显式注册 HEAD handler，
-                 * 优先执行 HEAD handler。
-                 *
-                 * 否则遵循 HTTP HEAD 的通常语义：
-                 * HEAD 可以复用 GET handler。
-                 */
                 if(entry->head_handler)
-                {
                     handler = &entry->head_handler;
-                } else if(entry->get_handler)
-                {
+                else if(entry->get_handler)
                     handler = &entry->get_handler;
-                }
             } else if(req.method == http_method::get)
             {
                 if(entry->get_handler)
-                {
                     handler = &entry->get_handler;
-                }
             }
 
             if(!handler || !(*handler))
@@ -403,6 +393,7 @@ class http_server
         }
         catch(...)
         {
+            resp.status_code = 500;
             if(_exception_handler)
             {
                 try
@@ -434,9 +425,10 @@ class http_server
             metrics.path   = req.path;
             metrics.status_code =
                 resp.status_code != 0 ? resp.status_code : 200;
-            metrics.latency        = duration;
-            metrics.request_bytes  = req.body.size();
-            metrics.response_bytes = resp.body.size();
+            metrics.latency             = duration;
+            metrics.request_body_bytes  = req.body.size();
+            metrics.response_body_bytes = resp.body.size();
+            metrics.client_ip           = req.client_ip;
 
             try
             {
@@ -462,6 +454,21 @@ class http_server
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 
+/**
+ * @brief HTTP Server wrapper based on cpp-httplib.
+ * 
+ * @note Lifecycle & Thread Safety Policy:
+ * Server configuration (registering routes via get(), post(), route(), 
+ * and setting handlers like set_exception_handler(), set_metrics_handler()) 
+ * is NOT thread-safe. All configurations MUST be completed prior to calling 
+ * listen() or listen_async().
+ * 
+ * Once the server enters the RUNNING state, route mutation and configuration 
+ * modification are strictly prohibited to prevent data races and undefined behavior.
+ * 
+ * Lifecycle State Machine:
+ *   [ CONFIGURATION ] -> ( listen() / listen_async() ) -> [ RUNNING ]
+ */
 class http_ssl_server
 {
   private:
@@ -479,6 +486,13 @@ class http_ssl_server
               std::make_unique<httplib::SSLServer>(cert_path, private_key_path))
         , _exception_handler(_default_exception_handler)
     {
+        if(!_server || !_server->is_valid())
+        {
+            throw std::runtime_error("Failed to initialize SSLServer: invalid "
+                                     "certificate or private key ("
+                                     + std::string(cert_path) + ", "
+                                     + std::string(private_key_path) + ")");
+        }
     }
 
     explicit http_ssl_server(const ssl_config &cfg)
@@ -486,6 +500,12 @@ class http_ssl_server
               cfg.cert_path.c_str(), cfg.private_key_path.c_str()))
         , _exception_handler(_default_exception_handler)
     {
+        if(!_server || !_server->is_valid())
+        {
+            throw std::runtime_error("Failed to initialize SSLServer: invalid "
+                                     "cert_path or private_key_path");
+        }
+
         _apply_ssl_config(cfg);
     }
 
@@ -494,23 +514,33 @@ class http_ssl_server
     http_ssl_server(const http_ssl_server &)            = delete;
     http_ssl_server &operator=(const http_ssl_server &) = delete;
 
-    http_ssl_server(http_ssl_server &&other) noexcept
-        : _server(std::move(other._server))
-        , _worker_thread(std::move(other._worker_thread))
-        , _exception_handler(std::move(other._exception_handler))
-        , _routes(std::move(other._routes))
+    http_ssl_server(http_ssl_server &&other)
     {
+        if(other.is_running())
+            throw std::logic_error(
+                "Cannot move http_ssl_server while it is running");
+
+        _server            = std::move(other._server);
+        _worker_thread     = std::move(other._worker_thread);
+        _exception_handler = std::move(other._exception_handler);
+        _metrics_handler   = std::move(other._metrics_handler);
+        _routes            = std::move(other._routes);
     }
 
-    http_ssl_server &operator=(http_ssl_server &&other) noexcept
+    http_ssl_server &operator=(http_ssl_server &&other)
     {
         if(this != &other)
         {
             stop();
 
+            if(other.is_running())
+                throw std::logic_error(
+                    "Cannot move http_ssl_server while source is running");
+
             _server            = std::move(other._server);
             _worker_thread     = std::move(other._worker_thread);
             _exception_handler = std::move(other._exception_handler);
+            _metrics_handler   = std::move(other._metrics_handler);
             _routes            = std::move(other._routes);
         }
 
@@ -519,10 +549,12 @@ class http_ssl_server
 
     http_ssl_server &set_exception_handler(exception_handler handler)
     {
+        if(is_running())
+            throw std::logic_error(
+                "Cannot change exception_handler while server is running");
+
         if(handler)
-        {
             _exception_handler = std::move(handler);
-        }
 
         return *this;
     }
@@ -530,9 +562,7 @@ class http_ssl_server
     http_ssl_server &set_metrics_handler(server_metrics_handler handler)
     {
         if(handler)
-        {
             _metrics_handler = std::move(handler);
-        }
 
         return *this;
     }
@@ -540,13 +570,14 @@ class http_ssl_server
     http_ssl_server &
     route(http_method m, std::string_view pattern, http_handler handler)
     {
+        if(is_running())
+            throw std::logic_error(
+                "Cannot mutate routes while server is running");
+
         if(pattern.empty() || !handler)
-        {
             return *this;
-        }
 
         const std::string pattern_str(pattern);
-
         switch(m)
         {
             case http_method::get:
@@ -656,14 +687,10 @@ class http_ssl_server
     void stop()
     {
         if(_server)
-        {
             _server->stop();
-        }
 
         if(_worker_thread.joinable())
-        {
             _worker_thread.join();
-        }
     }
 
     bool is_running() const { return _server ? _server->is_running() : false; }
@@ -673,37 +700,6 @@ class http_ssl_server
     const httplib::SSLServer &native_handle() const noexcept
     {
         return *_server;
-    }
-
-    bool reload_certs(const std::string &cert_path,
-                      const std::string &private_key_path)
-    {
-        if(!_server)
-        {
-            return false;
-        }
-
-        SSL_CTX *ctx = _server->ssl_context();
-
-        if(!ctx)
-        {
-            return false;
-        }
-
-        if(SSL_CTX_use_certificate_chain_file(ctx, cert_path.c_str()) != 1)
-        {
-            return false;
-        }
-
-        if(SSL_CTX_use_PrivateKey_file(ctx,
-                                       private_key_path.c_str(),
-                                       SSL_FILETYPE_PEM)
-           != 1)
-        {
-            return false;
-        }
-
-        return SSL_CTX_check_private_key(ctx) == 1;
     }
 
     SSL_CTX *ssl_context() noexcept
@@ -718,24 +714,7 @@ class http_ssl_server
     {
         resp.status_code = 500;
         resp.headers.set("Content-Type", "application/json");
-
-        try
-        {
-            if(ep)
-            {
-                std::rethrow_exception(ep);
-            }
-        }
-        catch(const std::exception &e)
-        {
-            resp.body = R"({"error": "Internal Server Error", "message": ")"
-                        + std::string(e.what()) + R"("})";
-        }
-        catch(...)
-        {
-            resp.body =
-                R"({"error": "Internal Server Error", "message": "Unknown error occurred"})";
-        }
+        resp.body = R"({"error": "Internal Server Error"})";
     }
 
     route_ptr _get_or_create_route(const std::string &pattern)
@@ -743,29 +722,21 @@ class http_ssl_server
         auto it = _routes.find(pattern);
 
         if(it != _routes.end())
-        {
             return it->second;
-        }
 
         auto entry = std::make_shared<route_entry>();
         _routes.emplace(pattern, entry);
-
         return entry;
     }
 
     void _register_get_handler(const std::string &pattern, http_handler handler)
     {
-        auto entry = _get_or_create_route(pattern);
-
+        auto       entry = _get_or_create_route(pattern);
         const bool first_registration =
             !entry->get_handler && !entry->head_handler;
-
         entry->get_handler = std::move(handler);
-
         if(first_registration)
-        {
             _server->Get(pattern, _make_get_head_adapter(entry));
-        }
     }
 
     void _register_head_handler(const std::string &pattern,
@@ -779,9 +750,7 @@ class http_ssl_server
         entry->head_handler = std::move(handler);
 
         if(first_registration)
-        {
             _server->Get(pattern, _make_get_head_adapter(entry));
-        }
     }
 
     auto _make_get_head_adapter(const route_ptr &entry)
@@ -795,18 +764,13 @@ class http_ssl_server
             if(req.method == http_method::head)
             {
                 if(entry->head_handler)
-                {
                     handler = &entry->head_handler;
-                } else if(entry->get_handler)
-                {
+                else if(entry->get_handler)
                     handler = &entry->get_handler;
-                }
             } else if(req.method == http_method::get)
             {
                 if(entry->get_handler)
-                {
                     handler = &entry->get_handler;
-                }
             }
 
             if(!handler || !(*handler))
@@ -854,6 +818,7 @@ class http_ssl_server
         }
         catch(...)
         {
+            resp.status_code = 500;
             if(_exception_handler)
             {
                 try
@@ -885,10 +850,10 @@ class http_ssl_server
             metrics.path   = req.path;
             metrics.status_code =
                 resp.status_code != 0 ? resp.status_code : 200;
-            metrics.latency        = duration;
-            metrics.request_bytes  = req.body.size();
-            metrics.response_bytes = resp.body.size();
-
+            metrics.latency             = duration;
+            metrics.request_body_bytes  = req.body.size();
+            metrics.response_body_bytes = resp.body.size();
+            metrics.client_ip           = req.client_ip;
             try
             {
                 _metrics_handler(metrics);
@@ -899,31 +864,49 @@ class http_ssl_server
         }
     }
 
+    static std::string _get_openssl_error_string()
+    {
+        unsigned long err = ERR_get_error();
+        if(err == 0)
+            return "Unknown OpenSSL error";
+        char buf[256];
+        ERR_error_string_n(err, buf, sizeof(buf));
+        return std::string(buf);
+    }
+
     void _apply_ssl_config(const ssl_config &cfg)
     {
         if(!_server)
-        {
-            return;
-        }
+            throw std::runtime_error("SSLServer instance is null");
 
         SSL_CTX *ctx = _server->ssl_context();
-
         if(!ctx)
+            throw std::runtime_error(
+                "Failed to acquire SSL_CTX from SSLServer");
+
+        int min_ver = (cfg.min_version == tls_version::tls_1_3)
+                          ? TLS1_3_VERSION
+                          : TLS1_2_VERSION;
+        if(SSL_CTX_set_min_proto_version(ctx, min_ver) != 1)
+            throw std::runtime_error("Failed to set minimum TLS version: "
+                                     + _get_openssl_error_string());
+
+        if(!cfg.tls12_cipher_suites.empty())
         {
-            return;
+            if(SSL_CTX_set_cipher_list(ctx, cfg.tls12_cipher_suites.c_str())
+               != 1)
+                throw std::runtime_error("Failed to set TLS 1.2 cipher list '"
+                                         + cfg.tls12_cipher_suites
+                                         + "': " + _get_openssl_error_string());
         }
 
-        if(cfg.min_version == tls_version::tls_1_3)
+        if(!cfg.tls13_cipher_suites.empty())
         {
-            SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
-        } else
-        {
-            SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-        }
-
-        if(!cfg.cipher_suites.empty())
-        {
-            SSL_CTX_set_cipher_list(ctx, cfg.cipher_suites.c_str());
+            if(SSL_CTX_set_ciphersuites(ctx, cfg.tls13_cipher_suites.c_str())
+               != 1)
+                throw std::runtime_error("Failed to set TLS 1.3 ciphersuites '"
+                                         + cfg.tls13_cipher_suites
+                                         + "': " + _get_openssl_error_string());
         }
 
         if(cfg.client_auth)
@@ -938,25 +921,32 @@ class http_ssl_server
                 const char *ca_file = cfg.ca_cert_path.empty()
                                           ? nullptr
                                           : cfg.ca_cert_path.c_str();
-
                 const char *ca_dir =
                     cfg.ca_cert_dir.empty() ? nullptr : cfg.ca_cert_dir.c_str();
 
-                SSL_CTX_load_verify_locations(ctx, ca_file, ca_dir);
+                if(SSL_CTX_load_verify_locations(ctx, ca_file, ca_dir) != 1)
+                {
+                    throw std::runtime_error(
+                        "Failed to load CA verify locations (file: "
+                        + cfg.ca_cert_path + ", dir: " + cfg.ca_cert_dir
+                        + "): " + _get_openssl_error_string());
+                }
+            } else
+            {
+                throw std::runtime_error(
+                    "Client authentication is enabled (client_auth=true), "
+                    "but neither ca_cert_path nor ca_cert_dir is specified");
             }
         }
 
         if(cfg.enable_session_cache)
         {
             SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER);
-
             SSL_CTX_set_timeout(ctx, cfg.session_timeout_sec);
         }
 
         if(cfg.ssl_ctx_callback)
-        {
             cfg.ssl_ctx_callback(ctx);
-        }
     }
 
   private:

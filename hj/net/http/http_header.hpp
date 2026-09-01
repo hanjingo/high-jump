@@ -198,7 +198,9 @@ struct ssl_config
     std::string ca_cert_dir;
 
     tls_version min_version{tls_version::tls_1_2};
-    std::string cipher_suites;
+
+    std::string tls12_cipher_suites;
+    std::string tls13_cipher_suites;
 
     bool enable_session_cache{true};
     long session_timeout_sec{7200};
@@ -225,8 +227,8 @@ struct http_server_metrics
     std::string               path;
     int                       status_code{200};
     std::chrono::microseconds latency{0};
-    std::size_t               request_bytes{0};
-    std::size_t               response_bytes{0};
+    std::size_t               request_body_bytes{0};
+    std::size_t               response_body_bytes{0};
     std::string               client_ip;
 };
 
@@ -356,6 +358,7 @@ struct http_request
     http_headers headers{};
     std::string  body{};
     std::string  content_type{};
+    std::string  client_ip{};
 
     query_params                query{};
     std::optional<http_timeout> timeout{std::nullopt};
@@ -479,42 +482,41 @@ inline std::string build_full_path(std::string_view    path,
     return "UNKNOWN";
 }
 
-inline http_request parse_httplib_request(const httplib::Request &req)
+inline http_request parse_httplib_request(const httplib::Request &raw_req)
 {
-    http_request hj_req;
-    hj_req.path = req.path;
-    hj_req.body = req.body;
+    http_request req;
+    req.path      = raw_req.path;
+    req.body      = raw_req.body;
+    req.client_ip = raw_req.remote_addr;
 
-    if(req.method == "GET")
-        hj_req.method = http_method::get;
-    else if(req.method == "POST")
-        hj_req.method = http_method::post;
-    else if(req.method == "PUT")
-        hj_req.method = http_method::put;
-    else if(req.method == "PATCH")
-        hj_req.method = http_method::patch;
-    else if(req.method == "DELETE")
-        hj_req.method = http_method::del;
-    else if(req.method == "HEAD")
-        hj_req.method = http_method::head;
-    else if(req.method == "OPTIONS")
-        hj_req.method = http_method::options;
+    if(raw_req.method == "GET")
+        req.method = http_method::get;
+    else if(raw_req.method == "POST")
+        req.method = http_method::post;
+    else if(raw_req.method == "PUT")
+        req.method = http_method::put;
+    else if(raw_req.method == "PATCH")
+        req.method = http_method::patch;
+    else if(raw_req.method == "DELETE")
+        req.method = http_method::del;
+    else if(raw_req.method == "HEAD")
+        req.method = http_method::head;
+    else if(raw_req.method == "OPTIONS")
+        req.method = http_method::options;
 
-    for(const auto &[k, v] : req.headers)
+    for(const auto &[k, v] : raw_req.headers)
     {
-        hj_req.headers.append(k, v);
+        req.headers.append(k, v);
         if(case_insensitive_equal{}(k, "Content-Type"))
-        {
-            hj_req.content_type = v;
-        }
+            req.content_type = v;
     }
 
-    for(const auto &[k, v] : req.params)
+    for(const auto &[k, v] : raw_req.params)
     {
-        hj_req.query.emplace_back(k, v);
+        req.query.emplace_back(k, v);
     }
 
-    return hj_req;
+    return req;
 }
 
 static http_error to_http_error(httplib::Error err) noexcept
@@ -591,9 +593,10 @@ static http_client_response parse_response(const httplib::Result &res)
     return client_resp;
 }
 
-inline void apply_response(const http_response &resp, httplib::Response &res)
+inline void apply_response(const http_response &resp,
+                           httplib::Response   &raw_resp)
 {
-    res.status = resp.status_code != 0 ? resp.status_code : 200;
+    raw_resp.status = resp.status_code != 0 ? resp.status_code : 200;
 
     std::string content_type = resp.headers.get("Content-Type");
     if(content_type.empty())
@@ -601,15 +604,11 @@ inline void apply_response(const http_response &resp, httplib::Response &res)
         content_type = "text/plain";
     }
 
-    res.set_content(resp.body, content_type.c_str());
-
+    raw_resp.set_content(resp.body, content_type.c_str());
     for(const auto &[k, v] : resp.headers)
     {
-        std::cerr << "apply header: " << k << " = " << v << std::endl;
         if(!case_insensitive_equal{}(k, "Content-Type"))
-        {
-            res.set_header(k.c_str(), v.c_str());
-        }
+            raw_resp.set_header(k.c_str(), v.c_str());
     }
 }
 

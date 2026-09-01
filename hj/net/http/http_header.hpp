@@ -32,7 +32,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace hj
+namespace hj::http
 {
 
 enum class http_method
@@ -62,6 +62,21 @@ enum class backoff_strategy
     fixed,
     exponential_jitter
 };
+
+struct case_insensitive_hash;
+struct case_insensitive_equal;
+struct http_timeout;
+struct proxy_config;
+struct tls_config;
+struct http_request_metrics;
+class http_headers;
+struct http_response;
+struct retry_policy;
+struct http_request;
+
+using logger_callback = std::function<void(const http_request_metrics &)>;
+using query_params    = std::vector<std::pair<std::string, std::string>>;
+using http_handler = std::function<void(const http_request &, http_response &)>;
 
 struct case_insensitive_hash
 {
@@ -109,7 +124,7 @@ struct http_timeout
     std::chrono::milliseconds read{5000};
     std::chrono::milliseconds write{5000};
 
-    /* implicit */ http_timeout(std::chrono::milliseconds timeout)
+    http_timeout(std::chrono::milliseconds timeout)
         : connect(timeout)
         , read(timeout)
         , write(timeout)
@@ -164,9 +179,6 @@ struct http_request_metrics
     std::size_t               request_body_bytes{0};
     std::size_t               response_body_bytes{0};
 };
-
-using logger_callback = std::function<void(const http_request_metrics &)>;
-using query_params    = std::vector<std::pair<std::string, std::string>>;
 
 class http_headers
 {
@@ -409,6 +421,44 @@ inline std::string build_full_path(std::string_view    path,
     return "UNKNOWN";
 }
 
+inline http_request parse_httplib_request(const httplib::Request &req)
+{
+    http_request hj_req;
+    hj_req.path = req.path;
+    hj_req.body = req.body;
+
+    if(req.method == "GET")
+        hj_req.method = http_method::get;
+    else if(req.method == "POST")
+        hj_req.method = http_method::post;
+    else if(req.method == "PUT")
+        hj_req.method = http_method::put;
+    else if(req.method == "PATCH")
+        hj_req.method = http_method::patch;
+    else if(req.method == "DELETE")
+        hj_req.method = http_method::del;
+    else if(req.method == "HEAD")
+        hj_req.method = http_method::head;
+    else if(req.method == "OPTIONS")
+        hj_req.method = http_method::options;
+
+    for(const auto &[k, v] : req.headers)
+    {
+        hj_req.headers.append(k, v);
+        if(case_insensitive_equal{}(k, "Content-Type"))
+        {
+            hj_req.content_type = v;
+        }
+    }
+
+    for(const auto &[k, v] : req.params)
+    {
+        hj_req.query.emplace_back(k, v);
+    }
+
+    return hj_req;
+}
+
 static http_error to_http_error(httplib::Error err) noexcept
 {
     switch(err)
@@ -483,6 +533,27 @@ static http_response parse_response(const httplib::Result &res)
     return response;
 }
 
+inline void apply_response(const http_response &resp, httplib::Response &res)
+{
+    res.status = resp.status_code != 0 ? resp.status_code : 200;
+
+    std::string content_type = resp.headers.get("Content-Type");
+    if(content_type.empty())
+    {
+        content_type = "text/plain";
+    }
+
+    res.set_content(resp.body, content_type.c_str());
+
+    for(const auto &[k, v] : resp.headers)
+    {
+        if(!case_insensitive_equal{}(k, "Content-Type"))
+        {
+            res.set_header(k.c_str(), v.c_str());
+        }
+    }
+}
+
 static httplib::Headers to_httplib_headers(const http_headers &headers)
 {
     httplib::Headers h;
@@ -494,6 +565,6 @@ static httplib::Headers to_httplib_headers(const http_headers &headers)
 }
 
 } // namespace detail
-} // namespace hj
+} // namespace hj::http
 
 #endif // HTTP_HEADER_HPP

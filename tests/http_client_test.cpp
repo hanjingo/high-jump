@@ -89,7 +89,7 @@ TEST_F(HttpClientTest, HttpStatusCodesAndOkSemantics)
                     res.status = 503;
                 });
 
-    http_client client(_base_url);
+    hj::http::http_client client(_base_url);
 
     for(int code : {200, 201, 204})
     {
@@ -118,8 +118,8 @@ TEST_F(HttpClientTest, ResponseHeadersParsing)
                     res.set_header("X-Server-Time", "2026-09-01");
                 });
 
-    http_client client(_base_url);
-    auto        res = client.get("/custom-headers");
+    hj::http::http_client client(_base_url);
+    auto                  res = client.get("/custom-headers");
 
     ASSERT_TRUE(res.ok());
     EXPECT_EQ(res.headers.get("X-Test"), "hello");
@@ -142,7 +142,7 @@ TEST_F(HttpClientTest, RequestHeadersTransmission)
                     }
                 });
 
-    http_client client(_base_url);
+    hj::http::http_client client(_base_url);
     auto res = client.get("/ping", {{"Authorization", "Bearer token-abc-123"}});
 
     EXPECT_TRUE(res.ok());
@@ -162,8 +162,8 @@ TEST_F(HttpClientTest, PostContentTypeHeaderValidation)
                      res.status    = 200;
                  });
 
-    http_client client(_base_url);
-    auto        res =
+    hj::http::http_client client(_base_url);
+    auto                  res =
         client.post("/api/data", R"({"key":"value"})", "application/json");
 
     EXPECT_TRUE(res.ok());
@@ -178,8 +178,8 @@ TEST_F(HttpClientTest, EmptyResponseBodyHandling)
                        res.status = 204; // No Content
                    });
 
-    http_client client(_base_url);
-    auto        res = client.del("/resource/1");
+    hj::http::http_client client(_base_url);
+    auto                  res = client.del("/resource/1");
 
     EXPECT_TRUE(res.ok());
     EXPECT_EQ(res.status_code, 204);
@@ -194,25 +194,26 @@ TEST_F(HttpClientTest, ReadTimeoutBehavior)
                     res.status = 200;
                 });
 
-    http_timeout timeout{std::chrono::milliseconds(100)};
-    http_client  client(_base_url, timeout);
+    hj::http::http_timeout timeout{std::chrono::milliseconds(100)};
+    hj::http::http_client  client(_base_url, timeout);
 
     auto res = client.get("/slow-response");
 
     EXPECT_FALSE(res.transport_success);
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.error, http_error::protocol); // 超时被判定为读协议/传输异常
+    EXPECT_EQ(res.error,
+              hj::http::http_error::protocol); // 超时被判定为读协议/传输异常
 }
 
 TEST(HttpClientStandaloneTest, DnsFailureHandling)
 {
-    http_client client("http://domain.invalid.nonexistent.test");
+    hj::http::http_client client("http://domain.invalid.nonexistent.test");
 
     auto res = client.get("/");
 
     EXPECT_FALSE(res.transport_success);
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.error, http_error::connection);
+    EXPECT_EQ(res.error, hj::http::http_error::connection);
 }
 
 TEST_F(HttpClientTest, MoveSemanticsVerification)
@@ -223,15 +224,15 @@ TEST_F(HttpClientTest, MoveSemanticsVerification)
                     res.body   = "moved_ok";
                 });
 
-    http_client client1(_base_url);
+    hj::http::http_client client1(_base_url);
 
-    http_client client2(std::move(client1));
+    hj::http::http_client client2(std::move(client1));
 
     auto res2 = client2.get("/move-test");
     EXPECT_TRUE(res2.ok());
     EXPECT_EQ(res2.body, "moved_ok");
 
-    http_client client3(_base_url);
+    hj::http::http_client client3(_base_url);
     client3 = std::move(client2);
 
     auto res3 = client3.get("/move-test");
@@ -242,7 +243,7 @@ TEST_F(HttpClientTest, MoveSemanticsVerification)
 #ifdef HJ_ENABLE_HTTPS
 TEST(HttpClientSslTest, HttpsPublicEndpointConnection)
 {
-    http_client client("https://badssl.com");
+    hj::http::http_client client("https://badssl.com");
 
     tls_config tls;
     tls.verify_server_certificate = true;
@@ -263,22 +264,22 @@ TEST_F(HttpClientTest, MetricsLoggerCallbackTest)
         res.body   = "pong";
     });
 
-    bool                     callback_called = false;
-    hj::http_request_metrics captured_metrics;
+    bool                           callback_called = false;
+    hj::http::http_request_metrics captured_metrics;
 
-    hj::http_client_options options;
-    options.logger = [&](const hj::http_request_metrics &m) {
+    hj::http::http_client_options options;
+    options.logger = [&](const hj::http::http_request_metrics &m) {
         callback_called  = true;
         captured_metrics = m;
     };
 
-    hj::http_client client(_base_url, std::move(options));
+    hj::http::http_client client(_base_url, std::move(options));
 
     auto res = client.get("/ping");
 
     EXPECT_TRUE(res.ok());
     EXPECT_TRUE(callback_called);
-    EXPECT_EQ(captured_metrics.method, hj::http_method::get);
+    EXPECT_EQ(captured_metrics.method, hj::http::http_method::get);
     EXPECT_EQ(captured_metrics.status_code, 200);
     EXPECT_EQ(captured_metrics.retry_count, 0);
     EXPECT_GE(captured_metrics.latency.count(), 20000);
@@ -302,15 +303,15 @@ TEST_F(HttpClientTest, RetrySuccessAfterFailures)
                     }
                 });
 
-    retry_policy policy;
+    hj::http::retry_policy policy;
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10); // 加快测试速度
 
-    http_client_options options;
+    hj::http::http_client_options options;
     options.retry = policy;
 
-    http_client client(_base_url, std::move(options));
-    auto        res = client.get("/retry-success");
+    hj::http::http_client client(_base_url, std::move(options));
+    auto                  res = client.get("/retry-success");
 
     EXPECT_TRUE(res.ok());
     EXPECT_EQ(res.status_code, 200);
@@ -327,19 +328,19 @@ TEST_F(HttpClientTest, RetryExhaustedFailure)
                     res.status = 500; // 持续返回 500
                 });
 
-    retry_policy policy;
+    hj::http::retry_policy policy;
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10);
 
-    http_client_options options;
+    hj::http::http_client_options options;
     options.retry = policy;
 
     std::size_t captured_retry_count = 0;
-    options.logger                   = [&](const http_request_metrics &m) {
+    options.logger = [&](const hj::http::http_request_metrics &m) {
         captured_retry_count = m.retry_count;
     };
 
-    http_client client(_base_url, std::move(options));
+    hj::http::http_client client(_base_url, std::move(options));
 
     auto res = client.get("/retry-fail");
 
@@ -357,16 +358,16 @@ TEST_F(HttpClientTest, PostDefaultNonIdempotentNoRetry)
                      res.status = 500;
                  });
 
-    retry_policy policy;
+    hj::http::retry_policy policy;
     policy.max_retries              = 2;
     policy.initial_delay            = std::chrono::milliseconds(10);
     policy.retry_only_if_idempotent = true; // 默认即为 true
 
-    http_client_options options;
+    hj::http::http_client_options options;
     options.retry = policy;
 
-    http_client client(_base_url, std::move(options));
-    auto        res = client.post("/post-retry", "data");
+    hj::http::http_client client(_base_url, std::move(options));
+    auto                  res = client.post("/post-retry", "data");
 
     EXPECT_FALSE(res.ok());
     EXPECT_EQ(attempt_count.load(), 1); // POST 默认非幂等，不应重试
@@ -387,17 +388,17 @@ TEST_F(HttpClientTest, PostForcedIdempotentAllowsRetry)
                      }
                  });
 
-    retry_policy policy;
+    hj::http::retry_policy policy;
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10);
 
-    http_client_options options;
+    hj::http::http_client_options options;
     options.retry = policy;
 
-    http_client client(_base_url, std::move(options));
+    hj::http::http_client client(_base_url, std::move(options));
 
-    http_request req;
-    req.method        = http_method::post;
+    hj::http::http_request req;
+    req.method        = hj::http::http_method::post;
     req.path          = "/post-idempotent-retry";
     req.body          = "data";
     req.is_idempotent = true; // 显式标记为幂等请求
@@ -411,18 +412,18 @@ TEST_F(HttpClientTest, PostForcedIdempotentAllowsRetry)
 TEST_F(HttpClientTest, TlsErrorNoRetry)
 {
     // 1. 设置极短的超时，避免 OS Socket 重传导致卡死
-    http_timeout fast_timeout{std::chrono::milliseconds(50)};
+    hj::http::http_timeout fast_timeout{std::chrono::milliseconds(50)};
 
-    retry_policy policy;
+    hj::http::retry_policy policy;
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10);
 
-    http_client_options options;
+    hj::http::http_client_options options;
     options.timeout = fast_timeout;
     options.retry   = policy;
 
     // 2. 指向一个必定拒绝/无法连接的端口（如 127.0.0.1:1）
-    http_client client("http://127.0.0.1:1", std::move(options));
+    hj::http::http_client client("http://127.0.0.1:1", std::move(options));
 
     auto start_time = std::chrono::steady_clock::now();
     auto res        = client.get("/");
@@ -432,7 +433,7 @@ TEST_F(HttpClientTest, TlsErrorNoRetry)
 
     // 3. 验证结果：请求失败，且没有因为 retry 导致运行时间翻倍
     EXPECT_FALSE(res.transport_success);
-    EXPECT_EQ(res.error, http_error::connection);
+    EXPECT_EQ(res.error, hj::http::http_error::connection);
 
     // 如果没有重试，耗时应该在 1 次超时左右（<< 200ms），而不是 3 次尝试（> 150ms + 延迟）
     EXPECT_LT(duration, 500);
@@ -456,15 +457,15 @@ TEST_F(HttpClientTest, RetryAfterHeaderRespecting)
                     }
                 });
 
-    retry_policy policy;
+    hj::http::retry_policy policy;
     policy.max_retries         = 1;
     policy.respect_retry_after = true;
 
-    http_client_options options;
+    hj::http::http_client_options options;
     options.retry = policy;
 
-    http_client client(_base_url, std::move(options));
-    auto        res = client.get("/retry-after");
+    hj::http::http_client client(_base_url, std::move(options));
+    auto                  res = client.get("/retry-after");
 
     auto end_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -500,13 +501,14 @@ TEST_F(HttpClientTest, ConcurrentRequestsTimeoutIsolation)
 
     // 线程 A：拥有独立的客户端 A，显式设定极短的自定义 timeout = 100ms
     auto future_a = std::async(std::launch::async, [&]() {
-        http_client  client_a(_base_url,
-                              http_timeout{std::chrono::milliseconds(3000)});
-        http_request req;
-        req.method = http_method::get;
-        req.path   = "/sleep-1000ms";
-        req.timeout =
-            http_timeout{std::chrono::milliseconds(100)}; // 预期超时失败
+        hj::http::http_client client_a(
+            _base_url,
+            hj::http::http_timeout{std::chrono::milliseconds(3000)});
+        hj::http::http_request req;
+        req.method  = hj::http::http_method::get;
+        req.path    = "/sleep-1000ms";
+        req.timeout = hj::http::http_timeout{
+            std::chrono::milliseconds(100)}; // 预期超时失败
         return client_a.request(req);
     });
 
@@ -514,10 +516,11 @@ TEST_F(HttpClientTest, ConcurrentRequestsTimeoutIsolation)
     auto future_b = std::async(std::launch::async, [&]() {
         std::this_thread::sleep_for(
             std::chrono::milliseconds(10)); // 错开微小的时间片
-        http_client  client_b(_base_url,
-                              http_timeout{std::chrono::milliseconds(3000)});
-        http_request req;
-        req.method = http_method::get;
+        hj::http::http_client client_b(
+            _base_url,
+            hj::http::http_timeout{std::chrono::milliseconds(3000)});
+        hj::http::http_request req;
+        req.method = hj::http::http_method::get;
         req.path   = "/sleep-100ms";
         return client_b.request(req);
     });
@@ -536,11 +539,12 @@ TEST_F(HttpClientTest, ConcurrentRequestsTimeoutIsolation)
 
 TEST(HttpClientUrlTest, QueryParametersEncodingAndSorting)
 {
-    query_params query{{"name", "Harry Potter"},
-                       {"q", "a+b"},
-                       {"url", "https://example.com?a=1&b=2"}};
+    hj::http::query_params query{{"name", "Harry Potter"},
+                                 {"q", "a+b"},
+                                 {"url", "https://example.com?a=1&b=2"}};
 
-    std::string result_path = hj::detail::build_full_path("/search", query);
+    std::string result_path =
+        hj::http::detail::build_full_path("/search", query);
 
     // 验证严格匹配 Percent-Encoding 标准以及参数按 key 排序后的字符串
     EXPECT_EQ(result_path,
@@ -570,10 +574,10 @@ TEST_F(HttpClientTest, QueryParametersTransmissionAndParsing)
                     res.body   = "ok";
                 });
 
-    http_client client(_base_url);
+    hj::http::http_client client(_base_url);
 
-    http_request req;
-    req.method = http_method::get;
+    hj::http::http_request req;
+    req.method = hj::http::http_method::get;
     req.path   = "/echo-query";
     req.query  = {{"name", "Harry Potter"},
                   {"q", "a+b"},

@@ -33,7 +33,7 @@
 #include <hj/net/http/http_header.hpp>
 #include <httplib.h>
 
-namespace hj
+namespace hj::http
 {
 
 struct http_client_options
@@ -446,6 +446,6 @@ class http_client
     http_client_options              _options;
 };
 
-} // namespace hj
+} // namespace hj::http
 
 #endif // HJ_NET_HTTP_CLIENT_HPP

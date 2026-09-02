@@ -28,6 +28,14 @@
 #include <optional>
 #include <filesystem>
 #include <cerrno>
+#include <atomic>
+#include <chrono>
+
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -45,6 +53,8 @@ enum class ini_errc
     bad_path_error,
     bad_data_error,
     filesystem_error,
+    file_empty,
+    io_error,
     out_of_memory,
     std_exception,
     unknown_error
@@ -77,6 +87,10 @@ class ini_category final : public std::error_category
                 return "Property tree bad data (type conversion failure)";
             case ini_errc::filesystem_error:
                 return "Boost filesystem error";
+            case ini_errc::file_empty:
+                return "File is empty";
+            case ini_errc::io_error:
+                return "I/O error (read/write/rename failure)";
             case ini_errc::out_of_memory:
                 return "Out of memory (std::bad_alloc)";
             case ini_errc::std_exception:
@@ -95,33 +109,35 @@ inline const std::error_category &ini_category_instance() noexcept
     return inst;
 }
 
-/**
- * @brief Lightweight memory stream buffer for zero-copy string_view parsing.
- */
-class membuf : public std::streambuf
+class ini_membuf : public std::streambuf
 {
   public:
-    membuf(const char *base, size_t size)
+    ini_membuf(const char *base, size_t size)
     {
         char *p = const_cast<char *>(base);
         setg(p, p, p + size);
     }
 };
 
+inline auto ini_proc_id() noexcept
+{
+#if defined(_WIN32)
+    return ::_getpid();
+#else
+    return ::getpid();
+#endif
+}
+
 /**
-     * @brief Translate path string to ptree path type using '/' as separator.
-     * @note hj::ini Path Syntax Convention:
-     *       Users must use 'section/key' format (e.g., "server/port") to access 
-     *       nested properties. The forward slash ('/') acts as the hierarchical 
-     *       separator based on Boost Property Tree semantics.
-     */
+ * @brief Translate path string to ptree path type using '/' as separator.
+ */
 static inline boost::property_tree::ptree::path_type
-translate(const std::string &s)
+ini_translate(const std::string &s)
 {
     return boost::property_tree::ptree::path_type(s, '/');
 }
 
-static inline std::error_code exception_to_error_code() noexcept
+static inline std::error_code ini_exception_to_error_code() noexcept
 {
     try
     {
@@ -129,8 +145,7 @@ static inline std::error_code exception_to_error_code() noexcept
     }
     catch(const boost::filesystem::filesystem_error &e)
     {
-        if(e.code() == boost::system::errc::no_such_file_or_directory
-           || e.code().value() == ENOENT || e.code().value() == 2)
+        if(e.code() == boost::system::errc::no_such_file_or_directory)
         {
             return make_error_code(ini_errc::file_not_found);
         }
@@ -138,8 +153,7 @@ static inline std::error_code exception_to_error_code() noexcept
     }
     catch(const std::filesystem::filesystem_error &e)
     {
-        if(e.code() == std::errc::no_such_file_or_directory
-           || e.code().value() == 2)
+        if(e.code() == std::errc::no_such_file_or_directory)
         {
             return make_error_code(ini_errc::file_not_found);
         }
@@ -231,12 +245,6 @@ class ini
 
     bool empty() const noexcept { return _tree.empty(); }
 
-    /**
-     * @brief Parse INI configuration from std::string_view with error code output (High Performance).
-     * @param text INI text content (supports zero-copy via string_view).
-     * @param ec Output error code.
-     * @return ini Parsed ini configuration object.
-     */
     static std::optional<ini> parse(std::string_view text,
                                     std::error_code &ec) noexcept
     {
@@ -248,7 +256,7 @@ class ini
 
         try
         {
-            detail::membuf              buf(text.data(), text.size());
+            detail::ini_membuf          buf(text.data(), text.size());
             std::istream                ss(&buf);
             boost::property_tree::ptree tree;
             boost::property_tree::ini_parser::read_ini(ss, tree);
@@ -257,7 +265,7 @@ class ini
         }
         catch(...)
         {
-            ec = detail::exception_to_error_code();
+            ec = detail::ini_exception_to_error_code();
             return std::nullopt;
         }
     }
@@ -273,11 +281,11 @@ class ini
         try
         {
             std::error_code ec_fs;
-            if(!std::filesystem::exists(filepath, ec_fs)
-               || !std::filesystem::is_regular_file(filepath, ec_fs))
-            {
+            if(!std::filesystem::exists(filepath, ec_fs))
                 return make_error_code(ini_errc::file_not_found);
-            }
+
+            if(!std::filesystem::is_regular_file(filepath, ec_fs))
+                return make_error_code(ini_errc::filesystem_error);
 
             boost::property_tree::ptree tree;
             boost::property_tree::ini_parser::read_ini(filepath.string(), tree);
@@ -286,7 +294,7 @@ class ini
         }
         catch(...)
         {
-            return detail::exception_to_error_code();
+            return detail::ini_exception_to_error_code();
         }
     }
 
@@ -303,29 +311,57 @@ class ini
     {
         try
         {
-            boost::property_tree::ini_parser::write_ini(filepath.string(),
-                                                        _tree);
+            std::string target_str = filepath.string();
+            if(target_str.empty())
+                return make_error_code(ini_errc::invalid_argument);
+
+            static std::atomic<uint64_t> seq_counter{0};
+            auto                         now =
+                std::chrono::steady_clock::now().time_since_epoch().count();
+            std::string temp_file = target_str + ".tmp."
+                                    + std::to_string(detail::ini_proc_id())
+                                    + "." + std::to_string(now) + "."
+                                    + std::to_string(seq_counter.fetch_add(1));
+
+            boost::property_tree::ini_parser::write_ini(temp_file, _tree);
+            std::error_code ec;
+            auto            sz = std::filesystem::file_size(temp_file, ec);
+            if(ec)
+            {
+                std::filesystem::remove(temp_file, ec);
+                return make_error_code(ini_errc::io_error);
+            }
+            if(sz == 0)
+            {
+                std::filesystem::remove(temp_file, ec);
+                return make_error_code(ini_errc::file_empty);
+            }
+
+            std::filesystem::rename(temp_file, target_str, ec);
+            if(ec)
+            {
+                if(std::filesystem::exists(temp_file))
+                    std::filesystem::remove(temp_file);
+
+                return make_error_code(ini_errc::io_error);
+            }
+
             return make_error_code(ini_errc::success);
         }
         catch(...)
         {
-            return detail::exception_to_error_code();
+            return detail::ini_exception_to_error_code();
         }
     }
 
     std::error_code write_file(const char *filepath) const noexcept
     {
-        if(!filepath)
+        if(!filepath || filepath[0] == '\0')
             return make_error_code(ini_errc::invalid_argument);
 
         return write_file(std::filesystem::path(filepath));
     }
 
-    /**
-     * @brief Serialize configuration to INI format string with error code reporting.
-     * @param ec Output error code to distinguish serialization failure from empty content.
-     * @return std::optional<std::string> Returns std::nullopt if serialization fails.
-     */
     std::optional<std::string> str(std::error_code &ec) const noexcept
     {
         std::ostringstream ss;
@@ -337,15 +373,11 @@ class ini
         }
         catch(...)
         {
-            ec = detail::exception_to_error_code();
+            ec = detail::ini_exception_to_error_code();
             return std::nullopt;
         }
     }
 
-    /**
-     * @brief Serialize configuration to INI format string safely without error code reference.
-     * @return std::optional<std::string> Returns std::nullopt if serialization fails.
-     */
     [[deprecated("Use str(std::error_code& ec) or try_str() instead.")]]
     std::optional<std::string> str() const noexcept
     {
@@ -353,28 +385,19 @@ class ini
         return str(ec);
     }
 
-    /**
-     * @brief Try to serialize configuration to INI format string safely without error code reference.
-     * @return std::optional<std::string> Returns std::nullopt if serialization fails.
-     */
     std::optional<std::string> try_str() const noexcept
     {
         std::error_code ec;
         return str(ec);
     }
 
-    /**
-     * @brief Get configuration value with error code reporting.
-     * @param path Target property path using 'section/key' syntax.
-     * @param ec Output error code to distinguish missing paths from type errors.
-     */
     template <typename T>
     std::optional<T> get(const std::string &path,
                          std::error_code   &ec) const noexcept
     {
         try
         {
-            auto val = _tree.get<T>(detail::translate(path));
+            auto val = _tree.get<T>(detail::ini_translate(path));
             ec       = make_error_code(ini_errc::success);
             return val;
         }
@@ -390,18 +413,13 @@ class ini
         }
         catch(...)
         {
-            ec = detail::exception_to_error_code();
+            ec = detail::ini_exception_to_error_code();
             return std::nullopt;
         }
     }
 
-    /**
-     * @brief Get configuration value with a fallback default value.
-     * @param path Target property path using 'section/key' syntax.
-     * @param default_value Fallback value if path is missing.
-     */
     template <typename T>
-    T get(const std::string &path, const T &default_value) const noexcept
+    T get(const std::string &path, const T &default_value) const
     {
         std::error_code ec;
         auto            val = get<T>(path, ec);
@@ -411,29 +429,18 @@ class ini
         return *val;
     }
 
-    /**
-     * @brief Put configuration value.
-     * @param path Target property path using 'section/key' syntax.
-     * @param value Value to set.
-     */
     template <typename T>
     void put(const std::string &path, const T &value)
     {
-        _tree.put(detail::translate(path), value);
+        _tree.put(detail::ini_translate(path), value);
     }
 
-    /**
-     * @brief Get a nested child configuration section with error code reporting.
-     * @param path Section path using 'section/key' syntax.
-     * @param ec Output error code to distinguish a missing section from a successful query.
-     * @return std::optional<ini> Returns std::nullopt if the child section does not exist.
-     */
     std::optional<ini> get_child(const std::string &path,
                                  std::error_code   &ec) const noexcept
     {
         try
         {
-            auto child_tree = _tree.get_child(detail::translate(path));
+            auto child_tree = _tree.get_child(detail::ini_translate(path));
             ec              = make_error_code(ini_errc::success);
             return ini(std::move(child_tree));
         }
@@ -444,16 +451,11 @@ class ini
         }
         catch(...)
         {
-            ec = detail::exception_to_error_code();
+            ec = detail::ini_exception_to_error_code();
             return std::nullopt;
         }
     }
 
-    /**
-     * @brief Try to get a nested child configuration section safely without error code reference.
-     * @param path Section path using 'section/key' syntax.
-     * @return std::optional<ini> Returns std::nullopt if the child section does not exist.
-     */
     std::optional<ini> try_get_child(const std::string &path) const noexcept
     {
         std::error_code ec;

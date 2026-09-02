@@ -193,13 +193,45 @@ TEST(ini, filesystem_errors)
 
     std::filesystem::path current_dir = std::filesystem::current_path();
     std::error_code       dir_ec      = ini.read_file(current_dir);
-    ASSERT_NE(dir_ec, hj::ini_errc::success);
+    ASSERT_EQ(dir_ec, hj::ini_errc::filesystem_error);
 
     std::error_code write_ec = ini.write_file(current_dir);
     ASSERT_NE(write_ec, hj::ini_errc::success);
 }
 
-TEST(ini, large_data_performance)
+TEST(ini, unicode_and_paths)
+{
+    std::string unicode_ini = "[user]\n"
+                              "name=张三\n"
+                              "[config]\n"
+                              "path=C:\\中文\\配置\n";
+
+    std::error_code ec;
+    auto            ini = hj::ini::parse(unicode_ini, ec);
+    ASSERT_TRUE(ini.has_value());
+    ASSERT_EQ(ec, hj::ini_errc::success);
+
+    ASSERT_EQ(ini->get<std::string>("user/name", ""), "张三");
+    ASSERT_EQ(ini->get<std::string>("config/path", ""), "C:\\中文\\配置");
+}
+
+TEST(ini, smoke_extra_long_value)
+{
+    std::string large_val(1024 * 1024, 'X');
+    std::string ini_content = "[limits]\nkey=" + large_val + "\n";
+
+    std::error_code ec;
+    auto            ini = hj::ini::parse(ini_content, ec);
+    ASSERT_TRUE(ini.has_value());
+    ASSERT_EQ(ec, hj::ini_errc::success);
+
+    auto result_val = ini->get<std::string>("limits/key", "");
+    ASSERT_EQ(result_val.size(), 1024 * 1024);
+    ASSERT_EQ(result_val[0], 'X');
+    ASSERT_EQ(result_val.back(), 'X');
+}
+
+TEST(ini, smoke_performance_large_key_count)
 {
     hj::ini   ini;
     const int num_keys = 10000;
@@ -221,6 +253,18 @@ TEST(ini, large_data_performance)
     ASSERT_EQ(ini_parsed->get<int>("perf_section/key_5000", -1), 5000);
 }
 
+TEST(ini, error_code_initial_state_contract)
+{
+    std::error_code ec = hj::ini_errc::bad_path_error;
+
+    const char *valid_text = "[section]\nkey=value";
+    auto        ini        = hj::ini::parse(valid_text, ec);
+
+    ASSERT_TRUE(ini.has_value());
+    ASSERT_FALSE(ec);
+    ASSERT_EQ(ec, hj::ini_errc::success);
+}
+
 TEST(ini, error_handling)
 {
     hj::ini ini;
@@ -239,8 +283,8 @@ TEST(ini, error_handling)
         ASSERT_FALSE(ret.has_value());
         ASSERT_EQ(ec, hj::ini_errc::parser_error);
 
-        const char *valid_ini = "unclosed_section = [section";
-        ret                   = hj::ini::parse(valid_ini, ec);
+        const char *valid_ini_inner = "unclosed_section = [section";
+        ret                         = hj::ini::parse(valid_ini_inner, ec);
         ASSERT_TRUE(ret.has_value());
         ASSERT_EQ(ec, hj::ini_errc::success);
     }

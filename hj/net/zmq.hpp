@@ -22,12 +22,16 @@
 
 #include <zmq.h>
 
+#ifndef HJ_ZMQ_THREAD_AFFINITY_CHECK_ENABLE
+#define HJ_ZMQ_THREAD_AFFINITY_CHECK_ENABLE 1
+#endif
+
 namespace hj::zmq
 {
 
 namespace cmd
 {
-constexpr uint8_t DATA = 0;
+// constexpr uint8_t DATA = 0;
 constexpr uint8_t STOP = 1;
 } // namespace cmd
 
@@ -37,6 +41,37 @@ enum class io_status
     would_block,
     interrupted,
     closed
+};
+
+struct multipart_result
+{
+    io_status status;
+    size_t    frames;
+
+    [[nodiscard]] explicit operator bool() const noexcept
+    {
+        return status == io_status::ok;
+    }
+
+    friend bool operator==(const multipart_result &lhs, io_status rhs) noexcept
+    {
+        return lhs.status == rhs;
+    }
+
+    friend bool operator==(io_status lhs, const multipart_result &rhs) noexcept
+    {
+        return lhs == rhs.status;
+    }
+
+    friend bool operator!=(const multipart_result &lhs, io_status rhs) noexcept
+    {
+        return lhs.status != rhs;
+    }
+
+    friend bool operator!=(io_status lhs, const multipart_result &rhs) noexcept
+    {
+        return lhs != rhs.status;
+    }
 };
 
 // -----------------------------------------------------------------------------
@@ -232,6 +267,10 @@ class message
     message(void *data_ptr, size_t size, Deleter &&deleter)
     {
         using DecayedDeleter = std::decay_t<Deleter>;
+        static_assert(
+            std::is_nothrow_invocable_v<DecayedDeleter, void *>
+                || std::is_nothrow_invocable_v<DecayedDeleter>,
+            "hj::zmq::message custom deleter must be noexcept callable!");
         auto *del_ptr = new DecayedDeleter(std::forward<Deleter>(deleter));
 
         auto free_fn = [](void *data, void *hint) noexcept {
@@ -355,8 +394,6 @@ class socket
         return *this;
     }
 
-    void unbind_from_thread() noexcept { _owner_thread_id = std::thread::id(); }
-
     void bind_to_current_thread() noexcept
     {
         _owner_thread_id = std::this_thread::get_id();
@@ -385,26 +422,34 @@ class socket
 
     void set_linger(int ms)
     {
+        check_thread_affinity();
         if(set_opt(ZMQ_LINGER, ms) != 0)
             throw zmq_error("set_opt ZMQ_LINGER failed");
     }
 
     int set_opt(int opt, int value)
     {
+        check_thread_affinity();
         return zmq_setsockopt(_sock, opt, &value, sizeof(value));
     }
 
     int set_opt(int opt, const void *value, size_t len)
     {
+        check_thread_affinity();
         return zmq_setsockopt(_sock, opt, value, len);
     }
 
     int get_opt(int opt, void *value, size_t *len) const
     {
+        check_thread_affinity();
         return zmq_getsockopt(_sock, opt, value, len);
     }
 
-    void *get() const noexcept { return _sock; }
+    void *get() const noexcept
+    {
+        check_thread_affinity();
+        return _sock;
+    }
 
     io_status send(message &&msg, int flags = 0)
     {
@@ -446,11 +491,12 @@ class socket
         }
     }
 
-    io_status send_multipart(const std::vector<std::string_view> &parts,
-                             int                                  flags = 0)
+    multipart_result send_multipart(const std::vector<std::string_view> &parts,
+                                    int flags = 0)
     {
         check_thread_affinity();
-        for(size_t i = 0; i < parts.size(); ++i)
+        size_t i = 0;
+        for(; i < parts.size(); ++i)
         {
             int send_flags = flags | ((i + 1 < parts.size()) ? ZMQ_SNDMORE : 0);
             while(true)
@@ -464,98 +510,55 @@ class socket
 
                 int ec = zmq_errno();
                 if(ec == EINTR)
-                    return io_status::interrupted;
+                    return {io_status::interrupted, i};
                 if(ec == EAGAIN)
-                    return io_status::would_block;
+                    return {io_status::would_block, i};
                 if(ec == ETERM || ec == ENOTSOCK)
-                    return io_status::closed;
+                    return {io_status::closed, i};
 
                 throw zmq_error("zmq_send failed in send_multipart", ec);
             }
         }
 
-        return io_status::ok;
+        return {io_status::ok, parts.size()};
     }
 
-    io_status send_multipart(const std::vector<message> &parts, int flags = 0)
+    multipart_result send_multipart(std::vector<message> &&parts, int flags = 0)
     {
         check_thread_affinity();
-        for(size_t i = 0; i < parts.size(); ++i)
+        size_t i = 0;
+        for(; i < parts.size(); ++i)
         {
             int send_flags = flags | ((i + 1 < parts.size()) ? ZMQ_SNDMORE : 0);
-            message msg_copy;
-            if(zmq_msg_copy(msg_copy.get(),
-                            const_cast<message &>(parts[i]).get())
-               != 0)
-                throw zmq_error(
-                    "zmq_msg_copy failed in send_multipart(vector<message>&)");
-
             while(true)
             {
-                int rc = zmq_msg_send(msg_copy.get(), _sock, send_flags);
+                int rc = zmq_msg_send(parts[i].get(), _sock, send_flags);
                 if(rc >= 0)
                     break;
 
                 int ec = zmq_errno();
                 if(ec == EINTR)
-                    return io_status::interrupted;
+                    return {io_status::interrupted, i};
                 if(ec == EAGAIN)
-                    return io_status::would_block;
+                    return {io_status::would_block, i};
                 if(ec == ETERM || ec == ENOTSOCK)
-                    return io_status::closed;
+                    return {io_status::closed, i};
 
                 throw zmq_error(
-                    "zmq_msg_send failed in send_multipart(vector<message>&)",
+                    "zmq_msg_send failed in send_multipart(vector<message>&&)",
                     ec);
             }
         }
 
-        return io_status::ok;
+        return {io_status::ok, parts.size()};
     }
 
-    io_status recv_multipart(std::vector<std::string> &dst, int flags = 0)
+    multipart_result recv_multipart(std::vector<std::string> &dst,
+                                    int                       flags = 0)
     {
         check_thread_affinity();
         dst.clear();
-        while(true)
-        {
-            message msg;
-            int     rc = -1;
-            while(true)
-            {
-                rc = zmq_msg_recv(msg.get(), _sock, flags);
-                if(rc >= 0)
-                    break;
-
-                int ec = zmq_errno();
-                if(ec == EINTR)
-                    return io_status::interrupted;
-                if(ec == EAGAIN)
-                    return io_status::would_block;
-                if(ec == ETERM || ec == ENOTSOCK)
-                    return io_status::closed;
-
-                throw zmq_error("zmq_msg_recv failed in recv_multipart", ec);
-            }
-
-            dst.emplace_back(static_cast<char *>(msg.data()), msg.size());
-
-            int64_t more     = 0;
-            size_t  more_len = sizeof(more);
-            if(zmq_getsockopt(_sock, ZMQ_RCVMORE, &more, &more_len) != 0)
-                throw zmq_error("getsockopt ZMQ_RCVMORE failed");
-
-            if(!more)
-                break;
-        }
-
-        return io_status::ok;
-    }
-
-    io_status recv_multipart(std::vector<message> &dst, int flags = 0)
-    {
-        check_thread_affinity();
-        dst.clear();
+        size_t i = 0;
         while(true)
         {
             message msg;
@@ -567,18 +570,18 @@ class socket
 
                 int ec = zmq_errno();
                 if(ec == EINTR)
-                    return io_status::interrupted;
+                    return {io_status::interrupted, i};
                 if(ec == EAGAIN)
-                    return io_status::would_block;
+                    return {io_status::would_block, i};
                 if(ec == ETERM || ec == ENOTSOCK)
-                    return io_status::closed;
+                    return {io_status::closed, i};
 
-                throw zmq_error(
-                    "zmq_msg_recv failed in recv_multipart(vector<message>&)",
-                    ec);
+                throw zmq_error("zmq_msg_recv failed in recv_multipart", ec);
             }
 
-            dst.push_back(std::move(msg));
+            dst.emplace_back(static_cast<char *>(msg.data()), msg.size());
+            ++i;
+
             int64_t more     = 0;
             size_t  more_len = sizeof(more);
             if(zmq_getsockopt(_sock, ZMQ_RCVMORE, &more, &more_len) != 0)
@@ -588,13 +591,55 @@ class socket
                 break;
         }
 
-        return io_status::ok;
+        return {io_status::ok, i};
+    }
+
+    multipart_result recv_multipart(std::vector<message> &dst, int flags = 0)
+    {
+        check_thread_affinity();
+        dst.clear();
+        size_t i = 0;
+        while(true)
+        {
+            message msg;
+            while(true)
+            {
+                int rc = zmq_msg_recv(msg.get(), _sock, flags);
+                if(rc >= 0)
+                    break;
+
+                int ec = zmq_errno();
+                if(ec == EINTR)
+                    return {io_status::interrupted, i};
+                if(ec == EAGAIN)
+                    return {io_status::would_block, i};
+                if(ec == ETERM || ec == ENOTSOCK)
+                    return {io_status::closed, i};
+
+                throw zmq_error(
+                    "zmq_msg_recv failed in recv_multipart(vector<message>&)",
+                    ec);
+            }
+
+            dst.push_back(std::move(msg));
+            ++i;
+
+            int64_t more     = 0;
+            size_t  more_len = sizeof(more);
+            if(zmq_getsockopt(_sock, ZMQ_RCVMORE, &more, &more_len) != 0)
+                throw zmq_error("getsockopt ZMQ_RCVMORE failed");
+
+            if(!more)
+                break;
+        }
+
+        return {io_status::ok, i};
     }
 
   protected:
     void check_thread_affinity() const
     {
-#ifndef NDEBUG
+#if HJ_ZMQ_THREAD_AFFINITY_CHECK_ENABLE
         if(_owner_thread_id != std::thread::id()
            && _owner_thread_id != std::this_thread::get_id())
         {
@@ -629,9 +674,8 @@ class r_chan : public socket
         message   msg;
         io_status st = recv(msg);
         if(st == io_status::ok)
-        {
             dst.assign(static_cast<const char *>(msg.data()), msg.size());
-        }
+
         return st;
     }
 
@@ -701,7 +745,12 @@ class broker
         : _ctx(std::move(ctx))
         , _back(std::move(back))
         , _front(std::move(front))
+        , _ctrl_server(_ctx, ZMQ_PAIR)
+        , _running(false)
     {
+        static std::atomic<uint64_t> broker_counter{0};
+        _ctrl_addr = "inproc://broker_ctrl_" + std::to_string(++broker_counter);
+        _ctrl_server.bind(_ctrl_addr);
     }
 
     ~broker() { stop(); }
@@ -714,6 +763,11 @@ class broker
 
     const socket &backend() const noexcept { return _back; }
     const socket &frontend() const noexcept { return _front; }
+
+    [[nodiscard]] bool is_running() const noexcept
+    {
+        return _running.load(std::memory_order_acquire);
+    }
 
     void bind(const std::string &back_addr, const std::string &front_addr)
     {
@@ -729,18 +783,24 @@ class broker
      */
     void proxy(socket *capture = nullptr)
     {
-        static std::atomic<uint64_t> broker_counter{0};
-        _ctrl_addr = "inproc://broker_ctrl_" + std::to_string(++broker_counter);
+        bool expected = false;
+        if(!_running.compare_exchange_strong(expected,
+                                             true,
+                                             std::memory_order_acq_rel))
+            throw std::logic_error("broker::proxy() is already running!");
 
-        socket ctrl_sock(_ctx, ZMQ_PAIR);
-        ctrl_sock.bind(_ctrl_addr);
+        struct guard
+        {
+            std::atomic<bool> &flag;
+            ~guard() { flag.store(false, std::memory_order_release); }
+        } running_guard{_running};
 
         while(true)
         {
             int rc = zmq_proxy_steerable(_front.get(),
                                          _back.get(),
                                          capture ? capture->get() : nullptr,
-                                         ctrl_sock.get());
+                                         _ctrl_server.get());
 
             if(rc == 0)
                 return; // Gracefully stopped by "TERMINATE" command
@@ -757,6 +817,9 @@ class broker
 
     void stop() noexcept
     {
+        if(!is_running())
+            return;
+
         try
         {
             socket ctrl_client(_ctx, ZMQ_PAIR);
@@ -766,15 +829,16 @@ class broker
         }
         catch(...)
         {
-            // Ignore socket errors during shutdown
         }
     }
 
   private:
-    context::ptr _ctx;
-    socket       _back;
-    socket       _front;
-    std::string  _ctrl_addr;
+    context::ptr      _ctx;
+    socket            _back;
+    socket            _front;
+    socket            _ctrl_server;
+    std::string       _ctrl_addr;
+    std::atomic<bool> _running;
 };
 
 class consumer : public socket
@@ -994,11 +1058,11 @@ class subscriber : public socket
 class poller
 {
   public:
-    using callback_t = std::function<void(short revents)>;
+    struct event_entry;
+    using callback_t = std::function<void(const event_entry &)>;
     using user_data_t =
         std::variant<std::monostate, uintptr_t, void *, callback_t>;
 
-  public:
     struct event_entry
     {
         void       *sock;
@@ -1041,6 +1105,7 @@ class poller
         }
     };
 
+  public:
     poller() = default;
 
     void add(const socket &sock,
@@ -1163,7 +1228,7 @@ class poller
             if(auto pcb = std::get_if<callback_t>(&ev.user_data))
             {
                 if(*pcb)
-                    (*pcb)(ev.revents);
+                    (*pcb)(ev);
             }
         }
         return rc;

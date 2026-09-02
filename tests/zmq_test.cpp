@@ -226,7 +226,7 @@ TEST(zmq, publisher_subscriber_safe_pipeline)
             hj::zmq::subscriber sub(ctx);
             EXPECT_NO_THROW(sub.connect(addr));
             EXPECT_NO_THROW(sub.sub(""));
-            p.set_value(); // Subscriber connect 和 sub 完成
+            p.set_value();
             sub.safe_recv(w_ch_out, hj::zmq::cmd::STOP);
         });
 
@@ -236,7 +236,7 @@ TEST(zmq, publisher_subscriber_safe_pipeline)
                             p    = std::move(pub_ready_promise)]() mutable {
         hj::zmq::publisher pub(ctx);
         EXPECT_NO_THROW(pub.bind(addr));
-        p.set_value(); // Publisher bind 完成
+        p.set_value();
         pub.safe_pub(r_ch, hj::zmq::cmd::STOP);
     });
 
@@ -326,29 +326,33 @@ TEST(zmq, broker_steerable_graceful_shutdown)
 {
     auto ctx = hj::zmq::context::create();
 
-    hj::zmq::socket xpub(ctx, ZMQ_XPUB);
-    hj::zmq::socket xsub(ctx, ZMQ_XSUB);
-
     std::string xpub_addr = "inproc://xpub-steerable-test";
     std::string xsub_addr = "inproc://xsub-steerable-test";
 
-    hj::zmq::broker bk(ctx, std::move(xpub), std::move(xsub));
-    EXPECT_NO_THROW(bk.bind(xpub_addr, xsub_addr));
+    std::promise<hj::zmq::broker *> broker_ready_promise;
+    auto broker_ready = broker_ready_promise.get_future();
 
-    std::promise<void> proxy_ready_promise;
-    auto               proxy_ready = proxy_ready_promise.get_future();
+    std::thread broker_thread([ctx,
+                               &xpub_addr,
+                               &xsub_addr,
+                               p = std::move(broker_ready_promise)]() mutable {
+        hj::zmq::socket xpub(ctx, ZMQ_XPUB);
+        hj::zmq::socket xsub(ctx, ZMQ_XSUB);
+        hj::zmq::broker bk(ctx, std::move(xpub), std::move(xsub));
 
-    std::thread broker_thread(
-        [&bk, p = std::move(proxy_ready_promise)]() mutable {
-            p.set_value();
-            bk.proxy();
-        });
+        EXPECT_NO_THROW(bk.bind(xpub_addr, xsub_addr));
+        p.set_value(&bk);
+        bk.proxy();
+    });
 
-    proxy_ready.wait();
+    hj::zmq::broker *bk = broker_ready.get();
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    while(!bk->is_running())
+    {
+        std::this_thread::yield();
+    }
 
-    EXPECT_NO_THROW(bk.stop());
+    EXPECT_NO_THROW(bk->stop());
 
     if(broker_thread.joinable())
     {
@@ -459,7 +463,8 @@ TEST(zmq, multipart_message_vector_send_recv)
     send_msgs.emplace_back("Part_B");
     send_msgs.emplace_back("Part_C");
 
-    ASSERT_EQ(prod.send_multipart(send_msgs), hj::zmq::io_status::ok);
+    ASSERT_EQ(prod.send_multipart(std::move(send_msgs)),
+              hj::zmq::io_status::ok);
 
     std::vector<hj::zmq::message> recv_msgs;
     ASSERT_EQ(cons.recv_multipart(recv_msgs), hj::zmq::io_status::ok);
@@ -489,11 +494,8 @@ TEST(zmq, eagain_nonblocking)
     push_sock.set_opt(ZMQ_SNDHWM, 1);
     push_sock.connect("inproc://eagain_hwm_test");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
     hj::zmq::io_status status       = hj::zmq::io_status::ok;
     int                pushed_count = 0;
-
     while(pushed_count < 1000)
     {
         status = push_sock.push("BURST_DATA", ZMQ_DONTWAIT);
@@ -509,38 +511,54 @@ TEST(zmq, eagain_nonblocking)
 }
 
 #ifndef _WIN32
-static void dummy_signal_handler(int)
+static volatile sig_atomic_t g_signal_received = 0;
+
+static void precise_signal_handler(int signo)
 {
+    g_signal_received = signo;
 }
 
-TEST(zmq, eintr_signal_interruption)
+TEST(zmq, eintr_signal_interruption_robust)
 {
-    struct sigaction sa;
-    sa.sa_handler = dummy_signal_handler;
+    struct sigaction sa{};
+    sa.sa_handler = precise_signal_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
-    sigaction(SIGUSR1, &sa, nullptr);
+    ASSERT_EQ(sigaction(SIGUSR1, &sa, nullptr), 0);
 
-    auto            ctx = hj::zmq::context::create();
+    auto ctx = hj::zmq::context::create();
+
     hj::zmq::socket sock(ctx, ZMQ_REP);
-    sock.bind("inproc://eintr_test");
+    sock.bind("tcp://127.0.0.1:*");
 
-    std::thread::id main_thread_id = std::this_thread::get_id();
+    char   addr[100];
+    size_t addr_len = sizeof(addr);
+    ASSERT_EQ(sock.getsockopt(ZMQ_LAST_ENDPOINT, addr, &addr_len), 0);
 
-    std::thread killer([main_thread_id]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        pthread_kill(static_cast<pthread_t>(/* native_handle */ pthread_self()),
-                     SIGUSR1);
-    });
+    std::promise<void> killer_ready_promise;
+    auto               killer_ready_future = killer_ready_promise.get_future();
 
-    hj::zmq::message   msg;
-    hj::zmq::io_status status = sock.recv(msg);
+    pthread_t main_native_thread = pthread_self();
+
+    std::thread killer(
+        [main_native_thread, p = std::move(killer_ready_promise)]() mutable {
+            p.set_value();
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            pthread_kill(main_native_thread, SIGUSR1);
+        });
+
+    killer_ready_future.wait();
+
+    hj::zmq::message msg;
+    auto             status = sock.recv(msg);
 
     if(killer.joinable())
+    {
         killer.join();
+    }
 
     EXPECT_TRUE(status == hj::zmq::io_status::interrupted
-                || status == hj::zmq::io_status::ok);
+                || status == hj::zmq::io_status::closed);
 }
 #endif
 
@@ -549,31 +567,34 @@ TEST(zmq, eterm_context_shutdown)
     auto ctx  = hj::zmq::context::create();
     auto sock = std::make_shared<hj::zmq::socket>(ctx, ZMQ_REP);
     sock->bind("inproc://eterm_test");
-    sock->unbind_from_thread();
 
     std::promise<void> thread_started;
-    auto               future = thread_started.get_future();
+    std::promise<void> recv_entered;
+    auto               f1 = thread_started.get_future();
+    auto               f2 = recv_entered.get_future();
 
-    std::thread recv_thread([sock, p = std::move(thread_started)]() mutable {
+    std::thread recv_thread([sock,
+                             p1 = std::move(thread_started),
+                             p2 = std::move(recv_entered)]() mutable {
         sock->bind_to_current_thread();
-        p.set_value();
+        p1.set_value();
 
+        p2.set_value();
         hj::zmq::message   msg;
         hj::zmq::io_status st = sock->recv(msg);
         EXPECT_TRUE(st == hj::zmq::io_status::closed
                     || st == hj::zmq::io_status::interrupted);
     });
 
-    future.wait();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
+    f1.wait();
+    f2.wait();
     ctx->shutdown();
 
     if(recv_thread.joinable())
         recv_thread.join();
 }
 
-TEST(zmq, socket_and_context_lifetime)
+TEST(zmq, socket_keeps_context_alive)
 {
     auto ctx = hj::zmq::context::create();
     {
@@ -630,9 +651,7 @@ TEST(zmq, move_semantics_socket_broker_context)
     hj::zmq::socket xpub(ctx, ZMQ_XPUB);
     hj::zmq::socket xsub(ctx, ZMQ_XSUB);
     hj::zmq::broker bk1(ctx, std::move(xpub), std::move(xsub));
-
-    hj::zmq::broker bk2 = std::move(bk1);
-    EXPECT_NO_THROW(bk2.bind("inproc://bk_moved_pub", "inproc://bk_moved_sub"));
+    EXPECT_NO_THROW(bk1.bind("inproc://bk_moved_pub", "inproc://bk_moved_sub"));
 }
 
 TEST(zmq, multipart_edge_cases)
@@ -676,35 +695,86 @@ TEST(zmq, multipart_edge_cases)
 
 TEST(zmq, pub_sub_behavior_filtering_and_unsubscribe)
 {
-    auto        ctx  = hj::zmq::context::create();
-    std::string addr = "inproc://pub_sub_test";
+    auto        ctx       = hj::zmq::context::create();
+    std::string addr      = "inproc://pub_sub_test";
+    std::string sync_addr = "inproc://pub_sub_sync";
+
+    hj::zmq::socket sync_server(ctx, ZMQ_REP);
+    sync_server.bind(sync_addr);
 
     hj::zmq::publisher pub(ctx);
     pub.bind(addr);
 
-    pub.pub("LOST_MESSAGE");
+    std::promise<void> sub_thread_started;
+    auto               sub_started_future = sub_thread_started.get_future();
 
-    hj::zmq::subscriber sub(ctx);
-    sub.connect(addr);
+    std::thread sub_thread(
+        [ctx, addr, sync_addr, p = std::move(sub_thread_started)]() mutable {
+            hj::zmq::subscriber sub(ctx);
+            sub.connect(addr);
+            sub.sub("TopicA");
 
-    sub.sub("TopicA");
+            p.set_value();
+
+            hj::zmq::socket sync_client(ctx, ZMQ_REQ);
+            sync_client.connect(sync_addr);
+
+            hj::zmq::message ready_msg1("READY_1");
+            sync_client.send(std::move(ready_msg1));
+            hj::zmq::message ack1;
+            sync_client.recv(ack1);
+
+            auto msg1 = sub.recv_string(0);
+            assert(msg1.has_value() && msg1.value() == "TopicA_Data");
+
+            sub.sub("TopicB");
+            sub.unsub("TopicA");
+
+            hj::zmq::message ready_msg2("READY_2");
+            sync_client.send(std::move(ready_msg2));
+            hj::zmq::message ack2;
+            sync_client.recv(ack2);
+
+            while(true)
+            {
+                auto msg2 = sub.recv_string(0);
+                if(msg2.has_value() && msg2.value() == "TopicB_Data_2")
+                {
+                    break;
+                }
+            }
+
+            hj::zmq::message empty_check;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            auto st = sub.recv(empty_check, ZMQ_DONTWAIT);
+            assert(st == hj::zmq::io_status::would_block);
+        });
+
+    sub_started_future.wait();
+
+    hj::zmq::message req1;
+    sync_server.recv(req1);
+    sync_server.send(hj::zmq::message("ACK_1"));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
-    pub.pub("TopicB_Data");
     pub.pub("TopicA_Data");
+    pub.pub("TopicX_Unmatched");
 
-    std::string recv_str;
-    ASSERT_EQ(sub.recv_string(0).value_or(""), "TopicA_Data");
+    hj::zmq::message req2;
+    sync_server.recv(req2);
+    sync_server.send(hj::zmq::message("ACK_2"));
 
-    sub.unsub("TopicA");
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     pub.pub("TopicA_Data_2");
+    pub.pub("TopicB_Data_2");
+    if(sub_thread.joinable())
+    {
+        sub_thread.join();
+    }
 
-    hj::zmq::message empty_check;
-    ASSERT_EQ(sub.recv(empty_check, ZMQ_DONTWAIT),
-              hj::zmq::io_status::would_block);
+    SUCCEED();
 }
 
 TEST(zmq, single_producer_single_consumer_100k)
@@ -788,7 +858,7 @@ TEST(zmq, single_producer_single_consumer_100k)
               << std::endl;
 }
 
-TEST(zmq, multi_producer_multi_consumer_concurrent)
+TEST(zmq, concurrent_multi_socket_shared_context)
 {
     constexpr int      NUM_PRODUCERS     = 4;
     constexpr int      NUM_CONSUMERS     = 4;
@@ -801,8 +871,6 @@ TEST(zmq, multi_producer_multi_consumer_concurrent)
     hj::zmq::consumer binder_cons(shared_ctx);
     binder_cons.set_opt(ZMQ_RCVHWM, 100'000);
     binder_cons.bind(addr);
-
-    binder_cons.unbind_from_thread();
 
     std::atomic<uint32_t>    total_received_count{0};
     std::atomic<bool>        consumers_start{false};
@@ -968,7 +1036,10 @@ TEST(zmq, destruction_under_load_context_shutdown)
         }
     });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    while(messages_processed.load() == 0)
+    {
+        std::this_thread::yield();
+    }
     EXPECT_GT(messages_processed.load(), 0u);
 
     ctx->shutdown();

@@ -19,4 +19,6 @@
 
 #include <hj/os/signal.hpp>
 
+#include <hj/os/winsock.h>
+
 #endif

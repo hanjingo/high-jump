@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include <hj/net/zmq.hpp>
-#include <zmq.h>
 #include <thread>
 #include <chrono>
 #include <vector>
@@ -72,15 +71,15 @@ TEST(zmq, producer_consumer_basic)
     hj::zmq::consumer cons(ctx);
     std::string       addr = "inproc://test-pc-basic";
 
-    ASSERT_EQ(prod.bind(addr), 0);
-    ASSERT_EQ(cons.connect(addr), 0);
+    EXPECT_NO_THROW(prod.bind(addr));
+    EXPECT_NO_THROW(cons.connect(addr));
 
     std::string msg = "producer_consumer_data";
-    ASSERT_GT(prod.push(msg), 0);
+    ASSERT_TRUE(prod.push(msg));
 
-    std::string recv;
-    ASSERT_GT(cons.pull(recv), 0);
-    ASSERT_EQ(recv, msg);
+    auto recv = cons.pull_string();
+    ASSERT_TRUE(recv.has_value());
+    ASSERT_EQ(recv.value(), msg);
 }
 
 TEST(zmq, multipart_message_basic)
@@ -90,8 +89,8 @@ TEST(zmq, multipart_message_basic)
     hj::zmq::consumer cons(ctx);
     std::string       addr = "inproc://test-multipart-basic";
 
-    ASSERT_EQ(prod.bind(addr), 0);
-    ASSERT_EQ(cons.connect(addr), 0);
+    EXPECT_NO_THROW(prod.bind(addr));
+    EXPECT_NO_THROW(cons.connect(addr));
 
     std::vector<std::string_view> send_frames = {"Frame1", "Frame2", "Frame3"};
     ASSERT_TRUE(prod.send_multipart(send_frames));
@@ -117,33 +116,34 @@ TEST(zmq, producer_consumer_safe_pipeline)
 
     std::thread cons_thread([ctx, &addr, &w_ch_out]() {
         hj::zmq::consumer cons(ctx);
-        ASSERT_EQ(cons.connect(addr), 0);
-        cons.safe_pull(w_ch_out, 0);
+        EXPECT_NO_THROW(cons.connect(addr));
+        cons.safe_pull(w_ch_out, hj::zmq::control_cmd::STOP);
     });
 
     std::thread prod_thread(
         [ctx, &addr, r_ch = w_ch_in.make_r_chan()]() mutable {
             hj::zmq::producer prod(ctx);
-            ASSERT_EQ(prod.bind(addr), 0);
-            prod.safe_push(r_ch, 0);
+            EXPECT_NO_THROW(prod.bind(addr));
+            prod.safe_push(r_ch, hj::zmq::control_cmd::STOP);
         });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     w_ch_in << "msg_1";
     w_ch_in << "msg_2";
-    w_ch_in << "";
 
-    std::string res1, res2, res3;
+    // 发送 STOP 控制信号来终止管道
+    hj::zmq::control_cmd stop_cmd = hj::zmq::control_cmd::STOP;
+    hj::zmq::message     stop_msg(&stop_cmd, sizeof(stop_cmd), nullptr);
+    w_ch_in.send(stop_msg);
+
+    std::string res1, res2;
 
     ASSERT_TRUE(r_ch_out >> res1);
     ASSERT_EQ(res1, "msg_1");
 
     ASSERT_TRUE(r_ch_out >> res2);
     ASSERT_EQ(res2, "msg_2");
-
-    ASSERT_TRUE(r_ch_out >> res3);
-    ASSERT_TRUE(res3.empty());
 
     if(prod_thread.joinable())
         prod_thread.join();
@@ -158,18 +158,18 @@ TEST(zmq, publisher_subscriber_basic)
     hj::zmq::subscriber sub(ctx);
     std::string         addr = "inproc://test-ps-basic";
 
-    ASSERT_EQ(pub.bind(addr), 0);
-    ASSERT_EQ(sub.connect(addr), 0);
-    ASSERT_EQ(sub.sub(""), 0);
+    EXPECT_NO_THROW(pub.bind(addr));
+    EXPECT_NO_THROW(sub.connect(addr));
+    EXPECT_NO_THROW(sub.sub(""));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     std::string msg = "pubmsg";
-    ASSERT_GT(pub.pub(msg), 0);
+    ASSERT_TRUE(pub.pub(msg));
 
-    std::string recv;
-    ASSERT_GT(sub.recv(recv), 0);
-    ASSERT_EQ(recv, msg);
+    auto recv = sub.recv_string();
+    ASSERT_TRUE(recv.has_value());
+    ASSERT_EQ(recv.value(), msg);
 }
 
 TEST(zmq, publisher_subscriber_safe_pipeline)
@@ -184,30 +184,30 @@ TEST(zmq, publisher_subscriber_safe_pipeline)
 
     std::thread sub_thread([ctx, &addr, &w_ch_out]() {
         hj::zmq::subscriber sub(ctx);
-        ASSERT_EQ(sub.connect(addr), 0);
-        ASSERT_EQ(sub.sub(""), 0);
-        sub.safe_recv(w_ch_out, 0);
+        EXPECT_NO_THROW(sub.connect(addr));
+        EXPECT_NO_THROW(sub.sub(""));
+        sub.safe_recv(w_ch_out, hj::zmq::control_cmd::STOP);
     });
 
     std::thread pub_thread(
         [ctx, &addr, r_ch = w_ch_in.make_r_chan()]() mutable {
             hj::zmq::publisher pub(ctx);
-            ASSERT_EQ(pub.bind(addr), 0);
-            pub.safe_pub(r_ch, 0);
+            EXPECT_NO_THROW(pub.bind(addr));
+            pub.safe_pub(r_ch, hj::zmq::control_cmd::STOP);
         });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     w_ch_in << "pub_data_1";
-    w_ch_in << "";
 
-    std::string res1, res2;
+    // 发送 STOP 信号终止
+    hj::zmq::control_cmd stop_cmd = hj::zmq::control_cmd::STOP;
+    hj::zmq::message     stop_msg(&stop_cmd, sizeof(stop_cmd), nullptr);
+    w_ch_in.send(stop_msg);
 
+    std::string res1;
     ASSERT_TRUE(r_ch_out >> res1);
     ASSERT_EQ(res1, "pub_data_1");
-
-    ASSERT_TRUE(r_ch_out >> res2);
-    ASSERT_TRUE(res2.empty());
 
     if(pub_thread.joinable())
         pub_thread.join();
@@ -220,11 +220,11 @@ TEST(zmq, broker_basic)
     auto            ctx = hj::zmq::context::create();
     hj::zmq::socket xpub(ctx, ZMQ_XPUB);
     hj::zmq::socket xsub(ctx, ZMQ_XSUB);
-    hj::zmq::broker bk(xpub.get(), xsub.get());
+    hj::zmq::broker bk(xpub, xsub);
     std::string     xpub_addr = "inproc://xpub-broker";
     std::string     xsub_addr = "inproc://xsub-broker";
 
-    ASSERT_EQ(bk.bind(xpub_addr, xsub_addr), 0);
+    EXPECT_NO_THROW(bk.bind(xpub_addr, xsub_addr));
 }
 
 TEST(zmq, poller_basic)
@@ -234,24 +234,27 @@ TEST(zmq, poller_basic)
     hj::zmq::consumer cons(ctx);
     std::string       addr = "inproc://test-poller-basic";
 
-    ASSERT_EQ(prod.bind(addr), 0);
-    ASSERT_EQ(cons.connect(addr), 0);
+    EXPECT_NO_THROW(prod.bind(addr));
+    EXPECT_NO_THROW(cons.connect(addr));
 
     hj::zmq::poller poller;
     int             user_tag = 100;
     poller.add(cons, &user_tag, ZMQ_POLLIN);
 
-    int rc1 = poller.poll(10);
+    std::vector<hj::zmq::poller::event_entry> active_events;
+    int rc1 = poller.poll(active_events, 10);
     ASSERT_EQ(rc1, 0);
+    ASSERT_TRUE(active_events.empty());
 
-    ASSERT_GT(prod.push("poller_test"), 0);
+    ASSERT_TRUE(prod.push("poller_test"));
 
-    int rc2 = poller.poll(1000);
-    ASSERT_EQ(rc2, 1);
-    ASSERT_TRUE(poller.items()[0].revents & ZMQ_POLLIN);
-    ASSERT_EQ(*static_cast<int *>(poller.user_data(0)), 100);
+    int rc2 = poller.poll(active_events, 1000);
+    ASSERT_GT(rc2, 0);
+    ASSERT_EQ(active_events.size(), 1u);
+    ASSERT_TRUE(active_events[0].revents & ZMQ_POLLIN);
+    ASSERT_EQ(*static_cast<int *>(active_events[0].user_data), 100);
 
-    std::string recv_data;
-    ASSERT_GT(cons.pull(recv_data), 0);
-    ASSERT_EQ(recv_data, "poller_test");
+    auto recv_data = cons.pull_string();
+    ASSERT_TRUE(recv_data.has_value());
+    ASSERT_EQ(recv_data.value(), "poller_test");
 }

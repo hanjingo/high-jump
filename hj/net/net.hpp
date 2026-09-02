@@ -13,8 +13,6 @@
 
 #include <hj/net/udp.hpp>
 
-#include <hj/net/winsock.h>
-
 #ifdef HJ_ENABLE_ZMQ
 #include <hj/net/zmq.hpp>
 #endif

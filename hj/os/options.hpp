@@ -19,142 +19,138 @@
 #ifndef OPTIONS_HPP
 #define OPTIONS_HPP
 
-#ifdef __cplusplus
-#include <functional>
-
-// -------- detect compiler C++ version ------------
-#ifndef HJ_CPP_VERSION
-#if defined(_MSC_VER)
-#if defined(_MSVC_LANG)
-#define HJ_CPP_VERSION _MSVC_LANG
-#else
-#define HJ_CPP_VERSION __cplusplus
-#endif
-#else
-#define HJ_CPP_VERSION __cplusplus
-#endif
-#endif // HJ_CPP_VERSION
-
-// -------- detect whether std::unary_function exists ------------
-#ifndef HJ_UNARY_FUNCTION_DEFINED
-// Historically std::unary_function was provided by the standard
-// library implementations but has been removed in C++17. Some
-// libstdc++/libc++/MSVC versions may still provide a deprecated
-// definition or a compatibility macro. We try to detect common
-// cases conservatively and only provide a fallback when the symbol
-// is truly absent.
-
-// MSVC (Visual Studio) removed unary_function in recent toolsets
-#if defined(_MSC_VER)
-#if (_MSC_VER >= 1910 && HJ_CPP_VERSION >= 201703L)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
-
-// libstdc++ (GCC's C++ library) historically provided unary_function
-#elif defined(__GLIBCXX__)
-#define HJ_UNARY_FUNCTION_DEFINED 1
-
-// libc++ (LLVM's C++ library) removed many deprecated symbols; newer
-// releases may define a feature-test macro to indicate removal.
-#elif defined(_LIBCPP_VERSION)
-#if defined(_LIBCPP_HAS_NO_DEPRECATED_UNARY_FUNCTION)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#if (HJ_CPP_VERSION >= 201703L)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
-#endif
-
-// Generic fallback: if compiling in C++17 or newer, assume unary_function
-// is not present unless a known library macro indicates otherwise.
-#else
-#if (HJ_CPP_VERSION >= 201703L)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
-#endif
-
-#endif // HJ_UNARY_FUNCTION_DEFINED
-
-// -------- provide fallback only when truly missing ------------
-#if !HJ_UNARY_FUNCTION_DEFINED
-// Note: injecting names into namespace std is undefined behavior in the
-// C++ standard. In practice many implementations accept this for
-// compatibility shims, but a safer approach is to provide the shim in
-// a separate compatibility namespace and adapt callers. To minimize
-// disruption we keep the original behavior here but document the risk.
-namespace std
-{
-template <class Arg, class Result>
-struct unary_function
-{
-    typedef Arg    argument_type;
-    typedef Result result_type;
-};
-} // namespace std
-#undef HJ_UNARY_FUNCTION_DEFINED
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif // !HJ_UNARY_FUNCTION_DEFINED
-
-#endif // __cplusplus
-
-#include <thread>
-#include <chrono>
-
-#if defined(_WIN32)
-#if defined(_WIN32) && !defined(NOMINMAX)
-#define NOMINMAX
-#endif
-#include <io.h>
-#include <fcntl.h>
-#include <windows.h>
-
-#elif __linux__
-#include <syscall.h>
-#include <unistd.h>
-
-#else
-#include <unistd.h>
-
-#endif
+#include <stdexcept>
+#include <system_error>
+#include <string>
+#include <type_traits>
+#include <vector>
+#include <unordered_set>
+#include <sstream>
+#include <algorithm>
+#include <optional>
 
 #include <boost/program_options.hpp>
 
 namespace hj
 {
 
+class options_error : public std::runtime_error
+{
+  public:
+    using std::runtime_error::runtime_error;
+};
+
+class options_parse_error : public options_error
+{
+  public:
+    using options_error::options_error;
+};
+
+class options_duplicate_error : public options_error
+{
+  public:
+    using options_error::options_error;
+};
+
+class options_unknown_option : public options_parse_error
+{
+  public:
+    using options_parse_error::options_parse_error;
+};
+
+class options_invalid_value : public options_parse_error
+{
+  public:
+    using options_parse_error::options_parse_error;
+};
+
+class options_required_option : public options_parse_error
+{
+  public:
+    using options_parse_error::options_parse_error;
+};
+
+/**
+ * @brief Command line options parser based on Boost.Program_options.
+ * 
+ * @note Thread Safety:
+ * hj::options is NOT thread-safe. It is designed to be used in a single-threaded 
+ * setup phase (typically in the main thread) following the architecture below:
+ * 
+ *   main thread
+ *       ↓
+ *   parse() & configure
+ *       ↓
+ *   construct application configuration / immutable snapshot
+ *       ↓
+ *   worker threads (read-only / safe)
+ * 
+ * @note Exception Safety:
+ * parse() provides the Strong Exception Guarantee. If parsing fails, the internal 
+ * state (including any previous valid parsed state) remains completely untouched.
+ */
 class options
 {
   public:
     options()  = default;
     ~options() = default;
 
+    options(const options &)                = delete;
+    options &operator=(const options &)     = delete;
+    options(options &&) noexcept            = default;
+    options &operator=(options &&) noexcept = default;
+
     template <typename T>
-    void add(const char *key, T default_value, const char *memo = "")
+    void add(const char *key, const T &default_value, const char *memo = "")
     {
+        if(_parsed)
+            throw options_error(
+                "Cannot add options after parse() has been invoked.");
+
+        _check_duplicate_keys(key);
         _add_impl(key,
                   default_value,
                   memo,
                   std::is_same<T, std::vector<std::string>>{});
     }
 
+    template <typename T>
+    void add_required(const char *key, const char *memo = "")
+    {
+        if(_parsed)
+            throw options_error(
+                "Cannot add options after parse() has been invoked.");
+
+        _check_duplicate_keys(key);
+        _desc.add_options()(key,
+                            boost::program_options::value<T>()->required(),
+                            memo);
+    }
+
+    void add_flag(const char *key, const char *memo = "")
+    {
+        if(_parsed)
+            throw options_error(
+                "Cannot add options after parse() has been invoked.");
+
+        _check_duplicate_keys(key);
+        _desc.add_options()(key, boost::program_options::bool_switch(), memo);
+    }
+
     void add_positional(const char *key, int max_count = 1)
     {
+        if(_parsed)
+            throw options_error("Cannot add positional options after parse() "
+                                "has been invoked.");
+
         _pos.add(key, max_count);
     }
 
-    template <typename T>
-    T parse(int argc, char *argv[], const char *key)
+    void parse(int argc, char *argv[])
     {
-        T ret = T{};
+        boost::program_options::variables_map new_vm;
         try
         {
-            boost::program_options::variables_map vm;
             if(_pos.max_total_count() > 0)
             {
                 boost::program_options::store(
@@ -162,56 +158,68 @@ class options
                         .options(_desc)
                         .positional(_pos)
                         .run(),
-                    vm);
+                    new_vm);
             } else
             {
                 boost::program_options::store(
                     boost::program_options::parse_command_line(argc,
                                                                argv,
                                                                _desc),
-                    vm);
+                    new_vm);
             }
-            boost::program_options::notify(vm);
-            if(vm.count(key))
-                ret = vm[key].as<T>();
+            boost::program_options::notify(new_vm);
         }
-        catch(...)
+        catch(const boost::program_options::unknown_option &e)
         {
+            throw options_unknown_option(e.what());
         }
-        return ret;
+        catch(const boost::program_options::invalid_option_value &e)
+        {
+            throw options_invalid_value(e.what());
+        }
+        catch(const boost::program_options::required_option &e)
+        {
+            throw options_required_option(e.what());
+        }
+        catch(const boost::program_options::error &e)
+        {
+            throw options_parse_error(e.what());
+        }
+
+        _vm.swap(new_vm);
+        _parsed = true;
     }
 
     template <typename T>
+    [[deprecated(
+        "Use opts.parse(argc, argv) followed by opts.get<T>(key) instead.")]]
+    T parse(int argc, char *argv[], const char *key)
+    {
+        parse(argc, argv);
+        return get<T>(key);
+    }
+
+    template <typename T>
+    [[deprecated("Use opts.parse(argc, argv) followed by opts.get<T>(key, "
+                 "default) instead.")]]
     T parse(int argc, char *argv[], const char *key, const T &default_value)
+    {
+        parse(argc, argv);
+        if(!_vm.count(key) || _vm[key].defaulted())
+            return default_value;
+
+        return get<T>(key);
+    }
+
+    template <typename T>
+    T get(const char *key, const T &default_value = T{}) const
     {
         try
         {
-            boost::program_options::variables_map vm;
-            if(_pos.max_total_count() > 0)
-            {
-                boost::program_options::store(
-                    boost::program_options::command_line_parser(argc, argv)
-                        .options(_desc)
-                        .positional(_pos)
-                        .run(),
-                    vm);
-            } else
-            {
-                boost::program_options::store(
-                    boost::program_options::parse_command_line(argc,
-                                                               argv,
-                                                               _desc),
-                    vm);
-            }
-            boost::program_options::notify(vm);
-            if(!vm.count(key))
+            if(!_vm.count(key))
                 return default_value;
 
-            auto &variable_value = vm[key];
-            if(!variable_value.defaulted())
-                return vm[key].as<T>();
-            else
-                return default_value;
+            return _vm[key].as<T>();
         }
         catch(...)
         {
@@ -219,33 +227,71 @@ class options
         }
     }
 
-    template <typename T = std::vector<std::string>>
-    T parse_positional(int argc, char *argv[], const char *key)
+    template <typename T>
+    std::optional<T> try_get(const char *key) const
     {
-        T ret{};
         try
         {
-            boost::program_options::variables_map vm;
-            boost::program_options::store(
-                boost::program_options::command_line_parser(argc, argv)
-                    .options(_desc)
-                    .positional(_pos)
-                    .run(),
-                vm);
-            boost::program_options::notify(vm);
-            if(vm.count(key))
-                ret = vm[key].as<T>();
+            if(!_vm.count(key))
+                return std::nullopt;
+
+            return _vm[key].as<T>();
         }
         catch(...)
         {
+            return std::nullopt;
         }
-        return ret;
+    }
+
+    template <typename T = std::vector<std::string>>
+    T get_positional(const char *key) const
+    {
+        static_assert(std::is_same<T, std::string>::value
+                          || std::is_same<T, std::vector<std::string>>::value,
+                      "hj::options::get_positional only supports std::string "
+                      "or std::vector<std::string>.");
+        return get<T>(key);
+    }
+
+    template <typename T = std::vector<std::string>>
+    [[deprecated("Use opts.parse(argc, argv) followed by "
+                 "opts.get_positional<T>(key) instead.")]]
+    T parse_positional(int argc, char *argv[], const char *key)
+    {
+        parse(argc, argv);
+        return get_positional<T>(key);
+    }
+
+    const boost::program_options::options_description &description() const
+    {
+        return _desc;
     }
 
   private:
+    void _check_duplicate_keys(const char *key_str)
+    {
+        std::string       s(key_str);
+        std::stringstream ss(s);
+        std::string       segment;
+        while(std::getline(ss, segment, ','))
+        {
+            auto start = segment.find_first_not_of(" \t");
+            auto end   = segment.find_last_not_of(" \t");
+            if(start == std::string::npos)
+                continue;
+            std::string name = segment.substr(start, end - start + 1);
+
+            if(_registered_keys.find(name) != _registered_keys.end())
+            {
+                throw options_error("Duplicate option definition: " + name);
+            }
+            _registered_keys.insert(name);
+        }
+    }
+
     template <typename T>
     void _add_impl(const char *key,
-                   T           default_value,
+                   const T    &default_value,
                    const char *memo,
                    std::false_type)
     {
@@ -256,7 +302,7 @@ class options
     }
 
     template <typename T>
-    void _add_impl(const char *key, T, const char *memo, std::true_type)
+    void _add_impl(const char *key, const T &, const char *memo, std::true_type)
     {
         _desc.add_options()(key, boost::program_options::value<T>(), memo);
     }
@@ -264,8 +310,11 @@ class options
   private:
     boost::program_options::options_description            _desc;
     boost::program_options::positional_options_description _pos;
+    boost::program_options::variables_map                  _vm;
+    std::unordered_set<std::string>                        _registered_keys;
+    bool                                                   _parsed{false};
 };
 
-}
+} // namespace hj
 
 #endif // OPTIONS_HPP

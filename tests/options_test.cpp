@@ -3,7 +3,6 @@
 #include <vector>
 #include <string>
 #include <cstring>
-
 #include <algorithm>
 
 class options : public ::testing::Test
@@ -18,7 +17,6 @@ class options : public ::testing::Test
         {
             delete[] ptr;
         }
-        // allocated_args.clear();
         for(auto arr : allocated_argv_arrays)
         {
             delete[] arr;
@@ -29,7 +27,6 @@ class options : public ::testing::Test
     char **create_argv(const std::vector<std::string> &args)
     {
         char **argv = new char *[args.size()];
-        // allocated_args.clear();
         for(size_t i = 0; i < args.size(); ++i)
         {
             argv[i] = new char[args[i].length() + 1];
@@ -138,7 +135,7 @@ TEST_F(options, parse_bool_option_variations)
         opts->parse<bool>(static_cast<int>(args.size()), argv, "debug");
     EXPECT_FALSE(result);
 
-    std::vector<std::string> args2 = {"program", "--debug", "1"};
+    std::vector<std::string> args2 = {"program", "--debug", "true"};
     char                   **argv2 = create_argv(args2);
 
     bool result2 =
@@ -194,9 +191,9 @@ TEST_F(options, parse_invalid_value)
     std::vector<std::string> args = {"program", "--port", "invalid_number"};
     char                   **argv = create_argv(args);
 
-    int result =
-        opts->parse<int>(static_cast<int>(args.size()), argv, "port", 9999);
-    EXPECT_EQ(result, 9999);
+    // 工业级标准：非法输入应当抛出 std::runtime_error 异常
+    EXPECT_THROW(opts->parse<int>(static_cast<int>(args.size()), argv, "port"),
+                 std::runtime_error);
 }
 
 TEST_F(options, parse_success_ignores_default)
@@ -357,7 +354,6 @@ TEST_F(options, backward_compatibility_and_edge_cases)
 TEST_F(options, parse_boundary_values)
 {
     opts->add<int>("int_val", 0, "Integer value");
-    opts->add<float>("float_val", 0.0f, "Float value");
 
     std::vector<std::string> args1 = {"program",
                                       "--int_val",
@@ -368,14 +364,15 @@ TEST_F(options, parse_boundary_values)
         opts->parse<int>(static_cast<int>(args1.size()), argv1, "int_val");
     EXPECT_EQ(int_result, 2147483647);
 
-
+    auto opts2 = std::make_unique<hj::options>();
+    opts2->add<int>("int_val", 0, "Integer value");
     std::vector<std::string> args2 = {"program",
                                       "--int_val",
                                       "-2147483648"}; // INT_MIN
     char                   **argv2 = create_argv(args2);
 
     int int_result2 =
-        opts->parse<int>(static_cast<int>(args2.size()), argv2, "int_val");
+        opts2->parse<int>(static_cast<int>(args2.size()), argv2, "int_val");
     EXPECT_EQ(int_result2, -2147483648);
 }
 
@@ -454,4 +451,91 @@ TEST_F(options, parse_mixed_options_and_positional)
         opts->parse<std::string>(static_cast<int>(args.size()), argv, "output");
     EXPECT_EQ(input, "input.txt");
     EXPECT_EQ(output, "output.txt");
+}
+
+TEST_F(options, edge_case_unknown_option_throws)
+{
+    opts->add<int>("port", 8080, "Port");
+    std::vector<std::string> args = {"program", "--unknown"};
+    char                   **argv = create_argv(args);
+
+    EXPECT_THROW(opts->parse(static_cast<int>(args.size()), argv),
+                 hj::options_unknown_option);
+}
+
+TEST_F(options, edge_case_missing_value_throws)
+{
+    opts->add<int>("port", 8080, "Port");
+    std::vector<std::string> args = {"program", "--port"};
+    char                   **argv = create_argv(args);
+
+    EXPECT_THROW(opts->parse(static_cast<int>(args.size()), argv),
+                 hj::options_parse_error);
+}
+
+TEST_F(options, edge_case_duplicate_option_behavior)
+{
+    opts->add<int>("port", 8080, "Port");
+    std::vector<std::string> args = {"program", "--port", "1", "--port", "2"};
+    char                   **argv = create_argv(args);
+
+    EXPECT_THROW(opts->parse(static_cast<int>(args.size()), argv),
+                 hj::options_parse_error);
+}
+
+TEST_F(options, edge_case_empty_argv)
+{
+    opts->add<int>("port", 8080, "Port");
+    EXPECT_NO_THROW(opts->parse(0, nullptr));
+    EXPECT_EQ(opts->get<int>("port"), 8080);
+}
+
+TEST_F(options, edge_case_null_argv)
+{
+    opts->add<int>("port", 8080, "Port");
+    EXPECT_NO_THROW(opts->parse(0, nullptr));
+}
+
+TEST_F(options, edge_case_negative_number)
+{
+    opts->add<int>("port", 8080, "Port");
+    std::vector<std::string> args = {"program", "--port", "-1"};
+    char                   **argv = create_argv(args);
+    EXPECT_NO_THROW(opts->parse(static_cast<int>(args.size()), argv));
+    EXPECT_EQ(opts->get<int>("port"), -1);
+}
+
+TEST_F(options, edge_case_double_dash_separator)
+{
+    opts->add<std::string>("file", "", "File name");
+    opts->add_positional("file", 1);
+
+    std::vector<std::string> args = {"program", "--", "--file.txt"};
+    char                   **argv = create_argv(args);
+
+    EXPECT_NO_THROW(opts->parse(static_cast<int>(args.size()), argv));
+    EXPECT_EQ(opts->get<std::string>("file"), "--file.txt");
+}
+
+TEST_F(options, edge_case_equals_syntax)
+{
+    opts->add<int>("port", 8080, "Port");
+    std::vector<std::string> args = {"program", "--port=9000"};
+    char                   **argv = create_argv(args);
+
+    EXPECT_NO_THROW(opts->parse(static_cast<int>(args.size()), argv));
+    EXPECT_EQ(opts->get<int>("port"), 9000);
+}
+
+TEST_F(options, edge_case_combined_short_options)
+{
+    opts->add_flag("verbose,v", "Verbose");
+    opts->add_flag("debug,d", "Debug");
+
+    std::vector<std::string> args = {"program", "-vd"};
+    char                   **argv = create_argv(args);
+
+    EXPECT_NO_THROW(opts->parse(static_cast<int>(args.size()), argv));
+    EXPECT_TRUE(opts->get<bool>("verbose"));
+    EXPECT_TRUE(opts->get<bool>("debug"));
 }

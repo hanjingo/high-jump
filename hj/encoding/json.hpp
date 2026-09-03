@@ -19,7 +19,6 @@
 #ifndef JSON_HPP
 #define JSON_HPP
 
-#include <fstream>
 #include <nlohmann/json.hpp>
 
 namespace hj
@@ -27,6 +26,6 @@ namespace hj
 
 using json = nlohmann::json;
 
-}
+} // namespace hj
 
-#endif
+#endif // JSON_HPP

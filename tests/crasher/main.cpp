@@ -1,9 +1,13 @@
 #include <iostream>
 #include <string>
+#include <filesystem>
 #include <hj/testing/crash.hpp>
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
+namespace fs = std::filesystem;
+
+static std::string g_dump_dir = "./dumps";
 
 #if defined(_WIN32)
 static bool crasher_dump_callback(const wchar_t      *dump_dir,
@@ -18,8 +22,17 @@ static bool crasher_dump_callback(const wchar_t      *dump_dir,
     (void) context;
     (void) exinfo;
     (void) assertion;
-    std::cout << "[crasher] Breakpad callback triggered. Succeeded: "
-              << (succeeded ? "true" : "false") << std::endl;
+
+    std::string log_path = (fs::path(g_dump_dir) / "callback.log").string();
+    if(succeeded)
+    {
+        hj::crash_print("[crasher] Breakpad callback triggered successfully",
+                        log_path.c_str());
+    } else
+    {
+        hj::crash_print("[crasher] Breakpad callback triggered with failure",
+                        log_path.c_str());
+    }
     return succeeded;
 }
 #elif defined(__APPLE__)
@@ -31,8 +44,17 @@ static bool crasher_dump_callback(const char *dump_dir,
     (void) dump_dir;
     (void) minidump_id;
     (void) context;
-    std::cout << "[crasher] Breakpad callback triggered. Succeeded: "
-              << (succeeded ? "true" : "false") << std::endl;
+
+    std::string log_path = (fs::path(g_dump_dir) / "callback.log").string();
+    if(succeeded)
+    {
+        hj::crash_print("[crasher] Breakpad callback triggered successfully",
+                        log_path.c_str());
+    } else
+    {
+        hj::crash_print("[crasher] Breakpad callback triggered with failure",
+                        log_path.c_str());
+    }
     return succeeded;
 }
 #else
@@ -41,10 +63,19 @@ crasher_dump_callback(const google_breakpad::MinidumpDescriptor &descriptor,
                       void                                      *context,
                       bool                                       succeeded)
 {
+    (void) descriptor;
     (void) context;
-    std::cout << "[crasher] Breakpad callback triggered. Path: "
-              << descriptor.path()
-              << ", Succeeded: " << (succeeded ? "true" : "false") << std::endl;
+
+    std::string log_path = (fs::path(g_dump_dir) / "callback.log").string();
+    if(succeeded)
+    {
+        hj::crash_print("[crasher] Breakpad callback triggered successfully",
+                        log_path.c_str());
+    } else
+    {
+        hj::crash_print("[crasher] Breakpad callback triggered with failure",
+                        log_path.c_str());
+    }
     return succeeded;
 }
 #endif
@@ -96,12 +127,12 @@ int main(int argc, char *argv[])
     }
 
     std::string crash_type = vm["type"].as<std::string>();
-    std::string dump_dir   = vm["dir"].as<std::string>();
+    g_dump_dir             = vm["dir"].as<std::string>();
 
-    auto *handler = hj::crash_handler::instance();
-    handler->init(dump_dir, crasher_dump_callback);
+    auto &handler = hj::crash_handler::instance();
+    handler.init(g_dump_dir, crasher_dump_callback);
 
-    std::cout << "[crasher] Crash handler initialized at: " << dump_dir
+    std::cout << "[crasher] Crash handler initialized at: " << g_dump_dir
               << std::endl;
 
     trigger_crash(crash_type);

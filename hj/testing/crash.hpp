@@ -1,67 +1,59 @@
-/*
- *  This file is part of high-jump(hj).
- *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
- *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have registered a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 #ifndef CRASH_HPP
 #define CRASH_HPP
 
-#include <chrono>
+#include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
 
 #if defined(_WIN32)
-#if defined(_WIN32) && !defined(NOMINMAX)
+
+#if !defined(NOMINMAX)
 #define NOMINMAX
 #endif
+
 #include <windows.h>
 #include <BaseTsd.h>
 #include <signal.h>
-#include <intrin.h>
-typedef SSIZE_T ssize_t;
 #include <client/windows/handler/exception_handler.h>
-#elif __APPLE__
-#include <unistd.h>
+
+typedef SSIZE_T ssize_t;
+
+#elif defined(__APPLE__)
+
 #include <fcntl.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 #include <client/mac/handler/exception_handler.h>
-#elif __linux__
-#include <unistd.h>
+
+#elif defined(__linux__)
+
 #include <fcntl.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 #include <client/linux/handler/exception_handler.h>
+
 #endif
 
 namespace hj
 {
 
 #if defined(_WIN32)
-typedef bool (*dump_callback_t)(const wchar_t *,
-                                const wchar_t *,
-                                void *,
-                                EXCEPTION_POINTERS *,
-                                MDRawAssertionInfo *,
-                                bool);
+
+using dump_callback_t = bool (*)(const wchar_t *,
+                                 const wchar_t *,
+                                 void *,
+                                 EXCEPTION_POINTERS *,
+                                 MDRawAssertionInfo *,
+                                 bool);
 
 static bool default_dump_callback(const wchar_t      *dump_dir,
                                   const wchar_t      *minidump_id,
@@ -75,18 +67,12 @@ static bool default_dump_callback(const wchar_t      *dump_dir,
     (void) context;
     (void) exinfo;
     (void) assertion;
-    (void) succeeded;
-    return true;
+    return succeeded;
 }
 
-#elif __APPLE__
-typedef bool (*dump_callback_t)(const char *, const char *, void *, bool);
+#elif defined(__APPLE__)
 
-static inline void crash_sigabrt_handler(int sig)
-{
-    (void) sig;
-    std::abort();
-}
+using dump_callback_t = bool (*)(const char *, const char *, void *, bool);
 
 static bool default_dump_callback(const char *dump_dir,
                                   const char *minidump_id,
@@ -96,20 +82,14 @@ static bool default_dump_callback(const char *dump_dir,
     (void) dump_dir;
     (void) minidump_id;
     (void) context;
-    (void) succeeded;
-    return true;
+    return succeeded;
 }
 
 #else
-typedef bool (*dump_callback_t)(const google_breakpad::MinidumpDescriptor &,
-                                void *,
-                                bool);
 
-static inline void crash_sigabrt_handler(int sig)
-{
-    (void) sig;
-    std::abort();
-}
+using dump_callback_t = bool (*)(const google_breakpad::MinidumpDescriptor &,
+                                 void *,
+                                 bool);
 
 static bool
 default_dump_callback(const google_breakpad::MinidumpDescriptor &descriptor,
@@ -118,41 +98,104 @@ default_dump_callback(const google_breakpad::MinidumpDescriptor &descriptor,
 {
     (void) descriptor;
     (void) context;
-    (void) succeeded;
+    return succeeded;
+}
+
+#endif
+
+/*
+ * These helpers are intentionally small and independent of iostreams.
+ * They are used by the sample/application callback and are not part of
+ * Breakpad's exception capture path.
+ */
+static inline size_t crash_safe_u64tostr(uint64_t val, char *buf)
+{
+    char   tmp[24];
+    size_t i = 0;
+
+    do
+    {
+        tmp[i++] = static_cast<char>('0' + (val % 10));
+        val /= 10;
+    } while(val > 0);
+
+    for(size_t j = 0; j < i; ++j)
+        buf[j] = tmp[i - 1 - j];
+
+    buf[i] = '\0';
+    return i;
+}
+
+#if defined(_WIN32)
+
+static inline bool
+crash_safe_write_all(HANDLE hFile, const char *buf, size_t count)
+{
+    if(hFile == INVALID_HANDLE_VALUE || !buf)
+        return false;
+
+    size_t total_written = 0;
+
+    while(total_written < count)
+    {
+        size_t bytes_to_write = count - total_written;
+
+        DWORD chunk_size = bytes_to_write > static_cast<size_t>(0xFFFFFFFFu)
+                               ? 0xFFFFFFFFu
+                               : static_cast<DWORD>(bytes_to_write);
+
+        DWORD written = 0;
+
+        if(!::WriteFile(hFile,
+                        buf + total_written,
+                        chunk_size,
+                        &written,
+                        nullptr))
+        {
+            return false;
+        }
+
+        if(written == 0)
+            return false;
+
+        total_written += static_cast<size_t>(written);
+    }
+
     return true;
 }
-#endif
+
+#else
 
 static inline bool crash_safe_write_all(int fd, const char *buf, size_t count)
 {
-#if defined(_WIN32)
-    (void) fd;
-    (void) buf;
-    (void) count;
-    return false;
-#else
+    if(fd < 0 || !buf)
+        return false;
+
     size_t total_written = 0;
+
     while(total_written < count)
     {
         ssize_t written =
             ::write(fd, buf + total_written, count - total_written);
+
         if(written < 0)
         {
             if(errno == EINTR)
-            {
                 continue;
-            }
+
             return false;
         }
+
         if(written == 0)
-        {
-            break;
-        }
+            return false;
+
         total_written += static_cast<size_t>(written);
     }
-    return total_written == count;
-#endif
+
+    return true;
 }
+
+#endif
 
 static inline void crash_print(const char *content,
                                const char *path = "crash.log")
@@ -161,215 +204,127 @@ static inline void crash_print(const char *content,
         return;
 
     size_t content_len = 0;
-    while(content[content_len])
-    {
-        content_len++;
-    }
+
+    while(content[content_len] != '\0')
+        ++content_len;
 
 #if defined(_WIN32)
-    HANDLE hFile = ::CreateFileA(path,
+
+    int wlen = ::MultiByteToWideChar(CP_UTF8, 0, path, -1, nullptr, 0);
+
+    if(wlen <= 0)
+        return;
+
+    std::wstring wpath(static_cast<size_t>(wlen), L'\0');
+
+    if(::MultiByteToWideChar(CP_UTF8, 0, path, -1, &wpath[0], wlen) <= 0)
+    {
+        return;
+    }
+
+    HANDLE hFile = ::CreateFileW(wpath.c_str(),
                                  FILE_APPEND_DATA,
-                                 FILE_SHARE_READ,
-                                 NULL,
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                 nullptr,
                                  OPEN_ALWAYS,
                                  FILE_ATTRIBUTE_NORMAL,
-                                 NULL);
+                                 nullptr);
 
     if(hFile == INVALID_HANDLE_VALUE)
         return;
 
-    SYSTEMTIME st;
+    SYSTEMTIME st{};
     ::GetLocalTime(&st);
-    char timeBuf[64];
-    int  timeLen = ::wsprintfA(timeBuf,
-                               "%04d-%02d-%02d %02d:%02d:%02d : ",
-                               st.wYear,
-                               st.wMonth,
-                               st.wDay,
-                               st.wHour,
-                               st.wMinute,
-                               st.wSecond);
 
-    DWORD bytesWritten = 0;
+    char timeBuf[64]{};
+
+    int timeLen = ::wsprintfA(timeBuf,
+                              "%04d-%02d-%02d %02d:%02d:%02d : ",
+                              st.wYear,
+                              st.wMonth,
+                              st.wDay,
+                              st.wHour,
+                              st.wMinute,
+                              st.wSecond);
+
     if(timeLen > 0)
     {
-        ::WriteFile(hFile,
-                    timeBuf,
-                    static_cast<DWORD>(timeLen),
-                    &bytesWritten,
-                    NULL);
+        crash_safe_write_all(hFile, timeBuf, static_cast<size_t>(timeLen));
     }
 
     if(content_len > 0)
-    {
-        ::WriteFile(hFile,
-                    content,
-                    static_cast<DWORD>(content_len),
-                    &bytesWritten,
-                    NULL);
-    }
-    ::WriteFile(hFile, "\r\n", 2, &bytesWritten, NULL);
+        crash_safe_write_all(hFile, content, content_len);
+
+    crash_safe_write_all(hFile, "\r\n", 2);
+
     ::CloseHandle(hFile);
 
-#else // Linux / macOS (POSIX)
+#else
+
     int fd = ::open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+
     if(fd < 0)
         return;
 
-    struct timespec ts;
-    struct tm       tm_info;
+    struct timespec ts{};
+
     if(::clock_gettime(CLOCK_REALTIME, &ts) == 0)
     {
-        ::localtime_r(&ts.tv_sec, &tm_info);
-        char   timeBuf[64];
-        size_t timeLen = ::strftime(timeBuf,
-                                    sizeof(timeBuf),
-                                    "%Y-%m-%d %H:%M:%S : ",
-                                    &tm_info);
-        if(timeLen > 0)
-        {
-            crash_safe_write_all(fd, timeBuf, timeLen);
-        }
+        char   timeBuf[64]{};
+        size_t len = 0;
+
+        timeBuf[len++] = '[';
+
+        len += crash_safe_u64tostr(static_cast<uint64_t>(ts.tv_sec),
+                                   timeBuf + len);
+
+        timeBuf[len++] = '.';
+
+        len += crash_safe_u64tostr(static_cast<uint64_t>(ts.tv_nsec),
+                                   timeBuf + len);
+
+        timeBuf[len++] = ']';
+        timeBuf[len++] = ' ';
+
+        crash_safe_write_all(fd, timeBuf, len);
     }
 
     if(content_len > 0)
-    {
         crash_safe_write_all(fd, content, content_len);
-    }
+
     crash_safe_write_all(fd, "\n", 1);
 
     ::close(fd);
+
 #endif
 }
 
-#if defined(_WIN32)
-static inline bool crash_ensure_directories_exist(const std::wstring &wpath)
+static inline bool
+crash_ensure_directories_exist(const std::filesystem::path &dir_path)
 {
-    if(wpath.empty())
-        return false;
+    std::error_code ec;
 
-    std::wstring temp = wpath;
-    for(size_t i = 0; i < temp.size(); ++i)
-    {
-        if(temp[i] == L'\\' || temp[i] == L'/')
-        {
-            wchar_t prev = temp[i + 1];
-            temp[i + 1]  = L'\0';
-            if(!::CreateDirectoryW(temp.c_str(), NULL))
-            {
-                DWORD err = ::GetLastError();
-                if(err != ERROR_ALREADY_EXISTS)
-                {
-                    // ignore error, continue to next
-                }
-            }
-            temp[i + 1] = prev;
-        }
-    }
+    if(std::filesystem::exists(dir_path, ec))
+        return !ec && std::filesystem::is_directory(dir_path, ec);
 
-    if(!::CreateDirectoryW(temp.c_str(), NULL))
-    {
-        DWORD err = ::GetLastError();
-        if(err != ERROR_ALREADY_EXISTS)
-        {
-            return false;
-        }
-    }
-
-    DWORD attr = ::GetFileAttributesW(temp.c_str());
-    if(attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
-    {
-        return false;
-    }
-    return true;
+    return std::filesystem::create_directories(dir_path, ec) && !ec;
 }
-#else
-static inline bool crash_ensure_directories_exist(const std::string &path_str)
-{
-    if(path_str.empty())
-        return false;
-
-    std::string temp = path_str;
-    for(size_t i = 1; i < temp.size(); ++i)
-    {
-        if(temp[i] == '/')
-        {
-            temp[i] = '\0';
-            if(::mkdir(temp.c_str(), 0755) != 0)
-            {
-                if(errno != EEXIST)
-                {
-                    // ignore error, continue to next
-                }
-            }
-            temp[i] = '/';
-        }
-    }
-
-    if(::mkdir(temp.c_str(), 0755) != 0)
-    {
-        if(errno != EEXIST)
-            return false;
-    }
-
-    struct stat st;
-    if(::stat(temp.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
-        return false;
-
-    return true;
-}
-#endif
 
 class crash_handler
 {
   public:
-    crash_handler()
-        : _handler{nullptr}
-#if defined(_WIN32)
-        , _pOrgEntry{nullptr}
-        , _patchSize{0}
-        , _is_patched{false}
-#endif
+    enum class State
     {
-    }
+        UNINITIALIZED,
+        READY,
+        FAILED
+    };
 
-    explicit crash_handler(const char           *abs_path,
-                           const dump_callback_t cb = nullptr)
-        : _handler{nullptr}
-#if defined(_WIN32)
-        , _pOrgEntry{nullptr}
-        , _patchSize{0}
-        , _is_patched{false}
-#endif
+  public:
+    static crash_handler &instance()
     {
-        if(abs_path)
-        {
-            init(std::string(abs_path), cb);
-        }
-    }
-
-    ~crash_handler()
-    {
-#if defined(_WIN32)
-        if(_is_patched && _pOrgEntry != nullptr && _patchSize > 0)
-        {
-            DWORD dwOldFlag = 0, dwTempFlag = 0;
-            if(::VirtualProtect(_pOrgEntry,
-                                _patchSize,
-                                PAGE_EXECUTE_READWRITE,
-                                &dwOldFlag))
-            {
-                std::memcpy(_pOrgEntry, _origBytes, _patchSize);
-                ::FlushInstructionCache(GetCurrentProcess(),
-                                        _pOrgEntry,
-                                        _patchSize);
-                ::VirtualProtect(_pOrgEntry,
-                                 _patchSize,
-                                 dwOldFlag,
-                                 &dwTempFlag);
-            }
-        }
-#endif
+        static crash_handler inst;
+        return inst;
     }
 
     crash_handler(const crash_handler &)            = delete;
@@ -377,205 +332,114 @@ class crash_handler
     crash_handler(crash_handler &&)                 = delete;
     crash_handler &operator=(crash_handler &&)      = delete;
 
-    inline void init(const char *abs_path, const dump_callback_t cb = nullptr)
-    {
-        if(abs_path)
-        {
-            init(std::string(abs_path), cb);
-        }
-    }
-
-    void init(const std::string &abs_path, dump_callback_t cb = nullptr)
+    bool init(const std::string &abs_path, dump_callback_t cb = nullptr)
     {
         if(abs_path.empty())
+            return false;
+
+        std::lock_guard<std::mutex> lock(_init_mutex);
+        if(_state.load(std::memory_order_relaxed) == State::READY)
+            return false;
+
+        _handler.reset();
+
+        dump_callback_t       final_cb = cb ? cb : default_dump_callback;
+        std::filesystem::path dir_path(abs_path);
+        std::error_code       ec;
+        std::filesystem::create_directories(dir_path, ec);
+        if(ec || !std::filesystem::is_directory(dir_path, ec))
         {
-            return;
+            _state.store(State::FAILED, std::memory_order_release);
+            return false;
         }
 
-        std::call_once(_init_flag, [this, &abs_path, cb]() {
-            dump_callback_t final_cb = cb ? cb : default_dump_callback;
-
+        try
+        {
 #if defined(_WIN32)
-            int wlen   = ::MultiByteToWideChar(CP_UTF8,
-                                               0,
-                                               abs_path.c_str(),
-                                               -1,
-                                               NULL,
-                                               0);
-            _wabs_path = std::wstring(wlen, 0);
-            ::MultiByteToWideChar(CP_UTF8,
-                                  0,
-                                  abs_path.c_str(),
-                                  -1,
-                                  &_wabs_path[0],
-                                  wlen);
-            if(!_wabs_path.empty() && _wabs_path.back() == L'\0')
-                _wabs_path.pop_back();
-
-            if(!crash_ensure_directories_exist(_wabs_path))
-            {
-                return;
-            }
-
-            _handler = std::make_unique<google_breakpad::ExceptionHandler>(
+            _wabs_path = dir_path.wstring();
+            _handler   = std::make_unique<google_breakpad::ExceptionHandler>(
                 _wabs_path,
                 nullptr, // FilterCallback
                 final_cb,
-                nullptr, // context
+                nullptr, // callback context
                 google_breakpad::ExceptionHandler::HANDLER_ALL);
 
-#else
-            if(!crash_ensure_directories_exist(abs_path))
-            {
-                return;
-            }
-
-            _abs_path = abs_path;
-#if __APPLE__
-            _handler = std::make_unique<google_breakpad::ExceptionHandler>(
+#elif defined(__APPLE__)
+            _abs_path = dir_path.string();
+            _handler  = std::make_unique<google_breakpad::ExceptionHandler>(
                 _abs_path,
                 nullptr, // FilterCallback
                 final_cb,
-                nullptr, // context
+                nullptr, // callback context
                 true,
                 nullptr);
+
 #else
-            _handler = std::make_unique<google_breakpad::ExceptionHandler>(
+            _abs_path = dir_path.string();
+            _handler  = std::make_unique<google_breakpad::ExceptionHandler>(
                 google_breakpad::MinidumpDescriptor(_abs_path),
                 nullptr, // FilterCallback
                 final_cb,
-                nullptr, // context
+                nullptr, // callback context
                 true,
                 -1);
-#endif
-#endif
-        });
-    }
 
-#if defined(_WIN32)
-    static LPTOP_LEVEL_EXCEPTION_FILTER
-        WINAPI temp_set_unhandled_exception_filter(
-            LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
-    {
-        (void) lpTopLevelExceptionFilter;
-        return NULL;
-    }
 #endif
-
-    [[deprecated(
-        "Directly patching system DLL code (SetUnhandledExceptionFilter) is "
-        "discouraged due to modern Windows security mechanisms (CFG/CET) and "
-        "maintainability. Use standard Breakpad initialization instead.")]]
-    bool prevent_set_unhandled_exception_filter()
-    {
-#if defined(_WIN32)
-        HMODULE hKernel32 = LoadLibraryW(L"kernel32.dll");
-        if(hKernel32 == NULL)
-            return false;
-
-        auto scope_guard = [&hKernel32]() {
-            if(hKernel32)
-            {
-                ::FreeLibrary(hKernel32);
-                hKernel32 = NULL;
-            }
-        };
-        struct library_guard
+        }
+        catch(...)
         {
-            HMODULE h;
-            ~library_guard()
-            {
-                if(h)
-                    ::FreeLibrary(h);
-            }
-        } lib_guard{hKernel32};
+            _handler.reset();
 
-        void *pOrgEntry =
-            (void *) (::GetProcAddress(hKernel32,
-                                       "SetUnhandledExceptionFilter"));
-        if(pOrgEntry == NULL)
+            _state.store(State::FAILED, std::memory_order_release);
             return false;
+        }
 
-        SIZE_T        patchSize      = 0;
-        unsigned char patchBytes[16] = {0};
-        void         *pNewFunc =
-            (void *) (&crash_handler::temp_set_unhandled_exception_filter);
-
-#if defined(_WIN64)
-        // MOV RAX, pNewFunc  (48 B8 [8-byte address])
-        // JMP RAX            (FF E0)
-        patchSize              = 12;
-        patchBytes[0]          = 0x48;
-        patchBytes[1]          = 0xB8;
-        std::uint64_t funcAddr = reinterpret_cast<std::uint64_t>(pNewFunc);
-        std::memcpy(&patchBytes[2], &funcAddr, sizeof(funcAddr));
-        patchBytes[10] = 0xFF;
-        patchBytes[11] = 0xE0;
-#else
-        // JMP rel32          (E9 [4-byte relative offset])
-        patchSize                = 5;
-        patchBytes[0]            = 0xE9;
-        ULONG_PTR dwOrgEntryAddr = reinterpret_cast<ULONG_PTR>(pOrgEntry);
-        ULONG_PTR dwNewEntryAddr = reinterpret_cast<ULONG_PTR>(pNewFunc);
-        INT64     qwRelativeAddr = static_cast<INT64>(dwNewEntryAddr)
-                                   - (static_cast<INT64>(dwOrgEntryAddr) + 5);
-        if(qwRelativeAddr < INT32_MIN || qwRelativeAddr > INT32_MAX)
+        if(!_handler)
+        {
+            _state.store(State::FAILED, std::memory_order_release);
             return false;
+        }
 
-        LONG dwRelativeAddr = static_cast<LONG>(qwRelativeAddr);
-        std::memcpy(&patchBytes[1], &dwRelativeAddr, sizeof(LONG));
-#endif
-        DWORD dwOldFlag = 0, dwTempFlag = 0;
-        if(!::VirtualProtect(pOrgEntry,
-                             patchSize,
-                             PAGE_EXECUTE_READWRITE,
-                             &dwOldFlag))
-            return false;
-
-        _pOrgEntry = pOrgEntry;
-        _patchSize = patchSize;
-        std::memcpy(_origBytes, pOrgEntry, patchSize);
-        std::memcpy(pOrgEntry, patchBytes, patchSize);
-        ::FlushInstructionCache(GetCurrentProcess(), pOrgEntry, patchSize);
-        ::VirtualProtect(pOrgEntry, patchSize, dwOldFlag, &dwTempFlag);
-        _is_patched = true;
+        _state.store(State::READY, std::memory_order_release);
         return true;
-#else
-        return true;
-#endif
     }
+
+    bool init(const char *abs_path, dump_callback_t cb = nullptr)
+    {
+        if(!abs_path)
+            return false;
+
+        return init(std::string(abs_path), cb);
+    }
+
+    State state() const { return _state.load(std::memory_order_acquire); }
 
     bool write_minidump()
     {
-        if(_handler)
-            return _handler->WriteMinidump();
+        if(_state.load(std::memory_order_acquire) != State::READY)
+            return false;
 
-        return false;
-    }
-
-  public:
-    static crash_handler *instance()
-    {
-        static crash_handler inst;
-        return &inst;
+        return _handler ? _handler->WriteMinidump() : false;
     }
 
   private:
-    std::once_flag                                     _init_flag;
+    crash_handler()  = default;
+    ~crash_handler() = default;
+
+  private:
+    std::mutex         _init_mutex;
+    std::atomic<State> _state{State::UNINITIALIZED};
     std::unique_ptr<google_breakpad::ExceptionHandler> _handler;
 
 #if defined(_WIN32)
-    void         *_pOrgEntry;
-    SIZE_T        _patchSize;
-    unsigned char _origBytes[16];
-    bool          _is_patched;
-
     std::wstring _wabs_path;
+
 #else
     std::string _abs_path;
+
 #endif
 };
 
 } // namespace hj
 
-#endif
+#endif // CRASH_HPP

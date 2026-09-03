@@ -103,14 +103,13 @@
 /* -------------------------------------------------------------------------- */
 /* Assembly Feature Detection                                                 */
 /* -------------------------------------------------------------------------- */
-
-/* GCC 风格 Extended Inline ASM */
+/* GCC Extended Inline ASM */
 #if (HJ_COMPILER_GCC || HJ_COMPILER_CLANG) && !defined(__ASSEMBLER__)
 #undef HJ_HAS_EXTENDED_INLINE_ASM
 #define HJ_HAS_EXTENDED_INLINE_ASM 1
 #endif
 
-/* MSVC 传统 Inline ASM (仅 Legacy 32位 MSVC x86 支持) */
+/* MSVC Inline ASM */
 #if HJ_COMPILER_MSVC && HJ_ARCH_X86_32
 #undef HJ_HAS_MSVC_INLINE_ASM
 #define HJ_HAS_MSVC_INLINE_ASM 1
@@ -124,7 +123,6 @@
 /* -------------------------------------------------------------------------- */
 /* Assembly Modifiers (Only defined if the current platform supports assembly)   */
 /* -------------------------------------------------------------------------- */
-
 #if HJ_HAS_EXTENDED_INLINE_ASM
 #define HJ_ASM __asm__
 #define HJ_ASM_VOLATILE __asm__ __volatile__
@@ -132,13 +130,11 @@
 #define HJ_ASM __asm
 #define HJ_ASM_VOLATILE __asm
 #endif
-/* 注意：不支持内联汇编的平台故意不定义 HJ_ASM / HJ_ASM_VOLATILE，
-   防止代码在未受保护的情况下使用裸汇编宏产生错误的静默展开。 */
+
 
 /* -------------------------------------------------------------------------- */
 /* Intrinsics Headers                                                          */
 /* -------------------------------------------------------------------------- */
-
 #if HJ_COMPILER_MSVC || defined(__clang_cli__)
 #include <intrin.h>
 #elif HJ_COMPILER_GCC || HJ_COMPILER_CLANG

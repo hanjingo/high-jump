@@ -12,34 +12,43 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
+ *  You should have registered a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef CRASH_HPP
 #define CRASH_HPP
 
-#include <set>
-#include <string>
-#include <iostream>
-#include <fstream>
 #include <chrono>
-#include <functional>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <mutex>
+#include <string>
 
 #if defined(_WIN32)
 #if defined(_WIN32) && !defined(NOMINMAX)
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <BaseTsd.h>
+#include <signal.h>
+#include <intrin.h>
+typedef SSIZE_T ssize_t;
 #include <client/windows/handler/exception_handler.h>
 #elif __APPLE__
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <client/mac/handler/exception_handler.h>
 #elif __linux__
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <client/linux/handler/exception_handler.h>
 #endif
 
@@ -73,6 +82,12 @@ static bool default_dump_callback(const wchar_t      *dump_dir,
 #elif __APPLE__
 typedef bool (*dump_callback_t)(const char *, const char *, void *, bool);
 
+static inline void crash_sigabrt_handler(int sig)
+{
+    (void) sig;
+    std::abort();
+}
+
 static bool default_dump_callback(const char *dump_dir,
                                   const char *minidump_id,
                                   void       *context,
@@ -90,6 +105,12 @@ typedef bool (*dump_callback_t)(const google_breakpad::MinidumpDescriptor &,
                                 void *,
                                 bool);
 
+static inline void crash_sigabrt_handler(int sig)
+{
+    (void) sig;
+    std::abort();
+}
+
 static bool
 default_dump_callback(const google_breakpad::MinidumpDescriptor &descriptor,
                       void                                      *context,
@@ -102,109 +123,372 @@ default_dump_callback(const google_breakpad::MinidumpDescriptor &descriptor,
 }
 #endif
 
+static inline bool crash_safe_write_all(int fd, const char *buf, size_t count)
+{
+#if defined(_WIN32)
+    (void) fd;
+    (void) buf;
+    (void) count;
+    return false;
+#else
+    size_t total_written = 0;
+    while(total_written < count)
+    {
+        ssize_t written =
+            ::write(fd, buf + total_written, count - total_written);
+        if(written < 0)
+        {
+            if(errno == EINTR)
+            {
+                continue;
+            }
+            return false;
+        }
+        if(written == 0)
+        {
+            break;
+        }
+        total_written += static_cast<size_t>(written);
+    }
+    return total_written == count;
+#endif
+}
+
+static inline void crash_print(const char *content,
+                               const char *path = "crash.log")
+{
+    if(!content || !path)
+        return;
+
+    size_t content_len = 0;
+    while(content[content_len])
+    {
+        content_len++;
+    }
+
+#if defined(_WIN32)
+    HANDLE hFile = ::CreateFileA(path,
+                                 FILE_APPEND_DATA,
+                                 FILE_SHARE_READ,
+                                 NULL,
+                                 OPEN_ALWAYS,
+                                 FILE_ATTRIBUTE_NORMAL,
+                                 NULL);
+
+    if(hFile == INVALID_HANDLE_VALUE)
+        return;
+
+    SYSTEMTIME st;
+    ::GetLocalTime(&st);
+    char timeBuf[64];
+    int  timeLen = ::wsprintfA(timeBuf,
+                               "%04d-%02d-%02d %02d:%02d:%02d : ",
+                               st.wYear,
+                               st.wMonth,
+                               st.wDay,
+                               st.wHour,
+                               st.wMinute,
+                               st.wSecond);
+
+    DWORD bytesWritten = 0;
+    if(timeLen > 0)
+    {
+        ::WriteFile(hFile,
+                    timeBuf,
+                    static_cast<DWORD>(timeLen),
+                    &bytesWritten,
+                    NULL);
+    }
+
+    if(content_len > 0)
+    {
+        ::WriteFile(hFile,
+                    content,
+                    static_cast<DWORD>(content_len),
+                    &bytesWritten,
+                    NULL);
+    }
+    ::WriteFile(hFile, "\r\n", 2, &bytesWritten, NULL);
+    ::CloseHandle(hFile);
+
+#else // Linux / macOS (POSIX)
+    int fd = ::open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if(fd < 0)
+        return;
+
+    struct timespec ts;
+    struct tm       tm_info;
+    if(::clock_gettime(CLOCK_REALTIME, &ts) == 0)
+    {
+        ::localtime_r(&ts.tv_sec, &tm_info);
+        char   timeBuf[64];
+        size_t timeLen = ::strftime(timeBuf,
+                                    sizeof(timeBuf),
+                                    "%Y-%m-%d %H:%M:%S : ",
+                                    &tm_info);
+        if(timeLen > 0)
+        {
+            crash_safe_write_all(fd, timeBuf, timeLen);
+        }
+    }
+
+    if(content_len > 0)
+    {
+        crash_safe_write_all(fd, content, content_len);
+    }
+    crash_safe_write_all(fd, "\n", 1);
+
+    ::close(fd);
+#endif
+}
+
+#if defined(_WIN32)
+static inline bool crash_ensure_directories_exist(const std::wstring &wpath)
+{
+    if(wpath.empty())
+        return false;
+
+    std::wstring temp = wpath;
+    for(size_t i = 0; i < temp.size(); ++i)
+    {
+        if(temp[i] == L'\\' || temp[i] == L'/')
+        {
+            wchar_t prev = temp[i + 1];
+            temp[i + 1]  = L'\0';
+            if(!::CreateDirectoryW(temp.c_str(), NULL))
+            {
+                DWORD err = ::GetLastError();
+                if(err != ERROR_ALREADY_EXISTS)
+                {
+                    // ignore error, continue to next
+                }
+            }
+            temp[i + 1] = prev;
+        }
+    }
+
+    if(!::CreateDirectoryW(temp.c_str(), NULL))
+    {
+        DWORD err = ::GetLastError();
+        if(err != ERROR_ALREADY_EXISTS)
+        {
+            return false;
+        }
+    }
+
+    DWORD attr = ::GetFileAttributesW(temp.c_str());
+    if(attr == INVALID_FILE_ATTRIBUTES || !(attr & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        return false;
+    }
+    return true;
+}
+#else
+static inline bool crash_ensure_directories_exist(const std::string &path_str)
+{
+    if(path_str.empty())
+        return false;
+
+    std::string temp = path_str;
+    for(size_t i = 1; i < temp.size(); ++i)
+    {
+        if(temp[i] == '/')
+        {
+            temp[i] = '\0';
+            if(::mkdir(temp.c_str(), 0755) != 0)
+            {
+                if(errno != EEXIST)
+                {
+                    // ignore error, continue to next
+                }
+            }
+            temp[i] = '/';
+        }
+    }
+
+    if(::mkdir(temp.c_str(), 0755) != 0)
+    {
+        if(errno != EEXIST)
+            return false;
+    }
+
+    struct stat st;
+    if(::stat(temp.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+        return false;
+
+    return true;
+}
+#endif
+
 class crash_handler
 {
   public:
     crash_handler()
-        : _dump_cb{default_dump_callback}
-        , _handler{nullptr}
+        : _handler{nullptr}
+#if defined(_WIN32)
+        , _pOrgEntry{nullptr}
+        , _patchSize{0}
+        , _is_patched{false}
+#endif
     {
     }
-    crash_handler(const char *abs_path)
-        : _dump_cb{default_dump_callback}
-        , _handler{nullptr}
+
+    explicit crash_handler(const char           *abs_path,
+                           const dump_callback_t cb = nullptr)
+        : _handler{nullptr}
+#if defined(_WIN32)
+        , _pOrgEntry{nullptr}
+        , _patchSize{0}
+        , _is_patched{false}
+#endif
     {
-        set_local_path(abs_path);
-    }
-    crash_handler(const char *abs_path, const dump_callback_t cb)
-        : _dump_cb{cb}
-        , _handler{nullptr}
-    {
-        set_local_path(abs_path);
-    }
-    virtual ~crash_handler()
-    {
-        if(_handler != nullptr)
+        if(abs_path)
         {
-            delete _handler;
-            _handler = nullptr;
+            init(std::string(abs_path), cb);
         }
-    };
+    }
+
+    ~crash_handler()
+    {
+#if defined(_WIN32)
+        if(_is_patched && _pOrgEntry != nullptr && _patchSize > 0)
+        {
+            DWORD dwOldFlag = 0, dwTempFlag = 0;
+            if(::VirtualProtect(_pOrgEntry,
+                                _patchSize,
+                                PAGE_EXECUTE_READWRITE,
+                                &dwOldFlag))
+            {
+                std::memcpy(_pOrgEntry, _origBytes, _patchSize);
+                ::FlushInstructionCache(GetCurrentProcess(),
+                                        _pOrgEntry,
+                                        _patchSize);
+                ::VirtualProtect(_pOrgEntry,
+                                 _patchSize,
+                                 dwOldFlag,
+                                 &dwTempFlag);
+            }
+        }
+#endif
+    }
 
     crash_handler(const crash_handler &)            = delete;
     crash_handler &operator=(const crash_handler &) = delete;
     crash_handler(crash_handler &&)                 = delete;
     crash_handler &operator=(crash_handler &&)      = delete;
 
-    inline void set_dump_callback(const dump_callback_t cb) { _dump_cb = cb; }
-
-    inline void set_local_path(const char *abs_path)
+    inline void init(const char *abs_path, const dump_callback_t cb = nullptr)
     {
-        set_local_path(std::string(abs_path));
+        if(abs_path)
+        {
+            init(std::string(abs_path), cb);
+        }
     }
 
-    void set_local_path(const std::string &abs_path)
+    void init(const std::string &abs_path, dump_callback_t cb = nullptr)
     {
-        if(_handler != nullptr)
-            delete _handler;
+        if(abs_path.empty())
+        {
+            return;
+        }
+
+        std::call_once(_init_flag, [this, &abs_path, cb]() {
+            dump_callback_t final_cb = cb ? cb : default_dump_callback;
 
 #if defined(_WIN32)
-        int wlen =
-            ::MultiByteToWideChar(CP_UTF8, 0, abs_path.c_str(), -1, NULL, 0);
-        std::wstring wabs_path(wlen, 0);
-        ::MultiByteToWideChar(CP_UTF8,
-                              0,
-                              abs_path.c_str(),
-                              -1,
-                              &wabs_path[0],
-                              wlen);
-        if(!wabs_path.empty() && wabs_path.back() == L'\0')
-            wabs_path.pop_back();
+            int wlen   = ::MultiByteToWideChar(CP_UTF8,
+                                               0,
+                                               abs_path.c_str(),
+                                               -1,
+                                               NULL,
+                                               0);
+            _wabs_path = std::wstring(wlen, 0);
+            ::MultiByteToWideChar(CP_UTF8,
+                                  0,
+                                  abs_path.c_str(),
+                                  -1,
+                                  &_wabs_path[0],
+                                  wlen);
+            if(!_wabs_path.empty() && _wabs_path.back() == L'\0')
+                _wabs_path.pop_back();
 
-        ::CreateDirectoryW(wabs_path.c_str(), NULL);
-        _handler = new google_breakpad::ExceptionHandler(
-            wabs_path,
-            nullptr, // FilterCallback
-            _dump_cb,
-            nullptr, // context
-            google_breakpad::ExceptionHandler::HANDLER_ALL);
-#elif __APPLE__
-        _handler =
-            new google_breakpad::ExceptionHandler(abs_path,
-                                                  nullptr, // FilterCallback
-                                                  _dump_cb,
-                                                  nullptr, // context
-                                                  true,
-                                                  nullptr);
+            if(!crash_ensure_directories_exist(_wabs_path))
+            {
+                return;
+            }
+
+            _handler = std::make_unique<google_breakpad::ExceptionHandler>(
+                _wabs_path,
+                nullptr, // FilterCallback
+                final_cb,
+                nullptr, // context
+                google_breakpad::ExceptionHandler::HANDLER_ALL);
+
 #else
-        _handler = new google_breakpad::ExceptionHandler(
-            google_breakpad::MinidumpDescriptor(abs_path),
-            nullptr, // FilterCallback
-            _dump_cb,
-            nullptr, // context
-            true,
-            -1);
+            if(!crash_ensure_directories_exist(abs_path))
+            {
+                return;
+            }
+
+            _abs_path = abs_path;
+#if __APPLE__
+            _handler = std::make_unique<google_breakpad::ExceptionHandler>(
+                _abs_path,
+                nullptr, // FilterCallback
+                final_cb,
+                nullptr, // context
+                true,
+                nullptr);
+#else
+            _handler = std::make_unique<google_breakpad::ExceptionHandler>(
+                google_breakpad::MinidumpDescriptor(_abs_path),
+                nullptr, // FilterCallback
+                final_cb,
+                nullptr, // context
+                true,
+                -1);
 #endif
+#endif
+        });
     }
 
 #if defined(_WIN32)
-    // Reference to: https://www.cnblogs.com/cswuyg/p/3207576.html
-    static LPTOP_LEVEL_EXCEPTION_FILTER WINAPI
-    temp_set_unhandled_exception_filter(
-        LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
+    static LPTOP_LEVEL_EXCEPTION_FILTER
+        WINAPI temp_set_unhandled_exception_filter(
+            LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
     {
         (void) lpTopLevelExceptionFilter;
         return NULL;
     }
 #endif
 
+    [[deprecated(
+        "Directly patching system DLL code (SetUnhandledExceptionFilter) is "
+        "discouraged due to modern Windows security mechanisms (CFG/CET) and "
+        "maintainability. Use standard Breakpad initialization instead.")]]
     bool prevent_set_unhandled_exception_filter()
     {
-#if defined(_WIN32) && !defined(_WIN64) // Only for 32-bit Windows
-        HMODULE hKernel32 = LoadLibraryW(
-            L"kernel32.dll"); // Use LoadLibraryW for wide-character strings
+#if defined(_WIN32)
+        HMODULE hKernel32 = LoadLibraryW(L"kernel32.dll");
         if(hKernel32 == NULL)
             return false;
+
+        auto scope_guard = [&hKernel32]() {
+            if(hKernel32)
+            {
+                ::FreeLibrary(hKernel32);
+                hKernel32 = NULL;
+            }
+        };
+        struct library_guard
+        {
+            HMODULE h;
+            ~library_guard()
+            {
+                if(h)
+                    ::FreeLibrary(h);
+            }
+        } lib_guard{hKernel32};
 
         void *pOrgEntry =
             (void *) (::GetProcAddress(hKernel32,
@@ -212,31 +496,61 @@ class crash_handler
         if(pOrgEntry == NULL)
             return false;
 
-        unsigned char newJump[5];
-        ULONG_PTR     dwOrgEntryAddr = reinterpret_cast<ULONG_PTR>(pOrgEntry);
-        dwOrgEntryAddr += 5; // jump instruction has 5 byte space.
-
-        void *pNewFunc =
+        SIZE_T        patchSize      = 0;
+        unsigned char patchBytes[16] = {0};
+        void         *pNewFunc =
             (void *) (&crash_handler::temp_set_unhandled_exception_filter);
-        ULONG_PTR dwNewEntryAddr = reinterpret_cast<ULONG_PTR>(pNewFunc);
-        LONG      dwRelativeAddr =
-            static_cast<LONG>(dwNewEntryAddr - dwOrgEntryAddr);
 
-        newJump[0] = 0xE9; // jump
-        memcpy(&newJump[1], &dwRelativeAddr, sizeof(LONG));
-        SIZE_T bytesWritten;
-        DWORD  dwOldFlag, dwTempFlag;
-        ::VirtualProtect(pOrgEntry, 5, PAGE_READWRITE, &dwOldFlag);
-        BOOL bRet = ::WriteProcessMemory(::GetCurrentProcess(),
-                                         pOrgEntry,
-                                         newJump,
-                                         5,
-                                         &bytesWritten);
-        ::VirtualProtect(pOrgEntry, 5, dwOldFlag, &dwTempFlag);
-        return bRet;
+#if defined(_WIN64)
+        // MOV RAX, pNewFunc  (48 B8 [8-byte address])
+        // JMP RAX            (FF E0)
+        patchSize              = 12;
+        patchBytes[0]          = 0x48;
+        patchBytes[1]          = 0xB8;
+        std::uint64_t funcAddr = reinterpret_cast<std::uint64_t>(pNewFunc);
+        std::memcpy(&patchBytes[2], &funcAddr, sizeof(funcAddr));
+        patchBytes[10] = 0xFF;
+        patchBytes[11] = 0xE0;
+#else
+        // JMP rel32          (E9 [4-byte relative offset])
+        patchSize                = 5;
+        patchBytes[0]            = 0xE9;
+        ULONG_PTR dwOrgEntryAddr = reinterpret_cast<ULONG_PTR>(pOrgEntry);
+        ULONG_PTR dwNewEntryAddr = reinterpret_cast<ULONG_PTR>(pNewFunc);
+        INT64     qwRelativeAddr = static_cast<INT64>(dwNewEntryAddr)
+                                   - (static_cast<INT64>(dwOrgEntryAddr) + 5);
+        if(qwRelativeAddr < INT32_MIN || qwRelativeAddr > INT32_MAX)
+            return false;
+
+        LONG dwRelativeAddr = static_cast<LONG>(qwRelativeAddr);
+        std::memcpy(&patchBytes[1], &dwRelativeAddr, sizeof(LONG));
+#endif
+        DWORD dwOldFlag = 0, dwTempFlag = 0;
+        if(!::VirtualProtect(pOrgEntry,
+                             patchSize,
+                             PAGE_EXECUTE_READWRITE,
+                             &dwOldFlag))
+            return false;
+
+        _pOrgEntry = pOrgEntry;
+        _patchSize = patchSize;
+        std::memcpy(_origBytes, pOrgEntry, patchSize);
+        std::memcpy(pOrgEntry, patchBytes, patchSize);
+        ::FlushInstructionCache(GetCurrentProcess(), pOrgEntry, patchSize);
+        ::VirtualProtect(pOrgEntry, patchSize, dwOldFlag, &dwTempFlag);
+        _is_patched = true;
+        return true;
 #else
         return true;
 #endif
+    }
+
+    bool write_minidump()
+    {
+        if(_handler)
+            return _handler->WriteMinidump();
+
+        return false;
     }
 
   public:
@@ -246,88 +560,22 @@ class crash_handler
         return &inst;
     }
 
-    static void print(const char *content, const char *path = "crash.log")
-    {
-        if(!content || !path)
-            return;
+  private:
+    std::once_flag                                     _init_flag;
+    std::unique_ptr<google_breakpad::ExceptionHandler> _handler;
 
 #if defined(_WIN32)
-        HANDLE hFile = ::CreateFileA(path,
-                                     FILE_APPEND_DATA,
-                                     FILE_SHARE_READ,
-                                     NULL,
-                                     OPEN_ALWAYS,
-                                     FILE_ATTRIBUTE_NORMAL,
-                                     NULL);
+    void         *_pOrgEntry;
+    SIZE_T        _patchSize;
+    unsigned char _origBytes[16];
+    bool          _is_patched;
 
-        if(hFile == INVALID_HANDLE_VALUE)
-            return;
-
-        SYSTEMTIME st;
-        ::GetLocalTime(&st);
-        char timeBuf[64];
-        int  timeLen = ::wsprintfA(timeBuf,
-                                   "%04d-%02d-%02d %02d:%02d:%02d : ",
-                                   st.wYear,
-                                   st.wMonth,
-                                   st.wDay,
-                                   st.wHour,
-                                   st.wMinute,
-                                   st.wSecond);
-
-        DWORD bytesWritten;
-        if(timeLen > 0)
-            ::WriteFile(hFile, timeBuf, timeLen, &bytesWritten, NULL);
-
-        int contentLen = 0;
-        while(content[contentLen])
-            contentLen++;
-
-        ::WriteFile(hFile, content, contentLen, &bytesWritten, NULL);
-        ::WriteFile(hFile, "\r\n", 2, &bytesWritten, NULL);
-        ::CloseHandle(hFile);
-
-#else // Linux / macOS (POSIX)
-        int fd = ::open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
-        if(fd < 0)
-            return;
-
-        struct timespec ts;
-        struct tm       tm_info;
-        if(::clock_gettime(CLOCK_REALTIME, &ts) == 0)
-        {
-            ::localtime_r(&ts.tv_sec, &tm_info);
-            char   timeBuf[64];
-            size_t timeLen = ::strftime(timeBuf,
-                                        sizeof(timeBuf),
-                                        "%Y-%m-%d %H:%M:%S : ",
-                                        &tm_info);
-            if(timeLen > 0)
-            {
-                auto ret = ::write(fd, timeBuf, timeLen);
-                (void) ret;
-            }
-        }
-
-        size_t contentLen = 0;
-        while(content[contentLen])
-            contentLen++;
-
-        auto ret1 = ::write(fd, content, contentLen);
-        (void) ret1;
-
-        auto ret2 = ::write(fd, "\n", 1);
-        (void) ret2;
-
-        ::close(fd);
+    std::wstring _wabs_path;
+#else
+    std::string _abs_path;
 #endif
-    }
-
-  private:
-    google_breakpad::ExceptionHandler *_handler = nullptr;
-    dump_callback_t                    _dump_cb;
 };
 
-}
+} // namespace hj
 
 #endif

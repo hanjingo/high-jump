@@ -1,162 +1,72 @@
-/*
- *  This file is part of high-jump(hj).
- *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
- *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef COMPAT_HPP
 #define COMPAT_HPP
 
-#include <stdio.h>
-
-// -------------------------------- for c++ --------------------------------
+// -------------------------------- for c++ only --------------------------------
 #ifdef __cplusplus
-#include <functional>
 
 // -------- detect compiler C++ version ------------
-#ifndef HJ_CPP_VERSION
-#if defined(_MSC_VER)
-#if defined(_MSVC_LANG)
-#define HJ_CPP_VERSION _MSVC_LANG
+#if defined(_MSC_VER) && defined(_MSVC_LANG)
+#define HJ_DETAIL_ACTUAL_CPP_VERSION _MSVC_LANG
 #else
-#define HJ_CPP_VERSION __cplusplus
+#define HJ_DETAIL_ACTUAL_CPP_VERSION __cplusplus
 #endif
-#else
-#define HJ_CPP_VERSION __cplusplus
-#endif
-#endif // HJ_CPP_VERSION
 
-// -------- avoid redefine std::min/std::max in windows ------------
+#ifdef HJ_OVERRIDE_CPP_VERSION
+#define HJ_DETAIL_CPP_VERSION HJ_OVERRIDE_CPP_VERSION
+#else
+#define HJ_DETAIL_CPP_VERSION HJ_DETAIL_ACTUAL_CPP_VERSION
+#endif
+
+#ifdef HJ_CPP_VERSION
+#error                                                                         \
+    "HJ_CPP_VERSION is a read-only macro exported by hj. Do not define it manually; use HJ_OVERRIDE_CPP_VERSION instead."
+#else
+#define HJ_CPP_VERSION HJ_DETAIL_CPP_VERSION
+#endif
+
+// -------- avoid redefining std::min/std::max in windows ------------
 #if defined(_WIN32) && !defined(NOMINMAX)
 #define NOMINMAX
 #endif
 
-// -------- detect whether std::unary_function exists ------------
-#ifndef HJ_UNARY_FUNCTION_DEFINED
-// Historically std::unary_function was provided by the standard
-// library implementations but has been removed in C++17. Some
-// libstdc++/libc++/MSVC versions may still provide a deprecated
-// definition or a compatibility macro. We try to detect common
-// cases conservatively and only provide a fallback when the symbol
-// is truly absent.
-
-// MSVC (Visual Studio) removed unary_function in recent toolsets
-#if defined(_MSC_VER)
-#if (_MSC_VER >= 1910 && HJ_CPP_VERSION >= 201703L)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
-
-// libstdc++ (GCC's C++ library) historically provided unary_function
-#elif defined(__GLIBCXX__)
-#define HJ_UNARY_FUNCTION_DEFINED 1
-
-// libc++ (LLVM's C++ library) removed many deprecated symbols; newer
-// releases may define a feature-test macro to indicate removal.
-#elif defined(_LIBCPP_VERSION)
-#if defined(_LIBCPP_HAS_NO_DEPRECATED_UNARY_FUNCTION)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#if (HJ_CPP_VERSION >= 201703L)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
-#endif
-
-// Generic fallback: if compiling in C++17 or newer, assume unary_function
-// is not present unless a known library macro indicates otherwise.
-#else
-#if (HJ_CPP_VERSION >= 201703L)
-#define HJ_UNARY_FUNCTION_DEFINED 0
-#else
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif
-#endif
-
-#endif // HJ_UNARY_FUNCTION_DEFINED
-
-// -------- provide fallback only when truly missing ------------
-#if !HJ_UNARY_FUNCTION_DEFINED
-// Note: injecting names into namespace std is undefined behavior in the
-// C++ standard. In practice many implementations accept this for
-// compatibility shims, but a safer approach is to provide the shim in
-// a separate compatibility namespace and adapt callers. To minimize
-// disruption we keep the original behavior here but document the risk.
-namespace std
-{
-template <class Arg, class Result>
-struct unary_function
-{
-    typedef Arg    argument_type;
-    typedef Result result_type;
-};
-} // namespace std
-#undef HJ_UNARY_FUNCTION_DEFINED
-#define HJ_UNARY_FUNCTION_DEFINED 1
-#endif // !HJ_UNARY_FUNCTION_DEFINED
-
 #endif // __cplusplus
 
-// ------------------------------------ for c/c++ --------------------------------------
-#ifdef __cplusplus
-extern "C" {
-#endif
-// deprecated
-#if (__cplusplus >= 201402L)
-#if defined(_MSC_VER)
-#define DEPRECATED(msg) __declspec(deprecated(msg))
-#elif defined(__GNUC__)
-#define DEPRECATED(msg) __attribute__((deprecated(msg)))
-#else
-#define DEPRECATED(msg) [[deprecated(msg)]]
-#endif
-#else
-#define DEPRECATED(msg)
-#endif
-
-
-// inline
-#if defined(_MSC_VER)
-#define FORCE_INLINE __forceinline
-#define NO_INLINE __declspec(noinline)
+// ------------------------ Macros (C/C++ Shared) ------------------------
+// Deprecated attribute
+#if defined(__cplusplus) && defined(__has_cpp_attribute)                       \
+    && __has_cpp_attribute(deprecated) >= 201309L
+#define HJ_DEPRECATED(msg) [[deprecated(msg)]]
+#elif defined(_MSC_VER)
+#define HJ_DEPRECATED(msg) __declspec(deprecated(msg))
 #elif defined(__GNUC__) || defined(__clang__)
-#define FORCE_INLINE __attribute__((always_inline)) inline
-#define NO_INLINE __attribute__((noinline))
+#define HJ_DEPRECATED(msg) __attribute__((deprecated(msg)))
 #else
-#define FORCE_INLINE inline
-#define NO_INLINE
+#define HJ_DEPRECATED(msg)
 #endif
 
+// Inline control
+#if defined(_MSC_VER)
+#define HJ_FORCE_INLINE __forceinline
+#define HJ_NO_INLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define HJ_FORCE_INLINE __attribute__((always_inline)) inline
+#define HJ_NO_INLINE __attribute__((noinline))
+#else
+#define HJ_FORCE_INLINE inline
+#define HJ_NO_INLINE
+#endif
 
-// branch prediction hints (gcc and clang only)
+// Branch prediction hints
 #if defined(__GNUC__) || defined(__clang__)
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#define HOT __attribute__((hot))
-#define COLD __attribute__((cold))
+#define HJ_LIKELY(x) __builtin_expect(!!(x), 1)
+#define HJ_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#define HJ_HOT __attribute__((hot))
+#define HJ_COLD __attribute__((cold))
 #else
-#define LIKELY(x) (x)
-#define UNLIKELY(x) (x)
-#define HOT
-#define COLD
-#endif
-
-#ifdef __cplusplus
-}
+#define HJ_LIKELY(x) (!!(x))
+#define HJ_UNLIKELY(x) (!!(x))
+#define HJ_HOT
+#define HJ_COLD
 #endif
 
 #endif // COMPAT_HPP

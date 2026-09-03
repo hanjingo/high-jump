@@ -2,14 +2,27 @@
 #include <hj/testing/crash.hpp>
 #include <string>
 #include <cstdlib>
+#include <cstdint>
+#include <limits>
+#include <vector>
 #include <filesystem>
 #include <fstream>
 
 #if defined(_WIN32)
+#if !defined(NOMINMAX)
+#define NOMINMAX
+#endif
+#include <windows.h>
 #include <client/windows/handler/exception_handler.h>
 #elif defined(__APPLE__)
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <client/mac/handler/exception_handler.h>
 #else
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <client/linux/handler/exception_handler.h>
 #endif
 
@@ -33,11 +46,84 @@ int run_crasher_subprocess(const std::string &crash_type,
     fs::create_directories(dump_dir, ec);
 
 #if defined(_WIN32)
-    std::string cmd = "crasher.exe --type " + crash_type + " --dir " + dump_dir;
+    std::wstring app_name = L"crasher.exe";
+    std::string  cmd_str =
+        "crasher.exe --type " + crash_type + " --dir \"" + dump_dir + "\"";
+
+    std::vector<wchar_t> cmd_buf(cmd_str.begin(), cmd_str.end());
+    cmd_buf.push_back(L'\0');
+
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+
+    BOOL ok = ::CreateProcessW(nullptr,
+                               cmd_buf.data(),
+                               nullptr,
+                               nullptr,
+                               FALSE,
+                               0,
+                               nullptr,
+                               nullptr,
+                               &si,
+                               &pi);
+
+    if(!ok)
+    {
+        return -1;
+    }
+
+    ::WaitForSingleObject(pi.hProcess, INFINITE);
+
+    DWORD exit_code = 0;
+    ::GetExitCodeProcess(pi.hProcess, &exit_code);
+
+    ::CloseHandle(pi.hProcess);
+    ::CloseHandle(pi.hThread);
+
+    return static_cast<int>(exit_code);
+
 #else
-    std::string cmd = "./crasher --type " + crash_type + " --dir " + dump_dir;
+
+    pid_t pid = ::fork();
+    if(pid < 0)
+    {
+        return -1;
+    }
+
+    if(pid == 0)
+    {
+        const char *exe    = "./crasher";
+        const char *args[] = {exe,
+                              "--type",
+                              crash_type.c_str(),
+                              "--dir",
+                              dump_dir.c_str(),
+                              nullptr};
+
+        ::execv(exe, const_cast<char *const *>(args));
+        ::_exit(127);
+    }
+
+    int status = 0;
+    if(::waitpid(pid, &status, 0) < 0)
+    {
+        return -1;
+    }
+
+    if(WIFEXITED(status))
+    {
+        return WEXITSTATUS(status);
+    }
+
+    if(WIFSIGNALED(status))
+    {
+        return -WTERMSIG(status);
+    }
+
+    return status;
+
 #endif
-    return std::system(cmd.c_str());
 }
 
 bool validate_minidump_file(const std::string &dump_dir)
@@ -63,13 +149,17 @@ bool validate_minidump_file(const std::string &dump_dir)
     }
 
     fs::path dump_file_path;
+    uint64_t file_size = 0;
     for(const auto &entry : fs::directory_iterator(dump_dir))
     {
         if(entry.is_regular_file() && entry.path().extension() == ".dmp")
         {
-            if(entry.file_size() > sizeof(MDRawHeader))
+            std::error_code ec;
+            uint64_t        sz = entry.file_size(ec);
+            if(!ec && sz > sizeof(MDRawHeader))
             {
                 dump_file_path = entry.path();
+                file_size      = sz;
                 break;
             }
         }
@@ -94,6 +184,28 @@ bool validate_minidump_file(const std::string &dump_dir)
     }
 
     if(header.stream_count == 0 || header.stream_directory_rva == 0)
+    {
+        return false;
+    }
+
+    uint64_t dir_rva = static_cast<uint64_t>(header.stream_directory_rva);
+    if(dir_rva >= file_size)
+    {
+        return false;
+    }
+
+    uint64_t stream_count = static_cast<uint64_t>(header.stream_count);
+    uint64_t entry_size   = static_cast<uint64_t>(sizeof(MDRawDirectory));
+
+    if(stream_count > (std::numeric_limits<uint64_t>::max() / entry_size))
+    {
+        return false;
+    }
+
+    uint64_t total_dir_bytes = stream_count * entry_size;
+
+    if(dir_rva + total_dir_bytes > file_size
+       || (dir_rva + total_dir_bytes) < dir_rva)
     {
         return false;
     }

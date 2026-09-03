@@ -104,9 +104,8 @@ default_dump_callback(const google_breakpad::MinidumpDescriptor &descriptor,
 #endif
 
 /*
- * These helpers are intentionally small and independent of iostreams.
- * They are used by the sample/application callback and are not part of
- * Breakpad's exception capture path.
+ * These helpers are strictly Async-Signal-Safe:
+ * No heap allocations, no locks, no std::string/std::filesystem.
  */
 static inline size_t crash_safe_u64tostr(uint64_t val, char *buf)
 {
@@ -197,6 +196,10 @@ static inline bool crash_safe_write_all(int fd, const char *buf, size_t count)
 
 #endif
 
+/**
+ * @brief Strictly Async-Signal-Safe crash logger.
+ * Pure stack buffer operations, zero heap allocations, no std::string/filesystem.
+ */
 static inline void crash_print(const char *content,
                                const char *path = "crash.log")
 {
@@ -204,25 +207,16 @@ static inline void crash_print(const char *content,
         return;
 
     size_t content_len = 0;
-
     while(content[content_len] != '\0')
         ++content_len;
 
 #if defined(_WIN32)
-
-    int wlen = ::MultiByteToWideChar(CP_UTF8, 0, path, -1, nullptr, 0);
-
+    wchar_t wpath[1024]{};
+    int     wlen = ::MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, 1024);
     if(wlen <= 0)
         return;
 
-    std::wstring wpath(static_cast<size_t>(wlen), L'\0');
-
-    if(::MultiByteToWideChar(CP_UTF8, 0, path, -1, &wpath[0], wlen) <= 0)
-    {
-        return;
-    }
-
-    HANDLE hFile = ::CreateFileW(wpath.c_str(),
+    HANDLE hFile = ::CreateFileW(wpath,
                                  FILE_APPEND_DATA,
                                  FILE_SHARE_READ | FILE_SHARE_WRITE,
                                  nullptr,
@@ -237,15 +231,14 @@ static inline void crash_print(const char *content,
     ::GetLocalTime(&st);
 
     char timeBuf[64]{};
-
-    int timeLen = ::wsprintfA(timeBuf,
-                              "%04d-%02d-%02d %02d:%02d:%02d : ",
-                              st.wYear,
-                              st.wMonth,
-                              st.wDay,
-                              st.wHour,
-                              st.wMinute,
-                              st.wSecond);
+    int  timeLen = ::wsprintfA(timeBuf,
+                               "%04d-%02d-%02d %02d:%02d:%02d : ",
+                               st.wYear,
+                               st.wMonth,
+                               st.wDay,
+                               st.wHour,
+                               st.wMinute,
+                               st.wSecond);
 
     if(timeLen > 0)
     {
@@ -262,27 +255,21 @@ static inline void crash_print(const char *content,
 #else
 
     int fd = ::open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
-
     if(fd < 0)
         return;
 
     struct timespec ts{};
-
     if(::clock_gettime(CLOCK_REALTIME, &ts) == 0)
     {
         char   timeBuf[64]{};
         size_t len = 0;
 
         timeBuf[len++] = '[';
-
         len += crash_safe_u64tostr(static_cast<uint64_t>(ts.tv_sec),
                                    timeBuf + len);
-
         timeBuf[len++] = '.';
-
         len += crash_safe_u64tostr(static_cast<uint64_t>(ts.tv_nsec),
                                    timeBuf + len);
-
         timeBuf[len++] = ']';
         timeBuf[len++] = ' ';
 
@@ -297,17 +284,6 @@ static inline void crash_print(const char *content,
     ::close(fd);
 
 #endif
-}
-
-static inline bool
-crash_ensure_directories_exist(const std::filesystem::path &dir_path)
-{
-    std::error_code ec;
-
-    if(std::filesystem::exists(dir_path, ec))
-        return !ec && std::filesystem::is_directory(dir_path, ec);
-
-    return std::filesystem::create_directories(dir_path, ec) && !ec;
 }
 
 class crash_handler
@@ -412,7 +388,15 @@ class crash_handler
         return init(std::string(abs_path), cb);
     }
 
-    State state() const { return _state.load(std::memory_order_acquire); }
+    State state() const noexcept
+    {
+        return _state.load(std::memory_order_acquire);
+    }
+
+    bool is_ready() const noexcept
+    {
+        return _state.load(std::memory_order_acquire) == State::READY;
+    }
 
     bool write_minidump()
     {
@@ -421,6 +405,107 @@ class crash_handler
 
         return _handler ? _handler->WriteMinidump() : false;
     }
+
+#if defined(_WIN32)
+    static LPTOP_LEVEL_EXCEPTION_FILTER
+        WINAPI temp_set_unhandled_exception_filter(
+            LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
+    {
+        (void) lpTopLevelExceptionFilter;
+        return NULL;
+    }
+#endif
+
+    [[deprecated(
+        "Directly patching system DLL code (SetUnhandledExceptionFilter) is "
+        "discouraged due to modern Windows security mechanisms (CFG/CET) and "
+        "maintainability. Use standard Breakpad initialization instead.")]]
+    bool prevent_set_unhandled_exception_filter()
+    {
+#if defined(_WIN32)
+        HMODULE hKernel32 = LoadLibraryW(L"kernel32.dll");
+        if(hKernel32 == NULL)
+            return false;
+
+        auto scope_guard = [&hKernel32]() {
+            if(hKernel32)
+            {
+                ::FreeLibrary(hKernel32);
+                hKernel32 = NULL;
+            }
+        };
+        struct library_guard
+        {
+            HMODULE h;
+            ~library_guard()
+            {
+                if(h)
+                    ::FreeLibrary(h);
+            }
+        } lib_guard{hKernel32};
+
+        void *pOrgEntry =
+            (void *) (::GetProcAddress(hKernel32,
+                                       "SetUnhandledExceptionFilter"));
+        if(pOrgEntry == NULL)
+            return false;
+
+        SIZE_T        patchSize      = 0;
+        unsigned char patchBytes[16] = {0};
+        void         *pNewFunc =
+            (void *) (&crash_handler::temp_set_unhandled_exception_filter);
+
+#if defined(_WIN64)
+        // MOV RAX, pNewFunc  (48 B8 [8-byte address])
+        // JMP RAX            (FF E0)
+        patchSize              = 12;
+        patchBytes[0]          = 0x48;
+        patchBytes[1]          = 0xB8;
+        std::uint64_t funcAddr = reinterpret_cast<std::uint64_t>(pNewFunc);
+        std::memcpy(&patchBytes[2], &funcAddr, sizeof(funcAddr));
+        patchBytes[10] = 0xFF;
+        patchBytes[11] = 0xE0;
+#else
+        // JMP rel32          (E9 [4-byte relative offset])
+        patchSize                = 5;
+        patchBytes[0]            = 0xE9;
+        ULONG_PTR dwOrgEntryAddr = reinterpret_cast<ULONG_PTR>(pOrgEntry);
+        ULONG_PTR dwNewEntryAddr = reinterpret_cast<ULONG_PTR>(pNewFunc);
+        INT64     qwRelativeAddr = static_cast<INT64>(dwNewEntryAddr)
+                                   - (static_cast<INT64>(dwOrgEntryAddr) + 5);
+        if(qwRelativeAddr < INT32_MIN || qwRelativeAddr > INT32_MAX)
+            return false;
+
+        LONG dwRelativeAddr = static_cast<LONG>(qwRelativeAddr);
+        std::memcpy(&patchBytes[1], &dwRelativeAddr, sizeof(LONG));
+#endif
+        DWORD dwOldFlag = 0, dwTempFlag = 0;
+        if(!::VirtualProtect(pOrgEntry,
+                             patchSize,
+                             PAGE_EXECUTE_READWRITE,
+                             &dwOldFlag))
+            return false;
+
+        _pOrgEntry = pOrgEntry;
+        _patchSize = patchSize;
+        std::memcpy(_origBytes, pOrgEntry, patchSize);
+        std::memcpy(pOrgEntry, patchBytes, patchSize);
+        ::FlushInstructionCache(GetCurrentProcess(), pOrgEntry, patchSize);
+        ::VirtualProtect(pOrgEntry, patchSize, dwOldFlag, &dwTempFlag);
+        _is_patched = true;
+        return true;
+#else
+        return true;
+#endif
+    }
+
+  private:
+#if defined(_WIN32)
+    void         *_pOrgEntry;
+    SIZE_T        _patchSize;
+    unsigned char _origBytes[16];
+    bool          _is_patched;
+#endif
 
   private:
     crash_handler()  = default;

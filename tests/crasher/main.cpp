@@ -1,5 +1,7 @@
 #include <iostream>
 #include <string>
+#include <cstring>
+#include <cstdlib>
 #include <filesystem>
 #include <hj/testing/crash.hpp>
 #include <boost/program_options.hpp>
@@ -7,7 +9,7 @@
 namespace po = boost::program_options;
 namespace fs = std::filesystem;
 
-static std::string g_dump_dir = "./dumps";
+static char g_log_path[1024] = {0};
 
 #if defined(_WIN32)
 static bool crasher_dump_callback(const wchar_t      *dump_dir,
@@ -23,15 +25,14 @@ static bool crasher_dump_callback(const wchar_t      *dump_dir,
     (void) exinfo;
     (void) assertion;
 
-    std::string log_path = (fs::path(g_dump_dir) / "callback.log").string();
     if(succeeded)
     {
         hj::crash_print("[crasher] Breakpad callback triggered successfully",
-                        log_path.c_str());
+                        g_log_path);
     } else
     {
         hj::crash_print("[crasher] Breakpad callback triggered with failure",
-                        log_path.c_str());
+                        g_log_path);
     }
     return succeeded;
 }
@@ -45,15 +46,14 @@ static bool crasher_dump_callback(const char *dump_dir,
     (void) minidump_id;
     (void) context;
 
-    std::string log_path = (fs::path(g_dump_dir) / "callback.log").string();
     if(succeeded)
     {
         hj::crash_print("[crasher] Breakpad callback triggered successfully",
-                        log_path.c_str());
+                        g_log_path);
     } else
     {
         hj::crash_print("[crasher] Breakpad callback triggered with failure",
-                        log_path.c_str());
+                        g_log_path);
     }
     return succeeded;
 }
@@ -66,15 +66,14 @@ crasher_dump_callback(const google_breakpad::MinidumpDescriptor &descriptor,
     (void) descriptor;
     (void) context;
 
-    std::string log_path = (fs::path(g_dump_dir) / "callback.log").string();
     if(succeeded)
     {
         hj::crash_print("[crasher] Breakpad callback triggered successfully",
-                        log_path.c_str());
+                        g_log_path);
     } else
     {
         hj::crash_print("[crasher] Breakpad callback triggered with failure",
-                        log_path.c_str());
+                        g_log_path);
     }
     return succeeded;
 }
@@ -101,41 +100,59 @@ void trigger_crash(const std::string &type)
     } else
     {
         std::cerr << "[crasher] Unknown crash type: " << type << std::endl;
-        std::exit(1);
+        std::exit(EXIT_FAILURE);
     }
 }
 
 int main(int argc, char *argv[])
 {
-    po::options_description desc("Allowed options");
-    desc.add_options()("help,h", "produce help message")(
-        "type,t",
-        po::value<std::string>()->default_value("segfault"),
-        "crash type: segfault, divbyzero, abort")(
-        "dir,d",
-        po::value<std::string>()->default_value("./dumps"),
-        "dump directory");
-
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-    po::notify(vm);
-
-    if(vm.count("help"))
+    try
     {
-        std::cout << desc << "\n";
-        return 0;
+        po::options_description desc("Allowed options");
+        desc.add_options()("help,h", "produce help message")(
+            "type,t",
+            po::value<std::string>()->default_value("segfault"),
+            "crash type: segfault, divbyzero, abort")(
+            "dir,d",
+            po::value<std::string>()->default_value("./dumps"),
+            "dump directory");
+
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        po::notify(vm);
+
+        if(vm.count("help"))
+        {
+            std::cout << desc << "\n";
+            return EXIT_SUCCESS;
+        }
+
+        std::string crash_type = vm["type"].as<std::string>();
+        std::string dump_dir   = vm["dir"].as<std::string>();
+
+        std::string log_file_path =
+            (fs::path(dump_dir) / "callback.log").string();
+        std::strncpy(g_log_path, log_file_path.c_str(), sizeof(g_log_path) - 1);
+
+        auto &handler = hj::crash_handler::instance();
+        if(!handler.init(dump_dir, crasher_dump_callback))
+        {
+            std::cerr
+                << "[crasher] Error: Failed to initialize crash handler at: "
+                << dump_dir << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        std::cout << "[crasher] Crash handler initialized successfully at: "
+                  << dump_dir << std::endl;
+
+        trigger_crash(crash_type);
+    }
+    catch(const std::exception &e)
+    {
+        std::cerr << "[crasher] Exception in main: " << e.what() << std::endl;
+        return EXIT_FAILURE;
     }
 
-    std::string crash_type = vm["type"].as<std::string>();
-    g_dump_dir             = vm["dir"].as<std::string>();
-
-    auto &handler = hj::crash_handler::instance();
-    handler.init(g_dump_dir, crasher_dump_callback);
-
-    std::cout << "[crasher] Crash handler initialized at: " << g_dump_dir
-              << std::endl;
-
-    trigger_crash(crash_type);
-
-    return 0;
+    return EXIT_SUCCESS;
 }

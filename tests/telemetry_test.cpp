@@ -4,6 +4,7 @@
 #include <chrono>
 #include <map>
 #include <string>
+#include <future>
 
 #if defined(_WIN32) || defined(_WIN64)
 #ifndef NOMINMAX
@@ -25,7 +26,6 @@ static void _world()
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 }
 
-// 辅助函数：将 FILETIME 转换为 ULARGE_INTEGER
 #if defined(_WIN32) || defined(_WIN64)
 static ULARGE_INTEGER filetime_to_ull(const FILETIME &ft)
 {
@@ -36,7 +36,6 @@ static ULARGE_INTEGER filetime_to_ull(const FILETIME &ft)
 }
 #endif
 
-// 修复后的跨平台 CPU 利用率计算（基于差分采样，输出真正的百分比 0.0 ~ 100.0）
 static double _get_cpu_usage()
 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -52,7 +51,6 @@ static double _get_cpu_usage()
     ULARGE_INTEGER kernel = filetime_to_ull(kernelTime);
     ULARGE_INTEGER user   = filetime_to_ull(userTime);
 
-    // 计算差值
     ULONGLONG idle_diff   = idle.QuadPart - last_idle.QuadPart;
     ULONGLONG kernel_diff = kernel.QuadPart - last_kernel.QuadPart;
     ULONGLONG user_diff   = user.QuadPart - last_user.QuadPart;
@@ -68,7 +66,6 @@ static double _get_cpu_usage()
     }
 
     ULONGLONG kernel_non_idle = sys_total - idle_diff;
-    // CPU 占用率百分比
     double cpu_usage = (double) (kernel_non_idle * 100.0) / (double) sys_total;
     return cpu_usage < 0.0 ? 0.0 : (cpu_usage > 100.0 ? 100.0 : cpu_usage);
 #else
@@ -161,9 +158,68 @@ get_span_attribute_value_str(const hj::telemetry::trace_span_data_t &span,
     return "";
 }
 
+TEST(telemetry, runtime_config_initialization)
+{
+    hj::telemetry::config cfg;
+    cfg.service_name           = "my_service";
+    cfg.service_version        = "1.0.0";
+    cfg.deployment_environment = "production";
+    cfg.type                   = hj::telemetry::exporter_type::ostream;
+
+    hj::telemetry::runtime telemetry(cfg);
+
+    auto tracer = telemetry.tracer_handle("network");
+    auto span   = tracer.scoped_span("send_request");
+    span.set_attribute("peer", "server1");
+    span.add_event("request_sent");
+
+    auto meter = telemetry.meter_handle("network");
+    auto request_count =
+        meter.counter<uint64_t>("requests_total", "Total requests", "1");
+    request_count->Add(1);
+
+    auto latency = meter.histogram<double>("request_duration", "Latency", "ms");
+    latency->Record(14.5, {}, opentelemetry::context::Context{});
+
+    EXPECT_TRUE(telemetry.force_flush());
+    EXPECT_TRUE(telemetry.shutdown());
+}
+
+TEST(telemetry, trace_context_propagation_test)
+{
+    hj::telemetry::config cfg;
+    cfg.service_name = "service_a";
+    cfg.type         = hj::telemetry::exporter_type::ostream;
+
+    hj::telemetry::runtime telemetry(cfg);
+
+    auto tracer_a = telemetry.tracer_handle("service_a_tracer");
+    auto span_a   = tracer_a.start_scoped_span("call_from_a");
+
+    std::map<std::string, std::string>           http_headers;
+    hj::telemetry::propagation::text_map_carrier carrier(http_headers);
+    hj::telemetry::propagation::inject(carrier);
+
+    EXPECT_TRUE(http_headers.find("traceparent") != http_headers.end());
+
+    hj::telemetry::propagation::text_map_carrier remote_carrier(http_headers);
+    auto                                         extracted_context =
+        hj::telemetry::propagation::extract(remote_carrier);
+
+    auto tracer_b = telemetry.tracer_handle("service_b_tracer");
+    auto span_b =
+        tracer_b.start_span_with_context("handle_in_b", extracted_context);
+
+    EXPECT_NE(span_b, nullptr);
+    span_b->End();
+
+    telemetry.force_flush();
+}
+
 TEST(telemetry, trace_ostream_export_default)
 {
-    auto tracer = hj::telemetry::make_ostream_tracer("ostream1");
+    auto rt     = hj::telemetry::make_ostream_runtime("ostream1");
+    auto tracer = rt.get_tracer("ostream1");
     for(int i = 0; i < 2; ++i)
     {
         auto span_hello = tracer.start_span("call_hello");
@@ -174,11 +230,13 @@ TEST(telemetry, trace_ostream_export_default)
         _world();
         tracer.end_span(span_world);
     }
+    rt.shutdown();
 }
 
 TEST(telemetry, trace_scoped_raii_demo)
 {
-    auto tracer = hj::telemetry::make_ostream_tracer("raii_demo");
+    auto rt     = hj::telemetry::make_ostream_runtime("raii_demo");
+    auto tracer = rt.get_tracer("raii_demo");
 
     {
         auto parent_span =
@@ -191,7 +249,8 @@ TEST(telemetry, trace_scoped_raii_demo)
         }
     }
 
-    tracer.force_flush();
+    rt.force_flush();
+    rt.shutdown();
 }
 
 TEST(telemetry, trace_custom_span_exporter)
@@ -268,11 +327,8 @@ TEST(telemetry, trace_otlp_http_export)
         GTEST_SKIP()
             << "Please configure a valid OTLP endpoint to run this trace test.";
 
-    auto tracer = hj::telemetry::make_otlp_http_tracer(
-        "otlp_http_test",
-        endpoint,
-        true,
-        hj::telemetry::http_request_content_type::kBinary);
+    auto rt     = hj::telemetry::make_otlp_http_runtime(endpoint, true);
+    auto tracer = rt.get_tracer("otlp_http_test");
     for(int i = 0; i < 2; ++i)
     {
         auto span_hello = tracer.start_span("call_hello");
@@ -283,13 +339,14 @@ TEST(telemetry, trace_otlp_http_export)
         _world();
         tracer.end_span(span_world);
     }
+    rt.shutdown();
 }
 
 TEST(telemetry, trace_otlp_file_export)
 {
     std::string file_pattern = "trace-otlp-file.json";
-    auto        tracer =
-        hj::telemetry::make_otlp_file_tracer("otlp_file_test", file_pattern);
+    auto        rt     = hj::telemetry::make_otlp_file_runtime(file_pattern);
+    auto        tracer = rt.get_tracer("otlp_file_test");
     for(int i = 0; i < 2; ++i)
     {
         auto span_hello = tracer.start_span("call_hello");
@@ -300,6 +357,7 @@ TEST(telemetry, trace_otlp_file_export)
         _world();
         tracer.end_span(span_world);
     }
+    rt.shutdown();
 }
 
 static void
@@ -317,22 +375,36 @@ TEST(telemetry, meter_ostream_export_default)
 {
     hj::telemetry::clean_up_metrics();
 
-    auto meter =
-        hj::telemetry::make_ostream_meter("meter1", "1.2.0", "", 500, 100);
+    std::promise<void> p;
+    auto               f = p.get_future();
 
-    auto request_counter = meter.create_u64_counter("http.requests.total",
-                                                    "Total HTTP requests",
-                                                    "1");
+    std::thread worker([&p]() {
+        auto rt    = hj::telemetry::make_ostream_runtime("meter1");
+        auto meter = rt.get_meter("meter1", "1.2.0", "");
 
-    auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage",
-                                                   "System CPU usage",
-                                                   "%");
-    cpu_gauge->AddCallback(sys_metrics_callback, nullptr);
+        auto request_counter = meter.create_u64_counter("http.requests.total",
+                                                        "Total HTTP requests",
+                                                        "1");
 
-    for(uint32_t i = 0; i < 5; ++i)
+        auto cpu_gauge = meter.create_double_obs_gauge("system.cpu.usage",
+                                                       "System CPU usage",
+                                                       "%");
+        cpu_gauge->AddCallback(sys_metrics_callback, nullptr);
+
+        for(uint32_t i = 0; i < 3; ++i)
+        {
+            request_counter->Add(10);
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        rt.shutdown();
+        hj::telemetry::clean_up_metrics();
+        p.set_value();
+    });
+
+    f.wait();
+    if(worker.joinable())
     {
-        request_counter->Add(10);
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        worker.join();
     }
 }
 
@@ -345,46 +417,38 @@ TEST(telemetry, meter_otlp_http_export)
 
     hj::telemetry::clean_up_metrics();
 
-    auto meter = hj::telemetry::make_otlp_http_meter(
-        "meter_otlp_http_test",
-        "1.2.0",
-        "",
-        endpoint,
-        hj::telemetry::http_request_content_type::kBinary,
-        500,
-        100,
-        true);
+    auto rt    = hj::telemetry::make_otlp_http_runtime(endpoint, true);
+    auto meter = rt.get_meter("meter_otlp_http_test", "1.2.0", "");
 
     auto cpu_gauge =
         meter.create_double_obs_gauge("system.cpu.usage", "CPU usage");
     cpu_gauge->AddCallback(sys_metrics_callback, nullptr);
 
-    for(int i = 0; i < 5; ++i)
+    for(int i = 0; i < 3; ++i)
     {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
+    rt.shutdown();
+    hj::telemetry::clean_up_metrics();
 }
 
 TEST(telemetry, meter_otlp_file_export)
 {
     hj::telemetry::clean_up_metrics();
 
-    auto meter = hj::telemetry::make_otlp_file_meter("meter_otlp_file_test",
-                                                     "1.2.0",
-                                                     "",
-                                                     "meter-otlp-file.json",
-                                                     500,
-                                                     100,
-                                                     true);
+    auto rt    = hj::telemetry::make_otlp_file_runtime("meter-otlp-file.json");
+    auto meter = rt.get_meter("meter_otlp_file_test", "1.2.0", "");
 
     auto cpu_gauge =
         meter.create_double_obs_gauge("system.cpu.usage", "CPU usage");
     cpu_gauge->AddCallback(sys_metrics_callback, nullptr);
 
-    for(int i = 0; i < 5; ++i)
+    for(int i = 0; i < 3; ++i)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
+    rt.shutdown();
+    hj::telemetry::clean_up_metrics();
 }
 
 TEST(telemetry, multi_tracer_shared_runtime_demo)
@@ -405,6 +469,7 @@ TEST(telemetry, multi_tracer_shared_runtime_demo)
     }
 
     runtime.force_flush();
+    runtime.shutdown();
 }
 
 TEST(telemetry, runtime_graceful_shutdown)
@@ -439,7 +504,8 @@ TEST(telemetry, runtime_graceful_shutdown)
         hj::telemetry::runtime rt{opentelemetry::nostd::shared_ptr<
                                       opentelemetry::trace::TracerProvider>(
                                       sdk_trace_provider.release()),
-                                  nullptr};
+                                  opentelemetry::nostd::shared_ptr<
+                                      opentelemetry::metrics::MeterProvider>{}};
 
         auto tracer = rt.get_tracer("shutdown_test");
         auto span   = tracer.start_span("test_span");
@@ -454,111 +520,79 @@ TEST(telemetry, meter_all_instruments_demo)
 {
     using namespace hj::telemetry;
     clean_up_metrics();
-    auto meter = make_ostream_meter("demo_meter");
 
-    // 1. Counter (单调递增，如 HTTP 请求总数)
-    auto requests_counter = meter.counter<uint64_t>("http.server.requests",
-                                                    "Total requests served",
-                                                    "1");
-    requests_counter->Add(1,
-                          {{"http.status_code", 200}, {"http.method", "GET"}});
+    std::promise<void> p;
+    auto               f = p.get_future();
 
-    // 2. UpDownCounter (双向增减，如当前数据库连接池大小)
-    auto active_conns =
-        meter.up_down_counter<int64_t>("db.client.active_connections",
-                                       "Current active DB connections",
-                                       "1");
-    active_conns->Add(1);
-    active_conns->Add(-1);
+    std::thread worker([&p]() {
+        auto rt    = make_ostream_runtime("demo_meter");
+        auto meter = rt.get_meter("demo_meter");
 
-    // 3. Histogram (延迟分布统计，如 RPC 耗时)
-    auto rpc_latency = meter.histogram<double>("rpc.server.duration",
-                                               "RPC latency distribution",
-                                               "ms");
+        auto requests_counter = meter.counter<uint64_t>("http.server.requests",
+                                                        "Total requests served",
+                                                        "1");
+        requests_counter->Add(
+            1,
+            {{"http.status_code", 200}, {"http.method", "GET"}});
 
-    // 修正：直接记录数据，或使用单参数版本，或者只传基础数值
-    rpc_latency->Record(12.3, {}, opentelemetry::context::Context{});
+        auto active_conns =
+            meter.up_down_counter<int64_t>("db.client.active_connections",
+                                           "Current active DB connections",
+                                           "1");
+        active_conns->Add(1);
+        active_conns->Add(-1);
 
-    // 4. Observable Gauge (异步回调驱动瞬时状态)
-    auto sys_memory = meter.obs_gauge<double>("system.memory.usage",
-                                              "Memory usage percentage",
-                                              "%");
-    sys_memory->AddCallback(sys_metrics_callback, nullptr);
-}
+        auto rpc_latency = meter.histogram<double>("rpc.server.duration",
+                                                   "RPC latency distribution",
+                                                   "ms");
+        rpc_latency->Record(12.3, {}, opentelemetry::context::Context{});
 
-TEST(telemetry, advanced_custom_view_registry_injection)
-{
-    using namespace hj::telemetry;
-    clean_up_metrics();
+        auto sys_memory = meter.obs_gauge<double>("system.memory.usage",
+                                                  "Memory usage percentage",
+                                                  "%");
+        sys_memory->AddCallback(sys_metrics_callback, nullptr);
 
-    // 高级用户自主构建 ViewRegistry
-    auto custom_views =
-        std::make_unique<opentelemetry::sdk::metrics::ViewRegistry>();
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        rt.shutdown();
+        clean_up_metrics();
+        p.set_value();
+    });
 
-    auto inst_selector =
-        opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(
-            opentelemetry::sdk::metrics::InstrumentType::kHistogram,
-            "rpc.server.duration",
-            "ms");
-    auto meter_selector =
-        opentelemetry::sdk::metrics::MeterSelectorFactory::Create(
-            "custom_service",
-            "1.0.0",
-            "");
-
-    // 使用 SDK 默认支持的 Histogram 聚合类型
-    auto hist_view = opentelemetry::sdk::metrics::ViewFactory::Create(
-        "rpc.server.duration.custom",
-        "Custom histogram view description",
-        opentelemetry::sdk::metrics::AggregationType::kHistogram);
-
-    // 将 Selector 与 View 进行绑定添加
-    custom_views->AddView(std::move(inst_selector),
-                          std::move(meter_selector),
-                          std::move(hist_view));
-
-    // 通过参数注入给 runtime
-    auto rt = make_ostream_runtime("custom_service", std::move(custom_views));
-    auto custom_meter = rt.get_meter("custom_service", "1.0.0");
-
-    auto hist = custom_meter.histogram<double>("rpc.server.duration",
-                                               "RPC duration",
-                                               "ms");
-    // 补齐 3 个参数：value, attributes, context
-    hist->Record(45.2, {}, opentelemetry::context::Context{});
-
-    rt.force_flush();
+    f.wait();
+    if(worker.joinable())
+    {
+        worker.join();
+    }
 }
 
 TEST(telemetry_industrial, empty_tracer_edge_cases)
 {
-    auto tracer = hj::telemetry::make_ostream_tracer("empty_test");
+    auto rt     = hj::telemetry::make_ostream_runtime("empty_test");
+    auto tracer = rt.get_tracer("empty_test");
 
-    // 传入空字符串作为 Span 名称
     auto span = tracer.start_span("");
     EXPECT_NE(span, nullptr);
     tracer.end_span(span);
 
-    // 作用域空名称 Span Guard
     {
         auto guard = tracer.start_scoped_span("");
         guard.set_attribute("key", "value");
         guard.add_event("empty_event");
-    } // 确保自动析构结束
+    }
+    rt.shutdown();
 }
 
-// ============================================================================
-// 2. Invalid Provider 测试：验证传入 nullptr Provider 的防御性与健壮性
-// ============================================================================
 TEST(telemetry_industrial, invalid_provider_safety)
 {
-    // 显式传入 nullptr 构造 runtime
-    hj::telemetry::runtime null_rt(nullptr, nullptr);
+    hj::telemetry::runtime null_rt(
+        opentelemetry::nostd::shared_ptr<
+            opentelemetry::trace::TracerProvider>{},
+        opentelemetry::nostd::shared_ptr<
+            opentelemetry::metrics::MeterProvider>{});
 
     auto tracer = null_rt.get_tracer("null_tracer");
     auto meter  = null_rt.get_meter("null_meter");
 
-    // 操作应当全部安全降级（No-op），绝不发生段错误 (Segmentation Fault)
     auto span = tracer.start_span("should_not_crash");
     EXPECT_EQ(span, nullptr);
 
@@ -573,36 +607,31 @@ TEST(telemetry_industrial, invalid_provider_safety)
     EXPECT_TRUE(null_rt.shutdown());
 }
 
-// ============================================================================
-// 3. Move 语义测试：验证 span_guard 的合法移动构造
-// ============================================================================
 TEST(telemetry_industrial, span_guard_move_semantics)
 {
-    auto tracer = hj::telemetry::make_ostream_tracer("move_test");
+    auto rt     = hj::telemetry::make_ostream_runtime("move_test");
+    auto tracer = rt.get_tracer("move_test");
 
     {
         auto a = tracer.start_scoped_span("span_a", {{"phase", "initial"}});
-        // 验证移动构造：将 a 移动给 b，a 自身变空但不应触发崩溃
         auto b = std::move(a);
 
         b.set_attribute("phase", "moved");
         b.add_event("b_event");
-    } // b 在此作用域结束时自动析构并成功调用 End()
+    }
 
-    tracer.force_flush();
+    rt.force_flush();
+    rt.shutdown();
 }
 
-// ============================================================================
-// 4. Exception Path 测试：验证抛出异常时 Span 能够自动正确结束
-// ============================================================================
 TEST(telemetry_industrial, exception_path_automatic_end)
 {
-    auto tracer = hj::telemetry::make_ostream_tracer("exception_test");
+    auto rt     = hj::telemetry::make_ostream_runtime("exception_test");
+    auto tracer = rt.get_tracer("exception_test");
 
     auto function_that_throws = [&tracer]() {
         auto guard = tracer.start_scoped_span("faulty_operation");
         guard.set_attribute("status", "running");
-        // 模拟业务逻辑抛出异常
         throw std::runtime_error("critical business failure");
     };
 
@@ -614,26 +643,22 @@ TEST(telemetry_industrial, exception_path_automatic_end)
             }
             catch(const std::exception &e)
             {
-                // 捕获异常，同时验证离开作用域时 span_guard 正常析构（不会内存泄漏或死锁）
                 throw;
             }
         },
         std::runtime_error);
 
-    tracer.force_flush();
+    rt.force_flush();
+    rt.shutdown();
 }
 
-// ============================================================================
-// 5 & 6. Multithread & High Frequency 综合评测：100线程 / 100k Spans / 高频性能
-// ============================================================================
 TEST(telemetry_industrial, multithread_high_frequency_stress)
 {
-    // 使用文件或内存排查以减少标准输出控制台锁带来的性能失真
     auto rt = hj::telemetry::make_otlp_file_runtime("stress-test-spans.json");
     auto tracer = rt.get_tracer("stress_service");
 
-    const int thread_count     = 10;   // 工业压测可调整为 100
-    const int spans_per_thread = 1000; // 工业压测可调整为 100000 (总计 10M)
+    const int thread_count     = 10;
+    const int spans_per_thread = 1000;
 
     std::atomic<bool>        start_flag{false};
     std::vector<std::thread> threads;
@@ -652,13 +677,11 @@ TEST(telemetry_industrial, multithread_high_frequency_stress)
             for(int j = 0; j < spans_per_thread; ++j)
             {
                 auto span = tracer.start_span("stress_span", {{"index", j}});
-                // 模拟极简计算开销
                 tracer.end_span(span);
             }
         });
     }
 
-    // 同时并发冲刺
     start_flag.store(true, std::memory_order_release);
 
     for(auto &t : threads)
@@ -676,17 +699,14 @@ TEST(telemetry_industrial, multithread_high_frequency_stress)
               << ", Cost: " << duration << " ms" << std::endl;
 
     rt.force_flush();
+    rt.shutdown();
 }
 
-// ============================================================================
-// 7. Shutdown -> Flush -> Export 完整链路工业级验证
-// ============================================================================
 TEST(telemetry_industrial, shutdown_flush_export_lifecycle_validation)
 {
     std::atomic<int>  export_counter{0};
     std::atomic<bool> shutdown_called{0};
 
-    // 自定义一个全链路生命周期追踪 Exporter
     class lifecycle_test_exporter
         : public hj::telemetry::custom_trace_span_exporter_t
     {
@@ -730,11 +750,11 @@ TEST(telemetry_industrial, shutdown_flush_export_lifecycle_validation)
         hj::telemetry::runtime rt{opentelemetry::nostd::shared_ptr<
                                       opentelemetry::trace::TracerProvider>(
                                       sdk_trace_provider.release()),
-                                  nullptr};
+                                  opentelemetry::nostd::shared_ptr<
+                                      opentelemetry::metrics::MeterProvider>{}};
 
         auto tracer = rt.get_tracer("lifecycle_service");
 
-        // 1. 产生 Span
         {
             auto span = tracer.start_span("lifecycle_span_1");
             tracer.end_span(span);
@@ -744,14 +764,10 @@ TEST(telemetry_industrial, shutdown_flush_export_lifecycle_validation)
             tracer.end_span(span);
         }
 
-        // 2. 显式测试 Flush
         EXPECT_TRUE(rt.force_flush());
-
-        // 3. 显式测试 Shutdown
         EXPECT_TRUE(rt.shutdown());
         EXPECT_TRUE(shutdown_called.load(std::memory_order_acquire));
     }
 
-    // 验证在 shutdown 闭环完成后，Span 数据是否已被成功捕获并导出
     EXPECT_GE(export_counter.load(std::memory_order_relaxed), 2);
 }

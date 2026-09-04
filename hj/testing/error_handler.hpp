@@ -35,6 +35,9 @@
 namespace hj
 {
 
+/**
+ * @brief Representing current state of the error handler FSM.
+ */
 enum class err_status
 {
     idle,
@@ -44,8 +47,25 @@ enum class err_status
     unknown
 };
 
+/**
+ * @brief Exception thrown when the deferred event queue reaches its capacity limit.
+ * 
+ * @note This exception indicates an infrastructure overflow rather than a business logic error.
+ *       It will propagate directly to the caller of `match()` and will NOT be caught by `on_exception`.
+ */
+class defer_queue_overflow : public std::runtime_error
+{
+  public:
+    using std::runtime_error::runtime_error;
+};
+
 namespace detail
 {
+
+struct defer_queue_monitor
+{
+    std::size_t current_size{0};
+};
 
 // event
 template <typename T = std::error_code>
@@ -91,7 +111,7 @@ struct success
 {
 };
 
-template <typename TElement, std::size_t MaxCapacity = 0>
+template <typename TElement, std::size_t MaxCapacity = 64>
 class bounded_defer_queue
 {
   public:
@@ -103,6 +123,13 @@ class bounded_defer_queue
     using reference       = typename container_type::reference;
     using const_reference = typename container_type::const_reference;
 
+    bounded_defer_queue() = default;
+
+    explicit bounded_defer_queue(std::shared_ptr<defer_queue_monitor> monitor)
+        : _monitor(std::move(monitor))
+    {
+    }
+
     template <typename TEvent>
     void push_back(TEvent &&event)
     {
@@ -110,10 +137,12 @@ class bounded_defer_queue
         {
             if(_queue.size() >= MaxCapacity)
             {
-                throw std::runtime_error("Defer queue overflow limit reached.");
+                throw defer_queue_overflow(
+                    "Defer queue overflow limit reached.");
             }
         }
         _queue.push_back(std::forward<TEvent>(event));
+        sync_size();
     }
 
     iterator       begin() noexcept { return _queue.begin(); }
@@ -123,19 +152,46 @@ class bounded_defer_queue
     const_iterator cbegin() const noexcept { return _queue.cbegin(); }
     const_iterator cend() const noexcept { return _queue.cend(); }
 
-    void      pop_front() { _queue.pop_front(); }
+    void pop_front()
+    {
+        _queue.pop_front();
+        sync_size();
+    }
+
     bool      empty() const noexcept { return _queue.empty(); }
     size_type size() const noexcept { return _queue.size(); }
-    void      clear() noexcept { _queue.clear(); }
 
-    iterator erase(const_iterator pos) { return _queue.erase(pos); }
+    void clear() noexcept
+    {
+        _queue.clear();
+        sync_size();
+    }
+
+    iterator erase(const_iterator pos)
+    {
+        auto it = _queue.erase(pos);
+        sync_size();
+        return it;
+    }
+
     iterator erase(const_iterator first, const_iterator last)
     {
-        return _queue.erase(first, last);
+        auto it = _queue.erase(first, last);
+        sync_size();
+        return it;
     }
 
   private:
-    container_type _queue;
+    void sync_size() const noexcept
+    {
+        if(_monitor)
+        {
+            _monitor->current_size = _queue.size();
+        }
+    }
+
+    container_type                       _queue;
+    std::shared_ptr<defer_queue_monitor> _monitor;
 };
 
 template <std::size_t MaxCapacity>
@@ -149,9 +205,8 @@ struct bounded_defer_queue_template
 template <typename T = std::error_code>
 struct error_handler_impl
 {
-    using transition_cb =
-        std::function<void(std::string_view src, std::string_view dst)>;
-    using exception_cb = std::function<void(const std::exception_ptr &)>;
+    using transition_cb = std::function<void(err_status src, err_status dst)>;
+    using exception_cb  = std::function<void(const std::exception_ptr &)>;
 
     explicit error_handler_impl(transition_cb fn    = nullptr,
                                 exception_cb  ex_fn = nullptr)
@@ -192,8 +247,7 @@ struct error_handler_impl
         }
     }
 
-    void safe_invoke_transition(std::string_view src,
-                                std::string_view dst) const noexcept
+    void safe_invoke_transition(err_status src, err_status dst) const noexcept
     {
         if(on_transition)
         {
@@ -206,26 +260,35 @@ struct error_handler_impl
         using namespace boost::sml;
 
         return make_transition_table(
+            // --- IDLE STATE ---
             *state<idle>
-                + event<pass>
-                      / [this] { safe_invoke_transition("idle", "success"); } =
-                state<success>,
+                + event<pass> /
+                      [this] {
+                          safe_invoke_transition(err_status::idle,
+                                                 err_status::success);
+                      } = state<success>,
             *state<idle>
-                + event<fail>
-                      / [this] { safe_invoke_transition("idle", "failed"); } =
-                state<failed>,
+                + event<fail> /
+                      [this] {
+                          safe_invoke_transition(err_status::idle,
+                                                 err_status::failed);
+                      } = state<failed>,
             *state<idle>
-                + event<abort>
-                      / [this] { safe_invoke_transition("idle", "failed"); } =
-                state<failed>,
+                + event<abort> /
+                      [this] {
+                          safe_invoke_transition(err_status::idle,
+                                                 err_status::failed);
+                      } = state<failed>,
             *state<idle>
                 + event<err_event<T>> /
                       [this](const auto &e) {
                           safe_invoke_cb(e);
-                          safe_invoke_transition("idle", "handling");
+                          safe_invoke_transition(err_status::idle,
+                                                 err_status::handling);
                       }                         = state<handling>,
             *state<idle> + event<reset> / [] {} = state<idle>,
 
+            // --- SUCCESS STATE ---
             state<success> + event<pass> / [] {}     = state<success>,
             state<success> + event<resolved> / [] {} = state<success>,
             state<success> + event<abort> / [] {}    = state<success>,
@@ -233,41 +296,61 @@ struct error_handler_impl
                 + event<err_event<T>> /
                       [this](const auto &e) {
                           safe_invoke_cb(e);
-                          safe_invoke_transition("success", "handling");
+                          safe_invoke_transition(err_status::success,
+                                                 err_status::handling);
                       } = state<handling>,
             state<success>
-                + event<reset>
-                      / [this] { safe_invoke_transition("success", "idle"); } =
-                state<idle>,
+                + event<reset> /
+                      [this] {
+                          safe_invoke_transition(err_status::success,
+                                                 err_status::idle);
+                      } = state<idle>,
 
+            // --- HANDLING STATE ---
             state<handling>
                 + event<pass> /
                       [this] {
-                          safe_invoke_transition("handling", "success");
+                          safe_invoke_transition(err_status::handling,
+                                                 err_status::success);
                       } = state<success>,
             state<handling>
                 + event<resolved> /
                       [this] {
-                          safe_invoke_transition("handling", "success");
+                          safe_invoke_transition(err_status::handling,
+                                                 err_status::success);
                       } = state<success>,
             state<handling>
                 + event<fail> /
-                      [this] { safe_invoke_transition("handling", "failed"); } =
-                state<failed>,
+                      [this] {
+                          safe_invoke_transition(err_status::handling,
+                                                 err_status::failed);
+                      } = state<failed>,
             state<handling>
                 + event<abort> /
-                      [this] { safe_invoke_transition("handling", "failed"); } =
-                state<failed>,
+                      [this] {
+                          safe_invoke_transition(err_status::handling,
+                                                 err_status::failed);
+                      } = state<failed>,
             state<handling>
-                + event<reset>
-                      / [this] { safe_invoke_transition("handling", "idle"); } =
-                state<idle>,
+                + event<reset> /
+                      [this] {
+                          safe_invoke_transition(err_status::handling,
+                                                 err_status::idle);
+                      } = state<idle>,
             state<handling> + event<err_event<T>> / defer,
 
+            // --- FAILED STATE (Explicit Ignored Design) ---
+            state<failed> + event<pass> / [] {}         = state<failed>,
+            state<failed> + event<resolved> / [] {}     = state<failed>,
+            state<failed> + event<fail> / [] {}         = state<failed>,
+            state<failed> + event<abort> / [] {}        = state<failed>,
+            state<failed> + event<err_event<T>> / [] {} = state<failed>,
             state<failed>
-                + event<reset>
-                      / [this] { safe_invoke_transition("failed", "idle"); } =
-                state<idle>);
+                + event<reset> /
+                      [this] {
+                          safe_invoke_transition(err_status::failed,
+                                                 err_status::idle);
+                      } = state<idle>);
     }
 
     transition_cb on_transition;
@@ -281,29 +364,34 @@ struct error_handler_impl
  * 
  * @tparam T Error type, defaults to std::error_code.
  * @tparam IsOkFn Callable type determining if error represents success.
- * @tparam MaxDeferCapacity Capacity limit for deferred events (0 means unlimited).
+ * @tparam MaxDeferCapacity Capacity limit for deferred events (defaults to 64 for production safety).
  */
 template <typename T                   = std::error_code,
           typename IsOkFn              = std::function<bool(const T &)>,
-          std::size_t MaxDeferCapacity = 0>
+          std::size_t MaxDeferCapacity = 64>
 class error_handler
 {
+    static_assert(
+        std::is_invocable_r_v<bool, IsOkFn, const T &>,
+        "IsOkFn must be a callable object with signature bool(const T &).");
+
   public:
-    using is_ok_fn = IsOkFn;
-    using match_fn = std::function<void(const T &)>;
-    using transition_fn =
-        std::function<void(std::string_view src, std::string_view dst)>;
-    using exception_fn = std::function<void(const std::exception_ptr &)>;
+    using is_ok_fn      = IsOkFn;
+    using match_fn      = std::function<void(const T &)>;
+    using transition_fn = std::function<void(err_status src, err_status dst)>;
+    using exception_fn  = std::function<void(const std::exception_ptr &)>;
 
   private:
     using sm_impl      = detail::error_handler_impl<T>;
     using defer_policy = boost::sml::defer_queue<
         detail::bounded_defer_queue_template<MaxDeferCapacity>::template type>;
+    using sm_type = boost::sml::sm<sm_impl, defer_policy>;
 
   public:
     error_handler()
         : _base{std::make_shared<sm_impl>(nullptr, nullptr)}
-        , _sm{*_base}
+        , _monitor{std::make_shared<detail::defer_queue_monitor>()}
+        , _sm{std::make_unique<sm_type>(*_base, _monitor)}
         , _is_ok{[](const T &t) { return !t; }}
     {
     }
@@ -340,7 +428,8 @@ class error_handler
                            exception_fn  on_exception  = nullptr)
         : _base{std::make_shared<sm_impl>(std::move(on_transition),
                                           std::move(on_exception))}
-        , _sm{*_base}
+        , _monitor{std::make_shared<detail::defer_queue_monitor>()}
+        , _sm{std::make_unique<sm_type>(*_base, _monitor)}
         , _is_ok{std::move(is_ok)}
     {
     }
@@ -355,34 +444,40 @@ class error_handler
     error_handler(const error_handler &)            = delete;
     error_handler &operator=(const error_handler &) = delete;
 
-    error_handler(error_handler &&other) noexcept
+    error_handler(error_handler &&other) noexcept(
+        std::is_nothrow_move_constructible_v<is_ok_fn>)
         : _base(std::move(other._base))
+        , _monitor(std::move(other._monitor))
         , _sm(std::move(other._sm))
         , _is_ok(std::move(other._is_ok))
     {
     }
 
-    error_handler &operator=(error_handler &&other) noexcept
+    error_handler &operator=(error_handler &&other) noexcept(
+        std::is_nothrow_move_assignable_v<is_ok_fn>)
     {
         if(this != &other)
         {
-            _base = std::move(other._base);
-            _sm.~sm();
-            new(&_sm)
-                boost::sml::sm<sm_impl, defer_policy>{std::move(other._sm)};
-            _is_ok = std::move(other._is_ok);
+            _base    = std::move(other._base);
+            _monitor = std::move(other._monitor);
+            _sm      = std::move(other._sm);
+            _is_ok   = std::move(other._is_ok);
         }
         return *this;
     }
 
+    /**
+     * @brief Process an incoming error.
+     * @throws hj::defer_queue_overflow if the handling queue exceeds MaxDeferCapacity.
+     */
     error_handler &match(const T &err, match_fn cb = nullptr)
     {
         if(_is_ok(err))
         {
-            _sm.process_event(detail::pass{});
+            _sm->process_event(detail::pass{});
         } else
         {
-            _sm.process_event(detail::err_event<T>{err, std::move(cb)});
+            _sm->process_event(detail::err_event<T>{err, std::move(cb)});
         }
 
         return *this;
@@ -390,73 +485,84 @@ class error_handler
 
     error_handler &pass()
     {
-        _sm.process_event(detail::pass{});
+        _sm->process_event(detail::pass{});
         return *this;
     }
 
     error_handler &resolve()
     {
-        _sm.process_event(detail::resolved{});
+        _sm->process_event(detail::resolved{});
         return *this;
     }
 
     error_handler &fail()
     {
-        _sm.process_event(detail::fail{});
+        _sm->process_event(detail::fail{});
         return *this;
     }
 
     error_handler &abort()
     {
-        _sm.process_event(detail::abort{});
+        _sm->process_event(detail::abort{});
         return *this;
     }
 
     error_handler &reset()
     {
-        _sm.~sm();
-        new(&_sm) boost::sml::sm<sm_impl, defer_policy>{*_base};
+        _monitor->current_size = 0;
+        _sm                    = std::make_unique<sm_type>(*_base, _monitor);
         return *this;
     }
 
     [[nodiscard]] bool is_idle() const
     {
-        return _sm.is(boost::sml::state<detail::idle>);
+        return _sm->is(boost::sml::state<detail::idle>);
     }
 
     [[nodiscard]] bool is_handling() const
     {
-        return _sm.is(boost::sml::state<detail::handling>);
+        return _sm->is(boost::sml::state<detail::handling>);
     }
 
     [[nodiscard]] bool is_success() const
     {
-        return _sm.is(boost::sml::state<detail::success>);
+        return _sm->is(boost::sml::state<detail::success>);
     }
 
     [[nodiscard]] bool is_failed() const
     {
-        return _sm.is(boost::sml::state<detail::failed>);
+        return _sm->is(boost::sml::state<detail::failed>);
     }
 
     [[nodiscard]] err_status status() const
     {
-        if(_sm.is(boost::sml::state<detail::idle>))
+        if(_sm->is(boost::sml::state<detail::idle>))
             return err_status::idle;
-        if(_sm.is(boost::sml::state<detail::handling>))
+        if(_sm->is(boost::sml::state<detail::handling>))
             return err_status::handling;
-        if(_sm.is(boost::sml::state<detail::success>))
+        if(_sm->is(boost::sml::state<detail::success>))
             return err_status::success;
-        if(_sm.is(boost::sml::state<detail::failed>))
+        if(_sm->is(boost::sml::state<detail::failed>))
             return err_status::failed;
 
         return err_status::unknown;
     }
 
+    [[nodiscard]] std::size_t deferred_size() const noexcept
+    {
+        return _monitor ? _monitor->current_size : 0;
+    }
+
+    [[nodiscard]] static constexpr std::size_t max_defer_capacity() noexcept
+    {
+        return MaxDeferCapacity;
+    }
+
   private:
-    std::shared_ptr<sm_impl>              _base;
-    boost::sml::sm<sm_impl, defer_policy> _sm;
-    is_ok_fn                              _is_ok;
+    std::shared_ptr<sm_impl>                     _base;
+    std::shared_ptr<detail::defer_queue_monitor> _monitor;
+    std::unique_ptr<sm_type>                     _sm;
+    is_ok_fn                                     _is_ok;
 };
 
 } // namespace hj

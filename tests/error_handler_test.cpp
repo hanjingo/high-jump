@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <hj/testing/error_handler.hpp>
 #include <stdexcept>
-#include <string>
 #include <system_error>
 #include <utility>
 
@@ -12,6 +11,57 @@ enum class err1
     timeout,
     mem_leak,
 };
+
+TEST(error_handler_metrics, deferred_queue_observability)
+{
+    hj::error_handler<std::error_code,
+                      std::function<bool(const std::error_code &)>,
+                      16>
+                    h;
+    std::error_code err(static_cast<int>(err1::timeout),
+                        std::generic_category());
+
+    EXPECT_EQ(h.max_defer_capacity(), 16);
+    EXPECT_EQ(h.deferred_size(), 0);
+
+    // First match triggers transition to handling (size remains 0)
+    h.match(err);
+    EXPECT_TRUE(h.is_handling());
+    EXPECT_EQ(h.deferred_size(), 0);
+
+    h.match(err); // Deferred 1
+    EXPECT_EQ(h.deferred_size(), 1);
+
+    h.match(err); // Deferred 2
+    EXPECT_EQ(h.deferred_size(), 2);
+
+    h.resolve();
+    EXPECT_TRUE(h.is_success());
+    EXPECT_EQ(h.deferred_size(), 0);
+}
+
+TEST(error_handler_explicit_ignored, failed_state_absorbs_all_events)
+{
+    hj::error_handler<std::error_code> h;
+    std::error_code                    err(static_cast<int>(err1::timeout),
+                                           std::generic_category());
+    std::error_code                    ok_ec;
+
+    h.abort();
+    EXPECT_TRUE(h.is_failed());
+
+    h.match(err);
+    EXPECT_TRUE(h.is_failed());
+
+    h.match(ok_ec);
+    EXPECT_TRUE(h.is_failed());
+
+    h.resolve();
+    EXPECT_TRUE(h.is_failed());
+
+    h.fail();
+    EXPECT_TRUE(h.is_failed());
+}
 
 TEST(error_handler_factory, named_constructors)
 {
@@ -30,8 +80,11 @@ TEST(error_handler_factory, named_constructors)
 
     bool transition_hook_fired = false;
     auto h3                    = hj::error_handler<std::error_code>::with_hooks(
-        [&](std::string_view, std::string_view) {
-            transition_hook_fired = true;
+        [&](hj::err_status src, hj::err_status dst) {
+            if(src == hj::err_status::idle && dst == hj::err_status::handling)
+            {
+                transition_hook_fired = true;
+            }
         });
     h3.match(err_ec);
     EXPECT_TRUE(transition_hook_fired);
@@ -47,26 +100,21 @@ TEST(error_handler_matrix, state_event_coverage)
     {
         hj::error_handler<std::error_code> h;
 
-        // idle + resolve() -> idle
         h.resolve();
         EXPECT_TRUE(h.is_idle());
 
-        // idle + fail() -> failed
         h.reset();
         h.fail();
         EXPECT_TRUE(h.is_failed());
 
-        // idle + abort() -> failed
         h.reset();
         h.abort();
         EXPECT_TRUE(h.is_failed());
 
-        // idle + match(ok) -> success
         h.reset();
         h.match(ok_ec);
         EXPECT_TRUE(h.is_success());
 
-        // idle + match(err) -> handling
         h.reset();
         h.match(err_ec);
         EXPECT_TRUE(h.is_handling());
@@ -75,30 +123,25 @@ TEST(error_handler_matrix, state_event_coverage)
     {
         hj::error_handler<std::error_code> h;
 
-        // handling + resolve() -> success
         h.match(err_ec);
         h.resolve();
         EXPECT_TRUE(h.is_success());
 
-        // handling + fail() -> failed
         h.reset();
         h.match(err_ec);
         h.fail();
         EXPECT_TRUE(h.is_failed());
 
-        // handling + abort() -> failed
         h.reset();
         h.match(err_ec);
         h.abort();
         EXPECT_TRUE(h.is_failed());
 
-        // handling + reset() -> idle
         h.reset();
         h.match(err_ec);
         h.reset();
         EXPECT_TRUE(h.is_idle());
 
-        // handling + match(ok) -> success
         h.reset();
         h.match(err_ec);
         h.match(ok_ec);
@@ -108,24 +151,19 @@ TEST(error_handler_matrix, state_event_coverage)
     {
         hj::error_handler<std::error_code> h;
 
-        // success + resolve() -> success
         h.match(ok_ec);
         h.resolve();
         EXPECT_TRUE(h.is_success());
 
-        // success + fail() -> success (ignore)
         h.fail();
         EXPECT_TRUE(h.is_success());
 
-        // success + abort() -> success (ignore)
         h.abort();
         EXPECT_TRUE(h.is_success());
 
-        // success + match(err) -> handling
         h.match(err_ec);
         EXPECT_TRUE(h.is_handling());
 
-        // success + reset() -> idle
         h.reset();
         h.match(ok_ec);
         h.reset();
@@ -156,7 +194,7 @@ TEST(error_handler_exception, user_callback_and_transition_safety)
 {
     bool ex_captured = false;
     auto h           = hj::error_handler<std::error_code>::with_hooks(
-        [](std::string_view, std::string_view) {
+        [](hj::err_status, hj::err_status) {
             throw std::logic_error("Transition hook exploded!");
         },
         [&](const std::exception_ptr &ex) {
@@ -189,7 +227,6 @@ TEST(error_handler_move, move_construction_and_assignment)
     std::error_code err(static_cast<int>(err1::timeout),
                         std::generic_category());
 
-    // Move Construction
     {
         hj::error_handler<std::error_code> h1;
         h1.match(err);
@@ -202,7 +239,6 @@ TEST(error_handler_move, move_construction_and_assignment)
         EXPECT_TRUE(h2.is_success());
     }
 
-    // Move Assignment
     {
         hj::error_handler<std::error_code> h1;
         h1.match(err);

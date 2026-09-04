@@ -753,7 +753,16 @@ class broker
         _ctrl_server.bind(_ctrl_addr);
     }
 
-    ~broker() { stop(); }
+    ~broker() noexcept
+    {
+        try
+        {
+            stop();
+        }
+        catch(...)
+        {
+        }
+    }
 
     broker(const broker &)            = delete;
     broker &operator=(const broker &) = delete;
@@ -815,21 +824,18 @@ class broker
         }
     }
 
-    void stop() noexcept
+    void stop()
     {
         if(!is_running())
             return;
 
-        try
-        {
-            socket ctrl_client(_ctx, ZMQ_PAIR);
-            ctrl_client.connect(_ctrl_addr);
-            message msg("TERMINATE");
-            ctrl_client.send(std::move(msg));
-        }
-        catch(...)
-        {
-        }
+        socket ctrl_client(_ctx, ZMQ_PAIR);
+        ctrl_client.connect(_ctrl_addr);
+        message msg("TERMINATE");
+
+        io_status st = ctrl_client.send(std::move(msg));
+        if(st != io_status::ok)
+            throw zmq_error("broker::stop() failed to send TERMINATE command");
     }
 
   private:

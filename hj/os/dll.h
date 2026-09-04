@@ -148,6 +148,22 @@ static inline char *_dll_get_err_buf(void)
     return err_buf;
 }
 
+// thread local buffer for dll_pop_error returning value
+static inline char *_dll_get_temp_err_buf(void)
+{
+#if defined(_MSC_VER)
+    static __declspec(thread) char temp_buf[512];
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+    static _Thread_local char temp_buf[512];
+#elif defined(__GNUC__) || defined(__clang__)
+    static __thread char temp_buf[512];
+#else
+#error                                                                         \
+    "Thread-local storage (TLS) support is required for dll_h in multi-threaded environments."
+#endif
+    return temp_buf;
+}
+
 static inline void _dll_set_err_buf(const char *msg)
 {
     char *buf = _dll_get_err_buf();
@@ -181,14 +197,24 @@ static inline void dll_clear_error(void)
 }
 
 /**
- * @brief Retrieves and consumes the error message for the last DLL operation.
+ * @brief Retrieves and consumes the error message for the last DLL operation in the calling thread.
+ * 
+ * @return A null-terminated string describing the last error, or an empty string ("") if no error occurred.
+ * 
+ * @note LIFETIME CONTRACT & THREAD SAFETY:
+ *       1. THREAD SAFETY: Safe to call concurrently from multiple threads.
+ *       2. LIFETIME: The returned `const char *` pointer points to Thread-Local Storage (TLS).
+ *          The content remains valid ONLY until the NEXT DLL operation (e.g., dll_open, dll_get, 
+ *          dll_close, dll_clear_error, or dll_pop_error) is executed ON THE SAME THREAD.
+ *       3. CONSUMPTION: Calling this function clears the current error state (pop behavior).
  */
 static inline const char *dll_pop_error(void)
 {
-    char *buf = _dll_get_err_buf();
+    char *buf      = _dll_get_err_buf();
+    char *temp_buf = _dll_get_temp_err_buf();
+
     if(buf[0] != '\0')
     {
-        static char temp_buf[512];
 #if defined(_MSC_VER)
         strncpy_s(temp_buf, 512, buf, _TRUNCATE);
 #else
@@ -209,7 +235,7 @@ static inline const char *dll_pop_error(void)
                                NULL,
                                err_code,
                                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                               buf,
+                               temp_buf,
                                512,
                                NULL);
 
@@ -217,10 +243,10 @@ static inline const char *dll_pop_error(void)
     if(len == 0)
         return "Unknown system error";
 
-    while(len > 0 && (buf[len - 1] == '\r' || buf[len - 1] == '\n'))
-        buf[--len] = '\0';
+    while(len > 0 && (temp_buf[len - 1] == '\r' || temp_buf[len - 1] == '\n'))
+        temp_buf[--len] = '\0';
 
-    return buf;
+    return temp_buf;
 
 #else
     const char *err = dlerror();
@@ -503,7 +529,7 @@ namespace hj
 class dll_loader
 {
   public:
-    dll_loader() noexcept
+    dll_loader()
         : _handle(nullptr)
     {
     }
@@ -519,13 +545,13 @@ class dll_loader
     dll_loader(const dll_loader &)            = delete;
     dll_loader &operator=(const dll_loader &) = delete;
 
-    dll_loader(dll_loader &&other) noexcept
+    dll_loader(dll_loader &&other)
         : _handle(other._handle)
     {
         other._handle = nullptr;
     }
 
-    dll_loader &operator=(dll_loader &&other) noexcept
+    dll_loader &operator=(dll_loader &&other)
     {
         if(this != &other)
         {
@@ -557,6 +583,7 @@ class dll_loader
     template <class T>
     T symbol(const char *name) const noexcept
     {
+        static_assert(std::is_function_v<std::remove_pointer_t<T>>);
         return reinterpret_cast<T>(dll_get(_handle, name));
     }
 

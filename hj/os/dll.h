@@ -18,7 +18,6 @@
 #ifndef DLL_H
 #define DLL_H
 
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -75,31 +74,66 @@ extern "C" {
 
 typedef int dll_mode_t;
 
-#define DLL_MODE_DEFAULT 0
-#define DLL_MODE_RTLD_NOW (1 << 0)
-#define DLL_MODE_RTLD_GLOBAL (1 << 1)
-#define DLL_MODE_RTLD_LOCAL (1 << 2)
-#define DLL_MODE_RTLD_NOLOAD (1 << 3)
-#define DLL_MODE_RTLD_DEEPBIND (1 << 4)
+/*
+ * ====================================================================================================
+ *                                   FLAG COMPATIBILITY MATRIX
+ * ====================================================================================================
+ *  Flag Flag                       | Windows (PE)                   | POSIX (ELF / Mach-O)
+ * ---------------------------------+--------------------------------+---------------------------------
+ *  DLL_MODE_DEFAULT                | Default LoadLibraryExW (CWD)   | RTLD_LAZY | RTLD_LOCAL
+ *  DLL_MODE_RTLD_NOW               | Ignored (Windows resolves all) | RTLD_NOW
+ *  DLL_MODE_RTLD_GLOBAL            | Ignored (No ELF symbol space)  | RTLD_GLOBAL
+ *  DLL_MODE_RTLD_LOCAL             | Ignored (Default PE behavior)  | RTLD_LOCAL
+ *  DLL_MODE_RTLD_NOLOAD            | Emulated via GetModuleHandleExW| RTLD_NOLOAD
+ *  DLL_MODE_RTLD_DEEPBIND          | Ignored                        | RTLD_DEEPBIND (Glibc/Linux only)
+ * ---------------------------------+--------------------------------+---------------------------------
+ *  DLL_MODE_SEARCH_ALTERED_PATH    | LOAD_WITH_ALTERED_SEARCH_PATH  | Ignored
+ *  DLL_MODE_SEARCH_SYSTEM32        | LOAD_LIBRARY_SEARCH_SYSTEM32   | Ignored
+ *  DLL_MODE_SEARCH_APP_DIR         | LOAD_LIBRARY_SEARCH_APP_DIR    | Ignored
+ *  DLL_MODE_SEARCH_USER_DIRS       | LOAD_LIBRARY_SEARCH_USER_DIRS  | Ignored
+ *  DLL_MODE_SEARCH_DLL_LOAD_DIR    | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR| Ignored
+ *  DLL_MODE_SAFE                   | Secure default flags combined  | Ignored (POSIX uses RPATH/RUNPATH)
+ * ====================================================================================================
+ */
 
+// Portable Flags (Supported or safely ignored across platforms)
+#define DLL_MODE_DEFAULT 0
+#define DLL_MODE_RTLD_NOW (1 << 0)    // POSIX: RTLD_NOW      | Windows: Ignored
+#define DLL_MODE_RTLD_GLOBAL (1 << 1) // POSIX: RTLD_GLOBAL   | Windows: Ignored
+#define DLL_MODE_RTLD_LOCAL (1 << 2)  // POSIX: RTLD_LOCAL    | Windows: Ignored
+#define DLL_MODE_RTLD_NOLOAD                                                   \
+    (1 << 3) // POSIX: RTLD_NOLOAD   | Windows: Emulated (GetModuleHandleExW)
+
+// POSIX-Specific Flags
+#define DLL_MODE_RTLD_DEEPBIND (1 << 4) // Linux/Glibc Only: RTLD_DEEPBIND
+
+// Windows-Specific Search Path Security Flags
 #define DLL_MODE_SEARCH_ALTERED_PATH                                           \
     (1 << 8) // Windows Only: LOAD_WITH_ALTERED_SEARCH_PATH
 #define DLL_MODE_SEARCH_SYSTEM32                                               \
     (1 << 9) // Windows Only: LOAD_LIBRARY_SEARCH_SYSTEM32
+#define DLL_MODE_SEARCH_APP_DIR                                                \
+    (1 << 10) // Windows Only: LOAD_LIBRARY_SEARCH_APPLICATION_DIR
+#define DLL_MODE_SEARCH_USER_DIRS                                              \
+    (1 << 11) // Windows Only: LOAD_LIBRARY_SEARCH_USER_DIRS
+#define DLL_MODE_SEARCH_DLL_LOAD_DIR                                           \
+    (1 << 12) // Windows Only: LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
 
-// define sdk common api
-typedef struct sdk_context
-{
-    uint64_t sz;
-    void    *user_data;
-    void (*cb)(void *);
-} sdk_context;
+// Windows-Specific Compound Secure Default
+#define DLL_MODE_SAFE                                                          \
+    (DLL_MODE_SEARCH_SYSTEM32 | DLL_MODE_SEARCH_APP_DIR                        \
+     | DLL_MODE_SEARCH_USER_DIRS)
 
-typedef void (*sdk_callback)(void *);
-typedef void (*sdk_api)(sdk_context *);
+// All flags combined for validation purposes
+#define _DLL_MODE_ALL_MASK                                                     \
+    (DLL_MODE_RTLD_NOW | DLL_MODE_RTLD_GLOBAL | DLL_MODE_RTLD_LOCAL            \
+     | DLL_MODE_RTLD_NOLOAD | DLL_MODE_RTLD_DEEPBIND                           \
+     | DLL_MODE_SEARCH_ALTERED_PATH | DLL_MODE_SEARCH_SYSTEM32                 \
+     | DLL_MODE_SEARCH_APP_DIR | DLL_MODE_SEARCH_USER_DIRS                     \
+     | DLL_MODE_SEARCH_DLL_LOAD_DIR)
 
 // thread safe error buffer for dll operations
-static inline char *dll_get_last_err(void)
+static inline char *_dll_get_err_buf(void)
 {
 #if defined(_MSC_VER)
     static __declspec(thread) char err_buf[512];
@@ -108,14 +142,15 @@ static inline char *dll_get_last_err(void)
 #elif defined(__GNUC__) || defined(__clang__)
     static __thread char err_buf[512];
 #else
-    static char err_buf[512]; // Fallback
+#error                                                                         \
+    "Thread-local storage (TLS) support is required for dll_h in multi-threaded environments."
 #endif
     return err_buf;
 }
 
-static inline void dll_set_last_err(const char *msg)
+static inline void _dll_set_err_buf(const char *msg)
 {
-    char *buf = dll_get_last_err();
+    char *buf = _dll_get_err_buf();
     if(msg)
     {
 #if defined(_MSC_VER)
@@ -135,7 +170,7 @@ static inline void dll_set_last_err(const char *msg)
 // ---------------------------------------------------------------------------
 static inline void dll_clear_error(void)
 {
-    char *buf = dll_get_last_err();
+    char *buf = _dll_get_err_buf();
     buf[0]    = '\0';
 
 #if defined(_WIN32)
@@ -145,11 +180,24 @@ static inline void dll_clear_error(void)
 #endif
 }
 
-static inline const char *dll_error(void)
+/**
+ * @brief Retrieves and consumes the error message for the last DLL operation.
+ */
+static inline const char *dll_pop_error(void)
 {
-    char *buf = dll_get_last_err();
+    char *buf = _dll_get_err_buf();
     if(buf[0] != '\0')
-        return buf;
+    {
+        static char temp_buf[512];
+#if defined(_MSC_VER)
+        strncpy_s(temp_buf, 512, buf, _TRUNCATE);
+#else
+        strncpy(temp_buf, buf, 511);
+        temp_buf[511] = '\0';
+#endif
+        buf[0] = '\0';
+        return temp_buf;
+    }
 
 #if defined(_WIN32)
     DWORD err_code = GetLastError();
@@ -165,6 +213,7 @@ static inline const char *dll_error(void)
                                512,
                                NULL);
 
+    SetLastError(0);
     if(len == 0)
         return "Unknown system error";
 
@@ -172,9 +221,11 @@ static inline const char *dll_error(void)
         buf[--len] = '\0';
 
     return buf;
+
 #else
     const char *err = dlerror();
     return err ? err : "";
+
 #endif
 }
 
@@ -182,12 +233,21 @@ static inline void *dll_open(const char *filename, dll_mode_t mode)
 {
     dll_clear_error();
 
-    if(!filename)
+    if(!filename || filename[0] == '\0')
     {
 #if defined(_WIN32)
         SetLastError(ERROR_INVALID_PARAMETER);
 #endif
-        dll_set_last_err("Invalid argument: filename is null");
+        _dll_set_err_buf("Invalid argument: filename is NULL or empty");
+        return NULL;
+    }
+
+    if((mode & ~_DLL_MODE_ALL_MASK) != 0)
+    {
+#if defined(_WIN32)
+        SetLastError(ERROR_INVALID_PARAMETER);
+#endif
+        _dll_set_err_buf("Invalid argument: unrecognized dll_mode_t flags");
         return NULL;
     }
 
@@ -201,7 +261,7 @@ static inline void *dll_open(const char *filename, dll_mode_t mode)
     if(wlen <= 0)
     {
         SetLastError(ERROR_NO_UNICODE_TRANSLATION);
-        dll_set_last_err("Invalid UTF-8 sequence in filename");
+        _dll_set_err_buf("Invalid UTF-8 sequence in filename");
         return NULL;
     }
 
@@ -213,7 +273,7 @@ static inline void *dll_open(const char *filename, dll_mode_t mode)
         if(!wpath)
         {
             SetLastError(ERROR_OUTOFMEMORY);
-            dll_set_last_err("Out of memory during path conversion");
+            _dll_set_err_buf("Out of memory during path conversion");
             return NULL;
         }
     }
@@ -223,37 +283,84 @@ static inline void *dll_open(const char *filename, dll_mode_t mode)
         if(wpath != stack_buf)
             free(wpath);
 
-        dll_set_last_err("Failed to convert filename to UTF-16");
+        _dll_set_err_buf("Failed to convert filename to UTF-16");
         return NULL;
     }
 
-    wchar_t        full_path[MAX_PATH];
-    DWORD          ret = GetFullPathNameW(wpath, MAX_PATH, full_path, NULL);
-    const wchar_t *target_path =
-        (ret > 0 && ret < MAX_PATH) ? full_path : wpath;
+    DWORD    full_len  = GetFullPathNameW(wpath, 0, NULL, NULL);
+    wchar_t *full_path = NULL;
+    if(full_len > 0)
+    {
+        full_path = (wchar_t *) malloc(full_len * sizeof(wchar_t));
+        if(full_path)
+        {
+            if(GetFullPathNameW(wpath, full_len, full_path, NULL) == 0)
+            {
+                free(full_path);
+                full_path = NULL;
+            }
+        }
+    }
+
+    wchar_t *final_path    = full_path ? full_path : wpath;
+    wchar_t *long_path_buf = NULL;
+
+    if(final_path && wcsncmp(final_path, L"\\\\?\\", 4) != 0)
+    {
+        size_t path_len = wcslen(final_path);
+        if(path_len >= 248)
+        {
+            if(wcsncmp(final_path, L"\\\\", 2) == 0)
+            {
+                size_t alloc_len = path_len + 8;
+                long_path_buf = (wchar_t *) malloc(alloc_len * sizeof(wchar_t));
+                if(long_path_buf)
+                {
+                    swprintf(long_path_buf,
+                             alloc_len,
+                             L"\\\\?\\UNC\\%s",
+                             final_path + 2);
+                    final_path = long_path_buf;
+                }
+            } else
+            {
+                size_t alloc_len = path_len + 5;
+                long_path_buf = (wchar_t *) malloc(alloc_len * sizeof(wchar_t));
+                if(long_path_buf)
+                {
+                    swprintf(long_path_buf,
+                             alloc_len,
+                             L"\\\\?\\%s",
+                             final_path);
+                    final_path = long_path_buf;
+                }
+            }
+        }
+    }
 
     if(mode & DLL_MODE_RTLD_NOLOAD)
     {
         HMODULE hmod = NULL;
-        BOOL    ok   = GetModuleHandleExW(0, target_path, &hmod);
-        if(!ok)
-        {
-            const wchar_t *file_name = wcsrchr(wpath, L'/');
-            const wchar_t *bslash    = wcsrchr(wpath, L'\\');
-            if(bslash > file_name)
-                file_name = bslash;
-            file_name = file_name ? (file_name + 1) : wpath;
+        BOOL    ok   = FALSE;
+        int     has_path_separator =
+            (strchr(filename, '/') != NULL || strchr(filename, '\\') != NULL);
 
-            ok = GetModuleHandleExW(0, file_name, &hmod);
-        }
+        if(has_path_separator)
+            ok = GetModuleHandleExW(0, final_path, &hmod);
+        else
+            ok = GetModuleHandleExW(0, wpath, &hmod);
 
+        if(long_path_buf)
+            free(long_path_buf);
+        if(full_path)
+            free(full_path);
         if(wpath != stack_buf)
             free(wpath);
 
         if(!ok)
         {
             SetLastError(ERROR_MOD_NOT_FOUND);
-            dll_set_last_err("Module not currently loaded (RTLD_NOLOAD)");
+            _dll_set_err_buf("Module not currently loaded (RTLD_NOLOAD)");
             return NULL;
         }
 
@@ -265,8 +372,19 @@ static inline void *dll_open(const char *filename, dll_mode_t mode)
         dwFlags |= LOAD_WITH_ALTERED_SEARCH_PATH;
     if(mode & DLL_MODE_SEARCH_SYSTEM32)
         dwFlags |= LOAD_LIBRARY_SEARCH_SYSTEM32;
+    if(mode & DLL_MODE_SEARCH_APP_DIR)
+        dwFlags |= LOAD_LIBRARY_SEARCH_APPLICATION_DIR;
+    if(mode & DLL_MODE_SEARCH_USER_DIRS)
+        dwFlags |= LOAD_LIBRARY_SEARCH_USER_DIRS;
+    if(mode & DLL_MODE_SEARCH_DLL_LOAD_DIR)
+        dwFlags |= LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
 
-    HMODULE hmod = LoadLibraryExW(target_path, NULL, dwFlags);
+    HMODULE hmod = LoadLibraryExW(final_path, NULL, dwFlags);
+
+    if(long_path_buf)
+        free(long_path_buf);
+    if(full_path)
+        free(full_path);
     if(wpath != stack_buf)
         free(wpath);
 
@@ -295,7 +413,7 @@ static inline void *dll_open(const char *filename, dll_mode_t mode)
     {
         const char *err = dlerror();
         if(!err || err[0] == '\0')
-            dll_set_last_err("Module not currently loaded (RTLD_NOLOAD)");
+            _dll_set_err_buf("Module not currently loaded (RTLD_NOLOAD)");
     }
     return handle;
 #endif
@@ -305,17 +423,22 @@ static inline void *dll_get(void *handler, const char *symbol)
 {
     dll_clear_error();
 
-    if(!handler || !symbol)
+    if(!handler || !symbol || symbol[0] == '\0')
     {
 #if defined(_WIN32)
         SetLastError(ERROR_INVALID_PARAMETER);
 #endif
-        dll_set_last_err("Invalid argument: handle or symbol is null");
+        _dll_set_err_buf("Invalid argument: handle or symbol is NULL/empty");
         return NULL;
     }
 
 #if defined(_WIN32)
     void *sym = (void *) GetProcAddress((HMODULE) handler, symbol);
+    if(!sym)
+    {
+        if(GetLastError() == 0)
+            SetLastError(ERROR_PROC_NOT_FOUND);
+    }
     return sym;
 #else
     void       *sym = dlsym(handler, symbol);
@@ -327,6 +450,19 @@ static inline void *dll_get(void *handler, const char *symbol)
 #endif
 }
 
+/**
+ * @brief Closes and unloads the dynamic link library module.
+ * 
+ * @param handle Dynamic module handle returned by dll_open().
+ * @return 0 on success, or -1 on failure (error details via dll_pop_error()).
+ * 
+ * @note CONTRACT & LIFETIME WARNING:
+ *       1. After dll_close(handle) is called, the handle becomes INVALID immediately.
+ *       2. Passing a closed handle to dll_get() or calling dll_close() twice on the same handle
+ *          is UNDEFINED BEHAVIOR (Use-After-Close / Double-Free).
+ *       3. Function pointers fetched via dll_get() from this handle also become EXPIRED
+ *          and calling them after close will result in Segmentation Faults / Access Violations.
+ */
 static inline int dll_close(void *handle)
 {
     dll_clear_error();
@@ -335,7 +471,7 @@ static inline int dll_close(void *handle)
 #if defined(_WIN32)
         SetLastError(ERROR_INVALID_PARAMETER);
 #endif
-        dll_set_last_err("Invalid argument: handle is null");
+        _dll_set_err_buf("Invalid argument: handle is null");
         return -1;
     }
 
@@ -350,6 +486,90 @@ static inline int dll_close(void *handle)
 
 #ifdef __cplusplus
 }
+#endif
+
+
+// ---------------------------------------------------------------------------
+// C++ Wrappers for Dynamic Link Library (DLL) Operations
+// ---------------------------------------------------------------------------
+#ifdef __cplusplus
+
+#include <string>
+#include <stdexcept>
+
+namespace hj
+{
+
+class dll_loader
+{
+  public:
+    dll_loader() noexcept
+        : _handle(nullptr)
+    {
+    }
+
+    explicit dll_loader(const char *path, dll_mode_t mode = DLL_MODE_DEFAULT)
+        : _handle(dll_open(path, mode))
+    {
+        if(!_handle)
+            throw std::logic_error("DLL handle is loaded fail");
+    }
+    ~dll_loader() { close(); }
+
+    dll_loader(const dll_loader &)            = delete;
+    dll_loader &operator=(const dll_loader &) = delete;
+
+    dll_loader(dll_loader &&other) noexcept
+        : _handle(other._handle)
+    {
+        other._handle = nullptr;
+    }
+
+    dll_loader &operator=(dll_loader &&other) noexcept
+    {
+        if(this != &other)
+        {
+            close();
+            _handle       = other._handle;
+            other._handle = nullptr;
+        }
+        return *this;
+    }
+
+    bool open(const char *filename, dll_mode_t mode = DLL_MODE_DEFAULT)
+    {
+        close();
+        _handle = dll_open(filename, mode);
+        return is_loaded();
+    }
+
+    void close()
+    {
+        if(_handle)
+        {
+            dll_close(_handle);
+            _handle = nullptr;
+        }
+    }
+
+    bool is_loaded() const { return _handle != nullptr; }
+
+    template <class T>
+    T symbol(const char *name) const noexcept
+    {
+        return reinterpret_cast<T>(dll_get(_handle, name));
+    }
+
+    const char *pop_error() const { return dll_pop_error(); }
+
+    inline void *get() const noexcept { return _handle; }
+
+  private:
+    void *_handle;
+};
+
+} // namespace hj
+
 #endif
 
 #endif // DLL_H

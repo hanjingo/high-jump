@@ -12,7 +12,7 @@ enum class err1
     mem_leak,
 };
 
-TEST(error_handler_metrics, deferred_queue_observability)
+TEST(error_handler_metrics, deferred_queue_observability_and_replay)
 {
     hj::error_handler<std::error_code,
                       std::function<bool(const std::error_code &)>,
@@ -21,19 +21,32 @@ TEST(error_handler_metrics, deferred_queue_observability)
     std::error_code err(static_cast<int>(err1::timeout),
                         std::generic_category());
 
+    bool cb1_executed = false;
+    bool cb2_executed = false;
+
     EXPECT_EQ(h.max_defer_capacity(), 16);
     EXPECT_EQ(h.deferred_size(), 0);
 
-    // First match triggers transition to handling (size remains 0)
     h.match(err);
     EXPECT_TRUE(h.is_handling());
     EXPECT_EQ(h.deferred_size(), 0);
 
-    h.match(err); // Deferred 1
+    h.match(err, [&](const std::error_code &) { cb1_executed = true; });
     EXPECT_EQ(h.deferred_size(), 1);
 
-    h.match(err); // Deferred 2
+    h.match(err, [&](const std::error_code &) { cb2_executed = true; });
     EXPECT_EQ(h.deferred_size(), 2);
+
+    h.resolve();
+    EXPECT_TRUE(h.is_handling());
+    EXPECT_TRUE(cb1_executed);
+    EXPECT_FALSE(cb2_executed);
+    EXPECT_EQ(h.deferred_size(), 1);
+
+    h.resolve();
+    EXPECT_TRUE(h.is_handling());
+    EXPECT_TRUE(cb2_executed);
+    EXPECT_EQ(h.deferred_size(), 0);
 
     h.resolve();
     EXPECT_TRUE(h.is_success());
@@ -296,5 +309,5 @@ TEST(error_handler_defer, bounded_defer_queue_overflow_protection)
     EXPECT_NO_THROW(h.match(err));
     EXPECT_NO_THROW(h.match(err));
 
-    EXPECT_THROW(h.match(err), std::runtime_error);
+    EXPECT_THROW(h.match(err), hj::defer_queue_overflow);
 }

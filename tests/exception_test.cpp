@@ -1,3 +1,21 @@
+/*
+ *  This file is part of high-jump(hj).
+ *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <gtest/gtest.h>
 #include <memory>
 #include <optional>
@@ -7,6 +25,12 @@
 #include <vector>
 
 #include <hj/testing/exception.hpp>
+
+class FooWithBoolOperator
+{
+  public:
+    explicit operator bool() const { return true; }
+};
 
 TEST(exception, custom_exception_class)
 {
@@ -23,11 +47,15 @@ TEST(exception, custom_exception_class)
         });
     }
 
+    EXPECT_THROW(
+        { throw hj::NotFoundException("not found exact type"); },
+        hj::NotFoundException);
+
     try
     {
         throw hj::NotFoundException("resource not found");
     }
-    catch(const hj::Exception &e)
+    catch(const hj::NotFoundException &e)
     {
         EXPECT_STREQ(e.what(), "resource not found");
     }
@@ -64,6 +92,98 @@ TEST(exception, custom_stacktrace_preservation)
 
     EXPECT_STREQ(e.what(), "error with custom trace");
     EXPECT_EQ(e.trace().size(), expected_size);
+}
+
+TEST(exception, compile_time_nullable_traits)
+{
+    static_assert(!hj::detail::is_nullable_v<int>, "int is not nullable");
+    static_assert(!hj::detail::is_nullable_v<double>, "double is not nullable");
+    static_assert(!hj::detail::is_nullable_v<std::string>,
+                  "string is not nullable");
+    static_assert(!hj::detail::is_nullable_v<FooWithBoolOperator>,
+                  "Foo is not nullable");
+
+    static_assert(hj::detail::is_nullable_v<int *>, "int* is nullable");
+    static_assert(hj::detail::is_nullable_v<const char *>,
+                  "const char* is nullable");
+    static_assert(hj::detail::is_nullable_v<std::nullptr_t>,
+                  "nullptr_t is nullable");
+    static_assert(hj::detail::is_nullable_v<std::shared_ptr<int>>,
+                  "shared_ptr is nullable");
+    static_assert(hj::detail::is_nullable_v<std::unique_ptr<int>>,
+                  "unique_ptr is nullable");
+    static_assert(hj::detail::is_nullable_v<std::weak_ptr<int>>,
+                  "weak_ptr is nullable");
+    static_assert(hj::detail::is_nullable_v<std::optional<int>>,
+                  "optional is nullable");
+}
+
+TEST(exception, throw_if_null)
+{
+    int *null_ptr = nullptr;
+    int  val      = 100;
+
+    EXPECT_THROW(hj::throw_if_null(null_ptr), std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_null(&val));
+
+    std::shared_ptr<int> empty_shared;
+    auto                 valid_shared = std::make_shared<int>(42);
+
+    EXPECT_THROW(hj::throw_if_null(empty_shared, "shared null"),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_null(valid_shared));
+
+    std::unique_ptr<int> empty_unique;
+    auto                 valid_unique = std::make_unique<int>(42);
+
+    EXPECT_THROW(hj::throw_if_null(empty_unique, "unique null"),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_null(valid_unique));
+
+    std::optional<int> empty_opt;
+    std::optional<int> valid_opt = 42;
+
+    EXPECT_THROW(hj::throw_if_null(empty_opt, "optional null"),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_null(valid_opt));
+
+    std::weak_ptr<int> expired_weak;
+    {
+        auto temp_shared = std::make_shared<int>(99);
+        expired_weak     = temp_shared;
+    }
+    EXPECT_THROW(hj::throw_if_null(expired_weak, "weak expired"),
+                 std::invalid_argument);
+}
+
+TEST(exception, throw_if_not_null)
+{
+    int *null_ptr = nullptr;
+    int  val      = 100;
+
+    EXPECT_THROW(hj::throw_if_not_null(&val, "not null"),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_not_null(null_ptr));
+
+    auto                 valid_shared = std::make_shared<int>(42);
+    std::shared_ptr<int> empty_shared;
+
+    EXPECT_THROW(hj::throw_if_not_null(valid_shared), std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_not_null(empty_shared));
+
+    auto                 valid_unique = std::make_unique<int>(123);
+    std::unique_ptr<int> empty_unique;
+
+    EXPECT_THROW(hj::throw_if_not_null(valid_unique, "unique not null"),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_not_null(empty_unique));
+
+    std::optional<int> valid_opt = 456;
+    std::optional<int> empty_opt = std::nullopt;
+
+    EXPECT_THROW(hj::throw_if_not_null(valid_opt, "optional not null"),
+                 std::invalid_argument);
+    EXPECT_NO_THROW(hj::throw_if_not_null(empty_opt));
 }
 
 TEST(exception, string_view_non_null_terminated)
@@ -150,52 +270,6 @@ TEST(exception, throw_if_not_empty)
     EXPECT_NO_THROW(hj::throw_if_not_empty(str2));
 }
 
-TEST(exception, throw_if_null)
-{
-    int *null_ptr = nullptr;
-    int  val      = 100;
-
-    EXPECT_THROW(hj::throw_if_null(null_ptr), std::invalid_argument);
-    EXPECT_NO_THROW(hj::throw_if_null(&val));
-
-    std::shared_ptr<int> empty_shared;
-    auto                 valid_shared = std::make_shared<int>(42);
-
-    EXPECT_THROW(hj::throw_if_null(empty_shared, "shared null"),
-                 std::invalid_argument);
-    EXPECT_NO_THROW(hj::throw_if_null(valid_shared));
-
-    std::unique_ptr<int> empty_unique;
-    auto                 valid_unique = std::make_unique<int>(42);
-
-    EXPECT_THROW(hj::throw_if_null(empty_unique, "unique null"),
-                 std::invalid_argument);
-    EXPECT_NO_THROW(hj::throw_if_null(valid_unique));
-
-    std::optional<int> empty_opt;
-    std::optional<int> valid_opt = 42;
-
-    EXPECT_THROW(hj::throw_if_null(empty_opt, "optional null"),
-                 std::invalid_argument);
-    EXPECT_NO_THROW(hj::throw_if_null(valid_opt));
-}
-
-TEST(exception, throw_if_not_null)
-{
-    int *null_ptr = nullptr;
-    int  val      = 100;
-
-    EXPECT_THROW(hj::throw_if_not_null(&val, "not null"),
-                 std::invalid_argument);
-    EXPECT_NO_THROW(hj::throw_if_not_null(null_ptr));
-
-    auto                 valid_shared = std::make_shared<int>(42);
-    std::shared_ptr<int> empty_shared;
-
-    EXPECT_THROW(hj::throw_if_not_null(valid_shared), std::invalid_argument);
-    EXPECT_NO_THROW(hj::throw_if_not_null(empty_shared));
-}
-
 TEST(exception, throw_if_exists)
 {
     std::vector<int> vec{1, 2, 3};
@@ -239,6 +313,33 @@ TEST(exception, recover_function_with_return_value)
         });
 
     EXPECT_FALSE(res2.has_value());
+    EXPECT_TRUE(handler_called);
+}
+
+TEST(exception, recover_or_rethrow_function)
+{
+    bool handler_called = false;
+
+    int val =
+        hj::recover_or_rethrow([]() -> int { return 100; }, [&](auto, auto) {});
+    EXPECT_EQ(val, 100);
+
+    EXPECT_THROW(
+        {
+            hj::recover_or_rethrow(
+                []() -> int {
+                    throw hj::Exception("rethrow test error");
+                    return 0;
+                },
+                [&](const std::exception_ptr            &ep,
+                    const boost::stacktrace::stacktrace &st) {
+                    handler_called = true;
+                    EXPECT_NE(ep, nullptr);
+                    EXPECT_GT(st.size(), 0);
+                });
+        },
+        hj::Exception);
+
     EXPECT_TRUE(handler_called);
 }
 
@@ -293,4 +394,34 @@ TEST(exception, recover_macro)
     EXPECT_NE(log_output.find("Exception caught: macro capture test"),
               std::string::npos);
     EXPECT_NE(log_output.find("Stacktrace:"), std::string::npos);
+}
+
+TEST(exception, recover_nested_optional)
+{
+    bool handler_called = false;
+
+    auto res1 = hj::recover([]() -> std::optional<int> { return 42; },
+                            [&](auto, auto) {});
+
+    ASSERT_TRUE(res1.has_value());
+    ASSERT_TRUE(res1.value().has_value());
+    EXPECT_EQ(res1.value().value(), 42);
+
+    auto res2 = hj::recover([]() -> std::optional<int> { return std::nullopt; },
+                            [&](auto, auto) {});
+
+    ASSERT_TRUE(res2.has_value());
+    EXPECT_FALSE(res2.value().has_value());
+
+    auto res3 = hj::recover(
+        []() -> std::optional<int> {
+            throw std::runtime_error("inner failure");
+            return 42;
+        },
+        [&](const std::exception_ptr &, const boost::stacktrace::stacktrace &) {
+            handler_called = true;
+        });
+
+    EXPECT_FALSE(res3.has_value());
+    EXPECT_TRUE(handler_called);
 }

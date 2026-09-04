@@ -120,43 +120,77 @@ template <typename T>
 using recover_return_type_t = typename recover_return_type<T>::type;
 
 template <typename T>
-struct is_optional : std::false_type
-{
-};
-
-template <typename T>
-struct is_optional<std::optional<T>> : std::true_type
-{
-};
-
-template <typename T>
-inline constexpr bool is_optional_v = is_optional<std::decay_t<T>>::value;
-
-template <typename T, typename = void>
 struct is_nullable : std::false_type
 {
 };
 
 template <typename T>
-struct is_nullable<
-    T,
-    std::enable_if_t<std::is_pointer_v<T> || std::is_same_v<T, std::nullptr_t>>>
-    : std::true_type
+struct is_nullable<T *> : std::true_type
+{
+};
+
+template <>
+struct is_nullable<std::nullptr_t> : std::true_type
 {
 };
 
 template <typename T>
-struct is_nullable<
-    T,
-    std::enable_if_t<
-        !std::is_pointer_v<T> && !std::is_same_v<T, std::nullptr_t>,
-        std::void_t<decltype(static_cast<bool>(std::declval<const T &>()))>>>
-    : std::true_type
+struct is_nullable<std::shared_ptr<T>> : std::true_type
+{
+};
+
+template <typename T, typename Deleter>
+struct is_nullable<std::unique_ptr<T, Deleter>> : std::true_type
+{
+};
+
+template <typename T>
+struct is_nullable<std::weak_ptr<T>> : std::true_type
+{
+};
+
+template <typename T>
+struct is_nullable<std::optional<T>> : std::true_type
 {
 };
 
 template <typename T>
 inline constexpr bool is_nullable_v = is_nullable<std::decay_t<T>>::value;
+
+template <typename T>
+inline bool check_is_null(T *target)
+{
+    return target == nullptr;
+}
+
+inline bool check_is_null(std::nullptr_t)
+{
+    return true;
+}
+
+template <typename T>
+inline bool check_is_null(const std::shared_ptr<T> &target)
+{
+    return target == nullptr;
+}
+
+template <typename T, typename Deleter>
+inline bool check_is_null(const std::unique_ptr<T, Deleter> &target)
+{
+    return target == nullptr;
+}
+
+template <typename T>
+inline bool check_is_null(const std::weak_ptr<T> &target)
+{
+    return target.expired();
+}
+
+template <typename T>
+inline bool check_is_null(const std::optional<T> &target)
+{
+    return !target.has_value();
+}
 
 } // namespace detail
 
@@ -215,19 +249,10 @@ template <typename T>
 inline void throw_if_null(const T &target, std::string_view memo = "null")
 {
     static_assert(detail::is_nullable_v<T>,
-                  "hj::throw_if_null requires a nullable pointer, smart "
-                  "pointer, or optional type.");
+                  "hj::throw_if_null requires a raw pointer, smart pointer "
+                  "(shared_ptr/unique_ptr/weak_ptr), or std::optional type.");
 
-    bool is_null = false;
-    if constexpr(detail::is_optional_v<T>)
-    {
-        is_null = !target.has_value();
-    } else
-    {
-        is_null = (target == nullptr);
-    }
-
-    if(is_null)
+    if(detail::check_is_null(target))
         throw std::invalid_argument(std::string(memo));
 }
 
@@ -236,19 +261,10 @@ inline void throw_if_not_null(const T         &target,
                               std::string_view memo = "not null")
 {
     static_assert(detail::is_nullable_v<T>,
-                  "hj::throw_if_not_null requires a nullable pointer, smart "
-                  "pointer, or optional type.");
+                  "hj::throw_if_not_null requires a raw pointer, smart pointer "
+                  "(shared_ptr/unique_ptr/weak_ptr), or std::optional type.");
 
-    bool is_null = false;
-    if constexpr(detail::is_optional_v<T>)
-    {
-        is_null = !target.has_value();
-    } else
-    {
-        is_null = (target == nullptr);
-    }
-
-    if(!is_null)
+    if(!detail::check_is_null(target))
         throw std::invalid_argument(std::string(memo));
 }
 
@@ -337,6 +353,39 @@ inline auto recover(Func &&func, Handler &&handler)
     if constexpr(!std::is_void_v<RawReturnType>)
     {
         return std::nullopt;
+    }
+}
+
+template <typename Func, typename Handler>
+inline decltype(auto) recover_or_rethrow(Func &&func, Handler &&handler)
+{
+    try
+    {
+        return func();
+    }
+    catch(const hj::Exception &e)
+    {
+        if constexpr(detail::is_valid_handler_v<Handler>)
+        {
+            handler(std::current_exception(), e.trace());
+        }
+        throw;
+    }
+    catch(const std::exception &)
+    {
+        if constexpr(detail::is_valid_handler_v<Handler>)
+        {
+            handler(std::current_exception(), current_stacktrace());
+        }
+        throw;
+    }
+    catch(...)
+    {
+        if constexpr(detail::is_valid_handler_v<Handler>)
+        {
+            handler(std::current_exception(), current_stacktrace());
+        }
+        throw;
     }
 }
 

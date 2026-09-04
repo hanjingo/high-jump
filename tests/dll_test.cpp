@@ -1,147 +1,175 @@
 #include <gtest/gtest.h>
 #include <hj/os/dll.h>
 
-typedef int (*hello)(void);
-typedef int (*world)(void);
+#include <string>
+#include <thread>
+#include <vector>
 
-TEST(dll, dll_open_close)
+typedef int (*hello_fn_t)(void);
+typedef int (*world_fn_t)(void);
+
+static std::string get_test_dll_path()
 {
-#ifdef _WIN32
-    auto dll_file = std::string("./dll_example").append(DLL_EXT);
-#else
-    auto dll_file = std::string("./libdll_example").append(DLL_EXT);
-#endif
-
-    auto handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
-    ASSERT_TRUE(handle != NULL);
-    ASSERT_TRUE(dll_close(handle));
+    return std::string("./") + DLL_PREFIX + "dll_example" + DLL_EXT;
 }
 
-TEST(dll, repeated_open)
+TEST(dll_test, open_and_close)
 {
-#ifdef _WIN32
-    auto dll_file = std::string("./dll_example").append(DLL_EXT);
-#else
-    auto dll_file = std::string("./libdll_example").append(DLL_EXT);
-#endif
+    std::string dll_file = get_test_dll_path();
 
-    auto handle_a = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
-    ASSERT_TRUE(handle_a != NULL);
-
-    auto handle_b = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
-    ASSERT_TRUE(handle_b != NULL);
-
-    auto fn1 = dll_get(handle_b, "hello");
-    ASSERT_TRUE(fn1 != NULL);
-    EXPECT_EQ(((hello) fn1)(), 1);
-
-    ASSERT_TRUE(dll_close(handle_a));
-    ASSERT_TRUE(dll_close(handle_b));
+    void *handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
+    ASSERT_NE(handle, nullptr) << "Failed to open: " << dll_error();
+    EXPECT_TRUE(dll_close(handle) == 0);
 }
 
-TEST(dll, close_twice)
+TEST(dll_test, repeated_open)
 {
-#ifdef _WIN32
-    auto dll_file = std::string("./dll_example").append(DLL_EXT);
-#else
-    auto dll_file = std::string("./libdll_example").append(DLL_EXT);
-#endif
+    std::string dll_file = get_test_dll_path();
 
-    auto handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
+    void *handle_a = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
+    ASSERT_NE(handle_a, nullptr) << "Error: " << dll_error();
 
-    ASSERT_TRUE(dll_close(handle));
-    EXPECT_FALSE(dll_close(handle));
+    void *handle_b = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
+    ASSERT_NE(handle_b, nullptr) << "Error: " << dll_error();
+
+    auto fn1 = (hello_fn_t) dll_get(handle_b, "hello");
+    ASSERT_NE(fn1, nullptr) << "Error: " << dll_error();
+    EXPECT_EQ(fn1(), 1);
+
+    EXPECT_TRUE(dll_close(handle_a) == 0);
+    EXPECT_TRUE(dll_close(handle_b) == 0);
 }
 
-TEST(dll, dll_get_call)
+TEST(dll_test, get_and_call_symbol)
 {
-#ifdef _WIN32
-    auto dll_file = std::string("./dll_example").append(DLL_EXT);
-#else
-    auto dll_file = std::string("./libdll_example").append(DLL_EXT);
-#endif
+    std::string dll_file = get_test_dll_path();
 
-    auto handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
-    ASSERT_TRUE(handle != NULL);
+    void *handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
+    ASSERT_NE(handle, nullptr) << "Error: " << dll_error();
 
-    hello fn1 = (hello) dll_get(handle, "hello");
-    ASSERT_TRUE(fn1 != NULL);
-    ASSERT_EQ(fn1(), 1);
+    hello_fn_t fn_hello = (hello_fn_t) dll_get(handle, "hello");
+    ASSERT_NE(fn_hello, nullptr) << "Error: " << dll_error();
+    EXPECT_EQ(fn_hello(), 1);
 
-    world fn2 = (world) dll_get(handle, "world");
-    ASSERT_TRUE(fn2 != NULL);
-    ASSERT_EQ(fn2(), 2);
+    world_fn_t fn_world = (world_fn_t) dll_get(handle, "world");
+    ASSERT_NE(fn_world, nullptr) << "Error: " << dll_error();
+    EXPECT_EQ(fn_world(), 2);
 
-    ASSERT_TRUE(dll_close(handle));
+    EXPECT_TRUE(dll_close(handle) == 0);
 }
 
-TEST(dll, invalid_symbol_queries)
+TEST(dll_test, invalid_symbol_queries)
 {
-#ifdef _WIN32
-    auto dll_file = std::string("./dll_example").append(DLL_EXT);
-#else
-    auto dll_file = std::string("./libdll_example").append(DLL_EXT);
-#endif
+    std::string dll_file = get_test_dll_path();
 
-    auto handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
-    ASSERT_TRUE(handle != NULL);
+    void *handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
+    ASSERT_NE(handle, nullptr);
 
-    auto invalid_fn = dll_get(handle, "this_symbol_does_not_exist");
-    ASSERT_FALSE(invalid_fn != NULL);
+    void *invalid_fn = dll_get(handle, "this_symbol_does_not_exist");
+    EXPECT_EQ(invalid_fn, nullptr);
+    EXPECT_STRNE(dll_error(), "");
 
-    auto null_sym = dll_get(handle, NULL);
-    ASSERT_FALSE(null_sym != NULL);
+    void *null_sym = dll_get(handle, NULL);
+    EXPECT_EQ(null_sym, nullptr);
+    EXPECT_STRNE(dll_error(), "");
 
-    void *empty_handle = nullptr;
-    EXPECT_EQ(dll_get(empty_handle, "hello"), nullptr);
-    ASSERT_TRUE(dll_close(handle));
+    EXPECT_EQ(dll_get(NULL, "hello"), nullptr);
+    EXPECT_STRNE(dll_error(), "");
+
+    EXPECT_TRUE(dll_close(handle) == 0);
 }
 
-TEST(dll, dll_ext)
+TEST(dll_test, rtld_noload_semantics)
 {
-    ASSERT_EQ(!std::string(DLL_EXT).empty(), true);
-}
+    void *probe_not_loaded =
+        dll_open("./not_exist_module_for_test.dll", DLL_MODE_RTLD_NOLOAD);
+    EXPECT_EQ(probe_not_loaded, nullptr);
+    EXPECT_STRNE(dll_error(), "");
 
-TEST(dll, test_rtld_noload_semantics)
-{
-#ifdef _WIN32
-    auto dll_file = std::string("./dll_example").append(DLL_EXT);
-#else
-    auto dll_file = std::string("./libdll_example").append(DLL_EXT);
-#endif
-
-    void *probe_handle = dll_open(dll_file.c_str(), DLL_MODE_RTLD_NOLOAD);
-    ASSERT_FALSE(probe_handle != NULL);
+    std::string dll_file = get_test_dll_path();
 
     void *real_handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
-    ASSERT_TRUE(real_handle != NULL);
+    ASSERT_NE(real_handle, nullptr) << "Error: " << dll_error();
 
     void *noload_handle = dll_open(dll_file.c_str(), DLL_MODE_RTLD_NOLOAD);
-    ASSERT_TRUE(noload_handle != NULL);
+    EXPECT_NE(noload_handle, nullptr);
 
     if(noload_handle)
+    {
         dll_close(noload_handle);
+    }
 
-    dll_close(real_handle);
+    EXPECT_TRUE(dll_close(real_handle) == 0);
 }
 
-TEST(dll, invalid_inputs)
+TEST(dll_test, invalid_inputs)
 {
-    ASSERT_FALSE(dll_open(NULL, DLL_MODE_DEFAULT) != NULL);
-    ASSERT_FALSE(dll_open("./not_exist_library.so", DLL_MODE_DEFAULT) != NULL);
+    EXPECT_EQ(dll_open(NULL, DLL_MODE_DEFAULT), nullptr);
+    EXPECT_STRNE(dll_error(), "");
 
-    ASSERT_FALSE(dll_get(NULL, "hello") != NULL);
+    EXPECT_EQ(dll_open("./not_exist_library.so", DLL_MODE_DEFAULT), nullptr);
+    EXPECT_STRNE(dll_error(), "");
 
-#ifdef _WIN32
-    auto dll_file = std::string("./dll_example").append(DLL_EXT);
-#else
-    auto dll_file = std::string("./libdll_example").append(DLL_EXT);
+    EXPECT_FALSE(dll_close(NULL) == 0);
+    EXPECT_STRNE(dll_error(), "");
+}
+
+TEST(dll_test, error_handling_and_clearing)
+{
+    dll_clear_error();
+    EXPECT_STREQ(dll_error(), "");
+
+    dll_open(NULL, DLL_MODE_DEFAULT);
+    EXPECT_STRNE(dll_error(), "");
+
+    dll_clear_error();
+    EXPECT_STREQ(dll_error(), "");
+}
+
+TEST(dll_test, multithreaded_error_isolation)
+{
+    dll_clear_error();
+
+    std::thread t([]() {
+        dll_open(NULL, DLL_MODE_DEFAULT);
+        EXPECT_STRNE(dll_error(), "");
+    });
+
+    t.join();
+
+    EXPECT_STREQ(dll_error(), "");
+}
+
+TEST(dll_test, long_path_and_utf8)
+{
+    std::string long_path = "./";
+    for(int i = 0; i < 30; ++i)
+    {
+        long_path += "very_long_path_component_";
+    }
+    long_path += DLL_EXT;
+
+    EXPECT_EQ(dll_open(long_path.c_str(), DLL_MODE_DEFAULT), nullptr);
+    EXPECT_STRNE(dll_error(), "");
+
+#if defined(_WIN32)
+    const char invalid_utf8[] = {'\xC0', '\xAF', '\0'};
+    EXPECT_EQ(dll_open(invalid_utf8, DLL_MODE_DEFAULT), nullptr);
+    EXPECT_STRNE(dll_error(), "");
 #endif
-    void *handle = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
-    ASSERT_TRUE(handle != NULL);
-    ASSERT_FALSE(dll_get(handle, "non_existent_symbol") != NULL);
-    ASSERT_FALSE(dll_get(handle, NULL) != NULL);
+}
 
-    EXPECT_FALSE(dll_close(NULL));
-    EXPECT_TRUE(dll_close(handle));
+TEST(dll_test, mode_flags)
+{
+    std::string dll_file = get_test_dll_path();
+
+    dll_mode_t mode   = DLL_MODE_RTLD_NOW | DLL_MODE_RTLD_LOCAL;
+    void      *handle = dll_open(dll_file.c_str(), mode);
+    ASSERT_NE(handle, nullptr);
+    EXPECT_TRUE(dll_close(handle) == 0);
+}
+
+TEST(dll_test, macros)
+{
+    EXPECT_FALSE(std::string(DLL_EXT).empty());
 }

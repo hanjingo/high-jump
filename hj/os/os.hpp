@@ -17,6 +17,8 @@
 
 #include <hj/os/process.hpp>
 
+#include <hj/os/sdk.h>
+
 #include <hj/os/signal.hpp>
 
 #include <hj/os/winsock.h>

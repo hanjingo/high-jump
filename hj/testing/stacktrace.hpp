@@ -4,28 +4,26 @@
 #include <boost/core/demangle.hpp>
 #include <boost/stacktrace.hpp>
 #include <exception>
-#include <iostream>
-#include <mutex>
 #include <string>
 
 namespace hj
 {
 
-inline std::mutex &stacktrace_mutex()
+struct exception_info
 {
-    static std::mutex mtx;
-    return mtx;
-}
+    std::string type;
+    std::string message;
+    std::string stacktrace;
+    bool        is_throw_site_stacktrace{false};
+};
 
 inline std::string current_stacktrace()
 {
-    std::lock_guard<std::mutex> lock(stacktrace_mutex());
     return boost::stacktrace::to_string(boost::stacktrace::stacktrace());
 }
 
 inline std::string exception_stacktrace()
 {
-    std::lock_guard<std::mutex> lock(stacktrace_mutex());
     auto st = boost::stacktrace::stacktrace::from_current_exception();
     if(st)
     {
@@ -35,14 +33,17 @@ inline std::string exception_stacktrace()
            "Ensure Boost.Stacktrace exception hook is enabled]";
 }
 
-inline std::string current_exception_diagnostic()
+inline exception_info capture_exception(std::exception_ptr eptr)
 {
-    std::string        result;
-    std::exception_ptr eptr = std::current_exception();
+    exception_info info;
 
     if(!eptr)
     {
-        return "[No active exception]\nStacktrace:\n" + current_stacktrace();
+        info.type                     = "[No active exception]";
+        info.message                  = "[N/A]";
+        info.stacktrace               = current_stacktrace();
+        info.is_throw_site_stacktrace = false;
+        return info;
     }
 
     try
@@ -51,42 +52,61 @@ inline std::string current_exception_diagnostic()
     }
     catch(const std::exception &e)
     {
-        result += "Exception:\n    ";
-        result += boost::core::demangle(typeid(e).name());
-        result += "\nMessage:\n    ";
-        result += e.what();
+        info.type    = boost::core::demangle(typeid(e).name());
+        info.message = e.what() ? e.what() : "[null]";
     }
     catch(const char *e)
     {
-        result += "Exception:\n    const char*\nMessage:\n    ";
-        result += e;
+        info.type    = "const char*";
+        info.message = e ? e : "[null]";
     }
     catch(const std::string &e)
     {
-        result += "Exception:\n    std::string\nMessage:\n    ";
-        result += e;
+        info.type    = "std::string";
+        info.message = e;
     }
     catch(...)
     {
-        result +=
-            "Exception:\n    [Unknown Exception Type]\nMessage:\n    [N/A]";
+        info.type    = "[Unknown Exception Type]";
+        info.message = "[N/A]";
     }
 
-    result += "\nStacktrace:\n";
-
-    std::lock_guard<std::mutex> lock(stacktrace_mutex());
     auto st = boost::stacktrace::stacktrace::from_current_exception();
     if(st)
     {
-        result += boost::stacktrace::to_string(st);
+        info.stacktrace               = boost::stacktrace::to_string(st);
+        info.is_throw_site_stacktrace = true;
     } else
     {
-        result +=
-            "[Catch-site Stacktrace]\n"
-            + boost::stacktrace::to_string(boost::stacktrace::stacktrace());
+        info.stacktrace               = current_stacktrace();
+        info.is_throw_site_stacktrace = false;
     }
 
+    return info;
+}
+
+inline exception_info capture_current_exception()
+{
+    return capture_exception(std::current_exception());
+}
+
+inline std::string format_exception(const exception_info &info)
+{
+    std::string result;
+    result += "Exception:\n    " + info.type + "\n";
+    result += "Message:\n    " + info.message + "\n";
+    result += "Stacktrace:\n";
+    if(!info.is_throw_site_stacktrace && info.type != "[No active exception]")
+    {
+        result += "[Catch-site Stacktrace]\n";
+    }
+    result += info.stacktrace;
     return result;
+}
+
+inline std::string current_exception_diagnostic()
+{
+    return format_exception(capture_current_exception());
 }
 
 inline std::string stacktrace()

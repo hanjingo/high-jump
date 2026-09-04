@@ -534,7 +534,7 @@ TEST_F(http_client_test, concurrent_requests_timeout_isolation)
     }
 }
 
-TEST(http_client_test, query_parameters_encoding_and_sorting)
+TEST(http_client_test_util, query_parameters_encoding_and_sorting)
 {
     hj::http::query_params query{{"name", "Harry Potter"},
                                  {"q", "a+b"},

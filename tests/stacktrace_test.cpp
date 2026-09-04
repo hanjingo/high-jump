@@ -7,8 +7,6 @@
 #include <thread>
 #include <vector>
 
-// --- 去除 static，防止 MSVC PDB 生成修饰性内部符号 ---
-
 BOOST_NOINLINE std::string capture_deep_stacktrace_baz()
 {
     return hj::current_stacktrace();
@@ -245,14 +243,12 @@ TEST(stacktrace, concurrent_multithreaded_safety_cxx17)
 
                 if((t + i) % 2 == 0)
                 {
-                    // 核心逻辑校验：校验异常类型与该线程特有的 token Message
                     bool valid_type =
                         (diag.find("runtime_error") != std::string::npos);
                     bool valid_msg =
                         (diag.find("thread_a_err_" + expected_token)
                          != std::string::npos);
 
-                    // 数据隔离校验：不得夹带 Path B 的任何 Message 污染
                     bool clean =
                         (diag.find("thread_b_err_") == std::string::npos);
 
@@ -294,4 +290,106 @@ TEST(stacktrace, concurrent_multithreaded_safety_cxx17)
         << "Detected " << failure_count.load()
         << " thread-safety or data-leakage failures during high-concurrency "
            "execution!";
+}
+
+TEST(stacktrace, throw_const_char_pointer)
+{
+    hj::exception_info info;
+    try
+    {
+        throw "raw string exception";
+    }
+    catch(...)
+    {
+        info = hj::capture_current_exception();
+    }
+
+    EXPECT_EQ(info.type, "const char*");
+    EXPECT_EQ(info.message, "raw string exception");
+    EXPECT_FALSE(info.stacktrace.empty());
+}
+
+TEST(stacktrace, throw_std_string)
+{
+    hj::exception_info info;
+    try
+    {
+        throw std::string("std string exception");
+    }
+    catch(...)
+    {
+        info = hj::capture_current_exception();
+    }
+
+    EXPECT_EQ(info.type, "std::string");
+    EXPECT_EQ(info.message, "std string exception");
+    EXPECT_FALSE(info.stacktrace.empty());
+}
+
+TEST(stacktrace, throw_unknown_primitive_type)
+{
+    hj::exception_info info;
+    try
+    {
+        throw 123;
+    }
+    catch(...)
+    {
+        info = hj::capture_current_exception();
+    }
+
+    EXPECT_EQ(info.type, "[Unknown Exception Type]");
+    EXPECT_EQ(info.message, "[N/A]");
+    EXPECT_FALSE(info.stacktrace.empty());
+}
+
+TEST(stacktrace, no_active_exception_handling)
+{
+    std::string diag = hj::current_exception_diagnostic();
+
+    EXPECT_NE(diag.find("[No active exception]"), std::string::npos);
+    EXPECT_NE(diag.find("[N/A]"), std::string::npos);
+    EXPECT_NE(diag.find("Stacktrace:"), std::string::npos);
+}
+
+TEST(stacktrace, throw_null_const_char_pointer)
+{
+    hj::exception_info info;
+    try
+    {
+        throw static_cast<const char *>(nullptr);
+    }
+    catch(...)
+    {
+        info = hj::capture_current_exception();
+    }
+
+    EXPECT_EQ(info.type, "const char*");
+    EXPECT_EQ(info.message, "[null]");
+    EXPECT_FALSE(info.stacktrace.empty());
+}
+
+TEST(stacktrace, capture_exception_via_exception_ptr_async)
+{
+    std::exception_ptr captured_eptr;
+
+    std::thread worker([&captured_eptr]() {
+        try
+        {
+            throw std::overflow_error("async calculation overflow");
+        }
+        catch(...)
+        {
+            captured_eptr = std::current_exception();
+        }
+    });
+    worker.join();
+
+    ASSERT_NE(captured_eptr, nullptr);
+
+    hj::exception_info info = hj::capture_exception(captured_eptr);
+
+    EXPECT_NE(info.type.find("overflow_error"), std::string::npos);
+    EXPECT_EQ(info.message, "async calculation overflow");
+    EXPECT_FALSE(info.stacktrace.empty());
 }

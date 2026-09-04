@@ -1,6 +1,6 @@
 /*
  *  This file is part of high-jump(hj).
- *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ *  Copyright (C) 2025-2026 hanjingo <hehehunanchina@live.com>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,148 +18,113 @@
 #ifndef TELEMETRY_HPP
 #define TELEMETRY_HPP
 
-#include <string>
-#include <memory>
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <initializer_list>
 #include <map>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 #include <vector>
-#include <variant>
 
 #include <opentelemetry/common/attribute_value.h>
-
-#include <opentelemetry/nostd/shared_ptr.h>
-#include <opentelemetry/nostd/string_view.h>
-#include <opentelemetry/nostd/variant.h>
-#include <opentelemetry/sdk/common/exporter_utils.h>
-#include <opentelemetry/sdk/resource/resource.h>
-
-#include <opentelemetry/sdk/trace/span_data.h>
-#include <opentelemetry/sdk/trace/tracer_provider.h>
-#include <opentelemetry/sdk/trace/tracer_provider_factory.h>
-#include <opentelemetry/sdk/trace/simple_processor.h>
-#include <opentelemetry/sdk/trace/simple_processor_factory.h>
-#include <opentelemetry/sdk/trace/exporter.h>
-#include <opentelemetry/trace/provider.h>
-#include <opentelemetry/trace/tracer.h>
-#include <opentelemetry/trace/span.h>
-#include <opentelemetry/trace/span_context.h>
-#include <opentelemetry/trace/scope.h>
-
-#include <opentelemetry/metrics/provider.h>
-#include <opentelemetry/metrics/meter_provider.h>
-#include <opentelemetry/sdk/metrics/aggregation/aggregation_config.h>
-#include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_factory.h>
-#include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_options.h>
-#include <opentelemetry/sdk/metrics/instruments.h>
-#include <opentelemetry/sdk/metrics/meter_context.h>
-#include <opentelemetry/sdk/metrics/meter_context_factory.h>
-#include <opentelemetry/sdk/metrics/meter_provider.h>
-#include <opentelemetry/sdk/metrics/meter_provider_factory.h>
-#include <opentelemetry/sdk/metrics/metric_reader.h>
-#include <opentelemetry/sdk/metrics/provider.h>
-#include <opentelemetry/sdk/metrics/push_metric_exporter.h>
-#include <opentelemetry/sdk/metrics/view/instrument_selector.h>
-#include <opentelemetry/sdk/metrics/view/instrument_selector_factory.h>
-#include <opentelemetry/sdk/metrics/view/meter_selector.h>
-#include <opentelemetry/sdk/metrics/view/meter_selector_factory.h>
-#include <opentelemetry/sdk/metrics/view/view.h>
-#include <opentelemetry/sdk/metrics/view/view_factory.h>
-
-#include <opentelemetry/exporters/ostream/span_exporter_factory.h>
+#include <opentelemetry/common/key_value_iterable_view.h>
 #include <opentelemetry/exporters/ostream/metric_exporter_factory.h>
-
-#include <opentelemetry/exporters/otlp/otlp_http_exporter.h>
-#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h>
-#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h>
-
-#include <opentelemetry/exporters/otlp/otlp_file_exporter.h>
+#include <opentelemetry/exporters/ostream/span_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_file_client_options.h>
 #include <opentelemetry/exporters/otlp/otlp_file_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_file_exporter_options.h>
 #include <opentelemetry/exporters/otlp/otlp_file_metric_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_http_exporter.h>
+#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h>
+#include <opentelemetry/metrics/meter_provider.h>
+#include <opentelemetry/metrics/provider.h>
+#include <opentelemetry/nostd/shared_ptr.h>
+#include <opentelemetry/nostd/string_view.h>
+#include <opentelemetry/nostd/variant.h>
+#include <opentelemetry/sdk/common/exporter_utils.h>
+#include <opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_factory.h>
+#include <opentelemetry/sdk/metrics/meter_context_factory.h>
+#include <opentelemetry/sdk/metrics/meter_provider_factory.h>
+#include <opentelemetry/sdk/metrics/view/instrument_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/meter_selector_factory.h>
+#include <opentelemetry/sdk/metrics/view/view_factory.h>
+#include <opentelemetry/sdk/resource/resource.h>
+// #include <opentelemetry/sdk/resource/resource_resolver.h>  // <- 已移除，避免找不到文件错误
+#include <opentelemetry/sdk/trace/batch_span_processor_factory.h>
+#include <opentelemetry/sdk/trace/batch_span_processor_options.h>
+#include <opentelemetry/sdk/trace/simple_processor_factory.h>
+#include <opentelemetry/sdk/trace/span_data.h>
+#include <opentelemetry/sdk/trace/tracer_provider.h>
+#include <opentelemetry/sdk/trace/tracer_provider_factory.h>
+#include <opentelemetry/trace/provider.h>
+#include <opentelemetry/trace/scope.h>
+#include <opentelemetry/trace/tracer.h>
 
-namespace hj
+namespace hj::telemetry
 {
 
-namespace telemetry
-{
-using tracer_provider_t = opentelemetry::trace::TracerProvider;
-using tracer_base_t =
-    opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer>;
-using trace_id_t = opentelemetry::trace::TraceId;
+// ============================================================================
+// Type Aliases & Forward Declarations
+// ============================================================================
 using trace_span_t =
     opentelemetry::nostd::shared_ptr<opentelemetry::trace::Span>;
 using trace_span_processor_t = opentelemetry::sdk::trace::SpanProcessor;
-using trace_span_data_t      = opentelemetry::sdk::trace::SpanData;
-using trace_span_id_t        = opentelemetry::trace::SpanId;
 using trace_span_exporter_t  = opentelemetry::sdk::trace::SpanExporter;
 using trace_recordable_t     = opentelemetry::sdk::trace::Recordable;
+using trace_span_data_t      = opentelemetry::sdk::trace::SpanData;
+using trace_id_t             = opentelemetry::trace::TraceId;
+using trace_span_id_t        = opentelemetry::trace::SpanId;
+using export_result_t        = opentelemetry::sdk::common::ExportResult;
 
-using meter_provider_t = opentelemetry::metrics::MeterProvider;
-using meter_base_t =
-    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter>;
-using meter_context_t        = opentelemetry::v1::sdk::metrics::MeterContext;
-using metric_view_t          = opentelemetry::sdk::metrics::View;
-using metric_view_registry_t = opentelemetry::sdk::metrics::ViewRegistry;
-using metric_instrument_selector_t =
-    opentelemetry::sdk::metrics::InstrumentSelector;
-using metric_meter_selector_t = opentelemetry::sdk::metrics::MeterSelector;
-using metric_reader_t         = opentelemetry::sdk::metrics::MetricReader;
-using metric_u64_counter_t =
-    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<uint64_t>>;
-using metric_double_counter_t =
-    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Counter<double>>;
-using metric_obs_instrument_t = opentelemetry::nostd::shared_ptr<
-    opentelemetry::metrics::ObservableInstrument>;
-using metric_u64_histogram_t = opentelemetry::nostd::unique_ptr<
-    opentelemetry::metrics::Histogram<uint64_t>>;
-using metric_double_histogram_t =
-    opentelemetry::nostd::unique_ptr<opentelemetry::metrics::Histogram<double>>;
+using attribute_value_t = opentelemetry::common::AttributeValue;
+using attribute_pair_t =
+    std::pair<opentelemetry::nostd::string_view, attribute_value_t>;
+using attribute_list_t = std::initializer_list<attribute_pair_t>;
+using attribute_view_t =
+    opentelemetry::common::KeyValueIterableView<attribute_list_t>;
 
-using metric_periodic_reader_options_t =
-    opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions;
-using metric_aggregation_config_t =
-    opentelemetry::sdk::metrics::AggregationConfig;
-using metric_histogram_aggregation_config_t =
-    opentelemetry::sdk::metrics::HistogramAggregationConfig;
-
-using export_result_t = opentelemetry::sdk::common::ExportResult;
-using string_view_t   = opentelemetry::nostd::string_view;
-using resource_t      = opentelemetry::sdk::resource::Resource;
-using sec_t           = std::chrono::microseconds;
-using ms_t            = std::chrono::milliseconds;
-
-using otlp_http_options_t =
-    opentelemetry::exporter::otlp::OtlpHttpExporterOptions;
-using otlp_http_metric_exporter_options_t =
-    opentelemetry::exporter::otlp::OtlpHttpMetricExporterOptions;
-using otlp_file_options_t =
-    opentelemetry::exporter::otlp::OtlpFileExporterOptions;
-using otlp_file_metric_exporter_options_t =
-    opentelemetry::exporter::otlp::OtlpFileMetricExporterOptions;
-using otlp_file_cli_fs_options_t =
-    opentelemetry::exporter::otlp::OtlpFileClientFileSystemOptions;
-
-using instrument_type = opentelemetry::sdk::metrics::InstrumentType;
 using http_request_content_type =
     opentelemetry::exporter::otlp::HttpRequestContentType;
-using aggregation_type = opentelemetry::sdk::metrics::AggregationType;
 
-struct custom_exporter
+// ============================================================================
+// Enterprise-Grade Resource Options (符合 OpenTelemetry Semantic Conventions)
+// ============================================================================
+struct resource_options
 {
+    std::string service_name{"default-service"};
+    std::string service_version{"1.0.0"};
+    std::string service_instance_id{""};
+    std::string deployment_environment{"production"};
+
+    std::map<std::string, std::string> custom_attributes;
 };
-struct ostream_exporter
+
+// ============================================================================
+// Enterprise-Grade OTLP HTTP Options
+// ============================================================================
+struct otlp_http_options
 {
-};
-struct otlp_http_exporter
-{
-};
-struct otlp_file_exporter
-{
+    std::string endpoint{"http://localhost:4318/v1/traces"};
+    std::map<std::string, std::string> headers;
+    std::chrono::milliseconds          timeout{5000};
+    bool                               debug{false};
+    http_request_content_type content_type{http_request_content_type::kBinary};
 };
 
 namespace detail
 {
-static std::string to_std_string(const trace_id_t &id)
+inline opentelemetry::nostd::string_view
+to_otel_sv(std::string_view sv) noexcept
+{
+    return opentelemetry::nostd::string_view(sv.data(), sv.size());
+}
+
+inline std::string to_std_string(const trace_id_t &id)
 {
     std::string s;
     if(id.IsValid() && id.kSize == 16)
@@ -170,7 +135,7 @@ static std::string to_std_string(const trace_id_t &id)
     return s;
 }
 
-static std::string to_std_string(const trace_span_id_t &id)
+inline std::string to_std_string(const trace_span_id_t &id)
 {
     std::string s;
     if(id.IsValid() && id.kSize == 8)
@@ -181,164 +146,531 @@ static std::string to_std_string(const trace_span_id_t &id)
     return s;
 }
 
-static std::string to_std_string(const string_view_t &sv)
+inline std::string to_std_string(const opentelemetry::nostd::string_view &sv)
 {
     return std::string{sv.data(), sv.size()};
 }
 
-static std::string get_value_str(const trace_span_data_t &span,
-                                 const std::string       &target)
+inline opentelemetry::sdk::resource::Resource
+create_otel_resource(const resource_options &res_opts)
 {
-    for(const auto &[key, value] : span.GetAttributes())
+    opentelemetry::sdk::resource::ResourceAttributes attrs;
+
+    if(!res_opts.service_name.empty())
     {
-        if(key != target)
-            continue;
-
-        auto value_str = [](const auto &v) -> std::string {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr(std::is_same_v<T, std::string>)
-                return v;
-            else if constexpr(std::is_arithmetic_v<T>)
-                return std::to_string(v);
-            else if constexpr(std::is_same_v<T, bool>)
-                return v ? "true" : "false";
-            else if constexpr(std::is_same_v<T, string_view_t>)
-                return std::string{v.data(), v.size()};
-            else
-                return "[unsupported type]";
-        };
-        return opentelemetry::nostd::visit(value_str, value);
+        attrs["service.name"] = res_opts.service_name;
     }
-    return "";
-}
+    if(!res_opts.service_version.empty())
+    {
+        attrs["service.version"] = res_opts.service_version;
+    }
+    if(!res_opts.service_instance_id.empty())
+    {
+        attrs["service.instance.id"] = res_opts.service_instance_id;
+    }
+    if(!res_opts.deployment_environment.empty())
+    {
+        attrs["deployment.environment"] = res_opts.deployment_environment;
+    }
 
-static std::unique_ptr<metric_instrument_selector_t>
-make_instrument_selector(instrument_type    type,
-                         const std::string &name,
-                         const std::string &unit) noexcept
+    for(const auto &[k, v] : res_opts.custom_attributes)
+    {
+        attrs[k] = v;
+    }
+
+    return opentelemetry::sdk::resource::Resource::Create(attrs);
+}
+} // namespace detail
+
+template <typename T>
+inline std::string to_std_string(const T &value)
 {
-    return opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(type,
-                                                                          name,
-                                                                          unit);
+    return detail::to_std_string(value);
 }
 
-static std::unique_ptr<metric_meter_selector_t>
-make_meter_selector(const std::string &name,
-                    const std::string &version,
-                    const std::string &scheme) noexcept
+inline auto make_attributes(attribute_list_t attrs) noexcept
 {
-    return opentelemetry::sdk::metrics::MeterSelectorFactory::Create(name,
-                                                                     version,
-                                                                     scheme);
+    return attribute_view_t{attrs};
 }
 
-static std::unique_ptr<opentelemetry::sdk::metrics::View>
-make_view(const std::string &name,
-          const std::string &desc,
-          const std::string & /*unit*/,
-          aggregation_type   type) noexcept
+// ============================================================================
+// RAII Span Guard
+// ============================================================================
+class [[nodiscard]] span_guard final
 {
-    return opentelemetry::sdk::metrics::ViewFactory::Create(name,
-                                                            desc,
-                                                            type);
-}
+  public:
+    explicit span_guard(trace_span_t span) noexcept
+        : span_(std::move(span))
+        , scope_(span_)
+    {
+    }
 
-static std::unique_ptr<opentelemetry::sdk::metrics::View> make_view(
-    const std::string                           &name,
-    const std::string                           &desc,
-    const std::string                           & /*unit*/,
-    aggregation_type                             type,
-    std::shared_ptr<metric_aggregation_config_t> aggregation_config) noexcept
+    ~span_guard() noexcept
+    {
+        try
+        {
+            if(span_)
+            {
+                span_->End();
+            }
+        }
+        catch(...)
+        {
+        }
+    }
+
+    span_guard(const span_guard &)            = delete;
+    span_guard &operator=(const span_guard &) = delete;
+    span_guard &operator=(span_guard &&)      = delete;
+
+    span_guard(span_guard &&other) noexcept
+        : span_(std::move(other.span_))
+        , scope_(std::move(other.scope_))
+    {
+    }
+
+    opentelemetry::trace::Span *operator->() const noexcept
+    {
+        return span_.get();
+    }
+
+    opentelemetry::trace::Span &operator*() const noexcept { return *span_; }
+
+    [[nodiscard]] trace_span_t get_span() const noexcept { return span_; }
+
+    void add_event(std::string_view name, attribute_list_t attrs = {}) noexcept
+    {
+        try
+        {
+            if(!span_)
+                return;
+            if(attrs.size() == 0)
+            {
+                span_->AddEvent(detail::to_otel_sv(name));
+                return;
+            }
+            span_->AddEvent(detail::to_otel_sv(name), attribute_view_t{attrs});
+        }
+        catch(...)
+        {
+        }
+    }
+
+    void set_attribute(std::string_view         key,
+                       const attribute_value_t &value) noexcept
+    {
+        try
+        {
+            if(span_)
+            {
+                span_->SetAttribute(detail::to_otel_sv(key), value);
+            }
+        }
+        catch(...)
+        {
+        }
+    }
+
+  private:
+    trace_span_t                span_;
+    opentelemetry::trace::Scope scope_;
+};
+
+// ============================================================================
+// Lightweight Tracer Handle
+// ============================================================================
+class tracer final
 {
-    return opentelemetry::sdk::metrics::ViewFactory::Create(name,
-                                                            desc,
-                                                            type,
-                                                            aggregation_config);
-}
+  public:
+    tracer() = default;
 
-static std::unique_ptr<metric_histogram_aggregation_config_t>
-make_histogram_aggregation_config(const std::vector<double> &boundaries,
-                                  bool record_min_max = true) noexcept
+    explicit tracer(
+        opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> tracer)
+        : tracer_(std::move(tracer))
+    {
+    }
+
+    ~tracer() = default;
+
+    [[nodiscard]] span_guard
+    start_scoped_span(std::string_view name,
+                      attribute_list_t attrs = {}) noexcept
+    {
+        try
+        {
+            if(!tracer_)
+            {
+                return span_guard{trace_span_t{}};
+            }
+            opentelemetry::trace::StartSpanOptions options;
+            auto                                   span =
+                tracer_->StartSpan(detail::to_otel_sv(name), attrs, options);
+            return span_guard{std::move(span)};
+        }
+        catch(...)
+        {
+            return span_guard{trace_span_t{}};
+        }
+    }
+
+    [[nodiscard]] trace_span_t start_span(std::string_view name,
+                                          attribute_list_t attrs = {}) noexcept
+    {
+        try
+        {
+            if(!tracer_)
+            {
+                return trace_span_t{};
+            }
+            opentelemetry::trace::StartSpanOptions options;
+            return tracer_->StartSpan(detail::to_otel_sv(name), attrs, options);
+        }
+        catch(...)
+        {
+            return trace_span_t{};
+        }
+    }
+
+    void end_span(trace_span_t &span) noexcept
+    {
+        try
+        {
+            if(span)
+            {
+                span->End();
+            }
+        }
+        catch(...)
+        {
+        }
+    }
+
+    std::string curr_trace_id() const noexcept
+    {
+        try
+        {
+            if(!tracer_)
+                return "";
+            auto span = tracer_->GetCurrentSpan();
+            if(!span)
+                return "";
+            return detail::to_std_string(span->GetContext().trace_id());
+        }
+        catch(...)
+        {
+            return "";
+        }
+    }
+
+    std::string curr_span_id() const noexcept
+    {
+        try
+        {
+            if(!tracer_)
+                return "";
+            auto span = tracer_->GetCurrentSpan();
+            if(!span)
+                return "";
+            return detail::to_std_string(span->GetContext().span_id());
+        }
+        catch(...)
+        {
+            return "";
+        }
+    }
+
+    bool force_flush(
+        std::chrono::microseconds = std::chrono::microseconds(5000000)) noexcept
+    {
+        return true;
+    }
+
+  private:
+    opentelemetry::nostd::shared_ptr<opentelemetry::trace::Tracer> tracer_;
+};
+
+// ============================================================================
+// Comprehensive Modern Metric Meter Handle
+// ============================================================================
+class meter final
 {
-    auto config = std::unique_ptr<metric_histogram_aggregation_config_t>(
-        new metric_histogram_aggregation_config_t);
-    config->boundaries_     = boundaries;
-    config->record_min_max_ = record_min_max;
-    return config;
-}
+  public:
+    meter() = default;
 
-static std::unique_ptr<metric_view_registry_t>
-make_default_metric_view_registry(const std::string &name,
-                                  const std::string &version,
-                                  const std::string &scheme) noexcept
-{
-    auto views = std::make_unique<metric_view_registry_t>();
+    explicit meter(
+        opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter)
+        : meter_(std::move(meter))
+    {
+    }
 
-    // counter view
-    auto instrument_selector_ct =
-        make_instrument_selector(instrument_type::kCounter, "", "");
-    auto meter_selector = make_meter_selector(name, version, scheme);
-    auto sum_view       = make_view(name, "", "", aggregation_type::kSum);
-    views->AddView(std::move(instrument_selector_ct),
-                   std::move(meter_selector),
-                   std::move(sum_view));
+    ~meter() = default;
 
-    // observable counter view
-    auto obs_instrument_selector =
-        make_instrument_selector(instrument_type::kObservableCounter, "", "");
-    auto obs_meter_selector = make_meter_selector(name, version, scheme);
-    auto obs_sum_view       = make_view(name, "", "", aggregation_type::kSum);
-    views->AddView(std::move(obs_instrument_selector),
-                   std::move(obs_meter_selector),
-                   std::move(obs_sum_view));
+    template <typename T = uint64_t>
+    auto counter(std::string_view name,
+                 std::string_view desc = "",
+                 std::string_view unit = "") noexcept
+    {
+        try
+        {
+            if constexpr(std::is_same_v<T, double>)
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateDoubleCounter(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateDoubleCounter(detail::to_otel_sv(name),
+                                                   detail::to_otel_sv(desc),
+                                                   detail::to_otel_sv(unit));
+            } else
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateUInt64Counter(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateUInt64Counter(detail::to_otel_sv(name),
+                                                   detail::to_otel_sv(desc),
+                                                   detail::to_otel_sv(unit));
+            }
+        }
+        catch(...)
+        {
+            using return_type =
+                std::decay_t<decltype(counter<T>(name, desc, unit))>;
+            return return_type{};
+        }
+    }
 
-    // histogram view
-    auto histogram_instrument_selector =
-        make_instrument_selector(instrument_type::kHistogram, "", "");
-    auto histogram_meter_selector = make_meter_selector(name, version, scheme);
-    auto histogram_aggregation_config =
-        make_histogram_aggregation_config(std::vector<double>{0.0,
-                                                              50.0,
-                                                              100.0,
-                                                              250.0,
-                                                              500.0,
-                                                              750.0,
-                                                              1000.0,
-                                                              2500.0,
-                                                              5000.0,
-                                                              10000.0,
-                                                              20000.0});
-    std::shared_ptr<metric_aggregation_config_t> aggregation_config(
-        std::move(histogram_aggregation_config));
-    auto histogram_view = make_view(name,
-                                    "",
-                                    "",
-                                    aggregation_type::kHistogram,
-                                    aggregation_config);
-    views->AddView(std::move(histogram_instrument_selector),
-                   std::move(histogram_meter_selector),
-                   std::move(histogram_view));
+    template <typename T = int64_t>
+    auto up_down_counter(std::string_view name,
+                         std::string_view desc = "",
+                         std::string_view unit = "") noexcept
+    {
+        try
+        {
+            if constexpr(std::is_same_v<T, double>)
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateDoubleUpDownCounter(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateDoubleUpDownCounter(
+                    detail::to_otel_sv(name),
+                    detail::to_otel_sv(desc),
+                    detail::to_otel_sv(unit));
+            } else
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateInt64UpDownCounter(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateInt64UpDownCounter(
+                    detail::to_otel_sv(name),
+                    detail::to_otel_sv(desc),
+                    detail::to_otel_sv(unit));
+            }
+        }
+        catch(...)
+        {
+            using return_type =
+                std::decay_t<decltype(up_down_counter<T>(name, desc, unit))>;
+            return return_type{};
+        }
+    }
 
-    return views;
-}
+    template <typename T = double>
+    auto obs_gauge(std::string_view name,
+                   std::string_view desc = "",
+                   std::string_view unit = "") noexcept
+    {
+        try
+        {
+            if constexpr(std::is_same_v<T, int64_t>)
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateInt64ObservableGauge(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateInt64ObservableGauge(
+                    detail::to_otel_sv(name),
+                    detail::to_otel_sv(desc),
+                    detail::to_otel_sv(unit));
+            } else
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateDoubleObservableGauge(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateDoubleObservableGauge(
+                    detail::to_otel_sv(name),
+                    detail::to_otel_sv(desc),
+                    detail::to_otel_sv(unit));
+            }
+        }
+        catch(...)
+        {
+            using return_type =
+                std::decay_t<decltype(obs_gauge<T>(name, desc, unit))>;
+            return return_type{};
+        }
+    }
 
-// self defined trace_span_exporter
+    template <typename T = double>
+    auto histogram(std::string_view name,
+                   std::string_view desc = "",
+                   std::string_view unit = "") noexcept
+    {
+        try
+        {
+            if constexpr(std::is_same_v<T, uint64_t>)
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateUInt64Histogram(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateUInt64Histogram(detail::to_otel_sv(name),
+                                                     detail::to_otel_sv(desc),
+                                                     detail::to_otel_sv(unit));
+            } else
+            {
+                using return_type =
+                    decltype(std::declval<opentelemetry::nostd::shared_ptr<
+                                 opentelemetry::metrics::Meter>>()
+                                 ->CreateDoubleHistogram(
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>(),
+                                     std::declval<
+                                         opentelemetry::nostd::string_view>()));
+                if(!meter_)
+                    return return_type{};
+                return meter_->CreateDoubleHistogram(detail::to_otel_sv(name),
+                                                     detail::to_otel_sv(desc),
+                                                     detail::to_otel_sv(unit));
+            }
+        }
+        catch(...)
+        {
+            using return_type =
+                std::decay_t<decltype(histogram<T>(name, desc, unit))>;
+            return return_type{};
+        }
+    }
+
+    auto create_u64_counter(std::string_view name,
+                            std::string_view desc = "",
+                            std::string_view unit = "") noexcept
+    {
+        return counter<uint64_t>(name, desc, unit);
+    }
+
+    auto create_double_counter(std::string_view name,
+                               std::string_view desc = "",
+                               std::string_view unit = "") noexcept
+    {
+        return counter<double>(name, desc, unit);
+    }
+
+    auto create_double_obs_gauge(std::string_view name,
+                                 std::string_view desc = "",
+                                 std::string_view unit = "") noexcept
+    {
+        return obs_gauge<double>(name, desc, unit);
+    }
+
+    auto create_u64_histogram(std::string_view name,
+                              std::string_view desc = "",
+                              std::string_view unit = "") noexcept
+    {
+        return histogram<uint64_t>(name, desc, unit);
+    }
+
+  private:
+    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::Meter> meter_;
+};
+
+// ============================================================================
+// Custom Exporter Base Class
+// ============================================================================
 class custom_trace_span_exporter
     : public opentelemetry::sdk::trace::SpanExporter
 {
   public:
-    custom_trace_span_exporter() {}
+    custom_trace_span_exporter()
+        : is_shutdown_(false)
+    {
+    }
+    ~custom_trace_span_exporter() override = default;
 
     std::unique_ptr<trace_recordable_t> MakeRecordable() noexcept override
     {
-        return std::unique_ptr<opentelemetry::sdk::trace::Recordable>(
-            new trace_span_data_t());
+        return std::make_unique<trace_span_data_t>();
     }
 
     export_result_t
     Export(const opentelemetry::nostd::span<std::unique_ptr<trace_recordable_t>>
                &spans) noexcept override
     {
+        if(is_shutdown_.load(std::memory_order_acquire))
+        {
+            return export_result_t::kFailure;
+        }
         for(const auto &recordable : spans)
         {
             on_export(recordable);
@@ -346,423 +678,607 @@ class custom_trace_span_exporter
         return export_result_t::kSuccess;
     }
 
-    bool Shutdown(sec_t timeout = sec_t(0)) noexcept override { return true; }
-
-    bool ForceFlush(sec_t timeout = sec_t(0)) noexcept override { return true; }
-
-    virtual void
-    on_export(const std::unique_ptr<trace_recordable_t> &recordable) noexcept
+    bool Shutdown(std::chrono::microseconds =
+                      std::chrono::microseconds(0)) noexcept override
     {
-        // Custom export logic here
-        // Implement it!
+        bool expected = false;
+        if(is_shutdown_.compare_exchange_strong(expected, true))
+        {
+            on_shutdown();
+        }
+        return true;
     }
+
+    bool ForceFlush(std::chrono::microseconds =
+                        std::chrono::microseconds(0)) noexcept override
+    {
+        return true;
+    }
+
+    virtual void on_export(
+        const std::unique_ptr<trace_recordable_t> &recordable) noexcept = 0;
+
+    virtual void on_shutdown() noexcept {}
+
+  private:
+    std::atomic<bool> is_shutdown_;
 };
-}
 
-using custom_trace_span_exporter_t = detail::custom_trace_span_exporter;
+using custom_trace_span_exporter_t = custom_trace_span_exporter;
 
-template <typename T>
-static std::string to_std_string(const T &value)
-{
-    return detail::to_std_string(value);
-}
-
-// ----------------------------------- tracer ------------------------------
-template <typename T>
-class tracer
+// ============================================================================
+// Telemetry Runtime
+// ============================================================================
+class runtime final
 {
   public:
-    tracer()                        = delete;
-    tracer(const std::string &name) = delete;
-    explicit tracer(const std::string                        &name,
-                    std::unique_ptr<trace_span_processor_t> &&processor)
-    {
-        auto provider = opentelemetry::nostd::shared_ptr<tracer_provider_t>(
-            new opentelemetry::sdk::trace::TracerProvider(
-                std::move(processor)));
-        opentelemetry::trace::Provider::SetTracerProvider(provider);
-        _tracer = provider->GetTracer(name);
-    }
-    ~tracer() {}
+    runtime() = default;
 
-    trace_span_t
-    start_span(const std::string                        &name,
-               const std::map<std::string, std::string> &attrs = {})
+    runtime(
+        opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>
+            trace_provider,
+        opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>
+            meter_provider = {})
+        : trace_provider_(std::move(trace_provider))
+        , meter_provider_(std::move(meter_provider))
     {
-        auto span = _tracer->StartSpan(name);
-        for(const auto &kv : attrs)
-            span->SetAttribute(kv.first, kv.second);
-
-        return span;
+        if(trace_provider_)
+        {
+            opentelemetry::trace::Provider::SetTracerProvider(trace_provider_);
+        }
+        if(meter_provider_)
+        {
+            opentelemetry::metrics::Provider::SetMeterProvider(meter_provider_);
+        }
     }
 
-    void end_span(trace_span_t &span)
+    runtime(opentelemetry::nostd::shared_ptr<
+                opentelemetry::trace::TracerProvider> trace_provider,
+            std::nullptr_t)
+        : runtime(std::move(trace_provider),
+                  opentelemetry::nostd::shared_ptr<
+                      opentelemetry::metrics::MeterProvider>{})
     {
-        if(span)
-            span->End();
     }
 
-    void trace(const std::string                        &name,
-               const std::map<std::string, std::string> &attrs = {})
+    runtime(std::nullptr_t, std::nullptr_t)
+        : runtime(opentelemetry::nostd::shared_ptr<
+                      opentelemetry::trace::TracerProvider>{},
+                  opentelemetry::nostd::shared_ptr<
+                      opentelemetry::metrics::MeterProvider>{})
     {
-        auto span = start_span(name, attrs);
-        end_span(span);
     }
 
-    void add_event(trace_span_t                             &span,
-                   const std::string                        &event,
-                   const std::map<std::string, std::string> &attrs = {})
-    {
-        if(!span)
-            return;
+    ~runtime() noexcept { shutdown(); }
 
-        span->AddEvent(event);
-        for(const auto &kv : attrs)
-            span->SetAttribute(kv.first, kv.second);
+    runtime(const runtime &)            = delete;
+    runtime &operator=(const runtime &) = delete;
+
+    runtime(runtime &&other) noexcept
+        : trace_provider_(std::move(other.trace_provider_))
+        , meter_provider_(std::move(other.meter_provider_))
+    {
     }
 
-    std::string curr_trace_id()
+    runtime &operator=(runtime &&other) noexcept
     {
-        auto        span = _tracer->GetCurrentSpan();
-        std::string hex;
-        span->GetContext().trace_id().ToLowerBase16(hex);
-        return hex;
+        if(this != &other)
+        {
+            shutdown();
+            trace_provider_ = std::move(other.trace_provider_);
+            meter_provider_ = std::move(other.meter_provider_);
+        }
+        return *this;
     }
 
-    std::string curr_span_id()
+    [[nodiscard]] tracer get_tracer(std::string_view name,
+                                    std::string_view version = "") noexcept
     {
-        auto        span = _tracer->GetCurrentSpan();
-        std::string hex;
-        span->GetContext().span_id().ToLowerBase16(hex);
-        return hex;
+        try
+        {
+            if(!trace_provider_)
+            {
+                return tracer{};
+            }
+            return tracer{
+                trace_provider_->GetTracer(detail::to_otel_sv(name),
+                                           detail::to_otel_sv(version))};
+        }
+        catch(...)
+        {
+            return tracer{};
+        }
+    }
+
+    [[nodiscard]] meter get_meter(std::string_view name,
+                                  std::string_view version = "",
+                                  std::string_view schema  = "") noexcept
+    {
+        try
+        {
+            if(!meter_provider_)
+            {
+                return meter{};
+            }
+            return meter{meter_provider_->GetMeter(detail::to_otel_sv(name),
+                                                   detail::to_otel_sv(version),
+                                                   detail::to_otel_sv(schema))};
+        }
+        catch(...)
+        {
+            return meter{};
+        }
+    }
+
+    bool force_flush(std::chrono::microseconds timeout =
+                         std::chrono::microseconds(5000000)) noexcept
+    {
+        try
+        {
+            bool ok = true;
+            if(trace_provider_)
+            {
+                if(auto sdk = dynamic_cast<
+                       opentelemetry::sdk::trace::TracerProvider *>(
+                       trace_provider_.get()))
+                {
+                    ok &= sdk->ForceFlush(timeout);
+                }
+            }
+            if(meter_provider_)
+            {
+                if(auto sdk = dynamic_cast<
+                       opentelemetry::sdk::metrics::MeterProvider *>(
+                       meter_provider_.get()))
+                {
+                    ok &= sdk->ForceFlush(timeout);
+                }
+            }
+            return ok;
+        }
+        catch(...)
+        {
+            return false;
+        }
+    }
+
+    bool shutdown(std::chrono::microseconds timeout =
+                      std::chrono::microseconds(5000000)) noexcept
+    {
+        try
+        {
+            bool ok = true;
+            if(trace_provider_)
+            {
+                if(auto sdk = dynamic_cast<
+                       opentelemetry::sdk::trace::TracerProvider *>(
+                       trace_provider_.get()))
+                {
+                    ok &= sdk->Shutdown(timeout);
+                }
+                std::shared_ptr<opentelemetry::trace::TracerProvider> none;
+                opentelemetry::trace::Provider::SetTracerProvider(none);
+                trace_provider_ = nullptr;
+            }
+
+            if(meter_provider_)
+            {
+                if(auto sdk = dynamic_cast<
+                       opentelemetry::sdk::metrics::MeterProvider *>(
+                       meter_provider_.get()))
+                {
+                    ok &= sdk->Shutdown(timeout);
+                }
+                std::shared_ptr<opentelemetry::metrics::MeterProvider> none;
+                opentelemetry::metrics::Provider::SetMeterProvider(none);
+                meter_provider_ = nullptr;
+            }
+            return ok;
+        }
+        catch(...)
+        {
+            return false;
+        }
     }
 
   private:
-    tracer_base_t _tracer;
-    bool          _is_custom;
+    opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>
+        trace_provider_;
+    opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>
+        meter_provider_;
 };
 
-// ----------------------------------- meter ----------------------------
-template <typename T>
-class meter
+// ============================================================================
+// Helper Factories & Adapters
+// ============================================================================
+
+inline std::unique_ptr<trace_span_processor_t> make_simple_trace_span_processor(
+    std::unique_ptr<trace_span_exporter_t> exporter)
 {
-  public:
-    meter() = delete;
-    meter(const std::string                      &name,
-          const std::string                      &version,
-          const std::string                      &scheme,
-          std::unique_ptr<metric_reader_t>        reader,
-          std::unique_ptr<metric_view_registry_t> views)
-    {
-        auto context = opentelemetry::sdk::metrics::MeterContextFactory::Create(
-            std::move(views));
-        context->AddMetricReader(std::move(reader));
-
-        auto provider =
-            opentelemetry::sdk::metrics::MeterProviderFactory::Create(
-                std::move(context));
-        std::shared_ptr<hj::telemetry::meter_provider_t> api_provider(
-            std::move(provider));
-        opentelemetry::sdk::metrics::Provider::SetMeterProvider(api_provider);
-
-        _meter = opentelemetry::metrics::Provider::GetMeterProvider()->GetMeter(
-            name,
-            version,
-            scheme);
-    }
-    ~meter() {}
-
-    metric_u64_counter_t
-    create_u64_counter(const std::string &name,
-                       const std::string &desc = "") noexcept
-    {
-        return _meter->CreateUInt64Counter(name, desc);
-    }
-
-    metric_double_counter_t
-    create_double_counter(const std::string &name,
-                          const std::string &desc = "",
-                          const std::string &unit = "") noexcept
-    {
-        return _meter->CreateDoubleCounter(name, desc, unit);
-    }
-
-    metric_obs_instrument_t
-    create_i64_obs_counter(const std::string &name,
-                           const std::string &desc = "",
-                           const std::string &unit = "") noexcept
-    {
-        return _meter->CreateInt64ObservableCounter(name, desc, unit);
-    }
-
-    metric_obs_instrument_t
-    create_double_obs_counter(const std::string &name,
-                              const std::string &desc = "",
-                              const std::string &unit = "") noexcept
-    {
-        return _meter->CreateDoubleObservableCounter(name, desc, unit);
-    }
-
-    metric_obs_instrument_t
-    create_i64_obs_gauge(const std::string &name,
-                         const std::string &desc = "",
-                         const std::string &unit = "") noexcept
-    {
-        return _meter->CreateInt64ObservableGauge(name, desc, unit);
-    }
-
-    metric_obs_instrument_t
-    create_double_obs_gauge(const std::string &name,
-                            const std::string &desc = "") noexcept
-    {
-        return _meter->CreateDoubleObservableGauge(name, desc);
-    }
-
-    metric_u64_histogram_t
-    create_u64_histogram(const std::string &name,
-                         const std::string &desc = "",
-                         const std::string &unit = "") noexcept
-    {
-        return _meter->CreateUInt64Histogram(name, desc, unit);
-    }
-
-
-    metric_double_histogram_t
-    create_double_histogram(const std::string &name,
-                            const std::string &desc = "",
-                            const std::string &unit = "") noexcept
-    {
-        return _meter->CreateDoubleHistogram(name, desc, unit);
-    }
-
-  private:
-    meter_base_t _meter;
-};
-
-// ------------------------------ global api -------------------------------
-// tracer API
-static std::unique_ptr<trace_span_processor_t> make_simple_trace_span_processor(
-    std::unique_ptr<trace_span_exporter_t> &&exporter)
-{
-    return std::make_unique<opentelemetry::sdk::trace::SimpleSpanProcessor>(
+    return opentelemetry::sdk::trace::SimpleSpanProcessorFactory::Create(
         std::move(exporter));
 }
 
-static void cleanup_tracer()
+inline std::unique_ptr<trace_span_processor_t> make_batch_trace_span_processor(
+    std::unique_ptr<trace_span_exporter_t> exporter,
+    std::size_t                            max_queue_size = 2048,
+    std::chrono::milliseconds schedule_delay = std::chrono::milliseconds(2000),
+    std::size_t               max_batch_size = 512)
 {
-    std::shared_ptr<opentelemetry::trace::TracerProvider> none;
-    opentelemetry::trace::Provider::SetTracerProvider(none);
+    opentelemetry::sdk::trace::BatchSpanProcessorOptions opts;
+    opts.max_queue_size        = max_queue_size;
+    opts.schedule_delay_millis = schedule_delay;
+    opts.max_export_batch_size = max_batch_size;
+
+    return opentelemetry::sdk::trace::BatchSpanProcessorFactory::Create(
+        std::move(exporter),
+        opts);
 }
 
-static tracer<custom_exporter>
-make_custom_tracer(const std::string                        &name,
-                   std::unique_ptr<trace_span_processor_t> &&processor)
+inline std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry>
+make_default_metric_view_registry(std::string_view name,
+                                  std::string_view version,
+                                  std::string_view schema)
 {
-    return tracer<custom_exporter>(name, std::move(processor));
+    auto views  = std::make_unique<opentelemetry::sdk::metrics::ViewRegistry>();
+    auto name_s = std::string(name);
+    auto version_s = std::string(version);
+    auto schema_s  = std::string(schema);
+
+    auto inst_selector =
+        opentelemetry::sdk::metrics::InstrumentSelectorFactory::Create(
+            opentelemetry::sdk::metrics::InstrumentType::kCounter,
+            "",
+            "");
+    auto meter_selector =
+        opentelemetry::sdk::metrics::MeterSelectorFactory::Create(name_s,
+                                                                  version_s,
+                                                                  schema_s);
+    auto sum_view = opentelemetry::sdk::metrics::ViewFactory::Create(
+        name_s,
+        "",
+        opentelemetry::sdk::metrics::AggregationType::kSum);
+    views->AddView(std::move(inst_selector),
+                   std::move(meter_selector),
+                   std::move(sum_view));
+
+    return views;
 }
 
-static tracer<ostream_exporter>
-make_ostream_tracer(const std::string                        &name,
-                    std::unique_ptr<trace_span_processor_t> &&processor)
+inline runtime make_ostream_runtime(
+    const resource_options                                    &res_opts,
+    std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry> views = nullptr)
 {
-    return tracer<ostream_exporter>(name, std::move(processor));
-}
+    auto resource = detail::create_otel_resource(res_opts);
 
-static tracer<ostream_exporter> make_ostream_tracer(const std::string &name)
-{
-    auto exporter =
+    auto span_exporter =
         opentelemetry::exporter::trace::OStreamSpanExporterFactory::Create();
-    auto processor = make_simple_trace_span_processor(std::move(exporter));
-    return make_ostream_tracer(name, std::move(processor));
+    auto span_processor =
+        make_simple_trace_span_processor(std::move(span_exporter));
+
+    auto sdk_trace_provider =
+        opentelemetry::sdk::trace::TracerProviderFactory::Create(
+            std::move(span_processor),
+            resource);
+
+    auto metric_exporter = opentelemetry::exporter::metrics::
+        OStreamMetricExporterFactory::Create();
+    opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions options;
+    options.export_interval_millis = std::chrono::milliseconds(500);
+    options.export_timeout_millis  = std::chrono::milliseconds(100);
+
+    auto reader =
+        opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::
+            Create(std::move(metric_exporter), options);
+
+    if(!views)
+    {
+        views = make_default_metric_view_registry(res_opts.service_name,
+                                                  res_opts.service_version,
+                                                  "");
+    }
+
+    auto context = opentelemetry::sdk::metrics::MeterContextFactory::Create(
+        std::move(views),
+        resource);
+    context->AddMetricReader(std::move(reader));
+
+    auto sdk_meter_provider =
+        opentelemetry::sdk::metrics::MeterProviderFactory::Create(
+            std::move(context));
+
+    return runtime{
+        opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
+            sdk_trace_provider.release()),
+        opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
+            sdk_meter_provider.release())};
 }
 
-static tracer<otlp_http_exporter>
-make_otlp_http_tracer(const std::string                        &name,
-                      std::unique_ptr<trace_span_processor_t> &&processor)
+inline runtime make_ostream_runtime(
+    std::string_view service_name = "default",
+    std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry> views = nullptr)
 {
-    return tracer<otlp_http_exporter>(name, std::move(processor));
+    resource_options res_opts;
+    if(!service_name.empty())
+        res_opts.service_name = std::string(service_name);
+    return make_ostream_runtime(res_opts, std::move(views));
 }
 
-static tracer<otlp_http_exporter>
-make_otlp_http_tracer(const std::string         &name,
-                      const otlp_http_options_t &options)
+inline runtime make_otlp_http_runtime(
+    const otlp_http_options                                   &opts,
+    const resource_options                                    &res_opts,
+    std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry> views = nullptr)
 {
-    auto exporter =
+    auto resource = detail::create_otel_resource(res_opts);
+
+    opentelemetry::exporter::otlp::OtlpHttpExporterOptions trace_opts;
+    if(!opts.endpoint.empty())
+        trace_opts.url = opts.endpoint;
+    trace_opts.console_debug = opts.debug;
+    trace_opts.content_type  = opts.content_type;
+    trace_opts.timeout       = opts.timeout;
+
+    for(const auto &[k, v] : opts.headers)
+    {
+        trace_opts.http_headers.insert({k, v});
+    }
+
+    auto span_exporter =
         std::make_unique<opentelemetry::exporter::otlp::OtlpHttpExporter>(
-            options);
-    auto processor = make_simple_trace_span_processor(std::move(exporter));
-    return make_otlp_http_tracer(name, std::move(processor));
+            trace_opts);
+    auto span_processor =
+        make_batch_trace_span_processor(std::move(span_exporter));
+    auto sdk_trace_provider =
+        opentelemetry::sdk::trace::TracerProviderFactory::Create(
+            std::move(span_processor),
+            resource);
+
+    opentelemetry::exporter::otlp::OtlpHttpMetricExporterOptions metric_opts;
+    if(!opts.endpoint.empty())
+        metric_opts.url = opts.endpoint;
+    metric_opts.console_debug = opts.debug;
+    metric_opts.content_type  = opts.content_type;
+    metric_opts.timeout       = opts.timeout;
+
+    for(const auto &[k, v] : opts.headers)
+    {
+        metric_opts.http_headers.insert({k, v});
+    }
+
+    auto metric_exporter =
+        opentelemetry::exporter::otlp::OtlpHttpMetricExporterFactory::Create(
+            metric_opts);
+    opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions
+        reader_options;
+    reader_options.export_interval_millis = std::chrono::milliseconds(500);
+    reader_options.export_timeout_millis  = std::chrono::milliseconds(100);
+
+    auto reader =
+        opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::
+            Create(std::move(metric_exporter), reader_options);
+
+    if(!views)
+    {
+        views = make_default_metric_view_registry(res_opts.service_name,
+                                                  res_opts.service_version,
+                                                  "");
+    }
+
+    auto context = opentelemetry::sdk::metrics::MeterContextFactory::Create(
+        std::move(views),
+        resource);
+    context->AddMetricReader(std::move(reader));
+    auto sdk_meter_provider =
+        opentelemetry::sdk::metrics::MeterProviderFactory::Create(
+            std::move(context));
+
+    return runtime{
+        opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
+            sdk_trace_provider.release()),
+        opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
+            sdk_meter_provider.release())};
 }
 
-static tracer<otlp_http_exporter>
-make_otlp_http_tracer(const std::string              &name,
-                      const std::string              &endpoint,
-                      const bool                      debug,
-                      const http_request_content_type content_type)
+inline runtime make_otlp_http_runtime(
+    std::string_view          endpoint,
+    bool                      debug        = false,
+    http_request_content_type content_type = http_request_content_type::kBinary,
+    std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry> views = nullptr)
 {
-    opentelemetry::exporter::otlp::OtlpHttpExporterOptions options;
+    otlp_http_options opts;
     if(!endpoint.empty())
-        options.url = endpoint;
-
-    options.console_debug = debug;
-    options.content_type  = content_type;
-    return make_otlp_http_tracer(name, options);
+        opts.endpoint = std::string(endpoint);
+    opts.debug        = debug;
+    opts.content_type = content_type;
+    return make_otlp_http_runtime(opts, resource_options{}, std::move(views));
 }
 
-static tracer<otlp_file_exporter>
-make_otlp_file_tracer(const std::string &name, const otlp_file_options_t &opts)
+inline runtime make_otlp_file_runtime(
+    std::string_view                                           file_pattern,
+    const resource_options                                    &res_opts,
+    std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry> views = nullptr)
 {
-    auto exporter =
-        opentelemetry::exporter::otlp::OtlpFileExporterFactory::Create(opts);
-    auto processor =
-        opentelemetry::sdk::trace::SimpleSpanProcessorFactory::Create(
-            std::move(exporter));
-    return tracer<otlp_file_exporter>(name, std::move(processor));
-}
+    auto resource = detail::create_otel_resource(res_opts);
 
-static tracer<otlp_file_exporter>
-make_otlp_file_tracer(const std::string &name, const std::string &file_pattern)
-{
     opentelemetry::exporter::otlp::OtlpFileClientFileSystemOptions fs_backend;
-    fs_backend.file_pattern = file_pattern;
+    fs_backend.file_pattern = std::string(file_pattern);
 
-    opentelemetry::exporter::otlp::OtlpFileExporterOptions opts;
-    opts.backend_options = fs_backend;
+    opentelemetry::exporter::otlp::OtlpFileExporterOptions trace_opts;
+    trace_opts.backend_options = fs_backend;
 
-    return make_otlp_file_tracer(name, opts);
+    auto span_exporter =
+        opentelemetry::exporter::otlp::OtlpFileExporterFactory::Create(
+            trace_opts);
+    auto span_processor =
+        make_batch_trace_span_processor(std::move(span_exporter));
+    auto sdk_trace_provider =
+        opentelemetry::sdk::trace::TracerProviderFactory::Create(
+            std::move(span_processor),
+            resource);
+
+    opentelemetry::exporter::otlp::OtlpFileMetricExporterOptions metric_opts;
+    metric_opts.backend_options = fs_backend;
+
+    auto metric_exporter =
+        opentelemetry::exporter::otlp::OtlpFileMetricExporterFactory::Create(
+            metric_opts);
+    opentelemetry::sdk::metrics::PeriodicExportingMetricReaderOptions
+        reader_options;
+    reader_options.export_interval_millis = std::chrono::milliseconds(500);
+    reader_options.export_timeout_millis  = std::chrono::milliseconds(100);
+
+    auto reader =
+        opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::
+            Create(std::move(metric_exporter), reader_options);
+
+    if(!views)
+    {
+        views = make_default_metric_view_registry(res_opts.service_name,
+                                                  res_opts.service_version,
+                                                  "");
+    }
+
+    auto context = opentelemetry::sdk::metrics::MeterContextFactory::Create(
+        std::move(views),
+        resource);
+    context->AddMetricReader(std::move(reader));
+    auto sdk_meter_provider =
+        opentelemetry::sdk::metrics::MeterProviderFactory::Create(
+            std::move(context));
+
+    return runtime{
+        opentelemetry::nostd::shared_ptr<opentelemetry::trace::TracerProvider>(
+            sdk_trace_provider.release()),
+        opentelemetry::nostd::shared_ptr<opentelemetry::metrics::MeterProvider>(
+            sdk_meter_provider.release())};
 }
 
-// meter API
-static void clean_up_metrics()
+inline runtime make_otlp_file_runtime(
+    std::string_view                                           file_pattern,
+    std::unique_ptr<opentelemetry::sdk::metrics::ViewRegistry> views = nullptr)
+{
+    return make_otlp_file_runtime(file_pattern,
+                                  resource_options{},
+                                  std::move(views));
+}
+
+inline tracer
+make_custom_tracer(std::string_view                        name,
+                   std::unique_ptr<trace_span_processor_t> processor)
+{
+    try
+    {
+        auto sdk_trace_provider =
+            opentelemetry::sdk::trace::TracerProviderFactory::Create(
+                std::move(processor));
+        auto provider = opentelemetry::nostd::shared_ptr<
+            opentelemetry::trace::TracerProvider>(sdk_trace_provider.release());
+        if(!provider)
+            return tracer{};
+        return tracer{provider->GetTracer(detail::to_otel_sv(name))};
+    }
+    catch(...)
+    {
+        return tracer{};
+    }
+}
+
+inline tracer make_ostream_tracer(std::string_view name)
+{
+    static auto rt = make_ostream_runtime();
+    return rt.get_tracer(name);
+}
+
+inline tracer make_otlp_http_tracer(std::string_view         name,
+                                    const otlp_http_options &opts)
+{
+    static auto rt = make_otlp_http_runtime(opts, resource_options{});
+    return rt.get_tracer(name);
+}
+
+inline tracer make_otlp_http_tracer(
+    std::string_view          name,
+    std::string_view          endpoint,
+    bool                      debug        = false,
+    http_request_content_type content_type = http_request_content_type::kBinary)
+{
+    otlp_http_options opts;
+    if(!endpoint.empty())
+        opts.endpoint = std::string(endpoint);
+    opts.debug        = debug;
+    opts.content_type = content_type;
+    return make_otlp_http_tracer(name, opts);
+}
+
+inline tracer make_otlp_file_tracer(std::string_view name,
+                                    std::string_view file_pattern)
+{
+    static auto rt = make_otlp_file_runtime(file_pattern);
+    return rt.get_tracer(name);
+}
+
+inline meter make_ostream_meter(std::string_view name,
+                                std::string_view version     = "",
+                                std::string_view schema      = "",
+                                std::size_t      interval_ms = 500,
+                                std::size_t      timeout_ms  = 100)
+{
+    static auto rt = make_ostream_runtime();
+    return rt.get_meter(name, version, schema);
+}
+
+inline meter make_otlp_http_meter(std::string_view         name,
+                                  std::string_view         version,
+                                  std::string_view         schema,
+                                  const otlp_http_options &opts,
+                                  std::size_t              interval_ms = 500,
+                                  std::size_t              timeout_ms  = 100)
+{
+    static auto rt = make_otlp_http_runtime(opts, resource_options{});
+    return rt.get_meter(name, version, schema);
+}
+
+inline meter make_otlp_http_meter(
+    std::string_view          name,
+    std::string_view          version,
+    std::string_view          schema,
+    std::string_view          endpoint,
+    http_request_content_type content_type = http_request_content_type::kBinary,
+    std::size_t               interval_ms  = 500,
+    std::size_t               timeout_ms   = 100,
+    bool                      debug        = false)
+{
+    otlp_http_options opts;
+    if(!endpoint.empty())
+        opts.endpoint = std::string(endpoint);
+    opts.debug        = debug;
+    opts.content_type = content_type;
+    return make_otlp_http_meter(name,
+                                version,
+                                schema,
+                                opts,
+                                interval_ms,
+                                timeout_ms);
+}
+
+inline meter make_otlp_file_meter(std::string_view name,
+                                  std::string_view version,
+                                  std::string_view schema,
+                                  std::string_view file_pattern,
+                                  std::size_t      interval_ms = 500,
+                                  std::size_t      timeout_ms  = 100,
+                                  bool             debug       = false)
+{
+    static auto rt = make_otlp_file_runtime(file_pattern);
+    return rt.get_meter(name, version, schema);
+}
+
+inline void clean_up_metrics()
 {
     std::shared_ptr<opentelemetry::metrics::MeterProvider> none;
-    opentelemetry::sdk::metrics::Provider::SetMeterProvider(none);
+    opentelemetry::metrics::Provider::SetMeterProvider(none);
 }
 
-static std::unique_ptr<metric_view_registry_t>
-make_default_metric_view_registry(const std::string &name,
-                                  const std::string &version,
-                                  const std::string &scheme)
-{
-    return detail::make_default_metric_view_registry(name, version, scheme);
-}
-
-static meter<ostream_exporter> make_ostream_meter(
-    const std::string                                       &name,
-    const std::string                                       &version,
-    const std::string                                       &scheme,
-    std::unique_ptr<hj::telemetry::metric_reader_t>        &&reader,
-    std::unique_ptr<hj::telemetry::metric_view_registry_t> &&views)
-{
-    return meter<ostream_exporter>(name,
-                                   version,
-                                   scheme,
-                                   std::move(reader),
-                                   std::move(views));
-}
-
-static meter<ostream_exporter> make_ostream_meter(const std::string &name,
-                                                  const std::string &version,
-                                                  const std::string &scheme,
-                                                  const std::size_t interval_ms,
-                                                  const std::size_t timeout_ms)
-{
-    auto exporter = opentelemetry::exporter::metrics::
-        OStreamMetricExporterFactory::Create();
-
-    metric_periodic_reader_options_t options;
-    options.export_interval_millis = ms_t(interval_ms);
-    options.export_timeout_millis  = ms_t(timeout_ms);
-
-    auto reader =
-        opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::
-            Create(std::move(exporter), options);
-
-    auto views = make_default_metric_view_registry(name, version, scheme);
-
-    return make_ostream_meter(name,
-                              version,
-                              scheme,
-                              std::move(reader),
-                              std::move(views));
-}
-
-static meter<otlp_http_exporter>
-make_otlp_http_meter(const std::string              &name,
-                     const std::string              &version,
-                     const std::string              &scheme,
-                     const std::string              &endpoint,
-                     const http_request_content_type content_type,
-                     const std::size_t               interval_ms,
-                     const std::size_t               timeout_ms,
-                     const bool                      debug)
-{
-    // Create the OTLP HTTP metric exporter
-    otlp_http_metric_exporter_options_t exporter_options;
-    exporter_options.url           = endpoint;
-    exporter_options.console_debug = debug;
-    exporter_options.content_type  = content_type;
-    auto exporter =
-        opentelemetry::exporter::otlp::OtlpHttpMetricExporterFactory::Create(
-            exporter_options);
-
-    // Create the periodic reader
-    metric_periodic_reader_options_t reader_options;
-    reader_options.export_interval_millis =
-        std::chrono::milliseconds(interval_ms);
-    reader_options.export_timeout_millis =
-        std::chrono::milliseconds(timeout_ms);
-    auto reader =
-        opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::
-            Create(std::move(exporter), reader_options);
-
-    auto views = make_default_metric_view_registry(name, version, scheme);
-
-    return meter<otlp_http_exporter>(name,
-                                     version,
-                                     scheme,
-                                     std::move(reader),
-                                     std::move(views));
-}
-
-static meter<otlp_file_exporter>
-make_otlp_file_meter(const std::string &name,
-                     const std::string &version,
-                     const std::string &scheme,
-                     const std::string &file_pattern,
-                     const std::size_t  interval_ms,
-                     const std::size_t  timeout_ms,
-                     const bool         debug)
-{
-    otlp_file_cli_fs_options_t fs_backend;
-    fs_backend.file_pattern = file_pattern;
-
-    otlp_file_metric_exporter_options_t exporter_options;
-    exporter_options.console_debug   = debug;
-    exporter_options.backend_options = fs_backend;
-    auto exporter =
-        opentelemetry::exporter::otlp::OtlpFileMetricExporterFactory::Create(
-            exporter_options);
-
-    metric_periodic_reader_options_t reader_options;
-    reader_options.export_interval_millis =
-        std::chrono::milliseconds(interval_ms);
-    reader_options.export_timeout_millis =
-        std::chrono::milliseconds(timeout_ms);
-
-    auto reader =
-        opentelemetry::sdk::metrics::PeriodicExportingMetricReaderFactory::
-            Create(std::move(exporter), reader_options);
-
-    auto views = make_default_metric_view_registry(name, version, scheme);
-    return meter<otlp_file_exporter>(name,
-                                     version,
-                                     scheme,
-                                     std::move(reader),
-                                     std::move(views));
-}
-
-} // namespace telemetry
-} // namespace hj
+} // namespace hj::telemetry
 
 #endif // TELEMETRY_HPP

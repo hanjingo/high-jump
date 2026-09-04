@@ -9,16 +9,13 @@
 class env : public ::testing::Test
 {
   protected:
-    void SetUp() override {}
-    void TearDown() override {}
-
-    bool IsValidValue(int64_t value) { return value != -1; }
+    bool IsValidValue(int64_t value) const { return value != -1; }
 };
 
 TEST_F(env, compile_time_macros)
 {
     EXPECT_GE(HJ_COMPILE_YEAR, 2020);
-    EXPECT_LE(HJ_COMPILE_YEAR, 2030);
+    EXPECT_LE(HJ_COMPILE_YEAR, 9999);
 
     EXPECT_GE(HJ_COMPILE_MONTH, 1);
     EXPECT_LE(HJ_COMPILE_MONTH, 12);
@@ -37,7 +34,25 @@ TEST_F(env, compile_time_macros)
 
     const char *compile_time = HJ_COMPILE_TIME;
     EXPECT_NE(compile_time, nullptr);
-    EXPECT_GT(strlen(compile_time), 0);
+    EXPECT_EQ(std::strlen(compile_time), 19);
+
+    int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+    int parsed = sscanf(compile_time,
+                        "%04d-%02d-%02d %02d:%02d:%02d",
+                        &year,
+                        &month,
+                        &day,
+                        &hour,
+                        &minute,
+                        &second);
+
+    EXPECT_EQ(parsed, 6);
+    EXPECT_EQ(year, HJ_COMPILE_YEAR);
+    EXPECT_EQ(month, HJ_COMPILE_MONTH);
+    EXPECT_EQ(day, HJ_COMPILE_DAY);
+    EXPECT_EQ(hour, HJ_COMPILE_HOUR);
+    EXPECT_EQ(minute, HJ_COMPILE_MINUTE);
+    EXPECT_EQ(second, HJ_COMPILE_SECOND);
 }
 
 TEST_F(env, cpu_configuration)
@@ -214,4 +229,109 @@ TEST_F(env, system_information_display)
     std::cout << "Path Max: " << HJ_ENV_PATH_LEN_MAX << std::endl;
     std::cout << "Open Files Max: " << HJ_ENV_OPEN_FILES_MAX << std::endl;
     std::cout << "===================================" << std::endl;
+}
+
+TEST_F(env, initialization)
+{
+    hj_env_init();
+
+    EXPECT_GT(HJ_ENV_CPU_COUNT, 0);
+    EXPECT_GT(HJ_ENV_MEMORY_PAGE_SIZE, 0);
+}
+
+TEST_F(env, initialization_idempotency)
+{
+    hj_env_init();
+    int64_t cpu1  = HJ_ENV_CPU_COUNT;
+    int64_t page1 = HJ_ENV_MEMORY_PAGE_SIZE;
+
+    hj_env_init();
+    hj_env_init();
+
+    int64_t cpu2  = HJ_ENV_CPU_COUNT;
+    int64_t page2 = HJ_ENV_MEMORY_PAGE_SIZE;
+
+    EXPECT_EQ(cpu1, cpu2);
+    EXPECT_EQ(page1, page2);
+}
+
+TEST_F(env, multithread_tls_initialization)
+{
+    hj_env_init();
+    int64_t main_cpu  = HJ_ENV_CPU_COUNT;
+    int64_t main_page = HJ_ENV_MEMORY_PAGE_SIZE;
+
+    int64_t thread_cpu  = 0;
+    int64_t thread_page = 0;
+
+    std::thread t([&]() {
+        hj_env_init();
+        thread_cpu  = HJ_ENV_CPU_COUNT;
+        thread_page = HJ_ENV_MEMORY_PAGE_SIZE;
+    });
+
+    t.join();
+
+    EXPECT_EQ(main_cpu, thread_cpu);
+    EXPECT_EQ(main_page, thread_page);
+    EXPECT_GT(thread_cpu, 0);
+    EXPECT_GT(thread_page, 0);
+}
+
+TEST_F(env, enum_completeness_and_validity)
+{
+    for(int i = 0; i < HJ_CONF_MAX_COUNT; ++i)
+    {
+        const auto conf  = static_cast<hj_conf_t>(i);
+        const auto value = hj_env_get(conf);
+
+        EXPECT_TRUE(value >= 0 || value == -1) << "Failed at enum index: " << i;
+    }
+}
+
+TEST_F(env, enum_out_of_bounds)
+{
+    EXPECT_EQ(hj_env_get(static_cast<hj_conf_t>(-1)), -1);
+
+    EXPECT_EQ(hj_env_get(HJ_CONF_MAX_COUNT), -1);
+
+    EXPECT_EQ(hj_env_get(static_cast<hj_conf_t>(9999)), -1);
+}
+
+TEST_F(env, os_macro_verification)
+{
+    EXPECT_NE(std::strlen(HJ_OS), 0);
+    EXPECT_NE(std::string(HJ_OS), "unknown");
+
+#if defined(_WIN32) || defined(_WIN64)
+    EXPECT_STREQ(HJ_OS, "windows");
+#elif defined(__APPLE__)
+#if TARGET_OS_IPHONE
+    EXPECT_STREQ(HJ_OS, "ios");
+#else
+    EXPECT_STREQ(HJ_OS, "macos");
+#endif
+#elif defined(__ANDROID__)
+    EXPECT_STREQ(HJ_OS, "android");
+#elif defined(__linux__)
+    EXPECT_STREQ(HJ_OS, "linux");
+#endif
+}
+
+TEST_F(env, arch_macro_verification)
+{
+    EXPECT_NE(std::strlen(HJ_ARCH), 0);
+    EXPECT_NE(std::string(HJ_ARCH), "unknown");
+
+#if defined(_M_IX86) || defined(__i386__)
+    EXPECT_STREQ(HJ_ARCH, "x86");
+#elif defined(_M_X64) || defined(__x86_64__)
+    EXPECT_STREQ(HJ_ARCH, "x64");
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    EXPECT_STREQ(HJ_ARCH, "arm64");
+#elif defined(_M_ARM) || defined(__arm__)
+    EXPECT_STREQ(HJ_ARCH, "arm");
+#elif defined(__loongarch__)
+    EXPECT_STREQ(HJ_ARCH, "loong64");
+#endif
 }

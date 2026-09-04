@@ -36,6 +36,24 @@ extern "C" {
 #endif
 
 /* -------------------------------------------------------------------------
+ * TLS (Thread Local Storage) 跨平台宏定义
+ * ------------------------------------------------------------------------- */
+#ifndef HJ_TLS
+#if defined(__cplusplus) && __cplusplus >= 201103L
+#define HJ_TLS thread_local
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L                 \
+    && !defined(__STDC_NO_THREADS__)
+#define HJ_TLS _Thread_local
+#elif defined(_MSC_VER)
+#define HJ_TLS __declspec(thread)
+#elif defined(__GNUC__) || defined(__clang__)
+#define HJ_TLS __thread
+#else
+#define HJ_TLS
+#endif
+#endif
+
+/* -------------------------------------------------------------------------
  * Compile time macros and handling
  * ------------------------------------------------------------------------- */
 #define HJ_COMPILE_YEAR                                                        \
@@ -172,7 +190,6 @@ typedef enum
     HJ_CONF_MAX_COUNT
 } hj_conf_t;
 
-
 HJ_ENV_API void    hj_env_init(void);
 HJ_ENV_API int64_t hj_env_get(hj_conf_t conf);
 
@@ -244,11 +261,14 @@ HJ_ENV_API int64_t hj_env_get(hj_conf_t conf);
 
 #endif
 
-static int64_t g_hj_env_cache[HJ_CONF_MAX_COUNT];
-static int     g_hj_env_initialized = 0;
+static HJ_TLS int64_t tls_hj_env_cache[HJ_CONF_MAX_COUNT];
+static HJ_TLS int     tls_hj_env_initialized = 0;
 
 HJ_ENV_API int64_t hj_env_fetch_uncached(hj_conf_t conf)
 {
+    if(conf < 0 || conf >= HJ_CONF_MAX_COUNT)
+        return -1;
+
     switch(conf)
     {
         case HJ_CONF_AIO_MAX: {
@@ -308,7 +328,7 @@ HJ_ENV_API int64_t hj_env_fetch_uncached(hj_conf_t conf)
 
         case HJ_CONF_FILE_SIZE_MAX: {
 #if defined(_WIN32) || defined(_WIN64)
-            return (int64_t) _I64_MAX;
+            return -1;
 #elif defined(__linux__) || defined(__APPLE__)
             struct rlimit rlim;
             if(getrlimit(RLIMIT_FSIZE, &rlim) == 0)
@@ -713,53 +733,33 @@ HJ_ENV_API int64_t hj_env_fetch_uncached(hj_conf_t conf)
             return -1;
 #endif
         }
-
-        default:
-            return -1;
     }
+
+    return -1; // Invalid conf value
 }
 
 HJ_ENV_API void hj_env_init(void)
 {
-    if(g_hj_env_initialized)
+    if(tls_hj_env_initialized)
         return;
 
     for(int i = 0; i < HJ_CONF_MAX_COUNT; ++i)
     {
-        g_hj_env_cache[i] = hj_env_fetch_uncached((hj_conf_t) i);
+        tls_hj_env_cache[i] = hj_env_fetch_uncached((hj_conf_t) i);
     }
 
-    g_hj_env_initialized = 1;
+    tls_hj_env_initialized = 1;
 }
-
-/* -------------------------------------------------------------------------
- * auto initialization for compilers that support constructor attributes
- * ------------------------------------------------------------------------- */
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((constructor)) static void _hj_env_auto_init(void)
-{
-    hj_env_init();
-}
-#elif defined(_MSC_VER)
-static void _hj_env_auto_init(void);
-#pragma section(".CRT$XCU", read)
-__declspec(allocate(".CRT$XCU")) void (*_hj_env_auto_init_ctor)(void) =
-    _hj_env_auto_init;
-static void _hj_env_auto_init(void)
-{
-    hj_env_init();
-}
-#endif
 
 HJ_ENV_API int64_t hj_env_get(hj_conf_t conf)
 {
     if(conf < 0 || conf >= HJ_CONF_MAX_COUNT)
         return -1;
 
-    if(!g_hj_env_initialized)
+    if(!tls_hj_env_initialized)
         hj_env_init();
 
-    return g_hj_env_cache[conf];
+    return tls_hj_env_cache[conf];
 }
 
 #endif /* HJ_ENV_IMPL || HJ_ENV_STATIC */

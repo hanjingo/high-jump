@@ -18,25 +18,29 @@
 #ifndef EXCEPTION_HPP
 #define EXCEPTION_HPP
 
+#include <iostream>
 #include <stdexcept>
+#include <utility>
+#include <typeinfo>
 
 namespace hj
 {
 
-static void throw_if_false(bool target, const char *memo = "false")
+static inline void throw_if_false(bool target, const char *memo = "false")
 {
     if(!target)
         throw std::logic_error(memo);
 }
 
-static void throw_if_not_false(bool target, const char *memo = "not false")
+static inline void throw_if_not_false(bool        target,
+                                      const char *memo = "not false")
 {
     if(target)
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void
+static inline void
 throw_if_equal(const T &target1, const T &target2, const char *memo = "equal")
 {
     if(target1 == target2)
@@ -44,46 +48,47 @@ throw_if_equal(const T &target1, const T &target2, const char *memo = "equal")
 }
 
 template <typename T>
-static void throw_if_not_equal(const T    &target1,
-                               const T    &target2,
-                               const char *memo = "not equal")
+static inline void throw_if_not_equal(const T    &target1,
+                                      const T    &target2,
+                                      const char *memo = "not equal")
 {
     if(target1 != target2)
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void throw_if_empty(const T &target, const char *memo = "empty")
+static inline void throw_if_empty(const T &target, const char *memo = "empty")
 {
     if(target.empty())
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void throw_if_not_empty(const T &target, const char *memo = "not empty")
+static inline void throw_if_not_empty(const T    &target,
+                                      const char *memo = "not empty")
 {
     if(!target.empty())
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void throw_if_null(T target, const char *memo = "null")
+static inline void throw_if_null(T target, const char *memo = "null")
 {
     if(target == nullptr || target == NULL)
         throw std::logic_error(memo);
 }
 
 template <typename T>
-static void throw_if_not_null(T target, const char *memo = "not null")
+static inline void throw_if_not_null(T target, const char *memo = "not null")
 {
     if(target != nullptr && target != NULL)
         throw std::logic_error(memo);
 }
 
 template <typename Container, typename T>
-static void throw_if_exists(const Container &container,
-                            const T         &target,
-                            const char      *memo = "already exist")
+static inline void throw_if_exists(const Container &container,
+                                   const T         &target,
+                                   const char      *memo = "already exist")
 {
     for(auto &elem : container)
     {
@@ -95,9 +100,9 @@ static void throw_if_exists(const Container &container,
 }
 
 template <typename Container, typename T>
-static void throw_if_not_exists(const Container &container,
-                                const T         &target,
-                                const char      *memo = "not exist")
+static inline void throw_if_not_exists(const Container &container,
+                                       const T         &target,
+                                       const char      *memo = "not exist")
 {
     for(auto &elem : container)
     {
@@ -108,6 +113,64 @@ static void throw_if_not_exists(const Container &container,
     throw std::logic_error(memo);
 }
 
+template <typename Func, typename Handler>
+static inline auto recover(Func &&func, Handler &&handler) -> decltype(func())
+{
+    try
+    {
+        return func();
+    }
+    catch(const hj::Exception &e)
+    {
+        if(detail::is_valid_handler(handler))
+        {
+            handler(std::current_exception(), e.trace());
+        }
+    }
+    catch(const std::exception &e)
+    {
+        if(detail::is_valid_handler(handler))
+        {
+            handler(std::current_exception(), current_stacktrace());
+        }
+    }
+    catch(...)
+    {
+        if(detail::is_valid_handler(handler))
+        {
+            handler(std::current_exception(), current_stacktrace());
+        }
+    }
 }
+
+}
+
+#define HJ_RECOVER_WITH_LOG(cmd, os)                                           \
+    do                                                                         \
+    {                                                                          \
+        ::hj::recover(                                                         \
+            [&]() { cmd; },                                                    \
+            [&](const std::exception_ptr            &ep,                       \
+                const boost::stacktrace::stacktrace &st) {                     \
+                try                                                            \
+                {                                                              \
+                    if(ep)                                                     \
+                        std::rethrow_exception(ep);                            \
+                }                                                              \
+                catch(const std::exception &e)                                 \
+                {                                                              \
+                    (os) << "Exception caught: " << e.what() << "\n"           \
+                         << "Stacktrace:\n"                                    \
+                         << st << std::endl;                                   \
+                }                                                              \
+                catch(...)                                                     \
+                {                                                              \
+                    (os) << "Unknown exception caught.\nStacktrace:\n"         \
+                         << st << std::endl;                                   \
+                }                                                              \
+            });                                                                \
+    } while(0)
+
+#define HJ_RECOVER(cmd) HJ_RECOVER_WITH_LOG(cmd, std::cerr)
 
 #endif

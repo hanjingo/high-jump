@@ -1,44 +1,103 @@
-/*
- *  This file is part of high-jump(hj).
- *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
- *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 #ifndef STACKTRACE_HPP
 #define STACKTRACE_HPP
 
+#include <boost/core/demangle.hpp>
 #include <boost/stacktrace.hpp>
+#include <exception>
 #include <iostream>
+#include <mutex>
+#include <string>
 
 namespace hj
 {
 
-inline auto stacktrace()
+inline std::mutex &stacktrace_mutex()
 {
-    return boost::stacktrace::stacktrace();
+    static std::mutex mtx;
+    return mtx;
+}
+
+inline std::string current_stacktrace()
+{
+    std::lock_guard<std::mutex> lock(stacktrace_mutex());
+    return boost::stacktrace::to_string(boost::stacktrace::stacktrace());
+}
+
+inline std::string exception_stacktrace()
+{
+    std::lock_guard<std::mutex> lock(stacktrace_mutex());
+    auto st = boost::stacktrace::stacktrace::from_current_exception();
+    if(st)
+    {
+        return boost::stacktrace::to_string(st);
+    }
+    return "[Warning: Exception throw-location stacktrace unavailable.\n"
+           "Ensure Boost.Stacktrace exception hook is enabled]";
+}
+
+inline std::string current_exception_diagnostic()
+{
+    std::string        result;
+    std::exception_ptr eptr = std::current_exception();
+
+    if(!eptr)
+    {
+        return "[No active exception]\nStacktrace:\n" + current_stacktrace();
+    }
+
+    try
+    {
+        std::rethrow_exception(eptr);
+    }
+    catch(const std::exception &e)
+    {
+        result += "Exception:\n    ";
+        result += boost::core::demangle(typeid(e).name());
+        result += "\nMessage:\n    ";
+        result += e.what();
+    }
+    catch(const char *e)
+    {
+        result += "Exception:\n    const char*\nMessage:\n    ";
+        result += e;
+    }
+    catch(const std::string &e)
+    {
+        result += "Exception:\n    std::string\nMessage:\n    ";
+        result += e;
+    }
+    catch(...)
+    {
+        result +=
+            "Exception:\n    [Unknown Exception Type]\nMessage:\n    [N/A]";
+    }
+
+    result += "\nStacktrace:\n";
+
+    std::lock_guard<std::mutex> lock(stacktrace_mutex());
+    auto st = boost::stacktrace::stacktrace::from_current_exception();
+    if(st)
+    {
+        result += boost::stacktrace::to_string(st);
+    } else
+    {
+        result +=
+            "[Catch-site Stacktrace]\n"
+            + boost::stacktrace::to_string(boost::stacktrace::stacktrace());
+    }
+
+    return result;
+}
+
+inline std::string stacktrace()
+{
+    if(std::current_exception())
+    {
+        return current_exception_diagnostic();
+    }
+    return current_stacktrace();
 }
 
 } // namespace hj
 
-#define RECOVER(cmd)                                                           \
-    try                                                                        \
-    {                                                                          \
-        cmd                                                                    \
-    }                                                                          \
-    catch(...)                                                                 \
-    {                                                                          \
-        std::cerr << hj::stacktrace() << std::endl;                            \
-    }
-
-#endif
+#endif // STACKTRACE_HPP

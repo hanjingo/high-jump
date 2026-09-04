@@ -12,7 +12,7 @@ enum class err1
     mem_leak,
 };
 
-TEST(error_handler_metrics, deferred_queue_observability_and_replay)
+TEST(error_handler, deferred_queue_observability_and_replay)
 {
     hj::error_handler<std::error_code,
                       std::function<bool(const std::error_code &)>,
@@ -53,7 +53,7 @@ TEST(error_handler_metrics, deferred_queue_observability_and_replay)
     EXPECT_EQ(h.deferred_size(), 0);
 }
 
-TEST(error_handler_explicit_ignored, failed_state_absorbs_all_events)
+TEST(error_handler, failed_state_absorbs_all_events)
 {
     hj::error_handler<std::error_code> h;
     std::error_code                    err(static_cast<int>(err1::timeout),
@@ -76,7 +76,7 @@ TEST(error_handler_explicit_ignored, failed_state_absorbs_all_events)
     EXPECT_TRUE(h.is_failed());
 }
 
-TEST(error_handler_factory, named_constructors)
+TEST(error_handler, named_constructors)
 {
     std::error_code ok_ec;
     std::error_code err_ec(static_cast<int>(err1::timeout),
@@ -104,7 +104,7 @@ TEST(error_handler_factory, named_constructors)
     EXPECT_TRUE(h3.is_handling());
 }
 
-TEST(error_handler_matrix, state_event_coverage)
+TEST(error_handler, state_event_coverage)
 {
     std::error_code ok_ec;
     std::error_code err_ec(static_cast<int>(err1::timeout),
@@ -203,7 +203,7 @@ TEST(error_handler_matrix, state_event_coverage)
     }
 }
 
-TEST(error_handler_exception, user_callback_and_transition_safety)
+TEST(error_handler, user_callback_and_transition_safety)
 {
     bool ex_captured = false;
     auto h           = hj::error_handler<std::error_code>::with_hooks(
@@ -235,7 +235,7 @@ TEST(error_handler_exception, user_callback_and_transition_safety)
     EXPECT_TRUE(h.is_handling());
 }
 
-TEST(error_handler_move, move_construction_and_assignment)
+TEST(error_handler, move_construction_and_assignment)
 {
     std::error_code err(static_cast<int>(err1::timeout),
                         std::generic_category());
@@ -265,7 +265,7 @@ TEST(error_handler_move, move_construction_and_assignment)
     }
 }
 
-TEST(error_handler_defer, reset_clears_deferred_events)
+TEST(error_handler, reset_clears_deferred_events)
 {
     bool            deferred_cb_executed = false;
     std::error_code err_a(static_cast<int>(err1::timeout),
@@ -293,7 +293,7 @@ TEST(error_handler_defer, reset_clears_deferred_events)
     EXPECT_FALSE(deferred_cb_executed);
 }
 
-TEST(error_handler_defer, bounded_defer_queue_overflow_protection)
+TEST(error_handler, bounded_defer_queue_overflow_protection)
 {
     hj::error_handler<std::error_code,
                       std::function<bool(const std::error_code &)>,

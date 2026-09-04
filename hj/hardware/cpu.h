@@ -104,6 +104,9 @@ HJ_CPU_API uint64_t     hj_cpu_tscp_read(uint32_t *aux);
 #include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <intrin.h>
 #include <immintrin.h>

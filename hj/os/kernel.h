@@ -20,6 +20,9 @@
 #define KERNEL_H
 
 #if defined(_WIN32) || defined(_WIN64)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h> // windows.h must be included before other headers
 
 #elif defined(__APPLE__)

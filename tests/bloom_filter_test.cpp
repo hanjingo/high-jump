@@ -50,9 +50,9 @@ TEST(bloom_filter_test, constructor_invalid_parameters)
     EXPECT_THROW(bloom_filter(100, -0.05), std::invalid_argument);
     EXPECT_THROW(bloom_filter(100, 1.0), std::invalid_argument);
     EXPECT_THROW(bloom_filter(100, 1.5), std::invalid_argument);
-    EXPECT_THROW(bloom_filter(100, std::numeric_limits<double>::quiet_NaN()),
+    EXPECT_THROW(bloom_filter(100, (std::numeric_limits<double>::quiet_NaN)()),
                  std::invalid_argument);
-    EXPECT_THROW(bloom_filter(100, std::numeric_limits<double>::infinity()),
+    EXPECT_THROW(bloom_filter(100, (std::numeric_limits<double>::infinity)()),
                  std::invalid_argument);
 
     EXPECT_THROW(bloom_filter(100, 0.01, 12345, 0), std::invalid_argument);

@@ -25,7 +25,7 @@
 #include <new>
 
 #if defined(_WIN32)
-#if !defined(NOMINMAX)
+#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>

@@ -383,12 +383,12 @@ TEST(skiplist_test, rank_differential_test)
             auto first_it = std::lower_bound(
                 oracle.begin(),
                 oracle.end(),
-                OracleEntry{min_s, std::numeric_limits<int>::min()},
+                OracleEntry{min_s, (std::numeric_limits<int>::min)()},
                 oracle_cmp);
             auto last_it = std::upper_bound(
                 oracle.begin(),
                 oracle.end(),
-                OracleEntry{max_s, std::numeric_limits<int>::max()},
+                OracleEntry{max_s, (std::numeric_limits<int>::max)()},
                 oracle_cmp);
 
             std::size_t oracle_removed = std::distance(first_it, last_it);
@@ -419,7 +419,7 @@ TEST(skiplist_test, nan_score_handling)
     SCOPED_TRACE(
         "Testing NaN comparisons (std::less<double> behavior with NaN)");
 
-    double            nan_val = std::numeric_limits<double>::quiet_NaN();
+    double            nan_val = (std::numeric_limits<double>::quiet_NaN)();
     std::less<double> score_cmp;
 
     // Standard C++ std::less<double> behavior verification with IEEE 754 NaN:
@@ -872,7 +872,7 @@ TEST(skiplist_test, boundary_score_values)
     SCOPED_TRACE("Testing infinity and extreme score values");
 
     skiplist<std::string> sl;
-    double                inf = std::numeric_limits<double>::infinity();
+    double                inf = (std::numeric_limits<double>::infinity)();
 
     sl.insert(-inf, "neg_inf");
     sl.insert(inf, "pos_inf");

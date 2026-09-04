@@ -94,6 +94,9 @@ HJ_MAINBOARD_API hj_mainboard_err_t hj_mainboard_version(uint8_t *major,
 
 #ifdef _WIN32
 #define COBJMACROS
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <wbemidl.h>
 #pragma comment(lib, "wbemuuid.lib")

@@ -14,8 +14,8 @@ static void bm_counter_inc_single(benchmark::State &st)
     for(auto _ : st)
     {
         counter<int> ct(0,
-                        std::numeric_limits<int>::min(),
-                        std::numeric_limits<int>::max(),
+                        (std::numeric_limits<int>::min)(),
+                        (std::numeric_limits<int>::max)(),
                         1);
         for(int i = 0; i < ops; ++i)
             ct.inc();
@@ -30,7 +30,7 @@ static void bm_counter_dec_single(benchmark::State &st)
     const int ops = 100000;
     for(auto _ : st)
     {
-        counter<int> ct(ops, 0, std::numeric_limits<int>::max(), 1);
+        counter<int> ct(ops, 0, (std::numeric_limits<int>::max)(), 1);
         for(int i = 0; i < ops; ++i)
             ct.dec();
         benchmark::DoNotOptimize(ct.value());

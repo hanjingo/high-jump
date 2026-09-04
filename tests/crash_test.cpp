@@ -9,7 +9,7 @@
 #include <fstream>
 
 #if defined(_WIN32)
-#if !defined(NOMINMAX)
+#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
@@ -197,7 +197,7 @@ bool validate_minidump_file(const std::string &dump_dir)
     uint64_t stream_count = static_cast<uint64_t>(header.stream_count);
     uint64_t entry_size   = static_cast<uint64_t>(sizeof(MDRawDirectory));
 
-    if(stream_count > (std::numeric_limits<uint64_t>::max() / entry_size))
+    if(stream_count > ((std::numeric_limits<uint64_t>::max)() / entry_size))
     {
         return false;
     }

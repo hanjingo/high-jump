@@ -343,7 +343,7 @@ inline uint64_t read_u64_be(const std::string &data, size_t &offset)
 
 inline bool checked_mul_size(size_t a, size_t b, size_t &result) noexcept
 {
-    if(b != 0 && a > std::numeric_limits<size_t>::max() / b)
+    if(b != 0 && a > (std::numeric_limits<size_t>::max)() / b)
         return false;
     result = a * b;
     return true;
@@ -416,7 +416,7 @@ class bloom_filter
         for(size_t i = 0; i < _num_hashes; ++i)
             _bits.set(detail::reduce_range(_combine(h, i), _num_bits));
 
-        if(_num_inserted != std::numeric_limits<size_t>::max())
+        if(_num_inserted != (std::numeric_limits<size_t>::max)())
             ++_num_inserted;
     }
 
@@ -496,8 +496,8 @@ class bloom_filter
         _bits |= other._bits;
 
         if(other._num_inserted
-           > std::numeric_limits<size_t>::max() - _num_inserted)
-            _num_inserted = std::numeric_limits<size_t>::max();
+           > (std::numeric_limits<size_t>::max)() - _num_inserted)
+            _num_inserted = (std::numeric_limits<size_t>::max)();
         else
             _num_inserted += other._num_inserted;
     }
@@ -524,7 +524,7 @@ class bloom_filter
                 "bloom_filter::serialize: serialized size overflow");
 
         constexpr size_t header_size = 37;
-        if(word_bytes > std::numeric_limits<size_t>::max() - header_size)
+        if(word_bytes > (std::numeric_limits<size_t>::max)() - header_size)
             throw std::length_error(
                 "bloom_filter::serialize: serialized size overflow");
 
@@ -585,7 +585,7 @@ class bloom_filter
                 "bloom_filter::deserialize: bit-array exceeds max_bits");
 
         if(num_bits_u64
-           > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+           > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
             throw std::length_error(
                 "bloom_filter::deserialize: num_bits does not fit size_t");
 
@@ -594,7 +594,7 @@ class bloom_filter
                 "bloom_filter::deserialize: invalid hash count");
 
         if(num_inserted_u64
-           > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+           > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
             throw std::length_error(
                 "bloom_filter::deserialize: insert count does not fit size_t");
 
@@ -679,7 +679,7 @@ class bloom_filter
         const long double rounded = std::ceil(m);
 
         if(rounded
-           > static_cast<long double>(std::numeric_limits<size_t>::max()))
+           > static_cast<long double>((std::numeric_limits<size_t>::max)()))
             throw std::length_error(
                 "bloom_filter: computed bit-array size does not fit size_t");
 

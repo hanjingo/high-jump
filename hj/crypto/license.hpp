@@ -905,7 +905,7 @@ class issuer
                 const std::size_t          valid_days,
                 const std::vector<pair_t> &claims = {})
     {
-        if(valid_days > std::numeric_limits<std::size_t>::max() / 86400)
+        if(valid_days > (std::numeric_limits<std::size_t>::max)() / 86400)
             return detail::make_err(error_code::param_too_big);
 
         std::size_t old_count = _valid_times.load();

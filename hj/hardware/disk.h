@@ -30,6 +30,9 @@
 // ------------------ Platform Detection ---------------------
 #if defined(_WIN32) || defined(_WIN64)
 #define HJ_DISK_PLATFORM_WINDOWS 1
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <setupapi.h>
 #include <winioctl.h>

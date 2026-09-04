@@ -117,6 +117,9 @@ HJ_MOUSE_API hj_mouse_err_t hj_mouse_set_param(intptr_t handle, int accel);
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <process.h>
 
@@ -168,8 +171,8 @@ HJ_MOUSE_API void hj_safe_strcpy(char *dest, const char *src, size_t dest_size)
 #define IS_BIT_SET(bit, array) ((array[LONG(bit)] >> OFF(bit)) & 1)
 
 HJ_MOUSE_API
-    hj_mouse_err_t hj_mouse_parse_input_event(const struct input_event *ev,
-                                              hj_mouse_event_t         *event)
+hj_mouse_err_t hj_mouse_parse_input_event(const struct input_event *ev,
+                                          hj_mouse_event_t         *event)
 {
     if(!ev || !event)
         return HJ_MOUSE_ERROR_INVALID_PARAM;

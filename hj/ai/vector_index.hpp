@@ -553,7 +553,7 @@ class vector_index
         const size_t req_n = static_cast<size_t>(vectors_num);
         const size_t dim   = static_cast<size_t>(_index->d);
 
-        if(req_n > std::numeric_limits<size_t>::max() / dim)
+        if(req_n > (std::numeric_limits<size_t>::max)() / dim)
             return vector_index_errc::out_of_range;
 
         if(vectors_capacity < req_n * dim || ids_capacity < req_n)
@@ -638,7 +638,7 @@ class vector_index
         const size_t req_n = static_cast<size_t>(n);
         const size_t dim   = static_cast<size_t>(_index->d);
 
-        if(req_n > std::numeric_limits<size_t>::max() / dim)
+        if(req_n > (std::numeric_limits<size_t>::max)() / dim)
             return vector_index_errc::out_of_range;
 
         if(vectors_capacity < req_n * dim)
@@ -665,7 +665,7 @@ class vector_index
         const size_t req_ni = static_cast<size_t>(ni);
         const size_t dim    = static_cast<size_t>(_index->d);
 
-        if(req_ni > std::numeric_limits<size_t>::max() / dim)
+        if(req_ni > (std::numeric_limits<size_t>::max)() / dim)
             return vector_index_errc::out_of_range;
 
         if(vectors_capacity < req_ni * dim)
@@ -1245,7 +1245,7 @@ class vector_index
         const size_t req_n = static_cast<size_t>(vectors_num);
         const size_t dim   = static_cast<size_t>(_index->d);
 
-        if(req_n > std::numeric_limits<size_t>::max() / dim)
+        if(req_n > (std::numeric_limits<size_t>::max)() / dim)
             return vector_index_errc::out_of_range;
 
         if(vectors_capacity < req_n * dim)

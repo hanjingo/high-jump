@@ -182,6 +182,9 @@ HJ_RAM_API hj_ram_err_t hj_ram_get_process_usage(hj_ram_statistics_t *stats);
 
 #if defined(_WIN32) || defined(_WIN64)
 #define RAM_PLATFORM_WINDOWS 1
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <psapi.h>
 #include <memoryapi.h>

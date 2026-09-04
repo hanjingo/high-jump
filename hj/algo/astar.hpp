@@ -267,7 +267,7 @@ struct grid
     virtual cost_t cost(const Location &from, const Location &to) const
     {
         if(obstacles.count(to))
-            return std::numeric_limits<cost_t>::infinity();
+            return (std::numeric_limits<cost_t>::infinity)();
 
         auto it = edge_weights.find({from, to});
         return it != edge_weights.end() ? it->second : 1.0;

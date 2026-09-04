@@ -1631,7 +1631,7 @@ TEST(vector_index, get_all_vectors_overflow_protection)
 
     auto *faiss_idx = index.unsafe_get_index();
 
-    faiss_idx->ntotal = std::numeric_limits<int64_t>::max() / 2;
+    faiss_idx->ntotal = (std::numeric_limits<int64_t>::max)() / 2;
     faiss_idx->d      = 128;
 
     std::vector<float> vectors;

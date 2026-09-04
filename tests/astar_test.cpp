@@ -244,15 +244,15 @@ TEST_F(astar, grid_edge_weight_accepts_only_finite_nonnegative_values)
     EXPECT_DOUBLE_EQ(g.cost(a, b), 3.5);
 
     EXPECT_FALSE(
-        g.set_edge_weight(a, b, std::numeric_limits<double>::quiet_NaN()));
+        g.set_edge_weight(a, b, (std::numeric_limits<double>::quiet_NaN)()));
     EXPECT_DOUBLE_EQ(g.cost(a, b), 3.5);
 
     EXPECT_FALSE(
-        g.set_edge_weight(a, b, std::numeric_limits<double>::infinity()));
+        g.set_edge_weight(a, b, (std::numeric_limits<double>::infinity)()));
     EXPECT_DOUBLE_EQ(g.cost(a, b), 3.5);
 
     EXPECT_FALSE(
-        g.set_edge_weight(a, b, -std::numeric_limits<double>::infinity()));
+        g.set_edge_weight(a, b, -(std::numeric_limits<double>::infinity)()));
     EXPECT_DOUBLE_EQ(g.cost(a, b), 3.5);
 }
 
@@ -431,7 +431,7 @@ TEST_F(astar, invalid_heuristic_nan_is_reported)
     auto                       g = create_grid(2, 1);
     search_options<location_t> options;
     options.heuristic = [](const location_t &, const location_t &) {
-        return std::numeric_limits<double>::quiet_NaN();
+        return (std::numeric_limits<double>::quiet_NaN)();
     };
 
     std::vector<location_t> path;
@@ -445,7 +445,7 @@ TEST_F(astar, invalid_heuristic_infinity_is_reported)
     auto                       g = create_grid(2, 1);
     search_options<location_t> options;
     options.heuristic = [](const location_t &, const location_t &) {
-        return std::numeric_limits<double>::infinity();
+        return (std::numeric_limits<double>::infinity)();
     };
 
     std::vector<location_t> path;
@@ -586,8 +586,9 @@ TEST_F(astar, search_ignores_nonwalkable_neighbors)
 
 TEST_F(astar, search_skips_infinite_edge_cost)
 {
-    auto g                           = create_grid(3, 1);
-    g.edge_weights[{{0, 0}, {1, 0}}] = std::numeric_limits<double>::infinity();
+    auto g = create_grid(3, 1);
+    g.edge_weights[{{0, 0}, {1, 0}}] =
+        (std::numeric_limits<double>::infinity)();
 
     std::vector<location_t> path;
     EXPECT_EQ(search(path, g, {0, 0}, {2, 0}), search_result::not_found);
@@ -597,7 +598,7 @@ TEST_F(astar, search_skips_infinite_edge_cost)
 TEST_F(astar, search_reports_overflowed_path_cost)
 {
     auto         g        = create_grid(3, 1);
-    const double max_cost = std::numeric_limits<double>::max();
+    const double max_cost = (std::numeric_limits<double>::max)();
     ASSERT_TRUE(g.set_edge_weight({0, 0}, {1, 0}, max_cost));
     ASSERT_TRUE(g.set_edge_weight({1, 0}, {2, 0}, max_cost));
 

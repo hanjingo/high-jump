@@ -750,7 +750,7 @@ class model
         }
 
         if(prompt.size()
-           > static_cast<std::size_t>(std::numeric_limits<int32_t>::max()))
+           > static_cast<std::size_t>((std::numeric_limits<int32_t>::max)()))
         {
             err = make_error_code(error_code::buffer_overflow);
             return {};

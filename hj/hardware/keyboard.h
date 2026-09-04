@@ -112,6 +112,9 @@ hj_keyboard_set_repeat(hj_keyboard_handle_t handle, int delay_ms, int rate_ms);
 #include <dirent.h>
 
 #elif defined(_WIN32) || defined(_WIN64)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <setupapi.h>
 #include <devguid.h>

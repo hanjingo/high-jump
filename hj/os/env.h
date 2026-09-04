@@ -36,7 +36,7 @@ extern "C" {
 #endif
 
 /* -------------------------------------------------------------------------
- * TLS (Thread Local Storage) 跨平台宏定义
+ * TLS (Thread Local Storage) 
  * ------------------------------------------------------------------------- */
 #ifndef HJ_TLS
 #if defined(__cplusplus) && __cplusplus >= 201103L
@@ -239,6 +239,9 @@ HJ_ENV_API int64_t hj_env_get(hj_conf_t conf);
 #include <limits.h>
 
 #if defined(_WIN32) || defined(_WIN64)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <psapi.h>
 #include <Lmcons.h>

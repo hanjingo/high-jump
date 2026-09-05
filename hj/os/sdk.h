@@ -59,7 +59,7 @@ extern "C" {
 #endif
 
 #define SDK_CONTEXT_ABI_VERSION_1 1U
-#define SDK_ABI_MAGIC 0x484A5344 // 'HJSD' in ASCII
+#define SDK_ABI_MAGIC 0x484A474FU // 'HJGO' in ASCII
 
 /**
  * @brief Common ABI prefix for all user-provided parameter structures.

@@ -3,24 +3,28 @@
 
 #include <hj/os/sdk.h>
 
-#define SDK_V1_API_VERSION 1
+#define SDK_HELLO_API_VERSION_1 1U
 
 typedef struct hello_param
 {
-    int num;
+    SDK_ABI_HEADER
+
+    int32_t num;
 } hello_param_t;
 
 typedef struct world_param
 {
-    const char *in;
-    int         in_len;
+    SDK_ABI_HEADER
 
-    char *out;
-    int   out_len;
+    const char *in;
+    uint32_t    in_len;
+
+    char    *out;
+    uint32_t out_len;
 } world_param_t;
 
-SDK_API void hello(sdk_context_t *ctx);
+SDK_C_API void hello(sdk_context_t *ctx);
 
-SDK_API void world(sdk_context_t *ctx);
+SDK_C_API void world(sdk_context_t *ctx);
 
 #endif

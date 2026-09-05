@@ -10,15 +10,24 @@ if (WIN32)
     )
 endif()
 
-add_definitions(-DSDK_BUILD)
-
 # set binary output path
 if (NOT LIBRARY_OUTPUT_PATH)
     set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 endif()
 
+# Symbol Visibility Control
+set(CMAKE_C_VISIBILITY_PRESET hidden)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+
 include_directories(${CMAKE_SOURCE_DIR})
 
 add_library(sdk_v1 SHARED ${CMAKE_CURRENT_SOURCE_DIR}/sdk_v1.cpp)
+
+target_compile_definitions(
+    sdk_v1
+    PRIVATE
+        SDK_BUILD
+)
 
 target_link_libraries(sdk_v1 ${CMAKE_DL_LIBS})

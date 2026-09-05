@@ -292,6 +292,7 @@ add_subdirectory(crasher)
 add_subdirectory(daemon)
 
 add_subdirectory(sdk_v1)
+add_subdirectory(sdk_v2)
 
 add_subdirectory(shm_consumer)
 add_subdirectory(shm_producer)

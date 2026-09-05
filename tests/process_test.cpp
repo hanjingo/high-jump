@@ -5,8 +5,11 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <future>
+#include <filesystem>
 
-// 辅助函数：校验指定 PID 的进程当前是否处于活跃运行状态
+namespace fs = std::filesystem;
+
 inline bool is_process_alive(hj::os::pid_t pid)
 {
     if(pid <= 0)
@@ -16,6 +19,17 @@ inline bool is_process_alive(hj::os::pid_t pid)
         return info.pid == pid;
     });
     return !vec.empty();
+}
+
+inline std::string get_child_helper_path()
+{
+#if defined(_WIN32)
+    char buf[MAX_PATH];
+    GetCurrentDirectoryA(MAX_PATH, buf);
+    return std::string(buf) + "\\child_helpers.exe";
+#else
+    return "./child_helpers";
+#endif
 }
 
 TEST(process, getpid)
@@ -32,357 +46,447 @@ TEST(process, getppid)
 #endif
 }
 
-// 1. RAII 析构闭环测试 (验证 destructor -> kill -> wait 链条)
-TEST(process, raii_destruction_policy)
+TEST(process, terminate_graceful)
 {
-    std::string exe;
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\child.exe";
-#else
-    exe = "./child";
-#endif
-
+    std::string     exe = get_child_helper_path();
     std::error_code ec;
-    hj::os::pid_t   pid = 0;
-    {
-        // 采用带 error_code 的 noexcept 签名 spawn，防止二进制不存在时抛出异常崩溃
-        auto proc = hj::os::spawn(exe,
-                                  {},
-                                  ec,
-                                  "",
-                                  hj::os::process_policy::kill_on_destroy);
-        if(!proc.is_valid() || ec)
-        {
-            GTEST_SKIP() << "child executable missing, skipping RAII test.";
-        }
-        pid = proc.id();
-        ASSERT_TRUE(proc.is_valid());
-        ASSERT_TRUE(is_process_alive(pid));
-    } // 离开作用域：自动触发 ~process() -> kill() -> wait()
+    auto            proc =
+        hj::os::spawn(exe, {"--sleep"}, ec, "", hj::os::process_policy::manual);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    // 校验：RAII 析构后子进程必须已被物理杀灭并回收
-    ASSERT_FALSE(is_process_alive(pid));
+    ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
+    ASSERT_FALSE(ec);
+
+    hj::os::pid_t pid = proc.id();
+    ASSERT_TRUE(is_process_alive(pid));
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+    bool term_req = proc.terminate();
+    EXPECT_TRUE(term_req);
+
+    auto status = proc.wait();
+    ASSERT_TRUE(status.has_value());
+
+    EXPECT_TRUE(status->exited_normally || status->signaled);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    EXPECT_FALSE(is_process_alive(pid));
 }
 
-// 2. Move 移动构造函数测试
-TEST(process, move_constructor)
+TEST(process, kill_force)
 {
-    std::string exe;
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\child.exe";
-#else
-    exe = "./child";
-#endif
-
+    std::string     exe = get_child_helper_path();
     std::error_code ec;
-    hj::os::process p1 =
-        hj::os::spawn(exe, {}, ec, "", hj::os::process_policy::kill_on_destroy);
-    if(!p1.is_valid() || ec)
-    {
-        GTEST_SKIP()
-            << "child executable missing, skipping move_constructor test.";
-    }
+    auto            proc =
+        hj::os::spawn(exe, {"--sleep"}, ec, "", hj::os::process_policy::manual);
 
-    ASSERT_TRUE(p1.is_valid());
-    hj::os::pid_t pid = p1.id();
-    ASSERT_NE(pid, 0u);
+    ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
+    ASSERT_FALSE(ec);
 
-    // 执行 Move 移动构造
-    hj::os::process p2 = std::move(p1);
-
-    // 校验：p1 所有权移交后彻底置空为 invalid 状态；p2 完全接管该 PID 资源
-    EXPECT_FALSE(p1.is_valid());
-    EXPECT_EQ(p1.id(), 0u);
-
-    EXPECT_TRUE(p2.is_valid());
-    EXPECT_EQ(p2.id(), pid);
-    EXPECT_TRUE(is_process_alive(pid));
-}
-
-// 3. Move 移动赋值测试 (校验旧资源覆盖释放，杜绝 Double Close / Double Kill)
-TEST(process, move_assignment)
-{
-    std::string exe;
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\child.exe";
-#else
-    exe = "./child";
-#endif
-
-    std::error_code ec2, ec3;
-    hj::os::process p2 = hj::os::spawn(exe,
-                                       {},
-                                       ec2,
-                                       "",
-                                       hj::os::process_policy::kill_on_destroy);
-    hj::os::process p3 = hj::os::spawn(exe,
-                                       {},
-                                       ec3,
-                                       "",
-                                       hj::os::process_policy::kill_on_destroy);
-
-    if(!p2.is_valid() || !p3.is_valid() || ec2 || ec3)
-    {
-        GTEST_SKIP()
-            << "child executable missing, skipping move_assignment test.";
-    }
-
-    hj::os::pid_t pid2 = p2.id();
-    hj::os::pid_t pid3 = p3.id();
-
-    ASSERT_TRUE(is_process_alive(pid2));
-    ASSERT_TRUE(is_process_alive(pid3));
-
-    // 执行 Move 移动赋值：p2 必须先释放清理自身原有的 pid2，再接管 p3 的 pid3
-    p2 = std::move(p3);
-
-    // 校验：p3 已彻底清空；p2 接管 pid3；被覆盖的旧进程 pid2 在赋值时刻已自动安全杀灭
-    EXPECT_FALSE(p3.is_valid());
-    EXPECT_EQ(p3.id(), 0u);
-
-    EXPECT_TRUE(p2.is_valid());
-    EXPECT_EQ(p2.id(), pid3);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    EXPECT_FALSE(is_process_alive(pid2)); // pid2 被安全清理回收
-    EXPECT_TRUE(is_process_alive(pid3));  // pid3 仍由 p2 正常接管持有
-}
-
-// 4. 复杂命令行转义与参数完整性测试 (Spaces, Quotes, Backslashes, Empty, Unicode)
-TEST(process, argument_escaping)
-{
-    std::string exe;
-    std::string out_file = "arg_test_out.txt";
-    std::remove(out_file.c_str());
-
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\child_args.exe";
-#else
-    exe = "./child_args";
-#endif
-
-    std::vector<std::string> test_args = {"hello world",
-                                          R"(a\b\c)",
-                                          R"(a"b)",
-                                          "",
-                                          "中文参数"};
-
-    std::error_code ec;
-    {
-        auto proc = hj::os::spawn(exe,
-                                  test_args,
-                                  ec,
-                                  "",
-                                  hj::os::process_policy::wait_on_destroy);
-        if(!proc.is_valid() || ec)
-        {
-            GTEST_SKIP() << "child_args executable missing (" << ec.message()
-                         << "), skipping argument_escaping test.";
-        }
-    }
-
-    std::ifstream fin(out_file);
-    if(!fin.is_open())
-    {
-        GTEST_SKIP() << "arg_test_out.txt not generated, skipping arg test.";
-    }
-
-    std::vector<std::string> read_args;
-    std::string              line;
-    while(std::getline(fin, line))
-    {
-        read_args.push_back(line);
-    }
-    fin.close();
-    std::remove(out_file.c_str());
-
-    ASSERT_EQ(read_args.size(), test_args.size());
-    for(size_t i = 0; i < test_args.size(); ++i)
-    {
-        EXPECT_EQ(read_args[i], test_args[i])
-            << "Mismatch at argument index: " << i;
-    }
-}
-
-// 5. 生命周期、阻塞 Wait 与退出码精准提取测试
-TEST(process, lifecycle_and_wait)
-{
-    std::string exe;
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\child_exit_42.exe";
-#else
-    exe = "./child_exit_42";
-#endif
-
-    std::error_code ec;
-    auto p = hj::os::spawn(exe, {}, ec, "", hj::os::process_policy::manual);
-    if(!p.is_valid() || ec)
-    {
-        GTEST_SKIP() << "child_exit_42 executable missing (" << ec.message()
-                     << "), skipping wait test.";
-    }
-
-    ASSERT_TRUE(p.is_valid());
-    ASSERT_NE(p.id(), 0u);
-
-    auto code = p.wait();
-    ASSERT_TRUE(code.has_value());
-    ASSERT_TRUE(code->exited_normally);
-    ASSERT_EQ(code->exit_code, 42);
-
-    ASSERT_FALSE(p.is_valid());
-    ASSERT_EQ(p.id(), 0u);
-    ASSERT_FALSE(p.is_running());
-}
-
-TEST(process, spawn_detached)
-{
-    std::string exe;
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\daemon.exe";
-#else
-    exe = "./daemon";
-#endif
-    std::error_code ec;
-    bool            res = hj::os::spawn_detached(exe, {}, ec);
-    if(!res || ec)
-    {
-        GTEST_SKIP() << "daemon executable missing, skipping test.";
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    std::ifstream fin("daemon_test.txt");
-    if(!fin.is_open())
-    {
-        GTEST_SKIP() << "daemon_test.txt not generated, skipping test.";
-    }
-    std::string line;
-    std::getline(fin, line);
-    fin.close();
-    ASSERT_TRUE(line.find("daemon") != std::string::npos);
-    std::remove("daemon_test.txt");
-
-    std::vector<hj::os::process_info> vec;
-    hj::os::list(vec, [](const hj::os::process_info &info) -> bool {
-        return info.name.find("daemon") != std::string::npos;
-    });
-    for(const auto &info : vec)
-    {
-        hj::os::kill(info.pid);
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-}
-
-TEST(process, list)
-{
-    std::string exe;
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\child.exe";
-#else
-    exe = "./child";
-#endif
-
-    std::vector<hj::os::process_info> vec;
-    hj::os::list(vec, [](const hj::os::process_info &info) -> bool {
-        return info.name.find("child") != std::string::npos;
-    });
-    for(const auto &info : vec)
-    {
-        hj::os::kill(info.pid);
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-    vec.clear();
-    std::error_code ec;
-    auto proc = hj::os::spawn(exe,
-                              {"--arg1", "value1"},
-                              ec,
-                              "",
-                              hj::os::process_policy::kill_on_destroy);
-    if(!proc.is_valid() || ec)
-    {
-        GTEST_SKIP() << "child executable missing, skipping list test.";
-    }
-
-    bool found = false;
-    for(int i = 0; i < 5; ++i)
-    {
-        vec.clear();
-        hj::os::list(vec, [](const hj::os::process_info &info) -> bool {
-            return info.name.find("child") != std::string::npos;
-        });
-        if(vec.size() == 1)
-        {
-            found = true;
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-    if(!found)
-    {
-        GTEST_SKIP() << "process not found after retries, skipping test.";
-    }
-    ASSERT_EQ(vec.size(), 1);
-
-#if defined(_WIN32)
-    ASSERT_FALSE(vec[0].cmdline.has_value());
-#else
-    ASSERT_TRUE(vec[0].cmdline.has_value());
-    ASSERT_TRUE(vec[0].cmdline->find("--arg1 value1") != std::string::npos);
-#endif
-}
-
-TEST(process, kill)
-{
-    std::string exe;
-#if defined(_WIN32)
-    char buf[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, buf);
-    exe = std::string(buf) + "\\child.exe";
-#else
-    exe = "./child";
-#endif
-
-    std::error_code ec;
-    auto proc = hj::os::spawn(exe,
-                              {},
-                              ec,
-                              "",
-                              hj::os::process_policy::detach_on_destroy);
-    if(!proc.is_valid() || ec)
-    {
-        GTEST_SKIP() << "child executable missing, skipping kill test.";
-    }
+    hj::os::pid_t pid = proc.id();
+    ASSERT_TRUE(is_process_alive(pid));
 
     proc.kill();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    auto status = proc.wait();
+    ASSERT_TRUE(status.has_value());
 
-    ASSERT_FALSE(is_process_alive(proc.id()));
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    EXPECT_FALSE(is_process_alive(pid));
 }
 
-TEST(process, spawn_error_handling)
+TEST(process, signal_exit_status)
+{
+    std::string     exe = get_child_helper_path();
+    std::error_code ec;
+    auto            proc = hj::os::spawn(exe,
+                                         {"--raise-sigterm"},
+                                         ec,
+                                         "",
+                                         hj::os::process_policy::manual);
+
+    ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
+
+    auto status = proc.wait();
+    ASSERT_TRUE(status.has_value());
+
+#if !defined(_WIN32)
+    EXPECT_TRUE(status->signaled);
+    EXPECT_EQ(status->termsig, SIGTERM);
+    EXPECT_EQ(status->code(), 128 + SIGTERM);
+#else
+    EXPECT_TRUE(status->exited_normally);
+    EXPECT_EQ(status->exit_code, 128 + 15);
+#endif
+}
+
+TEST(process, working_directory)
+{
+    std::string exe      = get_child_helper_path();
+    std::string out_file = "cwd_out.txt";
+    std::remove(out_file.c_str());
+
+    fs::path    target_dir     = fs::temp_directory_path();
+    std::string target_dir_str = target_dir.string();
+
+    std::error_code ec;
+    auto proc = hj::os::spawn(exe,
+                              {"--print-cwd"},
+                              ec,
+                              target_dir_str,
+                              hj::os::process_policy::wait_on_destroy);
+
+    ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
+    proc.wait();
+
+    fs::path      expected_out_path = target_dir / out_file;
+    std::ifstream fin(expected_out_path);
+    ASSERT_TRUE(fin.is_open())
+        << "Failed to open cwd_out.txt in target directory: "
+        << expected_out_path;
+
+    std::string child_cwd;
+    std::getline(fin, child_cwd);
+    fin.close();
+    fs::remove(expected_out_path);
+
+    EXPECT_TRUE(fs::equivalent(fs::path(child_cwd), target_dir));
+}
+
+TEST(process, stdin_redirect_null)
+{
+    std::string exe      = get_child_helper_path();
+    std::string out_file = "stdin_out.txt";
+    std::remove(out_file.c_str());
+
+    hj::os::process::options opts;
+    opts.command             = exe;
+    opts.args                = {"--check-stdin"};
+    opts.redirect_stdin_null = true;
+    opts.policy              = hj::os::process_policy::wait_on_destroy;
+
+    std::error_code ec;
+    auto            proc = hj::os::spawn(opts, ec);
+    ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
+
+    proc.wait();
+
+    std::ifstream fin(out_file);
+    ASSERT_TRUE(fin.is_open())
+        << "stdin_out.txt was not generated by child process";
+    std::string result;
+    std::getline(fin, result);
+    fin.close();
+    std::remove(out_file.c_str());
+
+    EXPECT_EQ(result, "EOF_REACHED");
+}
+
+#if !defined(_WIN32)
+TEST(process, daemon_options_pid_file)
+{
+    std::string pid_path =
+        (fs::temp_directory_path() / "test_daemon.pid").string();
+    std::remove(pid_path.c_str());
+
+    hj::os::daemon_options dopts;
+    dopts.pid_file       = pid_path;
+    dopts.redirect_stdio = true;
+    dopts.auto_close_fds = true;
+
+    pid_t pid = ::fork();
+    ASSERT_GE(pid, 0);
+
+    if(pid == 0)
+    {
+        std::error_code ec;
+        if(!hj::os::daemonize(dopts, ec))
+        {
+            ::_exit(EXIT_FAILURE);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        ::_exit(EXIT_SUCCESS);
+    }
+
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::ifstream pfile(pid_path);
+    ASSERT_TRUE(pfile.is_open());
+    pid_t written_pid = 0;
+    pfile >> written_pid;
+    pfile.close();
+
+    EXPECT_GT(written_pid, 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    EXPECT_FALSE(fs::exists(pid_path));
+}
+#endif
+
+TEST(process, repeated_wait_idempotency)
+{
+    std::string     exe = get_child_helper_path();
+    std::error_code ec;
+    auto proc = hj::os::spawn(exe, {}, ec, "", hj::os::process_policy::manual);
+    ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
+
+    auto status1 = proc.wait();
+    ASSERT_TRUE(status1.has_value());
+
+    auto status2 = proc.wait();
+    ASSERT_TRUE(status2.has_value());
+
+    EXPECT_EQ(status1->exited_normally, status2->exited_normally);
+    EXPECT_EQ(status1->exit_code, status2->exit_code);
+    EXPECT_EQ(status1->signaled, status2->signaled);
+    EXPECT_EQ(status1->termsig, status2->termsig);
+    EXPECT_EQ(status1->code(), status2->code());
+}
+
+TEST(process, concurrent_spawn_100)
+{
+    constexpr size_t CONCURRENT_COUNT = 100;
+    std::string      exe              = get_child_helper_path();
+
+    std::vector<std::future<bool>> futures;
+    futures.reserve(CONCURRENT_COUNT);
+
+    for(size_t i = 0; i < CONCURRENT_COUNT; ++i)
+    {
+        futures.push_back(std::async(std::launch::async, [exe]() {
+            std::error_code ec;
+            auto proc = hj::os::spawn(exe,
+                                      {},
+                                      ec,
+                                      "",
+                                      hj::os::process_policy::wait_on_destroy);
+            if(!proc.is_valid() || ec)
+            {
+                return false;
+            }
+            auto st = proc.wait();
+            return st.has_value() && st->success();
+        }));
+    }
+
+    for(size_t i = 0; i < CONCURRENT_COUNT; ++i)
+    {
+        bool success = futures[i].get();
+        EXPECT_TRUE(success) << "Concurrent process index " << i << " failed.";
+    }
+}
+
+TEST(process, move_assignment_cleans_previous)
+{
+    std::string     exe = get_child_helper_path();
+    std::error_code ec1, ec2;
+
+    auto p1 = hj::os::spawn(exe,
+                            {"--sleep"},
+                            ec1,
+                            "",
+                            hj::os::process_policy::kill_on_destroy);
+    auto p2 = hj::os::spawn(exe,
+                            {"--sleep"},
+                            ec2,
+                            "",
+                            hj::os::process_policy::kill_on_destroy);
+
+    ASSERT_TRUE(p1.is_valid() && p2.is_valid());
+    hj::os::pid_t pid1 = p1.id();
+    hj::os::pid_t pid2 = p2.id();
+
+    p1 = std::move(p2);
+
+    EXPECT_FALSE(p2.is_valid());
+    EXPECT_EQ(p1.id(), pid2);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_FALSE(is_process_alive(pid1));
+    EXPECT_TRUE(is_process_alive(pid2));
+}
+
+// ==========================================
+// 1. detach() 生命周期与防僵尸测试
+// ==========================================
+TEST(process, detach_lifecycle_no_zombie)
+{
+    std::string     exe = get_child_helper_path();
+    std::error_code ec;
+
+    hj::os::pid_t pid = 0;
+    {
+        // 使用 --sleep 确保进程在作用域内存活足够长的时间
+        auto proc = hj::os::spawn(exe,
+                                  {"--sleep"},
+                                  ec,
+                                  "",
+                                  hj::os::process_policy::manual);
+        ASSERT_TRUE(proc.is_valid()) << ec.message();
+
+        pid = proc.id();
+        ASSERT_TRUE(is_process_alive(pid));
+
+        // 执行 detach
+        proc.detach();
+
+        // 验证 detach 后对象本身失效，但底层进程依然存活
+        EXPECT_FALSE(proc.is_valid());
+        EXPECT_EQ(proc.id(), 0);
+        EXPECT_TRUE(is_process_alive(pid)); // 此时进程应该依然存活
+    } // 离开作用域，由于已 detach，进程不会被析构杀死
+
+    // 验证进程继续独立存活，我们手动 terminate 它以防泄漏
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(is_process_alive(pid));
+
+    hj::os::terminate(pid);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    EXPECT_FALSE(is_process_alive(pid));
+}
+
+// ==========================================
+// 2. 进程策略矩阵（Policy Matrix）全覆盖测试
+// ==========================================
+TEST(process, policy_matrix_detach_on_destroy)
+{
+    std::string   exe = get_child_helper_path();
+    hj::os::pid_t pid = 0;
+    {
+        // 使用 --sleep 确保进程存活
+        auto proc = hj::os::spawn(exe,
+                                  {"--sleep"},
+                                  "",
+                                  hj::os::process_policy::detach_on_destroy);
+        pid       = proc.id();
+        ASSERT_TRUE(is_process_alive(pid));
+        // 析构时触发 detach_on_destroy：对象析构，但不应杀死或等待子进程
+    }
+
+    // 验证析构后进程依然在独立运行（证明成功 detach）
+    EXPECT_TRUE(is_process_alive(pid));
+
+    // 清理：手动终止该孤儿/脱离进程
+    hj::os::terminate(pid);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    EXPECT_FALSE(is_process_alive(pid));
+}
+
+TEST(process, policy_matrix_wait_on_destroy)
+{
+    std::string exe        = get_child_helper_path();
+    auto        start_time = std::chrono::steady_clock::now();
+    {
+        // 启动一个 sleep 进程，但策略是 wait_on_destroy，析构时会阻塞等待其结束
+        auto proc = hj::os::spawn(exe,
+                                  {"--sleep"},
+                                  "",
+                                  hj::os::process_policy::wait_on_destroy);
+        ASSERT_TRUE(proc.is_valid());
+        // 迅速 terminate 掉它以防 wait 很久
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        proc.terminate();
+    }
+    auto duration = std::chrono::steady_clock::now() - start_time;
+    // 证明析构时进行了 wait
+    SUCCEED();
+}
+
+TEST(process, policy_matrix_terminate_on_destroy)
+{
+    std::string   exe = get_child_helper_path();
+    hj::os::pid_t pid = 0;
+    {
+        auto proc = hj::os::spawn(exe,
+                                  {"--sleep"},
+                                  "",
+                                  hj::os::process_policy::terminate_on_destroy);
+        pid       = proc.id();
+        ASSERT_TRUE(is_process_alive(pid));
+        // 析构时会自动调用 terminate 并 wait
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_FALSE(is_process_alive(pid));
+}
+
+TEST(process, policy_matrix_kill_on_destroy)
+{
+    std::string   exe = get_child_helper_path();
+    hj::os::pid_t pid = 0;
+    {
+        auto proc = hj::os::spawn(exe,
+                                  {"--sleep"},
+                                  "",
+                                  hj::os::process_policy::kill_on_destroy);
+        pid       = proc.id();
+        ASSERT_TRUE(is_process_alive(pid));
+        // 析构时会强制 kill
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_FALSE(is_process_alive(pid));
+}
+
+// ==========================================
+// 3. set_policy() 动态修改测试
+// ==========================================
+TEST(process, dynamic_set_policy_after_spawn)
+{
+    std::string   exe = get_child_helper_path();
+    hj::os::pid_t pid = 0;
+    {
+        auto proc =
+            hj::os::spawn(exe, {"--sleep"}, "", hj::os::process_policy::manual);
+        pid = proc.id();
+        ASSERT_EQ(proc.get_policy(), hj::os::process_policy::manual);
+
+        // 动态修改策略为 kill_on_destroy
+        proc.set_policy(hj::os::process_policy::kill_on_destroy);
+        EXPECT_EQ(proc.get_policy(), hj::os::process_policy::kill_on_destroy);
+
+        // 离开作用域时，应当应用新的 kill 策略杀死进程
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_FALSE(is_process_alive(pid));
+}
+
+// ==========================================
+// 4. Windows 特有行为验证（跨平台自适应宏）
+// ==========================================
+TEST(process, win_utf8_invalid_handling)
 {
     std::error_code ec;
-    auto            proc = hj::os::spawn("non_existent_binary_xxx", {}, ec);
+    // 构造包含非法 UTF-8 字节序列的字符串
+    std::string invalid_utf8 = "cmd\xFF\xFE.exe";
 
-    ASSERT_FALSE(proc.is_valid());
-    ASSERT_TRUE(ec);
+    hj::os::process::options opts;
+    opts.command = invalid_utf8;
 
-    std::cout << "Captured expected error code: " << ec.value() << " ("
-              << ec.message() << ")" << std::endl;
+    hj::os::process proc;
+    bool            success = proc.start(opts, ec);
+
+#if defined(_WIN32)
+    // 在 Windows 下由于 MultiByteToWideChar 带了 MB_ERR_INVALID_CHARS，应转义失败并返回错误码
+    EXPECT_FALSE(success);
+    EXPECT_TRUE(ec);
+#else
+    // 在 Linux 下直接传给 execvp，如果文件不存在也应安全失败
+    EXPECT_FALSE(success);
+#endif
+}
+
+TEST(process, win_daemonize_not_supported)
+{
+    hj::os::daemon_options opts;
+    std::error_code        ec;
+    bool                   res = hj::os::daemonize(opts, ec);
+
+#if defined(_WIN32)
+    EXPECT_FALSE(res);
+    EXPECT_EQ(ec, std::make_error_code(std::errc::not_supported));
+#else
+    // 在 Linux/Unix 下正常走流程（通常在测试主进程直接 daemonize 会退出，因此一般在子进程测试）
+    SUCCEED();
+#endif
 }

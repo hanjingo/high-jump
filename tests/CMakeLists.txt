@@ -288,6 +288,7 @@ add_dependencies(${PROJECT_NAME} copy_test_configs)
 
 add_subdirectory(dll_example)
 add_subdirectory(child)
+add_subdirectory(child_helpers)
 add_subdirectory(crasher)
 add_subdirectory(daemon)
 

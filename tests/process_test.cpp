@@ -50,8 +50,13 @@ TEST(process, terminate_graceful)
 {
     std::string     exe = get_child_helper_path();
     std::error_code ec;
-    auto            proc =
-        hj::os::spawn(exe, {"--sleep"}, ec, "", hj::os::process_policy::manual);
+
+    hj::os::process::options opts;
+    opts.command           = exe;
+    opts.args              = {"--sleep"};
+    opts.working_directory = "";
+    opts.policy            = hj::os::process_policy::manual;
+    auto proc              = hj::os::spawn(opts, ec);
 
     ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
     ASSERT_FALSE(ec);
@@ -75,10 +80,14 @@ TEST(process, terminate_graceful)
 
 TEST(process, kill_force)
 {
-    std::string     exe = get_child_helper_path();
-    std::error_code ec;
-    auto            proc =
-        hj::os::spawn(exe, {"--sleep"}, ec, "", hj::os::process_policy::manual);
+    std::string              exe = get_child_helper_path();
+    std::error_code          ec;
+    hj::os::process::options opts;
+    opts.command           = exe;
+    opts.args              = {"--sleep"};
+    opts.working_directory = "";
+    opts.policy            = hj::os::process_policy::manual;
+    auto proc              = hj::os::spawn(opts, ec);
 
     ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
     ASSERT_FALSE(ec);
@@ -96,13 +105,14 @@ TEST(process, kill_force)
 
 TEST(process, signal_exit_status)
 {
-    std::string     exe = get_child_helper_path();
-    std::error_code ec;
-    auto            proc = hj::os::spawn(exe,
-                                         {"--raise-sigterm"},
-                                         ec,
-                                         "",
-                                         hj::os::process_policy::manual);
+    std::string              exe = get_child_helper_path();
+    std::error_code          ec;
+    hj::os::process::options opts;
+    opts.command           = exe;
+    opts.args              = {"--raise-sigterm"};
+    opts.working_directory = "";
+    opts.policy            = hj::os::process_policy::manual;
+    auto proc              = hj::os::spawn(opts, ec);
 
     ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
 
@@ -128,12 +138,13 @@ TEST(process, working_directory)
     fs::path    target_dir     = fs::temp_directory_path();
     std::string target_dir_str = target_dir.string();
 
-    std::error_code ec;
-    auto proc = hj::os::spawn(exe,
-                              {"--print-cwd"},
-                              ec,
-                              target_dir_str,
-                              hj::os::process_policy::wait_on_destroy);
+    std::error_code          ec;
+    hj::os::process::options opts;
+    opts.command           = exe;
+    opts.args              = {"--print-cwd"};
+    opts.working_directory = target_dir_str;
+    opts.policy            = hj::os::process_policy::wait_on_destroy;
+    auto proc              = hj::os::spawn(opts, ec);
 
     ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
     proc.wait();
@@ -227,9 +238,14 @@ TEST(process, daemon_options_pid_file)
 
 TEST(process, repeated_wait_idempotency)
 {
-    std::string     exe = get_child_helper_path();
-    std::error_code ec;
-    auto proc = hj::os::spawn(exe, {}, ec, "", hj::os::process_policy::manual);
+    std::string              exe = get_child_helper_path();
+    std::error_code          ec;
+    hj::os::process::options opts;
+    opts.command           = exe;
+    opts.args              = {};
+    opts.working_directory = "";
+    opts.policy            = hj::os::process_policy::manual;
+    auto proc              = hj::os::spawn(opts, ec);
     ASSERT_TRUE(proc.is_valid()) << "child_helpers missing: " << ec.message();
 
     auto status1 = proc.wait();
@@ -256,12 +272,13 @@ TEST(process, concurrent_spawn_100)
     for(size_t i = 0; i < CONCURRENT_COUNT; ++i)
     {
         futures.push_back(std::async(std::launch::async, [exe]() {
-            std::error_code ec;
-            auto proc = hj::os::spawn(exe,
-                                      {},
-                                      ec,
-                                      "",
-                                      hj::os::process_policy::wait_on_destroy);
+            std::error_code          ec;
+            hj::os::process::options opts;
+            opts.command           = exe;
+            opts.args              = {};
+            opts.working_directory = "";
+            opts.policy            = hj::os::process_policy::wait_on_destroy;
+            auto proc              = hj::os::spawn(opts, ec);
             if(!proc.is_valid() || ec)
             {
                 return false;
@@ -283,16 +300,19 @@ TEST(process, move_assignment_cleans_previous)
     std::string     exe = get_child_helper_path();
     std::error_code ec1, ec2;
 
-    auto p1 = hj::os::spawn(exe,
-                            {"--sleep"},
-                            ec1,
-                            "",
-                            hj::os::process_policy::kill_on_destroy);
-    auto p2 = hj::os::spawn(exe,
-                            {"--sleep"},
-                            ec2,
-                            "",
-                            hj::os::process_policy::kill_on_destroy);
+    hj::os::process::options opts1;
+    opts1.command           = exe;
+    opts1.args              = {"--sleep"};
+    opts1.working_directory = "";
+    opts1.policy            = hj::os::process_policy::kill_on_destroy;
+    auto p1                 = hj::os::spawn(opts1, ec1);
+
+    hj::os::process::options opts2;
+    opts2.command           = exe;
+    opts2.args              = {"--sleep"};
+    opts2.working_directory = "";
+    opts2.policy            = hj::os::process_policy::kill_on_destroy;
+    auto p2                 = hj::os::spawn(opts2, ec2);
 
     ASSERT_TRUE(p1.is_valid() && p2.is_valid());
     hj::os::pid_t pid1 = p1.id();
@@ -308,9 +328,6 @@ TEST(process, move_assignment_cleans_previous)
     EXPECT_TRUE(is_process_alive(pid2));
 }
 
-// ==========================================
-// 1. detach() 生命周期与防僵尸测试
-// ==========================================
 TEST(process, detach_lifecycle_no_zombie)
 {
     std::string     exe = get_child_helper_path();
@@ -318,27 +335,24 @@ TEST(process, detach_lifecycle_no_zombie)
 
     hj::os::pid_t pid = 0;
     {
-        // 使用 --sleep 确保进程在作用域内存活足够长的时间
-        auto proc = hj::os::spawn(exe,
-                                  {"--sleep"},
-                                  ec,
-                                  "",
-                                  hj::os::process_policy::manual);
+        hj::os::process::options opts;
+        opts.command           = exe;
+        opts.args              = {"--sleep"};
+        opts.working_directory = "";
+        opts.policy            = hj::os::process_policy::manual;
+        auto proc              = hj::os::spawn(opts, ec);
         ASSERT_TRUE(proc.is_valid()) << ec.message();
 
         pid = proc.id();
         ASSERT_TRUE(is_process_alive(pid));
 
-        // 执行 detach
         proc.detach();
 
-        // 验证 detach 后对象本身失效，但底层进程依然存活
         EXPECT_FALSE(proc.is_valid());
         EXPECT_EQ(proc.id(), 0);
-        EXPECT_TRUE(is_process_alive(pid)); // 此时进程应该依然存活
-    } // 离开作用域，由于已 detach，进程不会被析构杀死
+        EXPECT_TRUE(is_process_alive(pid));
+    }
 
-    // 验证进程继续独立存活，我们手动 terminate 它以防泄漏
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     EXPECT_TRUE(is_process_alive(pid));
 
@@ -347,28 +361,23 @@ TEST(process, detach_lifecycle_no_zombie)
     EXPECT_FALSE(is_process_alive(pid));
 }
 
-// ==========================================
-// 2. 进程策略矩阵（Policy Matrix）全覆盖测试
-// ==========================================
 TEST(process, policy_matrix_detach_on_destroy)
 {
     std::string   exe = get_child_helper_path();
     hj::os::pid_t pid = 0;
     {
-        // 使用 --sleep 确保进程存活
-        auto proc = hj::os::spawn(exe,
-                                  {"--sleep"},
-                                  "",
-                                  hj::os::process_policy::detach_on_destroy);
-        pid       = proc.id();
+        hj::os::process::options opts;
+        opts.command           = exe;
+        opts.args              = {"--sleep"};
+        opts.working_directory = "";
+        opts.policy            = hj::os::process_policy::detach_on_destroy;
+        auto proc              = hj::os::spawn(opts);
+        pid                    = proc.id();
         ASSERT_TRUE(is_process_alive(pid));
-        // 析构时触发 detach_on_destroy：对象析构，但不应杀死或等待子进程
     }
 
-    // 验证析构后进程依然在独立运行（证明成功 detach）
     EXPECT_TRUE(is_process_alive(pid));
 
-    // 清理：手动终止该孤儿/脱离进程
     hj::os::terminate(pid);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     EXPECT_FALSE(is_process_alive(pid));
@@ -379,18 +388,17 @@ TEST(process, policy_matrix_wait_on_destroy)
     std::string exe        = get_child_helper_path();
     auto        start_time = std::chrono::steady_clock::now();
     {
-        // 启动一个 sleep 进程，但策略是 wait_on_destroy，析构时会阻塞等待其结束
-        auto proc = hj::os::spawn(exe,
-                                  {"--sleep"},
-                                  "",
-                                  hj::os::process_policy::wait_on_destroy);
+        hj::os::process::options opts;
+        opts.command           = exe;
+        opts.args              = {"--sleep"};
+        opts.working_directory = "";
+        opts.policy            = hj::os::process_policy::wait_on_destroy;
+        auto proc              = hj::os::spawn(opts);
         ASSERT_TRUE(proc.is_valid());
-        // 迅速 terminate 掉它以防 wait 很久
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         proc.terminate();
     }
     auto duration = std::chrono::steady_clock::now() - start_time;
-    // 证明析构时进行了 wait
     SUCCEED();
 }
 
@@ -399,13 +407,14 @@ TEST(process, policy_matrix_terminate_on_destroy)
     std::string   exe = get_child_helper_path();
     hj::os::pid_t pid = 0;
     {
-        auto proc = hj::os::spawn(exe,
-                                  {"--sleep"},
-                                  "",
-                                  hj::os::process_policy::terminate_on_destroy);
-        pid       = proc.id();
+        hj::os::process::options opts;
+        opts.command           = exe;
+        opts.args              = {"--sleep"};
+        opts.working_directory = "";
+        opts.policy            = hj::os::process_policy::terminate_on_destroy;
+        auto proc              = hj::os::spawn(opts);
+        pid                    = proc.id();
         ASSERT_TRUE(is_process_alive(pid));
-        // 析构时会自动调用 terminate 并 wait
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     EXPECT_FALSE(is_process_alive(pid));
@@ -416,49 +425,44 @@ TEST(process, policy_matrix_kill_on_destroy)
     std::string   exe = get_child_helper_path();
     hj::os::pid_t pid = 0;
     {
-        auto proc = hj::os::spawn(exe,
-                                  {"--sleep"},
-                                  "",
-                                  hj::os::process_policy::kill_on_destroy);
-        pid       = proc.id();
+        hj::os::process::options opts;
+        opts.command           = exe;
+        opts.args              = {"--sleep"};
+        opts.working_directory = "";
+        opts.policy            = hj::os::process_policy::kill_on_destroy;
+        auto proc              = hj::os::spawn(opts);
+        pid                    = proc.id();
         ASSERT_TRUE(is_process_alive(pid));
-        // 析构时会强制 kill
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     EXPECT_FALSE(is_process_alive(pid));
 }
 
-// ==========================================
-// 3. set_policy() 动态修改测试
-// ==========================================
 TEST(process, dynamic_set_policy_after_spawn)
 {
     std::string   exe = get_child_helper_path();
     hj::os::pid_t pid = 0;
     {
-        auto proc =
-            hj::os::spawn(exe, {"--sleep"}, "", hj::os::process_policy::manual);
-        pid = proc.id();
+        hj::os::process::options opts;
+        opts.command           = exe;
+        opts.args              = {"--sleep"};
+        opts.working_directory = "";
+        opts.policy            = hj::os::process_policy::manual;
+        auto proc              = hj::os::spawn(opts);
+        pid                    = proc.id();
         ASSERT_EQ(proc.get_policy(), hj::os::process_policy::manual);
 
-        // 动态修改策略为 kill_on_destroy
         proc.set_policy(hj::os::process_policy::kill_on_destroy);
         EXPECT_EQ(proc.get_policy(), hj::os::process_policy::kill_on_destroy);
-
-        // 离开作用域时，应当应用新的 kill 策略杀死进程
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     EXPECT_FALSE(is_process_alive(pid));
 }
 
-// ==========================================
-// 4. Windows 特有行为验证（跨平台自适应宏）
-// ==========================================
 TEST(process, win_utf8_invalid_handling)
 {
     std::error_code ec;
-    // 构造包含非法 UTF-8 字节序列的字符串
-    std::string invalid_utf8 = "cmd\xFF\xFE.exe";
+    std::string     invalid_utf8 = "cmd\xFF\xFE.exe";
 
     hj::os::process::options opts;
     opts.command = invalid_utf8;
@@ -467,11 +471,9 @@ TEST(process, win_utf8_invalid_handling)
     bool            success = proc.start(opts, ec);
 
 #if defined(_WIN32)
-    // 在 Windows 下由于 MultiByteToWideChar 带了 MB_ERR_INVALID_CHARS，应转义失败并返回错误码
     EXPECT_FALSE(success);
     EXPECT_TRUE(ec);
 #else
-    // 在 Linux 下直接传给 execvp，如果文件不存在也应安全失败
     EXPECT_FALSE(success);
 #endif
 }
@@ -486,7 +488,6 @@ TEST(process, win_daemonize_not_supported)
     EXPECT_FALSE(res);
     EXPECT_EQ(ec, std::make_error_code(std::errc::not_supported));
 #else
-    // 在 Linux/Unix 下正常走流程（通常在测试主进程直接 daemonize 会退出，因此一般在子进程测试）
     SUCCEED();
 #endif
 }

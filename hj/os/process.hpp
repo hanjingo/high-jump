@@ -523,7 +523,7 @@ class process
         {
             SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES),
                                       nullptr,
-                                      TRUE}; // 允许创建时该句柄可继承
+                                      TRUE};
             hNullInput = CreateFileW(L"NUL",
                                      GENERIC_READ,
                                      FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -920,162 +920,6 @@ inline process spawn(process::options opts)
     return p;
 }
 
-inline process
-spawn(const std::string              &executable,
-      const std::vector<std::string> &args,
-      std::error_code                &ec,
-      const std::string              &work_dir = {},
-      process_policy policy = process_policy::detach_on_destroy) noexcept
-{
-    process::options opts;
-    opts.command           = executable;
-    opts.args              = args;
-    opts.working_directory = work_dir;
-    opts.detached          = false;
-    opts.policy            = policy;
-
-    return spawn(std::move(opts), ec);
-}
-
-inline process spawn(const std::string              &executable,
-                     const std::vector<std::string> &args     = {},
-                     const std::string              &work_dir = {},
-                     process_policy policy = process_policy::detach_on_destroy)
-{
-    std::error_code ec;
-    process         p = spawn(executable, args, ec, work_dir, policy);
-    if(ec)
-    {
-        throw std::system_error(ec, "Failed to spawn process: " + executable);
-    }
-    return p;
-}
-
-inline bool spawn_detached(const std::string              &executable,
-                           const std::vector<std::string> &args,
-                           std::error_code                &ec) noexcept
-{
-    ec.clear();
-#if defined(_WIN32)
-    process::options opts;
-    opts.command  = executable;
-    opts.args     = args;
-    opts.detached = true;
-    opts.policy   = process_policy::detach_on_destroy;
-    auto p        = spawn(std::move(opts), ec);
-    return p.is_valid() && !ec;
-#else
-    if(executable.empty())
-    {
-        ec = std::make_error_code(std::errc::invalid_argument);
-        return false;
-    }
-
-    int err_pipe[2];
-#if defined(__linux__) && defined(O_CLOEXEC)
-    if(::pipe2(err_pipe, O_CLOEXEC) < 0)
-    {
-        ec = std::error_code(errno, std::generic_category());
-        return false;
-    }
-#else
-    if(::pipe(err_pipe) < 0)
-    {
-        ec = std::error_code(errno, std::generic_category());
-        return false;
-    }
-    ::fcntl(err_pipe[0], F_SETFD, FD_CLOEXEC);
-    ::fcntl(err_pipe[1], F_SETFD, FD_CLOEXEC);
-#endif
-
-    pid_t pid = ::fork();
-    if(pid < 0)
-    {
-        ec = std::error_code(errno, std::generic_category());
-        ::close(err_pipe[0]);
-        ::close(err_pipe[1]);
-        return false;
-    }
-
-    if(pid > 0)
-    {
-        ::close(err_pipe[1]);
-        int     child_errno = 0;
-        ssize_t n = ::read(err_pipe[0], &child_errno, sizeof(child_errno));
-        ::close(err_pipe[0]);
-
-        int status = 0;
-        ::waitpid(pid, &status, 0);
-
-        if(n > 0)
-        {
-            ec = std::error_code(child_errno, std::generic_category());
-            return false;
-        }
-
-        return true;
-    }
-
-    ::close(err_pipe[0]);
-    if(::setsid() < 0)
-    {
-        int                   err = errno;
-        [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
-        ::_exit(EXIT_FAILURE);
-    }
-
-    pid_t grandchild = ::fork();
-    if(grandchild < 0)
-    {
-        int                   err = errno;
-        [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
-        ::_exit(EXIT_FAILURE);
-    }
-
-    if(grandchild > 0)
-        ::_exit(EXIT_SUCCESS);
-
-    int dev_null = ::open("/dev/null", O_RDWR);
-    if(dev_null != -1)
-    {
-        ::dup2(dev_null, STDIN_FILENO);
-        ::dup2(dev_null, STDOUT_FILENO);
-        ::dup2(dev_null, STDERR_FILENO);
-        if(dev_null > 2)
-            ::close(dev_null);
-    }
-
-    std::vector<std::string> arg_storage;
-    arg_storage.push_back(executable);
-    arg_storage.insert(arg_storage.end(), args.begin(), args.end());
-
-    std::vector<char *> c_args;
-    c_args.reserve(arg_storage.size() + 1);
-    for(auto &s : arg_storage)
-        c_args.push_back(s.data());
-
-    c_args.push_back(nullptr);
-    ::execvp(c_args[0], c_args.data());
-    int                   err = errno;
-    [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
-    ::_exit(EXIT_FAILURE);
-#endif
-}
-
-inline bool spawn_detached(const std::string              &executable,
-                           const std::vector<std::string> &args = {})
-{
-    std::error_code ec;
-    bool            res = spawn_detached(executable, args, ec);
-    if(ec)
-    {
-        throw std::system_error(ec,
-                                "Failed to spawn detached process: "
-                                    + executable);
-    }
-    return res;
-}
-
 /**
  * @brief Transforms the CURRENT process into a POSIX daemon.
  * 
@@ -1087,8 +931,6 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec) noexcept
     ec.clear();
 #if defined(_WIN32)
     (void) opts;
-    // 工业级修复：Windows 平台不支持原生的进程内 fork/setsid 守护化语义，
-    // 必须明确返回 not_supported，严禁静默返回 true 造成假成功的逻辑漏洞。
     ec = std::make_error_code(std::errc::not_supported);
     return false;
 #else

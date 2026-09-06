@@ -20,35 +20,67 @@
 #define ENDIAN_HPP
 
 #include <cstdint>
+#include <cstring>
 #include <type_traits>
-
-#if defined(_WIN32)
-#include <WinSock2.h>
-#else
-#include <arpa/inet.h>
-#endif
 
 #if defined(_MSC_VER)
 #include <stdlib.h>
-#define ENDIAN_SWAP16 _byteswap_ushort
-#define ENDIAN_SWAP32 _byteswap_ulong
-#define ENDIAN_SWAP64 _byteswap_uint64
-#elif defined(__GNUC__) || defined(__clang__)
-#define ENDIAN_SWAP16 __builtin_bswap16
-#define ENDIAN_SWAP32 __builtin_bswap32
-#define ENDIAN_SWAP64 __builtin_bswap64
+#endif
+
+namespace hj
+{
+
+namespace detail
+{
+
+inline constexpr bool is_big_endian_impl() noexcept
+{
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__)                   \
+    && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    return true;
+#elif defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__)              \
+    && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+    return false;
+#elif defined(_MSC_VER)
+    return false;
 #else
-inline uint16_t ENDIAN_SWAP16(uint16_t x)
-{
-    return (x >> 8) | (x << 8);
+    uint16_t val = 0x0100;
+    uint8_t  bytes[sizeof(uint16_t)];
+    std::memcpy(bytes, &val, sizeof(uint16_t));
+    return bytes[0] == 0x01;
+#endif
 }
-inline uint32_t ENDIAN_SWAP32(uint32_t x)
+
+inline uint16_t bswap16(uint16_t x) noexcept
 {
-    return ((x >> 24) & 0xFF) | ((x >> 8) & 0xFF00) | ((x << 8) & 0xFF0000)
-           | ((x << 24) & 0xFF000000);
+#if defined(_MSC_VER)
+    return _byteswap_ushort(x);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_bswap16(x);
+#else
+    return static_cast<uint16_t>((x >> 8) | (x << 8));
+#endif
 }
-inline uint64_t ENDIAN_SWAP64(uint64_t x)
+
+inline uint32_t bswap32(uint32_t x) noexcept
 {
+#if defined(_MSC_VER)
+    return _byteswap_ulong(x);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_bswap32(x);
+#else
+    return ((x >> 24) & 0x000000FFu) | ((x >> 8) & 0x0000FF00u)
+           | ((x << 8) & 0x00FF0000u) | ((x << 24) & 0xFF000000u);
+#endif
+}
+
+inline uint64_t bswap64(uint64_t x) noexcept
+{
+#if defined(_MSC_VER)
+    return _byteswap_uint64(x);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_bswap64(x);
+#else
     return ((x & 0xFF00000000000000ull) >> 56)
            | ((x & 0x00FF000000000000ull) >> 40)
            | ((x & 0x0000FF0000000000ull) >> 24)
@@ -57,51 +89,61 @@ inline uint64_t ENDIAN_SWAP64(uint64_t x)
            | ((x & 0x0000000000FF0000ull) << 24)
            | ((x & 0x000000000000FF00ull) << 40)
            | ((x & 0x00000000000000FFull) << 56);
-}
 #endif
-
-namespace hj
-{
-
-inline bool is_big_endian() noexcept
-{
-    union
-    {
-        uint32_t i;
-        uint8_t  c[4];
-    } u = {0x01020304};
-    return u.c[0] == 0x01;
 }
 
 template <typename T>
-constexpr T to_big_endian(T v)
+inline T byte_swap(T val) noexcept
 {
-    static_assert(std::is_integral<T>::value, "T must be integral");
+    static_assert(std::is_integral_v<T>, "T must be an integral type");
+
+    using UnsignedT = std::make_unsigned_t<T>;
+    UnsignedT u_val = 0;
+    std::memcpy(&u_val, &val, sizeof(T));
 
     if constexpr(sizeof(T) == 2)
-        return htons(v);
-    else if constexpr(sizeof(T) == 4)
-        return htonl(v);
-    else if constexpr(sizeof(T) == 8)
-        return ((uint64_t) htonl(uint32_t(v >> 32))
-                | ((uint64_t) htonl(uint32_t(v & 0xFFFFFFFF)) << 32));
-    else
-        return v;
+    {
+        u_val = static_cast<UnsignedT>(bswap16(static_cast<uint16_t>(u_val)));
+    } else if constexpr(sizeof(T) == 4)
+    {
+        u_val = static_cast<UnsignedT>(bswap32(static_cast<uint32_t>(u_val)));
+    } else if constexpr(sizeof(T) == 8)
+    {
+        u_val = static_cast<UnsignedT>(bswap64(static_cast<uint64_t>(u_val)));
+    }
+
+    T res;
+    std::memcpy(&res, &u_val, sizeof(T));
+    return res;
+}
+
+} // namespace detail
+
+inline constexpr bool is_big_endian() noexcept
+{
+    return detail::is_big_endian_impl();
 }
 
 template <typename T>
-constexpr T to_little_endian(T v)
+inline T to_big_endian(T v) noexcept
 {
-    static_assert(std::is_integral<T>::value, "T must be integral");
+    static_assert(std::is_integral_v<T>, "T must be integral");
 
-    if(is_big_endian())
+    if constexpr(!detail::is_big_endian_impl())
     {
-        if constexpr(sizeof(T) == 2)
-            return ENDIAN_SWAP16(v);
-        else if constexpr(sizeof(T) == 4)
-            return ENDIAN_SWAP32(v);
-        else if constexpr(sizeof(T) == 8)
-            return ENDIAN_SWAP64(v);
+        return detail::byte_swap(v);
+    }
+    return v;
+}
+
+template <typename T>
+inline T to_little_endian(T v) noexcept
+{
+    static_assert(std::is_integral_v<T>, "T must be integral");
+
+    if constexpr(detail::is_big_endian_impl())
+    {
+        return detail::byte_swap(v);
     }
     return v;
 }

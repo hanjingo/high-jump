@@ -52,4 +52,4 @@ Contributing
 - Please open issues or pull requests. Follow the existing code style and add tests for new behavior.
 
 License
-- GPL-3.0 — see `LICENSE` for details.
+- Apache-2.0 — see `LICENSE` for details.

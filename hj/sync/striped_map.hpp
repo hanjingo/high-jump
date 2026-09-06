@@ -1,24 +1,25 @@
 /*
- *  This file is part of high-jump(hj).
- *  Copyright (C) 2025 hanjingo <hehehunanchina@live.com>
+ * This file is part of high-jump(hj).
  *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
+ * Copyright 2025 hanjingo <hehehunanchina@live.com>
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 #ifndef STRIPED_MAP_HPP
 #define STRIPED_MAP_HPP
 
-#if(__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
+#if (__cplusplus >= 201703L) || (defined(_MSC_VER) && _MSC_VER >= 1910)
 #include <vector>
 #include <unordered_map>
 #include <functional>
@@ -50,10 +51,10 @@ class striped_map
     using allocator_type      = Alloc;
     using value_type          = std::pair<const Key, Value>;
     using bucket_type         = std::unordered_map<Key,
-                                           Value,
-                                           std::hash<Key>,
-                                           std::equal_to<Key>,
-                                           allocator_type>;
+                                                   Value,
+                                                   std::hash<Key>,
+                                                   std::equal_to<Key>,
+                                                   allocator_type>;
 
   public:
     class const_iterator
@@ -149,11 +150,11 @@ class striped_map
     explicit striped_map(std::size_t    capa,
                          allocator_type alloc = allocator_type())
         : striped_map(
-            [capa](const Key &k) -> int {
-                return static_cast<int>(std::hash<Key>{}(k) % capa);
-            },
-            capa,
-            alloc)
+              [capa](const Key &k) -> int {
+                  return static_cast<int>(std::hash<Key>{}(k) % capa);
+              },
+              capa,
+              alloc)
     {
     }
     striped_map(strip_key_handler_t fn,

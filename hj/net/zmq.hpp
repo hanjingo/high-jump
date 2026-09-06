@@ -784,13 +784,8 @@ class broker
         _front.bind(front_addr);
     }
 
-    /**
-     * @brief Runs the steerable proxy loop with an internal control channel.
-     * 
-     * @note THIS IS A BLOCKING CALL. The current thread enters an event loop.
-     *       Call stop() from another thread to trigger a graceful shutdown.
-     */
-    void proxy(socket *capture = nullptr)
+    void proxy(std::function<void()> on_ready = nullptr,
+               socket               *capture  = nullptr)
     {
         bool expected = false;
         if(!_running.compare_exchange_strong(expected,
@@ -803,6 +798,9 @@ class broker
             std::atomic<bool> &flag;
             ~guard() { flag.store(false, std::memory_order_release); }
         } running_guard{_running};
+
+        if(on_ready)
+            on_ready();
 
         while(true)
         {

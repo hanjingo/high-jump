@@ -341,16 +341,11 @@ TEST(zmq, broker_steerable_graceful_shutdown)
         hj::zmq::broker bk(ctx, std::move(xpub), std::move(xsub));
 
         EXPECT_NO_THROW(bk.bind(xpub_addr, xsub_addr));
-        p.set_value(&bk);
-        bk.proxy();
+
+        bk.proxy([&p, &bk]() { p.set_value(&bk); });
     });
 
     hj::zmq::broker *bk = broker_ready.get();
-
-    while(!bk->is_running())
-    {
-        std::this_thread::yield();
-    }
 
     EXPECT_NO_THROW(bk->stop());
 

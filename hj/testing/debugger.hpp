@@ -29,6 +29,18 @@
 
 #include <fmt/format.h>
 
+#if __has_include(<boost/asio/buffer.hpp>) &&           \
+    __has_include(<boost/asio/streambuf.hpp>) &&        \
+    __has_include(<boost/asio/buffers_iterator.hpp>)
+#include <boost/asio/buffer.hpp>
+#include <boost/asio/streambuf.hpp>
+#include <boost/asio/buffers_iterator.hpp>
+
+#ifndef HJ_DEBUGGER_HAS_BOOST_ASIO
+#define HJ_DEBUGGER_HAS_BOOST_ASIO 1
+#endif
+#endif
+
 namespace hj
 {
 
@@ -215,19 +227,6 @@ class debugger
         }
     }
 
-    template <typename T, typename = void>
-    struct is_asio_streambuf : std::false_type
-    {
-    };
-
-    template <typename T>
-    struct is_asio_streambuf<
-        T,
-        std::void_t<decltype(std::declval<const T &>().data())>>
-        : std::true_type
-    {
-    };
-
     template <typename T>
     struct is_custom_buffer : std::false_type
     {
@@ -242,6 +241,13 @@ class debugger
     struct is_custom_buffer<std::vector<uint8_t>> : std::true_type
     {
     };
+
+#if defined(HJ_DEBUGGER_HAS_BOOST_ASIO)
+    template <>
+    struct is_custom_buffer<boost::asio::streambuf> : std::true_type
+    {
+    };
+#endif
 
     static std::string _fmt_bytes(bytes_view view, bool truncated = false)
     {
@@ -302,9 +308,9 @@ class debugger
         return _fmt_bytes(bytes_view(buf.data(), buf.size()));
     }
 
-    template <typename Streambuf>
-    static std::string _fmt_impl_streambuf(const char      *style,
-                                           const Streambuf &buf)
+#if defined(HJ_DEBUGGER_HAS_BOOST_ASIO)
+    static std::string _fmt_impl(const char                   *style,
+                                 const boost::asio::streambuf &buf)
     {
         (void) style;
         auto   buffers   = buf.data();
@@ -323,6 +329,7 @@ class debugger
         return _fmt_bytes(bytes_view(temp.data(), temp.size()),
                           total_len > buf_sz);
     }
+#endif
 
     static std::string _dispatch(const char *style)
     {
@@ -336,16 +343,19 @@ class debugger
 
         if constexpr(std::is_array_v<RawArg1>
                      && sizeof(std::remove_extent_t<RawArg1>) == 1)
+        {
             return _fmt_bytes(bytes_view(arg1, std::extent_v<RawArg1>));
-        else if constexpr(is_custom_buffer<RawArg1>::value)
+        } else if constexpr(is_custom_buffer<RawArg1>::value)
+        {
             return _fmt_impl(style, std::forward<Arg1>(arg1));
-        else if constexpr(is_asio_streambuf<RawArg1>::value)
-            return _fmt_impl_streambuf(style, std::forward<Arg1>(arg1));
-        else if constexpr(std::is_same_v<RawArg1, const char *>
-                          || std::is_same_v<RawArg1, char *>)
+        } else if constexpr(std::is_same_v<RawArg1, const char *>
+                            || std::is_same_v<RawArg1, char *>)
+        {
             return _fmt_impl(style, arg1);
-        else
+        } else
+        {
             return fmt::format(fmt::runtime(style), std::forward<Arg1>(arg1));
+        }
     }
 
     template <typename Arg1, typename Arg2, typename... Rest>
@@ -398,9 +408,10 @@ inline ostream_guard &ostream_guard::operator=(ostream_guard &&other) noexcept
 } // namespace hj
 
 #ifdef DEBUG
-#define PRINT(style, ...) hj::debugger::instance().print(style, ##__VA_ARGS__)
+#define HJ_PRINT(style, ...)                                                   \
+    hj::debugger::instance().print(style, ##__VA_ARGS__)
 #else
-#define PRINT(style, ...) ((void) 0)
+#define HJ_PRINT(style, ...) ((void) 0)
 #endif
 
 #endif // DEBUGGER_HPP

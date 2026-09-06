@@ -52,7 +52,7 @@ TEST_F(DebuggerTest, streambuf_exceed_buf_sz)
     EXPECT_NE(out.find("..."), std::string::npos);
 }
 
-TEST_F(DebuggerTest, ostream_guard_exception_safety)
+TEST_F(DebuggerTest, set_ostream_guard_exception_safety)
 {
     std::ostringstream oss;
 

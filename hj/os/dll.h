@@ -18,22 +18,6 @@
 #ifndef DLL_H
 #define DLL_H
 
-#include <stdlib.h>
-#include <string.h>
-
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <wchar.h>
-#else
-#include <dlfcn.h>
-#endif
-
 #if defined(_WIN32)
 #define DLL_EXT ".dll"
 #define DLL_PREFIX ""
@@ -68,8 +52,12 @@
 #define C_STYLE_IMPORT DLL_IMPORT
 #endif
 
-#ifdef __cplusplus
-extern "C" {
+#ifndef HJ_DLL_API
+#if defined(HJ_DLL_STATIC)
+#define HJ_DLL_API static inline
+#else
+#define HJ_DLL_API extern
+#endif
 #endif
 
 typedef int dll_mode_t;
@@ -132,6 +120,41 @@ typedef int dll_mode_t;
      | DLL_MODE_SEARCH_APP_DIR | DLL_MODE_SEARCH_USER_DIRS                     \
      | DLL_MODE_SEARCH_DLL_LOAD_DIR)
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ------------------------ DLL API Declarations ------------------------
+HJ_DLL_API void        dll_clear_error(void);
+HJ_DLL_API const char *dll_pop_error(void);
+HJ_DLL_API void       *dll_open(const char *filename, dll_mode_t mode);
+HJ_DLL_API void       *dll_get(void *handler, const char *symbol);
+HJ_DLL_API int         dll_close(void *handle);
+
+// ------------------------ Implementation ------------------------------
+// To include implementation, define HJ_DLL_IMPL before including
+// this header in ONE C/C++ source file.
+#if (defined(HJ_DLL_IMPL) || defined(HJ_DLL_STATIC))                           \
+    && !defined(HJ_DLL_IMPL_DONE)
+#define HJ_DLL_IMPL_DONE
+
+#include <stdlib.h>
+#include <string.h>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <wchar.h>
+#else
+#include <dlfcn.h>
+#endif
+
 // thread safe error buffer for dll operations
 static inline char *_dll_get_err_buf(void)
 {
@@ -184,7 +207,7 @@ static inline void _dll_set_err_buf(const char *msg)
 // ---------------------------------------------------------------------------
 // Common API for Dynamic Link Library (DLL) Operations
 // ---------------------------------------------------------------------------
-static inline void dll_clear_error(void)
+HJ_DLL_API void dll_clear_error(void)
 {
     char *buf = _dll_get_err_buf();
     buf[0]    = '\0';
@@ -208,7 +231,7 @@ static inline void dll_clear_error(void)
  *          dll_close, dll_clear_error, or dll_pop_error) is executed ON THE SAME THREAD.
  *       3. CONSUMPTION: Calling this function clears the current error state (pop behavior).
  */
-static inline const char *dll_pop_error(void)
+HJ_DLL_API const char *dll_pop_error(void)
 {
     char *buf      = _dll_get_err_buf();
     char *temp_buf = _dll_get_temp_err_buf();
@@ -255,7 +278,7 @@ static inline const char *dll_pop_error(void)
 #endif
 }
 
-static inline void *dll_open(const char *filename, dll_mode_t mode)
+HJ_DLL_API void *dll_open(const char *filename, dll_mode_t mode)
 {
     dll_clear_error();
 
@@ -445,7 +468,7 @@ static inline void *dll_open(const char *filename, dll_mode_t mode)
 #endif
 }
 
-static inline void *dll_get(void *handler, const char *symbol)
+HJ_DLL_API void *dll_get(void *handler, const char *symbol)
 {
     dll_clear_error();
 
@@ -489,7 +512,7 @@ static inline void *dll_get(void *handler, const char *symbol)
  *       3. Function pointers fetched via dll_get() from this handle also become EXPIRED
  *          and calling them after close will result in Segmentation Faults / Access Violations.
  */
-static inline int dll_close(void *handle)
+HJ_DLL_API int dll_close(void *handle)
 {
     dll_clear_error();
     if(!handle)
@@ -510,10 +533,11 @@ static inline int dll_close(void *handle)
 #endif
 }
 
-#ifdef __cplusplus
-}
-#endif
+#endif //  HJ_DLL_IMPL && !HJ_DLL_IMPL_DONE
 
+#ifdef __cplusplus
+} // EXTERN "C" end
+#endif
 
 // ---------------------------------------------------------------------------
 // C++ Wrappers for Dynamic Link Library (DLL) Operations
@@ -597,6 +621,6 @@ class dll_loader
 
 } // namespace hj
 
-#endif
+#endif // __cplusplus
 
 #endif // DLL_H

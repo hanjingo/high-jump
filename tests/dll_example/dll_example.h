@@ -1,6 +1,7 @@
 #ifndef DLL_EXAMPLE_H
 #define DLL_EXAMPLE_H
 
+#define HJ_DLL_IMPL
 #include <hj/os/dll.h>
 
 C_STYLE_EXPORT int hello();

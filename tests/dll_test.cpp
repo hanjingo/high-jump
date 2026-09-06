@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+
+#define HJ_DLL_IMPL
 #include <hj/os/dll.h>
 
 #include <filesystem>

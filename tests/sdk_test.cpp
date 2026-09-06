@@ -1,7 +1,9 @@
 // sdk_layout_test.cpp
 #include <gtest/gtest.h>
 #include <hj/os/sdk.h>
+
 #include <hj/os/dll.h>
+
 #include <cstddef>
 #include <stddef.h>
 #include <assert.h>

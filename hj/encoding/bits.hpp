@@ -19,8 +19,10 @@
 #ifndef BITS_HPP
 #define BITS_HPP
 
+#include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -44,15 +46,16 @@ namespace detail
 template <typename T>
 inline constexpr bool is_valid_bit_type_v =
     std::is_unsigned_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>;
-} // namespace detail
-
 
 template <typename T>
+using enable_if_valid_bit_type_t =
+    std::enable_if_t<is_valid_bit_type_v<T>, int>;
+} // namespace detail
+
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr bool try_get(const T src, const std::size_t pos, bool &val) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    constexpr std::size_t total_bits = sizeof(T) * 8;
+    constexpr std::size_t total_bits = sizeof(T) * CHAR_BIT;
 
     if(pos >= total_bits)
         return false;
@@ -61,7 +64,7 @@ constexpr bool try_get(const T src, const std::size_t pos, bool &val) noexcept
     return true;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 [[nodiscard]] constexpr bool get(const T src, const std::size_t pos)
 {
     bool val = false;
@@ -71,13 +74,11 @@ template <typename T>
     return val;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr bool
 try_put(T &src, const std::size_t pos, const bool bit = true) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    constexpr std::size_t total_bits = sizeof(T) * 8;
+    constexpr std::size_t total_bits = sizeof(T) * CHAR_BIT;
 
     if(pos >= total_bits)
         return false;
@@ -91,7 +92,7 @@ try_put(T &src, const std::size_t pos, const bool bit = true) noexcept
     return true;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr T &put(T &src, const std::size_t pos, const bool bit = true)
 {
     if(!try_put(src, pos, bit))
@@ -100,12 +101,10 @@ constexpr T &put(T &src, const std::size_t pos, const bool bit = true)
     return src;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr bool try_flip(T &src, const std::size_t pos) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    constexpr std::size_t total_bits = sizeof(T) * 8;
+    constexpr std::size_t total_bits = sizeof(T) * CHAR_BIT;
     if(pos >= total_bits)
         return false;
 
@@ -114,7 +113,7 @@ constexpr bool try_flip(T &src, const std::size_t pos) noexcept
     return true;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr T &flip(T &src, const std::size_t pos)
 {
     if(!try_flip(src, pos))
@@ -123,25 +122,21 @@ constexpr T &flip(T &src, const std::size_t pos)
     return src;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr T &flip(T &src) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    src = static_cast<T>(~src);
+    src = ~src;
     return src;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr bool try_extract(const T           src,
                            const std::size_t offset,
                            const std::size_t width,
                            T                &val) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    constexpr std::size_t total_bits = sizeof(T) * 8;
-    if(width == 0 || offset >= total_bits || offset + width > total_bits)
+    constexpr std::size_t total_bits = sizeof(T) * CHAR_BIT;
+    if(width == 0 || offset >= total_bits || width > total_bits - offset)
         return false;
 
     const T mask = (width == total_bits) ? ~T(0) : ((T(1) << width) - T(1));
@@ -149,7 +144,7 @@ constexpr bool try_extract(const T           src,
     return true;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 [[nodiscard]] constexpr T
 extract(const T src, const std::size_t offset, const std::size_t width)
 {
@@ -160,16 +155,14 @@ extract(const T src, const std::size_t offset, const std::size_t width)
     return val;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr bool try_insert(T                &src,
                           const std::size_t offset,
                           const std::size_t width,
                           const T           value) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    constexpr std::size_t total_bits = sizeof(T) * 8;
-    if(width == 0 || offset >= total_bits || offset + width > total_bits)
+    constexpr std::size_t total_bits = sizeof(T) * CHAR_BIT;
+    if(width == 0 || offset >= total_bits || width > total_bits - offset)
         return false;
 
     const T mask = (width == total_bits) ? ~T(0) : ((T(1) << width) - T(1));
@@ -177,7 +170,7 @@ constexpr bool try_insert(T                &src,
     return true;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr T &
 insert(T &src, const std::size_t offset, const std::size_t width, const T value)
 {
@@ -187,31 +180,25 @@ insert(T &src, const std::size_t offset, const std::size_t width, const T value)
     return src;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr T &clear(T &src) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
     src = T(0);
     return src;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr T &set_all(T &src) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    src = static_cast<T>(~T(0));
+    src = ~T(0);
     return src;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr bool
 to_string(const T &src, char *buf, const std::size_t buf_size) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    constexpr std::size_t sz = sizeof(T) * 8;
+    constexpr std::size_t sz = sizeof(T) * CHAR_BIT;
     if(buf == nullptr || buf_size <= sz)
         return false;
 
@@ -225,27 +212,22 @@ to_string(const T &src, char *buf, const std::size_t buf_size) noexcept
     return true;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 std::string to_string(const T &src)
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-    constexpr std::size_t sz = sizeof(T) * 8;
+    constexpr std::size_t sz = sizeof(T) * CHAR_BIT;
     std::string           res(sz, '0');
     to_string(src, res.data(), sz + 1);
     return res;
 }
 
-template <typename T>
+template <typename T, detail::enable_if_valid_bit_type_t<T> = 0>
 constexpr int countl_zero(const T &src) noexcept
 {
-    static_assert(detail::is_valid_bit_type_v<T>,
-                  "T must be an unsigned integral type (excluding bool)");
-
 #if defined(HJ_BITS_HAS_STD_BIT)
     return std::countl_zero(src);
 #else
-    constexpr int total_bits = static_cast<int>(sizeof(T) * 8);
+    constexpr int total_bits = static_cast<int>(sizeof(T) * CHAR_BIT);
 
     if(src == 0)
         return total_bits;

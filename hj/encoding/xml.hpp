@@ -20,200 +20,285 @@
 #define XML_HPP
 
 #include <string>
-#include <sstream>
+#include <string_view>
 #include <fstream>
+#include <iosfwd>
 #include <pugixml.hpp>
 
-namespace hj
+namespace hj::xml
 {
 
-class xml
+enum class format_flags : unsigned int
+{
+    indent                 = pugi::format_indent,
+    write_bom              = pugi::format_write_bom,
+    raw                    = pugi::format_raw,
+    no_declaration         = pugi::format_no_declaration,
+    no_escapes             = pugi::format_no_escapes,
+    save_file_text         = pugi::format_save_file_text,
+    indent_attributes      = pugi::format_indent_attributes,
+    no_empty_element_tags  = pugi::format_no_empty_element_tags,
+    skip_control_chars     = pugi::format_skip_control_chars,
+    attribute_single_quote = pugi::format_attribute_single_quote,
+    by_default             = pugi::format_default
+};
+
+enum class encoding : unsigned int
+{
+    by_auto  = pugi::encoding_auto,
+    utf8     = pugi::encoding_utf8,
+    utf16_le = pugi::encoding_utf16_le,
+    utf16_be = pugi::encoding_utf16_be,
+    utf16    = pugi::encoding_utf16,
+    utf32_le = pugi::encoding_utf32_le,
+    utf32_be = pugi::encoding_utf32_be,
+    utf32    = pugi::encoding_utf32,
+    wchar_   = pugi::encoding_wchar,
+    latin1   = pugi::encoding_latin1
+};
+
+enum class parse_options : unsigned int
+{
+    minimal          = pugi::parse_minimal,
+    pi               = pugi::parse_pi,
+    comments         = pugi::parse_comments,
+    cdata            = pugi::parse_cdata,
+    ws_pcdata        = pugi::parse_ws_pcdata,
+    escapes          = pugi::parse_escapes,
+    eol              = pugi::parse_eol,
+    wconv_attribute  = pugi::parse_wconv_attribute,
+    wnorm_attribute  = pugi::parse_wnorm_attribute,
+    declaration      = pugi::parse_declaration,
+    doctype          = pugi::parse_doctype,
+    ws_pcdata_single = pugi::parse_ws_pcdata_single,
+    trim_pcdata      = pugi::parse_trim_pcdata,
+    fragment         = pugi::parse_fragment,
+    embed_pcdata     = pugi::parse_embed_pcdata,
+    merge_pcdata     = pugi::parse_merge_pcdata,
+
+    by_default = pugi::parse_default,
+    full       = pugi::parse_full
+};
+
+struct parse_result
+{
+    pugi::xml_parse_result internal_result;
+
+    constexpr explicit operator bool() const noexcept
+    {
+        return internal_result.status == pugi::status_ok;
+    }
+
+    [[nodiscard]] const char *description() const noexcept
+    {
+        return internal_result.description();
+    }
+
+    [[nodiscard]] std::size_t offset() const noexcept
+    {
+        return static_cast<std::size_t>(internal_result.offset);
+    }
+};
+
+class node
 {
   public:
-    enum class format_flags
-    {
-        indent                 = pugi::format_indent,
-        write_bom              = pugi::format_write_bom,
-        raw                    = pugi::format_raw,
-        no_declaration         = pugi::format_no_declaration,
-        no_escapes             = pugi::format_no_escapes,
-        save_file_text         = pugi::format_save_file_text,
-        indent_attributes      = pugi::format_indent_attributes,
-        no_empty_element_tags  = pugi::format_no_empty_element_tags,
-        skip_control_chars     = pugi::format_skip_control_chars,
-        attribute_single_quote = pugi::format_attribute_single_quote,
-        by_default             = pugi::format_default
-    };
-
-    enum class encoding
-    {
-        by_auto  = pugi::encoding_auto,
-        utf8     = pugi::encoding_utf8,
-        utf16_le = pugi::encoding_utf16_le,
-        utf16_be = pugi::encoding_utf16_be,
-        utf16    = pugi::encoding_utf16,
-        utf32_le = pugi::encoding_utf32_le,
-        utf32_be = pugi::encoding_utf32_be,
-        utf32    = pugi::encoding_utf32,
-        wchar_   = pugi::encoding_wchar,
-        latin1   = pugi::encoding_latin1
-    };
-
-    enum class parse_options
-    {
-        minimal          = pugi::parse_minimal,
-        pi               = pugi::parse_pi,
-        comments         = pugi::parse_comments,
-        cdata            = pugi::parse_cdata,
-        ws_pcdata        = pugi::parse_ws_pcdata,
-        escapes          = pugi::parse_escapes,
-        eol              = pugi::parse_eol,
-        wconv_attribute  = pugi::parse_wconv_attribute,
-        wnorm_attribute  = pugi::parse_wnorm_attribute,
-        declaration      = pugi::parse_declaration,
-        doctype          = pugi::parse_doctype,
-        ws_pcdata_single = pugi::parse_ws_pcdata_single,
-        trim_pcdata      = pugi::parse_trim_pcdata,
-        fragment         = pugi::parse_fragment,
-        embed_pcdata     = pugi::parse_embed_pcdata,
-        merge_pcdata     = pugi::parse_merge_pcdata,
-
-        by_default = pugi::parse_default,
-        full       = pugi::parse_full
-    };
-
-    xml()
-        : _doc(std::make_shared<pugi::xml_document>())
-        , _node(*_doc)
+    node() noexcept = default;
+    node(pugi::xml_node n) noexcept
+        : _node(n)
     {
     }
 
-    xml(const xml &rhs)
-        : _doc(rhs._doc)
-        , _node(rhs._node)
-    {
-    }
-    ~xml() = default;
+    explicit           operator bool() const noexcept { return !_node.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return _node.empty(); }
 
-    inline xml child(const char *name) const
+    [[nodiscard]] node child(const char *name) const noexcept
     {
-        return xml(_doc, _node.child(name));
+        return node(_node.child(name));
     }
 
-    inline xml append_child(const char *name)
+    node append_child(const char *name)
     {
-        return xml(_doc, _node.append_child(name));
+        return node(_node.append_child(name));
     }
 
-    inline bool remove_child(const char *name)
+    bool remove_child(const char *name) { return _node.remove_child(name); }
+
+    bool remove_child(const node &child_node)
     {
-        return _node.remove_child(name);
+        return _node.remove_child(child_node._node);
     }
 
-    inline std::string child_value(const char *name) const
+    [[nodiscard]] std::string_view child_value(const char *name) const noexcept
     {
         return _node.child_value(name);
     }
 
-    inline void set_value(const char *value) { _node.text().set(value); }
+    void set_value(const char *val) { _node.text().set(val); }
 
-    inline std::string name() const { return _node.name(); }
+    [[nodiscard]] std::string_view name() const noexcept
+    {
+        return _node.name();
+    }
 
-    inline void set_name(const char *name) { _node.set_name(name); }
+    void set_name(const char *name) { _node.set_name(name); }
 
-    inline std::string value() const { return _node.text().get(); }
+    [[nodiscard]] std::string_view value() const noexcept
+    {
+        return _node.text().get();
+    }
 
-    inline bool empty() const { return _node.empty(); }
-
-    inline std::string attr(const char *name) const
+    [[nodiscard]] std::string_view attr(const char *name) const noexcept
     {
         return _node.attribute(name).value();
     }
 
-    inline void set_attr(const char *name, const char *value)
+    void set_attr(const char *name, const char *val)
     {
-        _node.append_attribute(name).set_value(value);
+        auto attribute = _node.attribute(name);
+        if(attribute)
+        {
+            attribute.set_value(val);
+        } else
+        {
+            _node.append_attribute(name).set_value(val);
+        }
     }
 
-    bool load(const char         *text,
-              const parse_options parse = parse_options::by_default)
+    [[nodiscard]] pugi::xml_node raw_node() const noexcept { return _node; }
+
+  protected:
+    pugi::xml_node _node;
+};
+
+class document : public node
+{
+  public:
+    document() { _node = _doc; }
+
+    ~document() = default;
+
+    document(const document &)            = delete;
+    document &operator=(const document &) = delete;
+
+    document(document &&rhs) noexcept
+        : node()
+        , _doc(std::move(rhs._doc))
     {
-        pugi::xml_parse_result r =
-            _doc->load_string(text, static_cast<unsigned int>(parse));
-        _node = _doc->first_child();
-        return r;
+        _node     = _doc;
+        rhs._node = pugi::xml_node();
     }
 
-    bool load(std::ifstream      &in,
-              const parse_options parse    = parse_options::by_default,
-              const encoding      encoding = encoding::by_auto)
+    document &operator=(document &&rhs) noexcept
     {
-        pugi::xml_parse_result r =
-            _doc->load(in,
-                       static_cast<unsigned int>(parse),
-                       static_cast<pugi::xml_encoding>(encoding));
-        _node = *_doc;
-        return r;
+        if(this != &rhs)
+        {
+            _doc      = std::move(rhs._doc);
+            _node     = _doc;
+            rhs._node = pugi::xml_node();
+        }
+        return *this;
     }
 
-    bool load_file(const char         *filepath,
-                   const parse_options parse    = parse_options::by_default,
-                   const encoding      encoding = encoding::by_auto)
+    parse_result
+    load_string(const char         *text,
+                const parse_options parse = parse_options::by_default)
     {
-        pugi::xml_parse_result r =
-            _doc->load_file(filepath,
-                            static_cast<unsigned int>(parse),
-                            static_cast<pugi::xml_encoding>(encoding));
-
-        _node = _doc->first_child();
-        return r;
+        auto res = _doc.load_string(text, static_cast<unsigned int>(parse));
+        _node    = _doc;
+        return parse_result{res};
     }
 
-    bool save(std::ofstream     &out,
-              const char        *indent   = "\t",
-              const format_flags flags    = format_flags::by_default,
-              const encoding     encoding = encoding::by_auto) const
+    parse_result load(const char         *text,
+                      const parse_options parse = parse_options::by_default)
     {
-        if(!out.is_open())
-            return false;
+        return load_string(text, parse);
+    }
 
-        _doc->save(out,
-                   indent,
-                   static_cast<unsigned int>(flags),
-                   static_cast<pugi::xml_encoding>(encoding));
-        return true;
+    parse_result load(std::string_view    text,
+                      const parse_options parse = parse_options::by_default)
+    {
+        auto res = _doc.load_buffer(text.data(),
+                                    text.size(),
+                                    static_cast<unsigned int>(parse));
+        _node    = _doc;
+        return parse_result{res};
+    }
+
+    parse_result load(std::istream       &in,
+                      const parse_options parse = parse_options::by_default,
+                      const encoding      enc   = encoding::by_auto)
+    {
+        auto res = _doc.load(in,
+                             static_cast<unsigned int>(parse),
+                             static_cast<pugi::xml_encoding>(enc));
+        _node    = _doc;
+        return parse_result{res};
+    }
+
+    parse_result
+    load_file(const char         *filepath,
+              const parse_options parse = parse_options::by_default,
+              const encoding      enc   = encoding::by_auto)
+    {
+        auto res = _doc.load_file(filepath,
+                                  static_cast<unsigned int>(parse),
+                                  static_cast<pugi::xml_encoding>(enc));
+        _node    = _doc;
+        return parse_result{res};
+    }
+
+    bool save(std::ostream      &out,
+              const char        *indent = "\t",
+              const format_flags flags  = format_flags::by_default,
+              const encoding     enc    = encoding::by_auto) const
+    {
+        _doc.save(out,
+                  indent,
+                  static_cast<unsigned int>(flags),
+                  static_cast<pugi::xml_encoding>(enc));
+        return out.good();
     }
 
     bool save_file(const char        *filepath,
-                   const char        *indent   = "\t",
-                   const format_flags flags    = format_flags::by_default,
-                   const encoding     encoding = encoding::by_auto) const
+                   const char        *indent = "\t",
+                   const format_flags flags  = format_flags::by_default,
+                   const encoding     enc    = encoding::by_auto) const
     {
-        return _doc->save_file(filepath,
-                               indent,
-                               static_cast<unsigned int>(flags),
-                               static_cast<pugi::xml_encoding>(encoding));
+        return _doc.save_file(filepath,
+                              indent,
+                              static_cast<unsigned int>(flags),
+                              static_cast<pugi::xml_encoding>(enc));
     }
 
-    std::string str() const
+    [[nodiscard]] std::string
+    str(const char        *indent = "\t",
+        const format_flags flags  = format_flags::by_default) const
     {
-        std::ostringstream oss;
-        _doc->save(oss);
-        return oss.str();
+        struct string_writer : pugi::xml_writer
+        {
+            std::string result;
+            void        write(const void *data, size_t size) override
+            {
+                result.append(static_cast<const char *>(data), size);
+            }
+        } writer;
+
+        _doc.save(writer, indent, static_cast<unsigned int>(flags));
+        return std::move(writer.result);
     }
+
+    [[nodiscard]] node root() const noexcept
+    {
+        return node(_doc.document_element());
+    }
+
+    [[nodiscard]] node document_element() const noexcept { return root(); }
 
   private:
-    xml(std::shared_ptr<pugi::xml_document> doc, pugi::xml_node node)
-        : _doc(std::move(doc))
-        , _node(node)
-    {
-    }
-
-  private:
-    std::shared_ptr<pugi::xml_document> _doc;
-    pugi::xml_node                      _node;
+    pugi::xml_document _doc;
 };
 
-} // namespace hj
+} // namespace hj::xml
 
 #endif

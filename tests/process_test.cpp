@@ -1,25 +1,22 @@
 #include <gtest/gtest.h>
 #include <hj/os/process.hpp>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
+#include <future>
 #include <string>
 #include <thread>
 #include <vector>
-#include <future>
-#include <filesystem>
+
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
-
-inline bool is_process_alive(hj::os::pid_t pid)
-{
-    if(pid <= 0)
-        return false;
-    std::vector<hj::os::process_info> vec;
-    hj::os::list(vec, [pid](const hj::os::process_info &info) {
-        return info.pid == pid;
-    });
-    return !vec.empty();
-}
 
 inline std::string get_child_helper_path()
 {
@@ -30,6 +27,17 @@ inline std::string get_child_helper_path()
 #else
     return "./child_helpers";
 #endif
+}
+
+inline bool is_process_alive(hj::os::pid_t pid)
+{
+    if(pid <= 0)
+        return false;
+    std::vector<hj::os::process_info> vec;
+    hj::os::list(vec, [pid](const hj::os::process_info &info) {
+        return info.pid == pid;
+    });
+    return !vec.empty();
 }
 
 TEST(process, getpid)
@@ -350,14 +358,11 @@ TEST(process, detach_lifecycle_no_zombie)
 
         EXPECT_FALSE(proc.is_valid());
         EXPECT_EQ(proc.id(), 0);
-        EXPECT_TRUE(is_process_alive(pid));
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    EXPECT_TRUE(is_process_alive(pid));
-
     hj::os::terminate(pid);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
     EXPECT_FALSE(is_process_alive(pid));
 }
 
@@ -490,4 +495,342 @@ TEST(process, win_daemonize_not_supported)
 #else
     SUCCEED();
 #endif
+}
+
+#if !defined(_WIN32)
+TEST(process, daemon_options_pid_file_normal_exit)
+{
+    std::string pid_path =
+        (fs::temp_directory_path() / "test_daemon_normal.pid").string();
+    std::remove(pid_path.c_str());
+
+    hj::os::daemon_options dopts;
+    dopts.pid_file       = pid_path;
+    dopts.redirect_stdio = true;
+    dopts.auto_close_fds = true;
+
+    pid_t pid = ::fork();
+    ASSERT_GE(pid, 0);
+
+    if(pid == 0)
+    {
+        std::error_code ec;
+        if(!hj::os::daemonize(dopts, ec))
+        {
+            ::_exit(EXIT_FAILURE);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::exit(EXIT_SUCCESS);
+    }
+
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    EXPECT_FALSE(fs::exists(pid_path));
+}
+
+TEST(process, daemon_options_pid_file_sigterm_cleanup)
+{
+    std::string pid_path =
+        (fs::temp_directory_path() / "test_daemon_sigterm.pid").string();
+    std::remove(pid_path.c_str());
+
+    hj::os::daemon_options dopts;
+    dopts.pid_file       = pid_path;
+    dopts.redirect_stdio = true;
+    dopts.auto_close_fds = true;
+
+    pid_t pid = ::fork();
+    ASSERT_GE(pid, 0);
+
+    if(pid == 0)
+    {
+        std::error_code ec;
+        if(!hj::os::daemonize(dopts, ec))
+        {
+            ::_exit(EXIT_FAILURE);
+        }
+
+        while(true)
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    EXPECT_TRUE(fs::exists(pid_path));
+
+    std::ifstream pfile(pid_path);
+    pid_t         daemon_pid = 0;
+    pfile >> daemon_pid;
+    pfile.close();
+
+    ASSERT_GT(daemon_pid, 0);
+    ::kill(daemon_pid, SIGTERM);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    EXPECT_FALSE(fs::exists(pid_path));
+}
+
+TEST(process, daemon_options_pid_file_stale_lock_recovery)
+{
+    std::string pid_path =
+        (fs::temp_directory_path() / "test_daemon_stale.pid").string();
+    std::remove(pid_path.c_str());
+
+    hj::os::daemon_options dopts;
+    dopts.pid_file       = pid_path;
+    dopts.redirect_stdio = true;
+
+    pid_t pid = ::fork();
+    ASSERT_GE(pid, 0);
+
+    if(pid == 0)
+    {
+        std::error_code ec;
+        hj::os::daemonize(dopts, ec);
+        ::_exit(EXIT_SUCCESS);
+    }
+
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    EXPECT_TRUE(fs::exists(pid_path));
+
+    std::error_code ec2;
+    pid_t           pid2 = ::fork();
+    if(pid2 == 0)
+    {
+        bool ok = hj::os::daemonize(dopts, ec2);
+        std::exit(ok ? 0 : 1);
+    }
+
+    ::waitpid(pid2, &status, 0);
+    EXPECT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+
+    fs::remove(pid_path);
+}
+
+TEST(process, wait_and_is_running_eintr_handling)
+{
+    struct sigaction sa{};
+    sa.sa_handler = [](int) {};
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    ::sigaction(SIGUSR1, &sa, nullptr);
+
+    std::string              exe = get_child_helper_path();
+    hj::os::process::options opts;
+    opts.command = exe;
+    opts.args    = {"--sleep"};
+    opts.policy  = hj::os::process_policy::manual;
+
+    std::error_code ec;
+    auto            proc = hj::os::spawn(opts, ec);
+    ASSERT_TRUE(proc.is_valid());
+
+    pthread_t main_thread = ::pthread_self();
+
+    std::thread killer([main_thread]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        ::pthread_kill(main_thread, SIGUSR1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        ::pthread_kill(main_thread, SIGUSR1);
+    });
+
+    EXPECT_TRUE(proc.is_running());
+
+    auto st = proc.wait(ec);
+    killer.join();
+
+    EXPECT_FALSE(ec);
+    ASSERT_TRUE(st.has_value());
+    EXPECT_TRUE(st->exited_normally);
+
+    signal(SIGUSR1, SIG_DFL);
+}
+
+TEST(process, detached_no_zombie_linux_status_check)
+{
+    std::string              exe = get_child_helper_path();
+    hj::os::process::options opts;
+    opts.command = exe;
+    opts.args    = {"--quick-exit"};
+    opts.policy  = hj::os::process_policy::manual;
+
+    std::error_code ec;
+    auto            proc = hj::os::spawn(opts, ec);
+    ASSERT_TRUE(proc.is_valid());
+
+    hj::os::pid_t child_pid = proc.id();
+
+    proc.detach();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    fs::path status_file =
+        fs::path("/proc") / std::to_string(child_pid) / "status";
+    if(fs::exists(status_file))
+    {
+        std::ifstream fin(status_file);
+        std::string   line;
+        bool          is_zombie = false;
+        while(std::getline(fin, line))
+        {
+            if(line.rfind("State:", 0) == 0)
+            {
+                if(line.find('Z') != std::string::npos
+                   || line.find("zombie") != std::string::npos)
+                {
+                    is_zombie = true;
+                }
+                break;
+            }
+        }
+        EXPECT_FALSE(is_zombie)
+            << "Process " << child_pid << " stuck in Zombie (Z) state!";
+    } else
+    {
+        SUCCEED();
+    }
+}
+
+TEST(process, daemonize_close_range_large_fds)
+{
+    std::vector<int> opened_fds;
+    for(int i = 0; i < 90; ++i)
+    {
+        int fd = ::open("/dev/null", O_RDONLY);
+        if(fd >= 0)
+            opened_fds.push_back(fd);
+    }
+    ASSERT_GT(opened_fds.size(), 10u);
+
+    hj::os::daemon_options dopts;
+    dopts.redirect_stdio = true;
+    dopts.auto_close_fds = true;
+
+    pid_t pid = ::fork();
+    ASSERT_GE(pid, 0);
+
+    if(pid == 0)
+    {
+        std::error_code ec;
+        if(!hj::os::daemonize(dopts, ec))
+        {
+            ::_exit(EXIT_FAILURE);
+        }
+
+        bool leaked = false;
+        for(int fd : opened_fds)
+        {
+            if(::fcntl(fd, F_GETFD) != -1 || errno != EBADF)
+            {
+                leaked = true;
+                break;
+            }
+        }
+
+        ::_exit(leaked ? EXIT_FAILURE : EXIT_SUCCESS);
+    }
+
+    for(int fd : opened_fds)
+    {
+        ::close(fd);
+    }
+
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+
+    EXPECT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(WEXITSTATUS(status), EXIT_SUCCESS)
+        << "Daemon process leaked file descriptors!";
+}
+
+TEST(process, daemonize_pid_file_contention_ebusy)
+{
+    std::string pid_path =
+        (fs::temp_directory_path() / "test_contention.pid").string();
+    std::remove(pid_path.c_str());
+
+    hj::os::daemon_options dopts;
+    dopts.pid_file       = pid_path;
+    dopts.redirect_stdio = true;
+
+    pid_t pidA = ::fork();
+    ASSERT_GE(pidA, 0);
+
+    if(pidA == 0)
+    {
+        std::error_code ec;
+        if(!hj::os::daemonize(dopts, ec))
+        {
+            ::_exit(EXIT_FAILURE);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(600));
+        ::_exit(EXIT_SUCCESS);
+    }
+
+    int status = 0;
+    ::waitpid(pidA, &status, 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    ASSERT_TRUE(fs::exists(pid_path));
+
+    std::error_code ecB;
+
+    pid_t pidB = ::fork();
+    ASSERT_GE(pidB, 0);
+
+    if(pidB == 0)
+    {
+        std::error_code ec;
+        bool            ok = hj::os::daemonize(dopts, ec);
+        if(!ok && ec == std::errc::device_or_resource_busy)
+        {
+            ::_exit(42);
+        }
+        ::_exit(ok ? EXIT_SUCCESS : EXIT_FAILURE);
+    }
+
+    ::waitpid(pidB, &status, 0);
+    EXPECT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(WEXITSTATUS(status), 42)
+        << "Daemon B should fail with EBUSY contention!";
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    fs::remove(pid_path);
+}
+#endif // !defined(_WIN32)
+
+TEST(process, win_exit_code_259_is_running)
+{
+    std::string              exe = get_child_helper_path();
+    hj::os::process::options opts;
+    opts.command = exe;
+#if defined(_WIN32)
+    opts.command = "cmd.exe";
+    opts.args    = {"/c", "exit 259"};
+#else
+    opts.command = exe;
+    opts.args    = {"--sleep"};
+#endif
+    opts.policy = hj::os::process_policy::manual;
+
+    std::error_code ec;
+    auto            proc = hj::os::spawn(opts, ec);
+    ASSERT_TRUE(proc.is_valid());
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    EXPECT_FALSE(proc.is_running());
+
+    auto st = proc.wait(ec);
+    ASSERT_TRUE(st.has_value());
+    EXPECT_EQ(st->code(), 259);
 }

@@ -1,19 +1,6 @@
 /*
  *  This file is part of high-jump(hj).
  *  Copyright (C) 2025-2026 hanjingo <hehehunanchina@live.com>
- *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef PROCESS_HPP
@@ -30,9 +17,11 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -135,7 +124,190 @@ inline bool  kill(pid_t pid) noexcept;
 
 namespace detail
 {
-#if defined(_WIN32)
+#if !defined(_WIN32)
+class async_reaper
+{
+  public:
+    static async_reaper &instance()
+    {
+        static async_reaper reaper;
+        return reaper;
+    }
+
+    void add_pid(pid_t pid)
+    {
+        if(pid <= 0)
+            return;
+        std::lock_guard<std::mutex> lock(_mutex);
+        _pids.push_back(pid);
+        if(!_worker.joinable())
+        {
+            _stop   = false;
+            _worker = std::thread([this]() { run(); });
+        }
+    }
+
+    ~async_reaper()
+    {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _stop = true;
+        }
+        if(_worker.joinable())
+            _worker.join();
+    }
+
+  private:
+    async_reaper() = default;
+
+    void run()
+    {
+        while(true)
+        {
+            std::vector<pid_t> current_pids;
+            {
+                std::lock_guard<std::mutex> lock(_mutex);
+                if(_pids.empty() && _stop)
+                    break;
+                current_pids = _pids;
+            }
+
+            if(current_pids.empty())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                continue;
+            }
+
+            std::vector<pid_t> remaining;
+            for(auto pid : current_pids)
+            {
+                int   status = 0;
+                pid_t res    = 0;
+                do
+                {
+                    res = ::waitpid(pid, &status, WNOHANG);
+                } while(res < 0 && errno == EINTR);
+
+                if(res == 0)
+                    remaining.push_back(pid);
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(_mutex);
+                std::vector<pid_t>          new_pids;
+                for(auto pid : _pids)
+                {
+                    if(std::find(remaining.begin(), remaining.end(), pid)
+                       != remaining.end())
+                        new_pids.push_back(pid);
+                }
+                _pids = std::move(new_pids);
+                if(_pids.empty() && _stop)
+                    break;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+
+    std::mutex         _mutex;
+    std::vector<pid_t> _pids;
+    std::thread        _worker;
+    bool               _stop{false};
+};
+
+inline void close_all_fds_above(int min_fd, int keep_fd = -1) noexcept
+{
+#if defined(__linux__) && defined(__NR_close_range)
+    if(keep_fd >= min_fd)
+    {
+        bool success = true;
+        if(keep_fd > min_fd)
+        {
+            if(::syscall(__NR_close_range, min_fd, keep_fd - 1, 0) < 0)
+                success = false;
+        }
+        if(static_cast<unsigned int>(keep_fd) < ~0U)
+        {
+            if(::syscall(__NR_close_range, keep_fd + 1, ~0U, 0) < 0)
+                success = false;
+        }
+        if(success)
+            return;
+    } else
+    {
+        if(::syscall(__NR_close_range, min_fd, ~0U, 0) == 0)
+            return;
+    }
+#endif
+    DIR *dir = ::opendir("/proc/self/fd");
+    if(dir)
+    {
+        int            dir_fd = ::dirfd(dir);
+        struct dirent *entry  = nullptr;
+        while((entry = ::readdir(dir)) != nullptr)
+        {
+            if(entry->d_name[0] == '.')
+                continue;
+
+            int fd = 0;
+            auto [ptr, ec] =
+                std::from_chars(entry->d_name,
+                                entry->d_name + std::strlen(entry->d_name),
+                                fd);
+            if(ec == std::errc{} && fd >= min_fd && fd != dir_fd
+               && fd != keep_fd)
+                ::close(fd);
+        }
+        ::closedir(dir);
+        return;
+    }
+
+    long max_fd = ::sysconf(_SC_OPEN_MAX);
+    if(max_fd < 0 || max_fd > 65536)
+        max_fd = 65536;
+
+    for(int fd = min_fd; fd < max_fd; ++fd)
+    {
+        if(fd != keep_fd)
+            ::close(fd);
+    }
+}
+
+inline std::string &global_pid_file_path()
+{
+    static std::string path;
+    return path;
+}
+
+inline void remove_pid_file_safe() noexcept
+{
+    auto &path = global_pid_file_path();
+    if(!path.empty())
+        ::unlink(path.c_str());
+}
+
+inline void daemon_signal_handler(int sig)
+{
+    remove_pid_file_safe();
+    ::_exit(128 + sig);
+}
+
+inline void register_pid_file_cleanup(const std::string &path)
+{
+    global_pid_file_path() = path;
+    std::atexit([]() { remove_pid_file_safe(); });
+    struct sigaction sa{};
+    sa.sa_handler = daemon_signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    ::sigaction(SIGTERM, &sa, nullptr);
+    ::sigaction(SIGINT, &sa, nullptr);
+    ::sigaction(SIGHUP, &sa, nullptr);
+}
+
+#else
 inline bool utf8_to_utf16(const std::string &str,
                           std::wstring      &out,
                           std::error_code   &ec) noexcept
@@ -261,100 +433,6 @@ inline BOOL CALLBACK enum_windows_close_cb(HWND hwnd, LPARAM lparam)
     }
     return TRUE;
 }
-
-#else
-
-inline void close_all_fds_above(int min_fd, int keep_fd = -1) noexcept
-{
-#if defined(__linux__) && defined(__NR_close_range)
-    if(::syscall(__NR_close_range, min_fd, ~0U, 0) == 0)
-    {
-        if(keep_fd >= min_fd)
-        {
-        } else
-        {
-            return;
-        }
-    }
-#endif
-
-    DIR *dir = ::opendir("/proc/self/fd");
-    if(dir)
-    {
-        int            dir_fd = ::dirfd(dir);
-        struct dirent *entry  = nullptr;
-        while((entry = ::readdir(dir)) != nullptr)
-        {
-            if(entry->d_name[0] == '.')
-                continue;
-
-            int fd = 0;
-            auto [ptr, ec] =
-                std::from_chars(entry->d_name,
-                                entry->d_name + std::strlen(entry->d_name),
-                                fd);
-            if(ec == std::errc{} && fd >= min_fd && fd != dir_fd
-               && fd != keep_fd)
-                ::close(fd);
-        }
-        ::closedir(dir);
-        return;
-    }
-
-    long max_fd = ::sysconf(_SC_OPEN_MAX);
-    if(max_fd < 0 || max_fd > 65536)
-        max_fd = 65536;
-
-    for(int fd = min_fd; fd < max_fd; ++fd)
-    {
-        if(fd != keep_fd)
-            ::close(fd);
-    }
-}
-
-struct pid_file_guard
-{
-    int         fd{-1};
-    std::string path;
-
-    ~pid_file_guard() noexcept
-    {
-        if(!path.empty())
-        {
-            ::unlink(path.c_str());
-        }
-        if(fd >= 0)
-        {
-            ::close(fd);
-        }
-    }
-};
-
-inline pid_file_guard &global_pid_guard() noexcept
-{
-    static pid_file_guard guard;
-    return guard;
-}
-
-inline void register_pid_file_cleanup(int fd, const std::string &path) noexcept
-{
-    auto &guard = global_pid_guard();
-    guard.fd    = fd;
-    guard.path  = path;
-    std::atexit([]() {
-        auto &g = global_pid_guard();
-        if(!g.path.empty())
-        {
-            ::unlink(g.path.c_str());
-            g.path.clear();
-        }
-        if(g.fd >= 0)
-        {
-            ::close(g.fd);
-            g.fd = -1;
-        }
-    });
-}
 #endif
 } // namespace detail
 
@@ -395,9 +473,6 @@ inline pid_t getppid() noexcept
 #endif
 }
 
-/**
- * @brief Best-effort graceful termination request.
- */
 inline bool terminate(pid_t pid) noexcept
 {
     if(pid <= 0)
@@ -487,7 +562,7 @@ class process
         return *this;
     }
 
-    bool start(options opts, std::error_code &ec) noexcept
+    bool start(options opts, std::error_code &ec)
     {
         clean_up();
         ec.clear();
@@ -531,13 +606,17 @@ class process
                                      OPEN_EXISTING,
                                      FILE_ATTRIBUTE_NORMAL,
                                      nullptr);
-            if(hNullInput != INVALID_HANDLE_VALUE)
+            if(hNullInput == INVALID_HANDLE_VALUE)
             {
-                si.dwFlags |= STARTF_USESTDHANDLES;
-                si.hStdInput  = hNullInput;
-                si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-                si.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
+                ec = std::error_code(static_cast<int>(::GetLastError()),
+                                     std::system_category());
+                return false;
             }
+
+            si.dwFlags |= STARTF_USESTDHANDLES;
+            si.hStdInput  = hNullInput;
+            si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+            si.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
         }
 
         DWORD creation_flags = CREATE_NEW_PROCESS_GROUP;
@@ -614,8 +693,106 @@ class process
             return false;
         }
 #endif
+        if(opts.detached)
+        {
+            pid_t p1 = ::fork();
+            if(p1 < 0)
+            {
+                ec = std::error_code(errno, std::generic_category());
+                ::close(err_pipe[0]);
+                ::close(err_pipe[1]);
+                return false;
+            }
 
-        pid_t pid = fork();
+            if(p1 == 0)
+            {
+                ::close(err_pipe[0]);
+                ::setsid();
+
+                pid_t p2 = ::fork();
+                if(p2 < 0)
+                {
+                    int                   err = errno;
+                    [[maybe_unused]] auto w =
+                        ::write(err_pipe[1], &err, sizeof(err));
+                    ::_exit(127);
+                }
+
+                if(p2 > 0)
+                    ::_exit(0);
+
+                if(!opts.working_directory.empty())
+                {
+                    if(::chdir(opts.working_directory.c_str()) != 0)
+                    {
+                        int                   err = errno;
+                        [[maybe_unused]] auto w =
+                            ::write(err_pipe[1], &err, sizeof(err));
+                        ::_exit(127);
+                    }
+                }
+
+                if(opts.redirect_stdin_null)
+                {
+                    int null_fd = ::open("/dev/null", O_RDWR);
+                    if(null_fd != -1)
+                    {
+                        ::dup2(null_fd, STDIN_FILENO);
+                        ::close(null_fd);
+                    }
+                }
+
+                std::vector<std::string> arg_storage;
+                arg_storage.push_back(opts.command);
+                arg_storage.insert(arg_storage.end(),
+                                   opts.args.begin(),
+                                   opts.args.end());
+
+                std::vector<char *> c_args;
+                c_args.reserve(arg_storage.size() + 1);
+                for(auto &s : arg_storage)
+                    c_args.push_back(s.data());
+                c_args.push_back(nullptr);
+
+                ::execvp(c_args[0], c_args.data());
+
+                int                   err = errno;
+                [[maybe_unused]] auto w =
+                    ::write(err_pipe[1], &err, sizeof(err));
+                ::_exit(127);
+            }
+
+            ::close(err_pipe[1]);
+            int status = 0;
+            while(::waitpid(p1, &status, 0) < 0 && errno == EINTR)
+                ;
+
+            int     child_errno = 0;
+            ssize_t n           = 0;
+            do
+            {
+                n = ::read(err_pipe[0], &child_errno, sizeof(child_errno));
+            } while(n < 0 && errno == EINTR);
+
+            ::close(err_pipe[0]);
+
+            if(n == sizeof(child_errno))
+            {
+                ec = std::error_code(child_errno, std::generic_category());
+                return false;
+            } else if(n < 0)
+            {
+                ec = std::error_code(errno, std::generic_category());
+                return false;
+            }
+
+            _pid      = 0;
+            _handle   = invalid_handle;
+            _detached = true;
+            return true;
+        }
+
+        pid_t pid = ::fork();
         if(pid < 0)
         {
             ec = std::error_code(errno, std::generic_category());
@@ -672,14 +849,27 @@ class process
         ::close(err_pipe[1]);
 
         int     child_errno = 0;
-        ssize_t n = ::read(err_pipe[0], &child_errno, sizeof(child_errno));
+        ssize_t n           = 0;
+        do
+        {
+            n = ::read(err_pipe[0], &child_errno, sizeof(child_errno));
+        } while(n < 0 && errno == EINTR);
+
         ::close(err_pipe[0]);
 
-        if(n > 0)
+        if(n == sizeof(child_errno))
         {
             ec         = std::error_code(child_errno, std::generic_category());
             int status = 0;
-            ::waitpid(pid, &status, 0);
+            while(::waitpid(pid, &status, 0) < 0 && errno == EINTR)
+                ;
+            return false;
+        } else if(n < 0)
+        {
+            ec         = std::error_code(errno, std::generic_category());
+            int status = 0;
+            while(::waitpid(pid, &status, 0) < 0 && errno == EINTR)
+                ;
             return false;
         }
 
@@ -689,7 +879,7 @@ class process
 #endif
     }
 
-    bool start(options opts) noexcept
+    bool start(options opts)
     {
         std::error_code ec;
         return start(std::move(opts), ec);
@@ -710,8 +900,17 @@ class process
 #if !defined(_WIN32)
             if(_pid > 0 && !_detached)
             {
-                int status = 0;
-                ::waitpid(_pid, &status, WNOHANG);
+                int   status = 0;
+                pid_t res    = 0;
+                do
+                {
+                    res = ::waitpid(_pid, &status, WNOHANG);
+                } while(res < 0 && errno == EINTR);
+
+                if(res == 0)
+                {
+                    detail::async_reaper::instance().add_pid(_pid);
+                }
             }
 #endif
             _detached = true;
@@ -736,61 +935,115 @@ class process
         return hj::os::kill(_pid);
     }
 
-    std::optional<exit_status> wait() noexcept
+    std::optional<exit_status> wait(std::error_code &ec)
     {
+        ec.clear();
+
         if(_exit_status.has_value())
             return _exit_status;
 
         if(!is_valid() || _detached)
+        {
+            ec = std::make_error_code(std::errc::invalid_argument);
             return std::nullopt;
+        }
 
 #if defined(_WIN32)
         if(_handle == invalid_handle)
+        {
+            ec = std::make_error_code(std::errc::invalid_argument);
             return std::nullopt;
-
-        WaitForSingleObject(_handle, INFINITE);
-        DWORD exit_code = 0;
-        BOOL  got_code  = GetExitCodeProcess(_handle, &exit_code);
-
-        release_handle();
-        _pid = 0;
-
-        if(got_code)
-        {
-            exit_status st;
-            st.exited_normally = true;
-            st.exit_code       = static_cast<int>(exit_code);
-            _exit_status       = st;
-            return _exit_status;
         }
-        return std::nullopt;
-#else
-        int   status = 0;
-        pid_t res    = ::waitpid(_pid, &status, 0);
 
-        _pid    = 0;
-        _handle = invalid_handle;
-
-        if(res > 0)
+        DWORD wait_ret = WaitForSingleObject(_handle, INFINITE);
+        if(wait_ret == WAIT_FAILED)
         {
-            exit_status st;
-            if(WIFEXITED(status))
+            ec = std::error_code(static_cast<int>(::GetLastError()),
+                                 std::system_category());
+            return std::nullopt;
+        }
+
+        if(wait_ret == WAIT_OBJECT_0)
+        {
+            DWORD exit_code = 0;
+            BOOL  got_code  = GetExitCodeProcess(_handle, &exit_code);
+
+            release_handle();
+            _pid = 0;
+
+            if(got_code)
             {
+                exit_status st;
                 st.exited_normally = true;
-                st.exit_code       = WEXITSTATUS(status);
-            } else if(WIFSIGNALED(status))
-            {
-                st.signaled = true;
-                st.termsig  = WTERMSIG(status);
+                st.exit_code       = static_cast<int>(exit_code);
+                _exit_status       = st;
+                return _exit_status;
             }
-            _exit_status = st;
-            return _exit_status;
+
+            ec = std::error_code(static_cast<int>(::GetLastError()),
+                                 std::system_category());
+            return std::nullopt;
         }
+
+        ec = std::make_error_code(std::errc::state_not_recoverable);
         return std::nullopt;
+
+#else
+        int status = 0;
+        while(true)
+        {
+            pid_t res = ::waitpid(_pid, &status, 0);
+
+            if(res == _pid)
+            {
+                _pid    = 0;
+                _handle = invalid_handle;
+
+                exit_status st;
+                if(WIFEXITED(status))
+                {
+                    st.exited_normally = true;
+                    st.exit_code       = WEXITSTATUS(status);
+                } else if(WIFSIGNALED(status))
+                {
+                    st.signaled = true;
+                    st.termsig  = WTERMSIG(status);
+                }
+                _exit_status = st;
+                return _exit_status;
+            }
+
+            if(res < 0)
+            {
+                if(errno == EINTR)
+                    continue;
+
+                ec = std::error_code(errno, std::generic_category());
+
+                if(errno == ECHILD)
+                {
+                    _pid    = 0;
+                    _handle = invalid_handle;
+                }
+
+                return std::nullopt;
+            }
+        }
 #endif
     }
 
-    bool is_running() noexcept
+    std::optional<exit_status> wait()
+    {
+        std::error_code ec;
+        auto            res = wait(ec);
+        if(ec)
+        {
+            throw std::system_error(ec, "Failed to wait for process");
+        }
+        return res;
+    }
+
+    bool is_running()
     {
         if(!is_valid())
             return false;
@@ -801,54 +1054,71 @@ class process
 #if defined(_WIN32)
         if(_handle == invalid_handle)
             return false;
-        DWORD exit_code = 0;
-        if(GetExitCodeProcess(_handle, &exit_code))
+
+        DWORD wait_res = WaitForSingleObject(_handle, 0);
+        if(wait_res == WAIT_TIMEOUT)
         {
-            if(exit_code == STILL_ACTIVE)
-                return true;
+            return true;
+        } else if(wait_res == WAIT_OBJECT_0)
+        {
+            DWORD exit_code = 0;
+            if(GetExitCodeProcess(_handle, &exit_code))
+            {
+                exit_status st;
+                st.exited_normally = true;
+                st.exit_code       = static_cast<int>(exit_code);
+                _exit_status       = st;
+            }
 
             release_handle();
             _pid = 0;
-
-            exit_status st;
-            st.exited_normally = true;
-            st.exit_code       = static_cast<int>(exit_code);
-            _exit_status       = st;
-
             return false;
         }
+
         return false;
 #else
-        int   status = 0;
-        pid_t res    = ::waitpid(_pid, &status, WNOHANG);
+        int status = 0;
 
-        if(res == 0)
+        while(true)
         {
-            return true;
-        } else if(res == _pid)
-        {
-            exit_status st;
-            if(WIFEXITED(status))
+            pid_t res = ::waitpid(_pid, &status, WNOHANG);
+
+            if(res == 0)
+                return true;
+
+            if(res == _pid)
             {
-                st.exited_normally = true;
-                st.exit_code       = WEXITSTATUS(status);
-            } else if(WIFSIGNALED(status))
-            {
-                st.signaled = true;
-                st.termsig  = WTERMSIG(status);
+                exit_status st;
+                if(WIFEXITED(status))
+                {
+                    st.exited_normally = true;
+                    st.exit_code       = WEXITSTATUS(status);
+                } else if(WIFSIGNALED(status))
+                {
+                    st.signaled = true;
+                    st.termsig  = WTERMSIG(status);
+                }
+                _exit_status = st;
+                _pid         = 0;
+                _handle      = invalid_handle;
+                return false;
             }
-            _exit_status = st;
-            _pid         = 0;
-            _handle      = invalid_handle;
-            return false;
-        } else if(res == -1 && errno == ECHILD)
-        {
-            _pid    = 0;
-            _handle = invalid_handle;
-            return false;
-        }
 
-        return false;
+            if(res < 0)
+            {
+                if(errno == EINTR)
+                    continue;
+
+                if(errno == ECHILD)
+                {
+                    _pid    = 0;
+                    _handle = invalid_handle;
+                    return false;
+                }
+
+                return true;
+            }
+        }
 #endif
     }
 
@@ -920,13 +1190,132 @@ inline process spawn(process::options opts)
     return p;
 }
 
-/**
- * @brief Transforms the CURRENT process into a POSIX daemon.
- * 
- * Note: daemonize() transforms the current process context in-place.
- * To launch an EXTERNAL process detached from the current process, use spawn_detached().
- */
-inline bool daemonize(const daemon_options &opts, std::error_code &ec) noexcept
+inline bool spawn_detached(const std::string              &executable,
+                           const std::vector<std::string> &args,
+                           std::error_code                &ec) noexcept
+{
+    ec.clear();
+#if defined(_WIN32)
+    process::options opts;
+    opts.command  = executable;
+    opts.args     = args;
+    opts.detached = true;
+    opts.policy   = process_policy::detach_on_destroy;
+    auto p        = spawn(std::move(opts), ec);
+    return p.is_valid() && !ec;
+#else
+    if(executable.empty())
+    {
+        ec = std::make_error_code(std::errc::invalid_argument);
+        return false;
+    }
+
+    int err_pipe[2];
+#if defined(__linux__) && defined(O_CLOEXEC)
+    if(::pipe2(err_pipe, O_CLOEXEC) < 0)
+    {
+        ec = std::error_code(errno, std::generic_category());
+        return false;
+    }
+#else
+    if(::pipe(err_pipe) < 0)
+    {
+        ec = std::error_code(errno, std::generic_category());
+        return false;
+    }
+    ::fcntl(err_pipe[0], F_SETFD, FD_CLOEXEC);
+    ::fcntl(err_pipe[1], F_SETFD, FD_CLOEXEC);
+#endif
+
+    pid_t pid = ::fork();
+    if(pid < 0)
+    {
+        ec = std::error_code(errno, std::generic_category());
+        ::close(err_pipe[0]);
+        ::close(err_pipe[1]);
+        return false;
+    }
+
+    if(pid > 0)
+    {
+        ::close(err_pipe[1]);
+        int     child_errno = 0;
+        ssize_t n = ::read(err_pipe[0], &child_errno, sizeof(child_errno));
+        ::close(err_pipe[0]);
+
+        int status = 0;
+        ::waitpid(pid, &status, 0);
+
+        if(n > 0)
+        {
+            ec = std::error_code(child_errno, std::generic_category());
+            return false;
+        }
+
+        return true;
+    }
+
+    ::close(err_pipe[0]);
+    if(::setsid() < 0)
+    {
+        int                   err = errno;
+        [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
+        ::_exit(EXIT_FAILURE);
+    }
+
+    pid_t grandchild = ::fork();
+    if(grandchild < 0)
+    {
+        int                   err = errno;
+        [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
+        ::_exit(EXIT_FAILURE);
+    }
+
+    if(grandchild > 0)
+        ::_exit(EXIT_SUCCESS);
+
+    int dev_null = ::open("/dev/null", O_RDWR);
+    if(dev_null != -1)
+    {
+        ::dup2(dev_null, STDIN_FILENO);
+        ::dup2(dev_null, STDOUT_FILENO);
+        ::dup2(dev_null, STDERR_FILENO);
+        if(dev_null > 2)
+            ::close(dev_null);
+    }
+
+    std::vector<std::string> arg_storage;
+    arg_storage.push_back(executable);
+    arg_storage.insert(arg_storage.end(), args.begin(), args.end());
+
+    std::vector<char *> c_args;
+    c_args.reserve(arg_storage.size() + 1);
+    for(auto &s : arg_storage)
+        c_args.push_back(s.data());
+
+    c_args.push_back(nullptr);
+    ::execvp(c_args[0], c_args.data());
+    int                   err = errno;
+    [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
+    ::_exit(EXIT_FAILURE);
+#endif
+}
+
+inline bool spawn_detached(const std::string              &executable,
+                           const std::vector<std::string> &args = {})
+{
+    std::error_code ec;
+    bool            res = spawn_detached(executable, args, ec);
+    if(ec)
+    {
+        throw std::system_error(ec,
+                                "Failed to spawn detached process: "
+                                    + executable);
+    }
+    return res;
+}
+
+inline bool daemonize(const daemon_options &opts, std::error_code &ec)
 {
     ec.clear();
 #if defined(_WIN32)
@@ -990,7 +1379,6 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec) noexcept
     }
 
     ::signal(SIGHUP, SIG_IGN);
-
     pid = ::fork();
     if(pid < 0)
     {
@@ -1014,6 +1402,11 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec) noexcept
         }
     }
 
+    gid_t target_gid = ::getgid();
+    uid_t target_uid = ::getuid();
+    bool  has_group  = false;
+    bool  has_user   = false;
+
     if(!opts.group.empty())
     {
         struct group *gr = ::getgrnam(opts.group.c_str());
@@ -1023,7 +1416,54 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec) noexcept
             [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
             ::_exit(EXIT_FAILURE);
         }
-        if(::setgid(gr->gr_gid) < 0)
+        target_gid = gr->gr_gid;
+        has_group  = true;
+    }
+
+    struct passwd *pw = nullptr;
+    if(!opts.user.empty())
+    {
+        pw = ::getpwnam(opts.user.c_str());
+        if(!pw)
+        {
+            int                   err = ENOENT;
+            [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
+            ::_exit(EXIT_FAILURE);
+        }
+        target_uid = pw->pw_uid;
+        has_user   = true;
+        if(!has_group)
+        {
+            target_gid = pw->pw_gid;
+        }
+    }
+
+    if(::geteuid() == 0)
+    {
+        if(has_user && pw)
+        {
+            if(::initgroups(pw->pw_name, target_gid) < 0)
+            {
+                int                   err = errno;
+                [[maybe_unused]] auto w =
+                    ::write(err_pipe[1], &err, sizeof(err));
+                ::_exit(EXIT_FAILURE);
+            }
+        } else if(has_group)
+        {
+            if(::setgroups(0, nullptr) < 0)
+            {
+                int                   err = errno;
+                [[maybe_unused]] auto w =
+                    ::write(err_pipe[1], &err, sizeof(err));
+                ::_exit(EXIT_FAILURE);
+            }
+        }
+    }
+
+    if(has_group || has_user)
+    {
+        if(::setgid(target_gid) < 0)
         {
             int                   err = errno;
             [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
@@ -1031,16 +1471,9 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec) noexcept
         }
     }
 
-    if(!opts.user.empty())
+    if(has_user)
     {
-        struct passwd *pw = ::getpwnam(opts.user.c_str());
-        if(!pw)
-        {
-            int                   err = ENOENT;
-            [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
-            ::_exit(EXIT_FAILURE);
-        }
-        if(::setuid(pw->pw_uid) < 0)
+        if(::setuid(target_uid) < 0)
         {
             int                   err = errno;
             [[maybe_unused]] auto w   = ::write(err_pipe[1], &err, sizeof(err));
@@ -1107,13 +1540,11 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec) noexcept
             ::_exit(EXIT_FAILURE);
         }
 
-        detail::register_pid_file_cleanup(pid_fd, opts.pid_file);
+        detail::register_pid_file_cleanup(opts.pid_file);
     }
 
     if(opts.auto_close_fds)
-    {
         detail::close_all_fds_above(3, err_pipe[1]);
-    }
 
     if(opts.redirect_stdio)
     {
@@ -1145,7 +1576,7 @@ inline bool daemonize(const daemon_options &opts = {})
 
 inline void list(
     std::vector<process_info> &result,
-    list_match_cb match = [](const process_info &) { return true; }) noexcept
+    list_match_cb match = [](const process_info &) { return true; })
 {
     result.clear();
 

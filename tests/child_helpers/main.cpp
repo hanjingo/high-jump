@@ -54,7 +54,6 @@ int main(int argc, char *argv[])
         }
     } else if(mode == "--quick-exit")
     {
-        // 快速退出，用于测试 wait_on_destroy / detach 等
         return 0;
     } else if(mode == "--raise-sigterm")
     {

@@ -22,16 +22,19 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <csignal>
 #include <cstdint>
 #include <functional>
 #include <iostream>
 #include <limits>
 #include <mutex>
+#include <system_error>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
 
+// Forward declaration for unit testing friendship
 class SignalTest;
 
 namespace hj
@@ -39,29 +42,48 @@ namespace hj
 
 using sig_t = int;
 
-enum class sig_overflow_policy
-{
-    reject,
-    overwrite
-};
-
+/**
+ * @brief Policy for handling interrupted blocking system calls (POSIX only).
+ */
 enum class sig_interrupt_policy
 {
-    restart,
-    none
+    restart, ///< Set SA_RESTART flag (POSIX only)
+    none ///< Do not set SA_RESTART flag; syscalls fail with EINTR (POSIX only)
 };
 
+/**
+ * @brief Ultra-lightweight Async-Signal-Safe Signal Handler Infrastructure.
+ * @details Pending signals are strictly bounded per signal type (MAX_PENDING_PER_SIGNAL).
+ *          Excess notifications arriving when full are dropped and counted in dropped_count().
+ *
+ * @note Ownership Note:
+ *       Signal disposition is a process-global OS resource. `sighandler` assumes 
+ *       exclusive ownership of signals registered through it. Restoring saved OS handlers
+ *       upon unregistering cannot guarantee coordination if external libraries modify
+ *       the signal disposition concurrently or out of stack order.
+ */
 class sighandler
 {
   public:
-    static constexpr size_t   MAX_SIGNALS            = 64;
-    static constexpr uint32_t MAX_PENDING_PER_SIGNAL = 100;
+    // Platform-specific maximum signal boundary calculation
+#if defined(NSIG)
+    static constexpr size_t MAX_SIGNALS = static_cast<size_t>(NSIG);
+#elif defined(_NSIG)
+    static constexpr size_t MAX_SIGNALS = static_cast<size_t>(_NSIG);
+#elif defined(_WIN32) || defined(_WIN64)
+    static constexpr size_t MAX_SIGNALS = 32;
+#else
+    static constexpr size_t MAX_SIGNALS = 64;
+#endif
+
+    static constexpr uint32_t MAX_PENDING_PER_SIGNAL =
+        100; // Strict capacity limit per signal
 
     sighandler()
-        : _overflow_policy(sig_overflow_policy::overwrite)
-        , _dropped_count(0)
+        : _dropped_count(0)
     {
         _clear_queue_internal();
+        _instance.store(this, std::memory_order_release);
     }
 
     ~sighandler() = default;
@@ -75,16 +97,6 @@ class sighandler
     {
         static sighandler *inst = new sighandler();
         return *inst;
-    }
-
-    void set_overflow_policy(sig_overflow_policy policy) noexcept
-    {
-        _overflow_policy.store(policy, std::memory_order_relaxed);
-    }
-
-    sig_overflow_policy overflow_policy() const noexcept
-    {
-        return _overflow_policy.load(std::memory_order_relaxed);
     }
 
     uint64_t dropped_count() const noexcept
@@ -116,40 +128,74 @@ class sighandler
         return is_one_shot(sig);
     }
 
-    void
+    /**
+     * @brief Register callback for a signal, saving the previous OS disposition.
+     * @details Ensures transactional atomic behavior: callback is only stored if OS handler installation succeeds.
+     * @return bool True if signal handler was successfully installed in OS kernel, false otherwise.
+     */
+    bool
     sigcatch(sig_t                      sig,
              std::function<void(sig_t)> cb,
              bool                       one_shot = false,
              sig_interrupt_policy int_policy = sig_interrupt_policy::restart)
     {
-        std::lock_guard<std::mutex> lock(_mu);
-        _callbacks[sig] = std::move(cb);
-        _one_shot[sig]  = one_shot;
-
-        _install_sys_handler(sig, int_policy);
+        std::error_code ec;
+        return sigcatch(sig, std::move(cb), ec, one_shot, int_policy);
     }
 
-    void
+    /**
+     * @brief Industrial-grade sigcatch with std::error_code error reporting.
+     * @param ec Output parameter receiving the OS error code if installation fails.
+     * @return bool True if successful, false on OS error or invalid signal number.
+     */
+    bool
+    sigcatch(sig_t                      sig,
+             std::function<void(sig_t)> cb,
+             std::error_code           &ec,
+             bool                       one_shot = false,
+             sig_interrupt_policy int_policy = sig_interrupt_policy::restart)
+    {
+        ec.clear();
+        if(sig < 0 || static_cast<size_t>(sig) >= MAX_SIGNALS)
+        {
+            ec = std::make_error_code(std::errc::invalid_argument);
+            return false;
+        }
+
+        std::lock_guard<std::mutex> lock(_mu);
+        if(!_install_sys_handler(sig, int_policy, ec))
+            return false;
+
+        _callbacks[sig] = std::move(cb);
+        _one_shot[sig]  = one_shot;
+        return true;
+    }
+
+    bool
     sigcatch(const std::vector<sig_t>  &sigs,
              std::function<void(sig_t)> cb,
              bool                       one_shot = false,
              sig_interrupt_policy int_policy = sig_interrupt_policy::restart)
     {
+        bool all_success = true;
         for(auto sig : sigs)
         {
-            sigcatch(sig, cb, one_shot, int_policy);
+            if(!sigcatch(sig, cb, one_shot, int_policy))
+                all_success = false;
         }
+        return all_success;
     }
-
 
     void sigunregister(sig_t sig)
     {
+        if(sig < 0 || static_cast<size_t>(sig) >= MAX_SIGNALS)
+            return;
+
         std::lock_guard<std::mutex> lock(_mu);
         _callbacks.erase(sig);
         _one_shot.erase(sig);
-        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
-            _pending_counts[sig].store(0, std::memory_order_relaxed);
 
+        _pending_counts[sig].store(0, std::memory_order_relaxed);
         _restore_sys_handler(sig);
     }
 
@@ -161,12 +207,14 @@ class sighandler
 
     void sigignore(sig_t sig)
     {
+        if(sig < 0 || static_cast<size_t>(sig) >= MAX_SIGNALS)
+            return;
+
         std::lock_guard<std::mutex> lock(_mu);
         _callbacks.erase(sig);
         _one_shot.erase(sig);
 
-        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
-            _pending_counts[sig].store(0, std::memory_order_relaxed);
+        _pending_counts[sig].store(0, std::memory_order_relaxed);
 
 #if defined(_WIN32) || defined(_WIN64)
         ::signal(sig, SIG_IGN);
@@ -185,12 +233,14 @@ class sighandler
 
     void sigrestore_default(sig_t sig)
     {
+        if(sig < 0 || static_cast<size_t>(sig) >= MAX_SIGNALS)
+            return;
+
         std::lock_guard<std::mutex> lock(_mu);
         _callbacks.erase(sig);
         _one_shot.erase(sig);
 
-        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
-            _pending_counts[sig].store(0, std::memory_order_relaxed);
+        _pending_counts[sig].store(0, std::memory_order_relaxed);
 
 #if defined(_WIN32) || defined(_WIN64)
         ::signal(sig, SIG_DFL);
@@ -216,19 +266,18 @@ class sighandler
         return ((::raise(args) == 0) && ...);
     }
 
+    /**
+     * @brief Software-level Event Injection / Internal Notification.
+     * @details Directly triggers internal atomic counter without raising an actual OS signal.
+     *          Useful for unit testing, event mock injection, and thread-safe internal signals.
+     */
     template <typename... Args>
-    void signotify(Args... args) noexcept
+    void notify(Args... args) noexcept
     {
         static_assert((std::is_same_v<Args, sig_t> && ...),
-                      "All arguments to signotify must be of type sig_t");
+                      "All arguments to notify must be of type sig_t");
 
         (_handle(args), ...);
-    }
-
-    template <typename... Args>
-    void sigdispatch(Args... args) noexcept
-    {
-        signotify(args...);
     }
 
     size_t poll(size_t max_events = std::numeric_limits<size_t>::max())
@@ -305,11 +354,13 @@ class sighandler
 
   private:
     friend class ::SignalTest;
+    inline static std::atomic<sighandler *> _instance{nullptr};
 
     void _clear_queue_internal() noexcept
     {
         std::lock_guard<std::mutex> lock(_mu);
         _dropped_count.store(0, std::memory_order_relaxed);
+
         for(size_t i = 0; i < MAX_SIGNALS; ++i)
             _pending_counts[i].store(0, std::memory_order_relaxed);
     }
@@ -319,16 +370,25 @@ class sighandler
     static_assert(std::atomic<uint64_t>::is_always_lock_free,
                   "std::atomic<uint64_t> MUST be hardware lock-free!");
 
-    void _install_sys_handler(sig_t sig, sig_interrupt_policy int_policy)
+    bool _install_sys_handler(sig_t                sig,
+                              sig_interrupt_policy int_policy,
+                              std::error_code     &ec)
     {
 #if defined(_WIN32) || defined(_WIN64)
         (void) int_policy;
         auto prev = ::signal(sig, &sighandler::_handle);
+        if(prev == SIG_ERR)
+        {
+            ec = std::error_code(errno, std::generic_category());
+            return false;
+        }
+
         if(_has_saved_action.find(sig) == _has_saved_action.end())
         {
             _saved_win_handlers[sig] = prev;
             _has_saved_action[sig]   = true;
         }
+        return true;
 #else
         struct sigaction sa{};
         sa.sa_handler = &sighandler::_handle;
@@ -340,14 +400,18 @@ class sighandler
             sa.sa_flags = 0;
 
         struct sigaction old_sa{};
-        if(::sigaction(sig, &sa, &old_sa) == 0)
+        if(::sigaction(sig, &sa, &old_sa) != 0)
         {
-            if(_has_saved_action.find(sig) == _has_saved_action.end())
-            {
-                _saved_posix_actions[sig] = old_sa;
-                _has_saved_action[sig]    = true;
-            }
+            ec = std::error_code(errno, std::generic_category());
+            return false;
         }
+
+        if(_has_saved_action.find(sig) == _has_saved_action.end())
+        {
+            _saved_posix_actions[sig] = old_sa;
+            _has_saved_action[sig]    = true;
+        }
+        return true;
 #endif
     }
 
@@ -382,25 +446,30 @@ class sighandler
         ::signal(sig, &sighandler::_handle);
 #endif
 
-        sighandler &inst = instance();
-        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
+        sighandler *inst = _instance.load(std::memory_order_acquire);
+        if(inst && sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
         {
-            sig_overflow_policy policy =
-                inst._overflow_policy.load(std::memory_order_relaxed);
             uint32_t current =
-                inst._pending_counts[sig].load(std::memory_order_relaxed);
+                inst->_pending_counts[sig].load(std::memory_order_relaxed);
 
-            if(current >= MAX_PENDING_PER_SIGNAL)
+            for(int retry = 0; retry < 2; ++retry)
             {
-                inst._dropped_count.fetch_add(1, std::memory_order_relaxed);
-                if(policy == sig_overflow_policy::reject)
+                if(current >= MAX_PENDING_PER_SIGNAL)
+                {
+                    inst->_dropped_count.fetch_add(1,
+                                                   std::memory_order_relaxed);
                     return;
+                }
 
-            } else
-            {
-                inst._pending_counts[sig].fetch_add(1,
-                                                    std::memory_order_relaxed);
+                if(inst->_pending_counts[sig].compare_exchange_weak(
+                       current,
+                       current + 1,
+                       std::memory_order_release,
+                       std::memory_order_relaxed))
+                    return;
             }
+
+            inst->_dropped_count.fetch_add(1, std::memory_order_relaxed);
         }
     }
 
@@ -414,11 +483,9 @@ class sighandler
 #else
     std::unordered_map<sig_t, struct sigaction> _saved_posix_actions;
 #endif
-    std::unordered_map<sig_t, bool> _has_saved_action;
 
-    std::atomic<sig_overflow_policy> _overflow_policy;
-    std::atomic<uint64_t>            _dropped_count;
-
+    std::unordered_map<sig_t, bool>                _has_saved_action;
+    std::atomic<uint64_t>                          _dropped_count;
     std::array<std::atomic<uint32_t>, MAX_SIGNALS> _pending_counts;
 };
 

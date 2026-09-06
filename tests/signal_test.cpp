@@ -21,6 +21,7 @@
 #include <atomic>
 #include <chrono>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -48,8 +49,6 @@ class SignalTest : public ::testing::Test
         hj::sighandler::instance().sigunregister(
             {TEST_SIG1, TEST_SIG2, TEST_SIG3});
         do_clear_queue();
-        hj::sighandler::instance().set_overflow_policy(
-            hj::sig_overflow_policy::reject);
     }
 
     void TearDown() override
@@ -65,10 +64,11 @@ TEST_F(SignalTest, Unregister)
     using hj::sighandler;
     int count = 0;
 
-    sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; });
+    EXPECT_TRUE(
+        sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; }));
     sighandler::instance().sigunregister(TEST_SIG1);
 
-    sighandler::instance().signotify(TEST_SIG1);
+    sighandler::instance().notify(TEST_SIG1);
     size_t processed = sighandler::instance().poll();
 
     EXPECT_EQ(processed, 0);
@@ -76,16 +76,30 @@ TEST_F(SignalTest, Unregister)
     EXPECT_FALSE(sighandler::instance().is_registered(TEST_SIG1));
 }
 
+TEST_F(SignalTest, TransactionalCatchFailure)
+{
+    using hj::sighandler;
+
+    std::error_code ec;
+    // -1 为非法信号值，系统 ::sigaction / ::signal 将必定安装失败
+    bool success = sighandler::instance().sigcatch(-1, [](int) {}, ec);
+
+    EXPECT_FALSE(success);
+    EXPECT_NE(ec.value(), 0);
+    EXPECT_FALSE(sighandler::instance().is_registered(-1));
+}
+
 TEST_F(SignalTest, PollReturnValueAndMaxEvents)
 {
     using hj::sighandler;
     std::atomic<int> count{0};
 
-    sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; });
+    EXPECT_TRUE(
+        sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; }));
 
     for(int i = 0; i < 10; ++i)
     {
-        sighandler::instance().signotify(TEST_SIG1);
+        sighandler::instance().notify(TEST_SIG1);
     }
 
     size_t processed_batch1 = sighandler::instance().poll(4);
@@ -109,14 +123,15 @@ TEST_F(SignalTest, OneShotBehavior)
     using hj::sighandler;
     int count = 0;
 
-    sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; }, true);
+    EXPECT_TRUE(sighandler::instance()
+                    .sigcatch(TEST_SIG1, [&](int) { count++; }, true));
 
-    sighandler::instance().signotify(TEST_SIG1);
+    sighandler::instance().notify(TEST_SIG1);
     EXPECT_EQ(sighandler::instance().poll(), 1);
     EXPECT_EQ(count, 1);
     EXPECT_FALSE(sighandler::instance().is_registered(TEST_SIG1));
 
-    sighandler::instance().signotify(TEST_SIG1);
+    sighandler::instance().notify(TEST_SIG1);
     EXPECT_EQ(sighandler::instance().poll(), 0);
     EXPECT_EQ(count, 1);
 }
@@ -126,12 +141,13 @@ TEST_F(SignalTest, QueueBurst)
     using hj::sighandler;
     std::atomic<int> count{0};
 
-    sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; });
+    EXPECT_TRUE(
+        sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; }));
 
     constexpr int BURST_SIZE = 100;
     for(int i = 0; i < BURST_SIZE; ++i)
     {
-        sighandler::instance().signotify(TEST_SIG1);
+        sighandler::instance().notify(TEST_SIG1);
     }
 
     EXPECT_EQ(sighandler::instance().poll(), BURST_SIZE);
@@ -144,14 +160,16 @@ TEST_F(SignalTest, ConcurrentRaiseAndNotify)
     std::atomic<int> count1{0};
     std::atomic<int> count2{0};
 
-    sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count1++; });
-    sighandler::instance().sigcatch(TEST_SIG2, [&](int) { count2++; });
+    EXPECT_TRUE(
+        sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count1++; }));
+    EXPECT_TRUE(
+        sighandler::instance().sigcatch(TEST_SIG2, [&](int) { count2++; }));
 
     constexpr int RAISES_PER_THREAD = 30;
     auto          notify_func       = [RAISES_PER_THREAD](int sig) {
         for(int i = 0; i < RAISES_PER_THREAD; ++i)
         {
-            sighandler::instance().signotify(sig);
+            sighandler::instance().notify(sig);
             std::this_thread::yield();
         }
     };
@@ -177,9 +195,9 @@ TEST_F(SignalTest, ExecutionContextVerification)
     std::thread::id poll_thread_id;
     std::thread::id callback_thread_id;
 
-    sighandler::instance().sigcatch(TEST_SIG1, [&](int) {
+    EXPECT_TRUE(sighandler::instance().sigcatch(TEST_SIG1, [&](int) {
         callback_thread_id = std::this_thread::get_id();
-    });
+    }));
 
     std::thread worker([&]() {
         poll_thread_id = std::this_thread::get_id();
@@ -187,7 +205,7 @@ TEST_F(SignalTest, ExecutionContextVerification)
         sighandler::instance().poll();
     });
 
-    sighandler::instance().signotify(TEST_SIG1);
+    sighandler::instance().notify(TEST_SIG1);
 
     worker.join();
 
@@ -196,47 +214,28 @@ TEST_F(SignalTest, ExecutionContextVerification)
     EXPECT_NE(callback_thread_id, std::this_thread::get_id());
 }
 
-TEST_F(SignalTest, QueueOverflowAndPolicy)
+TEST_F(SignalTest, QueueOverflowBounded)
 {
-    using hj::sig_overflow_policy;
     using hj::sighandler;
 
     std::atomic<int> count{0};
-    sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; });
+    EXPECT_TRUE(
+        sighandler::instance().sigcatch(TEST_SIG1, [&](int) { count++; }));
 
     constexpr int OVERFLOW_SIZE = 150;
 
-    sighandler::instance().set_overflow_policy(sig_overflow_policy::reject);
     sighandler::instance().reset_dropped_count();
     SignalTest::do_clear_queue();
     count.store(0);
 
     for(int i = 0; i < OVERFLOW_SIZE; ++i)
     {
-        sighandler::instance().signotify(TEST_SIG1);
+        sighandler::instance().notify(TEST_SIG1);
     }
 
     EXPECT_EQ(sighandler::instance().dropped_count(), 50);
 
     size_t processed = sighandler::instance().poll();
-    EXPECT_EQ(processed,
-              static_cast<size_t>(sighandler::MAX_PENDING_PER_SIGNAL));
-    EXPECT_EQ(count.load(),
-              static_cast<int>(sighandler::MAX_PENDING_PER_SIGNAL));
-
-    sighandler::instance().set_overflow_policy(sig_overflow_policy::overwrite);
-    sighandler::instance().reset_dropped_count();
-    SignalTest::do_clear_queue();
-    count.store(0);
-
-    for(int i = 0; i < OVERFLOW_SIZE; ++i)
-    {
-        sighandler::instance().signotify(TEST_SIG1);
-    }
-
-    EXPECT_EQ(sighandler::instance().dropped_count(), 50);
-
-    processed = sighandler::instance().poll();
     EXPECT_EQ(processed,
               static_cast<size_t>(sighandler::MAX_PENDING_PER_SIGNAL));
     EXPECT_EQ(count.load(),

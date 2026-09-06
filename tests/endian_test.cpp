@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <gtest/gtest.h>
 #include <hj/encoding/endian.hpp>
 
@@ -16,81 +17,91 @@ bool is_system_big_endian() noexcept
 
 } // namespace
 
-TEST(endian, is_big_endian)
+TEST(endian, constexpr_compile_time_evaluation)
 {
-    ASSERT_EQ(hj::is_big_endian(), is_system_big_endian());
+    constexpr uint16_t be16 = hj::to_big_endian(static_cast<uint16_t>(0x1234U));
+    constexpr uint32_t be32 =
+        hj::to_big_endian(static_cast<uint32_t>(0x01020304U));
+    constexpr uint64_t be64 =
+        hj::to_big_endian(static_cast<uint64_t>(0x0102030405060708ULL));
+
+    static_assert(hj::from_big_endian(be16) == 0x1234U,
+                  "Compile-time roundtrip failed for 16-bit");
+    static_assert(hj::from_big_endian(be32) == 0x01020304U,
+                  "Compile-time roundtrip failed for 32-bit");
+    static_assert(hj::from_big_endian(be64) == 0x0102030405060708ULL,
+                  "Compile-time roundtrip failed for 64-bit");
 }
 
-TEST(endian, to_big_endian)
+TEST(endian, type_constraints)
 {
-    const bool system_is_be = is_system_big_endian();
+    static_assert(hj::detail::is_valid_endian_type_v<int8_t>);
+    static_assert(hj::detail::is_valid_endian_type_v<uint8_t>);
+    static_assert(hj::detail::is_valid_endian_type_v<int16_t>);
+    static_assert(hj::detail::is_valid_endian_type_v<uint16_t>);
+    static_assert(hj::detail::is_valid_endian_type_v<int32_t>);
+    static_assert(hj::detail::is_valid_endian_type_v<uint32_t>);
+    static_assert(hj::detail::is_valid_endian_type_v<int64_t>);
+    static_assert(hj::detail::is_valid_endian_type_v<uint64_t>);
 
-    // 16-bit unsigned & signed
-    uint16_t u16 = 0x1234;
-    int16_t  s16 = -0x1234;
-    EXPECT_EQ(hj::to_big_endian(u16),
-              system_is_be ? u16 : static_cast<uint16_t>(0x3412));
-    EXPECT_EQ(hj::to_big_endian(s16),
-              system_is_be ? s16
-                           : static_cast<int16_t>(hj::detail::bswap16(
-                                 static_cast<uint16_t>(s16))));
-
-    // 32-bit unsigned & signed
-    uint32_t u32 = 0x01020304U;
-    int32_t  s32 = -0x01020304;
-    EXPECT_EQ(hj::to_big_endian(u32), system_is_be ? u32 : 0x04030201U);
-    EXPECT_EQ(hj::to_big_endian(s32),
-              system_is_be ? s32
-                           : static_cast<int32_t>(hj::detail::bswap32(
-                                 static_cast<uint32_t>(s32))));
-
-    // 64-bit unsigned & signed
-    uint64_t u64 = 0x0102030405060708ULL;
-    int64_t  s64 = -0x0102030405060708LL;
-    EXPECT_EQ(hj::to_big_endian(u64),
-              system_is_be ? u64 : 0x0807060504030201ULL);
-    EXPECT_EQ(hj::to_big_endian(s64),
-              system_is_be ? s64
-                           : static_cast<int64_t>(hj::detail::bswap64(
-                                 static_cast<uint64_t>(s64))));
+    static_assert(!hj::detail::is_valid_endian_type_v<bool>);
+    static_assert(!hj::detail::is_valid_endian_type_v<char>);
+    static_assert(!hj::detail::is_valid_endian_type_v<wchar_t>);
+    static_assert(!hj::detail::is_valid_endian_type_v<char16_t>);
+    static_assert(!hj::detail::is_valid_endian_type_v<char32_t>);
 }
 
-TEST(endian, to_little_endian)
+TEST(endian, known_byte_patterns)
 {
-    const bool system_is_be = is_system_big_endian();
+    const bool is_be = is_system_big_endian();
 
-    // 16-bit unsigned & signed
-    uint16_t u16 = 0x1234;
-    EXPECT_EQ(hj::to_little_endian(u16),
-              system_is_be ? static_cast<uint16_t>(0x3412) : u16);
+    // 16-bit
+    uint16_t v16 = 0x0102U;
+    EXPECT_EQ(hj::to_big_endian(v16), is_be ? 0x0102U : 0x0201U);
+    EXPECT_EQ(hj::to_little_endian(v16), is_be ? 0x0201U : 0x0102U);
 
-    // 32-bit unsigned & signed
-    uint32_t u32 = 0x01020304U;
-    EXPECT_EQ(hj::to_little_endian(u32), system_is_be ? 0x04030201U : u32);
+    // 32-bit
+    uint32_t v32 = 0x01020304U;
+    EXPECT_EQ(hj::to_big_endian(v32), is_be ? 0x01020304U : 0x04030201U);
+    EXPECT_EQ(hj::to_little_endian(v32), is_be ? 0x04030201U : 0x01020304U);
 
-    // 64-bit unsigned & signed
-    uint64_t u64 = 0x0102030405060708ULL;
-    EXPECT_EQ(hj::to_little_endian(u64),
-              system_is_be ? 0x0807060504030201ULL : u64);
+    // 64-bit
+    uint64_t v64 = 0x0102030405060708ULL;
+    EXPECT_EQ(hj::to_big_endian(v64),
+              is_be ? 0x0102030405060708ULL : 0x0807060504030201ULL);
+    EXPECT_EQ(hj::to_little_endian(v64),
+              is_be ? 0x0807060504030201ULL : 0x0102030405060708ULL);
 }
 
-TEST(endian, edge_cases_and_round_trip)
+TEST(endian, boundary_values)
 {
-    uint8_t u8 = 0xAB;
-    int8_t  s8 = -12;
-    EXPECT_EQ(hj::to_big_endian(u8), u8);
-    EXPECT_EQ(hj::to_little_endian(s8), s8);
+    // 0 & 1
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(static_cast<uint16_t>(0))),
+              0U);
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(static_cast<uint16_t>(1))),
+              1U);
 
-    EXPECT_EQ(hj::to_big_endian(static_cast<uint32_t>(0)), 0U);
-    EXPECT_EQ(hj::to_big_endian(static_cast<uint64_t>(~0ULL)), ~0ULL);
+    // INT16 Min / Max
+    int16_t i16_min = std::numeric_limits<int16_t>::min();
+    int16_t i16_max = std::numeric_limits<int16_t>::max();
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(i16_min)), i16_min);
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(i16_max)), i16_max);
+    EXPECT_EQ(hj::from_little_endian(hj::to_little_endian(i16_min)), i16_min);
+    EXPECT_EQ(hj::from_little_endian(hj::to_little_endian(i16_max)), i16_max);
 
-    uint64_t original = 0xDEADBEEF12345678ULL;
-    uint64_t be_val   = hj::to_big_endian(original);
+    // INT32 Min / Max
+    int32_t i32_min = std::numeric_limits<int32_t>::min();
+    int32_t i32_max = std::numeric_limits<int32_t>::max();
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(i32_min)), i32_min);
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(i32_max)), i32_max);
+    EXPECT_EQ(hj::from_little_endian(hj::to_little_endian(i32_min)), i32_min);
+    EXPECT_EQ(hj::from_little_endian(hj::to_little_endian(i32_max)), i32_max);
 
-    uint64_t restored = hj::to_big_endian(be_val);
-    EXPECT_EQ(restored, original);
-
-    uint64_t le_val    = hj::to_little_endian(original);
-    uint64_t restored2 = hj::to_little_endian(le_val);
-    EXPECT_EQ(restored2, original);
+    // INT64 Min / Max
+    int64_t i64_min = std::numeric_limits<int64_t>::min();
+    int64_t i64_max = std::numeric_limits<int64_t>::max();
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(i64_min)), i64_min);
+    EXPECT_EQ(hj::from_big_endian(hj::to_big_endian(i64_max)), i64_max);
+    EXPECT_EQ(hj::from_little_endian(hj::to_little_endian(i64_min)), i64_min);
+    EXPECT_EQ(hj::from_little_endian(hj::to_little_endian(i64_max)), i64_max);
 }

@@ -45,7 +45,7 @@ TEST(debugger, fmt_streambuf)
 
 TEST(debugger, fmt_bufsize_limit)
 {
-    std::vector<uint8_t> buf(DEBUG_BUF_SIZE + 10, 0xFF);
+    std::vector<uint8_t> buf(hj::debugger::buf_sz + 10, 0xFF);
     std::string          out = hj::debugger::instance().fmt("{:02x}", buf);
     EXPECT_NE(out.find("..."), std::string::npos);
 }

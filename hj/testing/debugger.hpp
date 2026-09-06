@@ -27,15 +27,14 @@
 #include <fmt/format.h>
 #include <boost/asio.hpp>
 
-#ifndef DEBUG_BUF_SIZE
-#define DEBUG_BUF_SIZE 4096
-#endif
-
 namespace hj
 {
 
 class debugger
 {
+  public:
+    static constexpr size_t buf_sz = 4096;
+
   public:
     debugger()
         : _os{&std::cout}
@@ -89,7 +88,7 @@ class debugger
                 oss << ' ';
 
             oss << fmt::format(fmt::runtime(style), data[i]);
-            if(++count >= DEBUG_BUF_SIZE)
+            if(++count >= hj::debugger::buf_sz)
             {
                 oss << " ...";
                 break;

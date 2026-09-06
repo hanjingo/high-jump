@@ -6,143 +6,253 @@
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #ifndef ERROR_HPP
 #define ERROR_HPP
 
-#include <map>
-#include <mutex>
-#include <string>
-#include <sstream>
+#include <cstdint>
+#include <iomanip>
 #include <memory>
+#include <sstream>
+#include <string>
+#include <string_view>
 #include <system_error>
+#include <type_traits>
+#include <utility>
 
 namespace hj
 {
 
-namespace err_detail
+namespace detail
 {
-
-class error_category : public std::error_category
+template <typename T, bool IsEnum = std::is_enum_v<T>>
+struct safe_underlying_type
 {
-  public:
-    error_category(const char *n)
-        : _name(n)
-    {
-    }
-    const char *name() const noexcept override { return _name.c_str(); }
-    std::string message(int ev) const override
-    {
-        std::lock_guard<std::mutex> lock(_mtx);
-        auto                        it = _messages.find(ev);
-        if(it != _messages.end())
-            return it->second;
-        return "unknown error";
-    }
-    void register_message(int ec, const std::string &msg)
-    {
-        std::lock_guard<std::mutex> lock(_mtx);
-        _messages[ec] = msg;
-    }
-    bool
-    equivalent(int                         code,
-               const std::error_condition &condition) const noexcept override
-    {
-        return std::error_category::equivalent(code, condition);
-    }
-
-  private:
-    std::string                _name;
-    mutable std::mutex         _mtx;
-    std::map<int, std::string> _messages;
+    static_assert(std::is_integral_v<T> || std::is_enum_v<T>,
+                  "hj error utility API only accepts integral or enum types!");
+    using type = T;
 };
 
-inline error_category &category(const char *name)
+template <typename T>
+struct safe_underlying_type<T, true>
 {
-    static std::mutex                                             mtx;
-    static std::map<std::string, std::unique_ptr<error_category>> cats;
-    std::lock_guard<std::mutex>                                   lock(mtx);
-    auto it = cats.find(name);
-    if(it != cats.end())
-        return *it->second;
+    using type = std::underlying_type_t<T>;
+};
 
-    auto            cat = std::make_unique<error_category>(name);
-    error_category &ref = *cat;
-    cats[name]          = std::move(cat);
-    return ref;
+template <typename T>
+using safe_underlying_type_t = typename safe_underlying_type<T>::type;
+} // namespace detail
+
+
+enum class generic_errc
+{
+    success = 0,
+    network_failure,
+    io_failure,
+    permission_denied,
+    resource_unavailable
+};
+
+class generic_category_impl final : public std::error_category
+{
+  public:
+    const char *name() const noexcept override { return "hj_generic"; }
+
+    std::string message(int ev) const override
+    {
+        switch(static_cast<generic_errc>(ev))
+        {
+            case generic_errc::success:
+                return "success";
+            case generic_errc::network_failure:
+                return "network failure";
+            case generic_errc::io_failure:
+                return "io failure";
+            case generic_errc::permission_denied:
+                return "permission denied";
+            case generic_errc::resource_unavailable:
+                return "resource unavailable";
+            default:
+                return "unknown generic error";
+        }
+    }
+};
+
+inline const std::error_category &generic_category() noexcept
+{
+    static generic_category_impl instance;
+    return instance;
 }
 
-// nested error code
-struct nested_error_code
+inline std::error_condition make_error_condition(generic_errc e) noexcept
 {
-    std::error_code                    ec;
-    std::shared_ptr<nested_error_code> cause;
-    nested_error_code(const std::error_code             &e,
-                      std::shared_ptr<nested_error_code> c = nullptr)
+    return {static_cast<int>(e), generic_category()};
+}
+
+
+struct nested_error
+{
+    std::error_code               ec;
+    std::shared_ptr<nested_error> cause{nullptr};
+
+    nested_error() noexcept = default;
+
+    /* implicit */ nested_error(
+        std::error_code e, std::shared_ptr<nested_error> c = nullptr) noexcept
         : ec(e)
         , cause(std::move(c))
     {
     }
-    nested_error_code(int                                e,
-                      const std::error_category         &cat,
-                      std::shared_ptr<nested_error_code> c = nullptr)
-        : ec(e, cat)
-        , cause(std::move(c))
+
+    nested_error(std::error_code e, std::error_code cause_ec)
+        : ec(e)
+        , cause(std::make_shared<nested_error>(cause_ec))
     {
     }
-    nested_error_code(const nested_error_code &)                = default;
-    nested_error_code(nested_error_code &&) noexcept            = default;
-    nested_error_code &operator=(const nested_error_code &)     = default;
-    nested_error_code &operator=(nested_error_code &&) noexcept = default;
+
+    explicit operator bool() const noexcept { return static_cast<bool>(ec); }
+
+    [[nodiscard]] std::string to_string() const
+    {
+        std::string result = ec.category().name();
+        result += " error " + std::to_string(ec.value()) + ": " + ec.message();
+        if(cause)
+        {
+            result += " (caused by: " + cause->to_string() + ")";
+        }
+        return result;
+    }
 };
 
-} // namespace err_detail
-
-static inline void
-register_err(const char *category, int ec, const std::string &desc = "")
+inline nested_error
+make_nested_error(std::error_code               ec,
+                  std::shared_ptr<nested_error> cause = nullptr)
 {
-    hj::err_detail::category(category).register_message(ec, desc);
+    return nested_error{ec, std::move(cause)};
 }
 
-static inline std::error_code make_err(int e, const char *catname = "")
+inline nested_error make_nested_error(std::error_code ec,
+                                      std::error_code cause_ec)
 {
-    return std::error_code(e, err_detail::category(catname));
+    return nested_error{ec, cause_ec};
 }
 
-static inline hj::err_detail::nested_error_code
-make_err(const std::error_code &e,
-         const std::error_code &c,
-         const char            *catname = "")
+
+template <typename T>
+constexpr auto to_underlying(T err) noexcept
 {
-    return hj::err_detail::nested_error_code(
-        e,
-        std::make_shared<hj::err_detail::nested_error_code>(c));
+    using Underlying = detail::safe_underlying_type_t<T>;
+    return static_cast<Underlying>(err);
 }
 
 template <typename T>
-static int ec_to_int(const T err, int mask = (~0))
+constexpr int ec_to_int(T err) noexcept
 {
-    return static_cast<int>(err) & mask;
+    using Underlying = detail::safe_underlying_type_t<T>;
+
+    static_assert(sizeof(Underlying) <= sizeof(int),
+                  "ec_to_int: underlying type size exceeds sizeof(int), use "
+                  "hj::to_underlying() instead.");
+
+    return static_cast<int>(static_cast<Underlying>(err));
 }
 
 template <typename T>
-static std::string
-ec_to_hex(const T err, bool upper_case = true, std::string prefix = "0x")
+std::string
+ec_to_hex(T err, bool upper_case = true, std::string_view prefix = "0x")
 {
+    using Underlying         = detail::safe_underlying_type_t<T>;
+    using UnsignedUnderlying = std::make_unsigned_t<Underlying>;
+
+    auto u_val = static_cast<UnsignedUnderlying>(err);
+
     std::ostringstream ss;
-    ss << (upper_case ? std::uppercase : std::nouppercase) << std::hex
-       << static_cast<int>(err);
-    return prefix.append(ss.str());
+    if(upper_case)
+        ss << std::uppercase;
+
+    if constexpr(sizeof(Underlying) < 4)
+    {
+        ss << std::hex << static_cast<uint32_t>(u_val);
+    } else
+    {
+        ss << std::hex << u_val;
+    }
+
+    std::string res(prefix);
+    res.append(ss.str());
+    return res;
 }
 
-}
+} // namespace hj
 
-#endif
+
+namespace std
+{
+template <>
+struct is_error_condition_enum<hj::generic_errc> : true_type
+{
+};
+} // namespace std
+
+
+#define HJ_REG_ERR_CONDITION(EnumType, ConditionClassName, ConditionName)      \
+    static_assert(sizeof(std::underlying_type_t<EnumType>) <= sizeof(int),     \
+                  #EnumType " size exceeds sizeof(int), cannot be converted "  \
+                            "to std::error_condition safely!");                \
+    class ConditionClassName final : public std::error_category                \
+    {                                                                          \
+      public:                                                                  \
+        const char *name() const noexcept override { return ConditionName; }   \
+        std::string message(int ev) const override;                            \
+    };                                                                         \
+    inline const std::error_category &get_##ConditionClassName() noexcept      \
+    {                                                                          \
+        static ConditionClassName instance;                                    \
+        return instance;                                                       \
+    }                                                                          \
+    inline std::error_condition make_error_condition(EnumType e) noexcept      \
+    {                                                                          \
+        return std::error_condition(static_cast<int>(e),                       \
+                                    get_##ConditionClassName());               \
+    }                                                                          \
+    namespace std                                                              \
+    {                                                                          \
+    template <>                                                                \
+    struct is_error_condition_enum<EnumType> : true_type                       \
+    {                                                                          \
+    };                                                                         \
+    }
+
+
+#define HJ_REG_ERR_CATEGORY(EnumType, CategoryClassName, CategoryName)         \
+    static_assert(sizeof(std::underlying_type_t<EnumType>) <= sizeof(int),     \
+                  #EnumType " size exceeds sizeof(int), cannot be converted "  \
+                            "to std::error_code safely!");                     \
+    class CategoryClassName : public std::error_category                       \
+    {                                                                          \
+      public:                                                                  \
+        const char *name() const noexcept override { return CategoryName; }    \
+        std::string message(int ev) const override;                            \
+        std::error_condition                                                   \
+        default_error_condition(int ev) const noexcept override;               \
+    };                                                                         \
+    inline const std::error_category &get_##CategoryClassName() noexcept       \
+    {                                                                          \
+        static CategoryClassName instance;                                     \
+        return instance;                                                       \
+    }                                                                          \
+    inline std::error_code make_error_code(EnumType e) noexcept                \
+    {                                                                          \
+        return std::error_code(static_cast<int>(e),                            \
+                               get_##CategoryClassName());                     \
+    }                                                                          \
+    namespace std                                                              \
+    {                                                                          \
+    template <>                                                                \
+    struct is_error_code_enum<EnumType> : true_type                            \
+    {                                                                          \
+    };                                                                         \
+    }
+
+#endif // ERROR_HPP

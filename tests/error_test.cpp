@@ -1,154 +1,237 @@
-
 #include <gtest/gtest.h>
 #include <hj/testing/error.hpp>
+#include <cstdint>
 #include <thread>
+#include <type_traits>
+#include <vector>
 
-enum class err1
+enum class NetError
 {
-    ok = -1,
-    fail,
-    unknown,
+    ok                 = 0,
+    io_fail            = 1,
+    net_fail           = 1001,
+    connection_refused = 1002,
+    timeout            = 1003,
 };
 
-enum err2
+HJ_REG_ERR_CATEGORY(NetError, NetErrorCategory, "net")
+
+std::string NetErrorCategory::message(int ev) const
 {
-    err2_ok       = 0,
-    err2_io_fail  = 1,
-    err2_net_fail = 1001,
-    err2_db_fail  = 2001,
-};
-
-enum err3
-{
-    err3_e1 = 10,
-    err3_e2 = 20
-};
-
-TEST(error, ec_to_int)
-{
-    ASSERT_EQ(hj::ec_to_int(err1::ok) == -1, true);
-    ASSERT_EQ(hj::ec_to_int(err1::fail) == 0, true);
-    ASSERT_EQ(hj::ec_to_int(err1::unknown) == 1, true);
-
-    ASSERT_EQ(hj::ec_to_int(err1::ok, 1) == 1, true);
-    ASSERT_EQ(hj::ec_to_int(err1::fail, 1) == 0, true);
-    ASSERT_EQ(hj::ec_to_int(err1::unknown, 1) == 1, true);
-}
-
-TEST(error, ec_to_hex)
-{
-    ASSERT_EQ(hj::ec_to_hex(err1::ok) == "0xFFFFFFFF", true);
-    ASSERT_EQ(hj::ec_to_hex(err1::ok, false) == "0xffffffff", true);
-    ASSERT_EQ(hj::ec_to_hex(err1::ok, false, "err-") == "err-ffffffff", true);
-    ASSERT_EQ(hj::ec_to_hex(err1::fail) == "0x0", true);
-    ASSERT_EQ(hj::ec_to_hex(err1::unknown) == "0x1", true);
-
-    std::uint16_t err2 = 1024;
-    ASSERT_EQ(hj::ec_to_hex(err2) == "0x400", true);
-
-    std::uint16_t err3 = 65535;
-    ASSERT_EQ(hj::ec_to_hex(err3) == "0xFFFF", true);
-    ASSERT_EQ(hj::ec_to_hex(err3, false) == "0xffff", true);
-    ASSERT_EQ(hj::ec_to_hex(err3, false, "err-") == "err-ffff", true);
-}
-
-TEST(error, reg_and_make_err)
-{
-    hj::register_err("net", err2_net_fail, "network error");
-    hj::register_err("db", err2_db_fail, "db error");
-
-    std::error_code ec1 = hj::make_err(err2_net_fail, "net");
-    std::error_code ec2 = hj::make_err(err2_db_fail, "db");
-    std::error_code ec3 = hj::make_err(9999, "net");
-
-    ASSERT_EQ(ec1.value(), 1001);
-    ASSERT_EQ(ec1.category().name(), std::string("net"));
-    ASSERT_EQ(ec1.message(), std::string("network error"));
-
-    ASSERT_EQ(ec2.value(), 2001);
-    ASSERT_EQ(ec2.category().name(), std::string("db"));
-    ASSERT_EQ(ec2.message(), std::string("db error"));
-
-    ASSERT_EQ(ec3.message(), std::string("unknown error"));
-}
-
-TEST(error, reg_and_make_nested_err)
-{
-    hj::register_err("io", err2_io_fail, "read/write io error");
-    hj::register_err("net", err2_net_fail, "network error");
-    hj::register_err("db", err2_db_fail, "db error");
-
-    auto nested1 = hj::make_err(hj::make_err(err2_net_fail, "net"),
-                                hj::make_err(err2_io_fail, "io"));
-    auto nested2 = hj::make_err(hj::make_err(err2_db_fail, "db"),
-                                hj::make_err(err2_io_fail, "io"));
-
-    ASSERT_EQ(nested1.ec.value(), 1001);
-    ASSERT_EQ(nested1.ec.category().name(), std::string("net"));
-    ASSERT_EQ(nested1.ec.message(), std::string("network error"));
-    ASSERT_NE(nested1.cause, nullptr);
-    ASSERT_EQ(nested1.cause->ec.value(), 1);
-    ASSERT_EQ(nested1.cause->ec.category().name(), std::string("io"));
-    ASSERT_EQ(nested1.cause->ec.message(), std::string("read/write io error"));
-    ASSERT_EQ(nested1.cause->cause, nullptr);
-
-    ASSERT_EQ(nested2.ec.value(), 2001);
-    ASSERT_EQ(nested2.ec.category().name(), std::string("db"));
-    ASSERT_EQ(nested2.ec.message(), std::string("db error"));
-    ASSERT_NE(nested2.cause, nullptr);
-    ASSERT_EQ(nested2.cause->ec.value(), 1);
-    ASSERT_EQ(nested2.cause->ec.category().name(), std::string("io"));
-    ASSERT_EQ(nested2.cause->ec.message(), std::string("read/write io error"));
-    ASSERT_EQ(nested2.cause->cause, nullptr);
-}
-
-TEST(error, concurrent_category)
-{
-    constexpr int            N = 8;
-    std::vector<std::thread> threads;
-    for(int i = 0; i < N; ++i)
+    switch(static_cast<NetError>(ev))
     {
-        threads.emplace_back([i] {
-            std::string cat = "cat" + std::to_string(i);
-            hj::register_err(cat.c_str(), i, "desc" + std::to_string(i));
-            auto ec = hj::make_err(i, cat.c_str());
-            ASSERT_EQ(ec.value(), i);
-            ASSERT_EQ(ec.category().name(), cat);
-            ASSERT_EQ(ec.message(), "desc" + std::to_string(i));
-        });
+        case NetError::ok:
+            return "ok";
+        case NetError::io_fail:
+            return "read/write io error";
+        case NetError::net_fail:
+            return "network error";
+        case NetError::connection_refused:
+            return "connection refused";
+        case NetError::timeout:
+            return "timeout";
+        default:
+            return "unknown error";
     }
-    for(auto &t : threads)
-        t.join();
 }
 
-TEST(error, equivalent)
+std::error_condition
+NetErrorCategory::default_error_condition(int ev) const noexcept
 {
-    hj::register_err("test", 123, "test error");
-    std::error_code      ec = hj::make_err(123, "test");
-    std::error_condition cond(123, ec.category());
-    ASSERT_TRUE(ec.category().equivalent(123, cond));
+    switch(static_cast<NetError>(ev))
+    {
+        case NetError::ok:
+            return hj::generic_errc::success;
+        case NetError::io_fail:
+            return hj::generic_errc::io_failure;
+        case NetError::net_fail:
+        case NetError::connection_refused:
+        case NetError::timeout:
+            return hj::generic_errc::network_failure;
+        default:
+            return std::error_category::default_error_condition(ev);
+    }
 }
 
-TEST(error, unknown_message)
+enum class DbError
 {
-    std::error_code ec = hj::make_err(9999, "not_exist");
-    ASSERT_EQ(ec.message(), "unknown error");
+    ok      = 0,
+    db_fail = 2001,
+};
+
+HJ_REG_ERR_CATEGORY(DbError, DbErrorCategory, "db")
+
+std::string DbErrorCategory::message(int ev) const
+{
+    switch(static_cast<DbError>(ev))
+    {
+        case DbError::ok:
+            return "ok";
+        case DbError::db_fail:
+            return "db error";
+        default:
+            return "unknown error";
+    }
 }
 
-TEST(error, nested_chain_traverse)
+std::error_condition
+DbErrorCategory::default_error_condition(int ev) const noexcept
 {
-    hj::register_err("a", 1, "err_a");
-    hj::register_err("b", 2, "err_b");
-    hj::register_err("c", 3, "err_c");
-    auto n3    = hj::make_err(3, "c");
-    auto n2    = hj::make_err(2, "b");
-    auto n1    = hj::make_err(1, "a");
-    auto chain = hj::err_detail::nested_error_code(
-        n1,
-        std::make_shared<hj::err_detail::nested_error_code>(
-            n2,
-            std::make_shared<hj::err_detail::nested_error_code>(n3)));
-    ASSERT_EQ(chain.ec.message(), "err_a");
-    ASSERT_EQ(chain.cause->ec.message(), "err_b");
-    ASSERT_EQ(chain.cause->cause->ec.message(), "err_c");
+    if(static_cast<DbError>(ev) == DbError::ok)
+        return hj::generic_errc::success;
+    return hj::generic_errc::resource_unavailable;
+}
+
+enum class HugeError : uint64_t
+{
+    ok       = 0,
+    huge_val = 0xFFFFFFFFFFFFFFFFULL
+};
+
+enum class EnumInt8 : int8_t
+{
+    neg = -1,
+    pos = 127
+};
+
+enum class EnumUint8 : uint8_t
+{
+    max_val = 255
+};
+
+enum class PlainEnum
+{
+    e1 = -1,
+    e2 = 0,
+    e3 = 1
+};
+
+
+TEST(error, error_condition_matching)
+{
+    std::error_code ec_refused = NetError::connection_refused;
+    std::error_code ec_timeout = NetError::timeout;
+    std::error_code ec_io      = NetError::io_fail;
+
+    EXPECT_EQ(ec_refused, hj::generic_errc::network_failure);
+    EXPECT_EQ(ec_timeout, hj::generic_errc::network_failure);
+
+    EXPECT_NE(ec_io, hj::generic_errc::network_failure);
+    EXPECT_EQ(ec_io, hj::generic_errc::io_failure);
+
+    std::error_code db_ec = DbError::db_fail;
+    EXPECT_EQ(db_ec, hj::generic_errc::resource_unavailable);
+}
+
+TEST(error, unknown_error)
+{
+    std::error_code ec{99999, get_NetErrorCategory()};
+    EXPECT_EQ(ec.message(), "unknown error");
+}
+
+TEST(error, zero_error)
+{
+    std::error_code ec = NetError::ok;
+    EXPECT_FALSE(ec);
+    EXPECT_EQ(ec.value(), 0);
+    EXPECT_EQ(ec, hj::generic_errc::success);
+}
+
+TEST(error, category_equality)
+{
+    std::error_code ec1 = NetError::net_fail;
+    std::error_code ec2 = NetError::io_fail;
+
+    EXPECT_EQ(ec1.category(), ec2.category());
+    EXPECT_EQ(&ec1.category(), &ec2.category());
+}
+
+TEST(error, different_categories)
+{
+    std::error_code net_ec{1, get_NetErrorCategory()};
+    std::error_code db_ec{1, get_DbErrorCategory()};
+
+    EXPECT_NE(net_ec, db_ec);
+    EXPECT_NE(net_ec.category(), db_ec.category());
+}
+
+TEST(error, copy_move_semantics)
+{
+    hj::nested_error a{NetError::net_fail, NetError::io_fail};
+    hj::nested_error b = a;            // Copy Construct
+    hj::nested_error c = std::move(b); // Move Construct
+
+    EXPECT_EQ(c.ec, NetError::net_fail);
+    ASSERT_NE(c.cause, nullptr);
+    EXPECT_EQ(c.cause->ec, NetError::io_fail);
+
+    EXPECT_EQ(a.ec, NetError::net_fail);
+}
+
+TEST(error, deep_chain)
+{
+    constexpr int    depth = 1000;
+    hj::nested_error current{NetError::io_fail};
+
+    for(int i = 0; i < depth; ++i)
+    {
+        current =
+            hj::make_nested_error(NetError::net_fail,
+                                  std::make_shared<hj::nested_error>(current));
+    }
+
+    int  count = 0;
+    auto node  = std::make_shared<hj::nested_error>(current);
+    while(node)
+    {
+        count++;
+        node = node->cause;
+    }
+    EXPECT_EQ(count, depth + 1);
+}
+
+TEST(error, integral_types_conversion)
+{
+    int8_t  i8 = -1;
+    uint8_t u8 = 255;
+    EXPECT_EQ(hj::ec_to_hex(i8), "0xFF");
+    EXPECT_EQ(hj::ec_to_hex(u8), "0xFF");
+    EXPECT_EQ(hj::ec_to_hex(EnumInt8::neg), "0xFF");
+    EXPECT_EQ(hj::ec_to_hex(EnumUint8::max_val), "0xFF");
+
+    int64_t  i64 = -1;
+    uint64_t u64 = 0xFFFFFFFFFFFFFFFFULL;
+    EXPECT_EQ(hj::ec_to_hex(i64), "0xFFFFFFFFFFFFFFFF");
+    EXPECT_EQ(hj::ec_to_hex(u64), "0xFFFFFFFFFFFFFFFF");
+    EXPECT_EQ(hj::ec_to_hex(HugeError::huge_val), "0xFFFFFFFFFFFFFFFF");
+
+    EXPECT_EQ(hj::to_underlying(HugeError::huge_val), 0xFFFFFFFFFFFFFFFFULL);
+}
+
+TEST(error, compile_time_tests)
+{
+    static_assert(hj::ec_to_int(PlainEnum::e1) == -1,
+                  "constexpr ec_to_int failed");
+    static_assert(hj::ec_to_int(PlainEnum::e2) == 0,
+                  "constexpr ec_to_int failed");
+    static_assert(hj::to_underlying(PlainEnum::e1) == -1,
+                  "constexpr to_underlying failed");
+
+    SUCCEED();
+}
+
+TEST(error, noexcept_specifications)
+{
+    NetError         err = NetError::net_fail;
+    hj::nested_error n_err;
+
+    static_assert(noexcept(make_error_code(err)),
+                  "make_error_code must be noexcept!");
+    static_assert(noexcept(hj::to_underlying(err)),
+                  "to_underlying must be noexcept!");
+    static_assert(noexcept(hj::ec_to_int(err)), "ec_to_int must be noexcept!");
+    static_assert(noexcept(static_cast<bool>(n_err)),
+                  "operator bool must be noexcept!");
+
+    SUCCEED();
 }

@@ -18,17 +18,51 @@
 #ifndef DEBUGGER_HPP
 #define DEBUGGER_HPP
 
-#include <sstream>
 #include <iostream>
-#include <iomanip>
+#include <string>
+#include <string_view>
 #include <vector>
 #include <mutex>
+#include <algorithm>
+#include <cstring>
+#include <type_traits>
 
 #include <fmt/format.h>
 #include <boost/asio.hpp>
 
 namespace hj
 {
+
+class bytes_view
+{
+  public:
+    constexpr bytes_view() noexcept
+        : _data{nullptr}
+        , _size{0}
+    {
+    }
+
+    constexpr bytes_view(const void *data, size_t size) noexcept
+        : _data{static_cast<const unsigned char *>(data)}
+        , _size{size}
+    {
+    }
+
+    template <size_t N>
+    constexpr bytes_view(const unsigned char (&arr)[N]) noexcept
+        : _data{arr}
+        , _size{N}
+    {
+    }
+
+    constexpr const unsigned char *data() const noexcept { return _data; }
+
+    constexpr size_t size() const noexcept { return _size; }
+
+  private:
+    const unsigned char *_data;
+    size_t               _size;
+};
 
 class debugger
 {
@@ -40,10 +74,12 @@ class debugger
         : _os{&std::cout}
     {
     }
+
     explicit debugger(std::ostream &os)
         : _os{&os}
     {
     }
+
     debugger(const debugger &)            = delete;
     debugger &operator=(const debugger &) = delete;
     debugger(debugger &&)                 = delete;
@@ -57,77 +93,203 @@ class debugger
     }
 
     template <typename... Args>
-    inline std::string fmt(const char *style, const Args &...args) const
+    inline std::string fmt(const char *style, Args &&...args) const
     {
-        return _fmt(style, std::forward<const Args &>(args)...);
+        return _dispatch(style, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    inline void print(const char *style, const Args &...args) const
+    inline void print(const char *style, Args &&...args) const
     {
-        *_os << debugger::fmt(style, std::forward<const Args &>(args)...)
-             << std::endl;
+        std::string formatted = fmt(style, std::forward<Args>(args)...);
+        std::lock_guard<std::mutex> lock(_mu);
+        *_os << formatted << std::endl;
     }
 
-    inline void set_ostream(std::ostream &os)
+    inline std::ostream *set_ostream(std::ostream &os)
     {
         std::lock_guard<std::mutex> lock(_mu);
-        _os = &os;
+        std::ostream               *prev = _os;
+        _os                              = &os;
+        return prev;
+    }
+
+    inline void reset_ostream()
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _os = &std::cout;
     }
 
   private:
-    static std::string
-    _fmt(const char *style, const unsigned char *data, const size_t len)
+    template <typename T>
+    struct is_custom_buffer : std::false_type
     {
-        std::ostringstream oss;
-        oss << std::hex << std::setfill('0');
-        size_t count = 0;
-        for(size_t i = 0; i < len; ++i)
+    };
+
+    template <>
+    struct is_custom_buffer<bytes_view> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_custom_buffer<std::vector<uint8_t>> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_custom_buffer<boost::asio::streambuf> : std::true_type
+    {
+    };
+
+    static std::string _fmt_bytes(bytes_view view, bool truncated = false)
+    {
+        const size_t len  = view.size();
+        const auto  *data = view.data();
+        if(len == 0)
+            return "";
+
+        if(data == nullptr)
+            return "<null>";
+
+        fmt::memory_buffer out;
+        const size_t       print_len = std::min(len, buf_sz);
+        for(size_t i = 0; i < print_len; ++i)
         {
             if(i > 0)
-                oss << ' ';
-
-            oss << fmt::format(fmt::runtime(style), data[i]);
-            if(++count >= hj::debugger::buf_sz)
             {
-                oss << " ...";
-                break;
+                fmt::format_to(std::back_inserter(out), " ");
             }
+            fmt::format_to(std::back_inserter(out),
+                           fmt::runtime("{:02x}"),
+                           data[i]);
         }
-        return oss.str();
+
+        if(truncated || len > buf_sz)
+        {
+            fmt::format_to(std::back_inserter(out), " ...");
+        }
+
+        return fmt::to_string(out);
     }
 
-    static std::string _fmt(const char *style, const char *data)
+    static std::string _fmt_impl(const char *style, bytes_view view)
     {
-        std::size_t len = strlen(data);
-        return _fmt(style, reinterpret_cast<const unsigned char *>(data), len);
+        (void) style;
+        return _fmt_bytes(view);
     }
 
-    static std::string _fmt(const char *style, const std::vector<uint8_t> &buf)
+    static std::string _fmt_impl(const char *style, const char *data)
     {
-        return _fmt(style, buf.data(), buf.size());
+        (void) style;
+        if(data == nullptr)
+            return "<null>";
+
+        return _fmt_bytes(bytes_view(data, std::strlen(data)));
     }
 
-    static std::string _fmt(const char                   *style,
-                            const boost::asio::streambuf &buf)
+    static std::string _fmt_impl(const char                 *style,
+                                 const std::vector<uint8_t> &buf)
     {
-        std::string str(boost::asio::buffers_begin(buf.data()),
-                        boost::asio::buffers_end(buf.data()));
-        return _fmt(style,
-                    reinterpret_cast<const unsigned char *>(str.data()),
-                    str.size());
+        (void) style;
+        return _fmt_bytes(bytes_view(buf.data(), buf.size()));
     }
 
-    std::ostream *_os;
-    std::mutex    _mu;
+    static std::string _fmt_impl(const char                   *style,
+                                 const boost::asio::streambuf &buf)
+    {
+        (void) style;
+        auto   buffers   = buf.data();
+        size_t total_len = boost::asio::buffer_size(buffers);
+        size_t read_len  = std::min(total_len, buf_sz);
+
+        std::vector<unsigned char> temp;
+        temp.reserve(read_len);
+
+        auto it = boost::asio::buffers_begin(buffers);
+        for(size_t i = 0; i < read_len; ++i, ++it)
+        {
+            temp.push_back(static_cast<unsigned char>(*it));
+        }
+
+        return _fmt_bytes(bytes_view(temp.data(), temp.size()),
+                          total_len > buf_sz);
+    }
+
+    static std::string _dispatch(const char *style)
+    {
+        return std::string(style);
+    }
+
+    template <typename Arg1>
+    static std::string _dispatch(const char *style, Arg1 &&arg1)
+    {
+        using RawArg1 = std::decay_t<Arg1>;
+
+        if constexpr(is_custom_buffer<RawArg1>::value)
+        {
+            return _fmt_impl(style, std::forward<Arg1>(arg1));
+        } else if constexpr(std::is_same_v<RawArg1, const char *>
+                            || std::is_same_v<RawArg1, char *>)
+        {
+            return _fmt_impl(style, arg1);
+        } else if constexpr(std::is_array_v<RawArg1>
+                            && std::is_same_v<std::remove_extent_t<RawArg1>,
+                                              char>)
+        {
+            return _fmt_impl(style, static_cast<const char *>(arg1));
+        } else
+        {
+            return fmt::format(fmt::runtime(style), std::forward<Arg1>(arg1));
+        }
+    }
+
+    template <typename Arg1, typename Arg2, typename... Rest>
+    static std::string
+    _dispatch(const char *style, Arg1 &&arg1, Arg2 &&arg2, Rest &&...rest)
+    {
+        return fmt::format(fmt::runtime(style),
+                           std::forward<Arg1>(arg1),
+                           std::forward<Arg2>(arg2),
+                           std::forward<Rest>(rest)...);
+    }
+
+    std::ostream      *_os;
+    mutable std::mutex _mu;
 };
 
-}
+class ostream_guard
+{
+  public:
+    explicit ostream_guard(std::ostream &new_os)
+        : _prev_os(debugger::instance().set_ostream(new_os))
+    {
+    }
+
+    ~ostream_guard()
+    {
+        if(_prev_os)
+        {
+            debugger::instance().set_ostream(*_prev_os);
+        } else
+        {
+            debugger::instance().reset_ostream();
+        }
+    }
+
+    ostream_guard(const ostream_guard &)            = delete;
+    ostream_guard &operator=(const ostream_guard &) = delete;
+
+  private:
+    std::ostream *_prev_os;
+};
+
+} // namespace hj
 
 #ifdef DEBUG
-#define PRINT(style, ...) hj::debugger::instance().print(style, ##__VA_ARGS__)
+#define HJ_PRINT(style, ...)                                                   \
+    hj::debugger::instance().print(style, ##__VA_ARGS__)
 #else
-#define PRINT(style, ...)
+#define HJ_PRINT(style, ...) ((void) 0)
 #endif
 
-#endif
+#endif // DEBUGGER_HPP

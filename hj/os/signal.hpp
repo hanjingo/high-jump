@@ -19,52 +19,52 @@
 #ifndef SIGNAL_HPP
 #define SIGNAL_HPP
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <csignal>
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <mutex>
-#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+
+class SignalTest;
 
 namespace hj
 {
 
 using sig_t = int;
 
-// 队列满时的丢包处理策略
 enum class sig_overflow_policy
 {
-    reject,   // 拒绝新信号，保持旧信号
-    overwrite // 覆盖最旧的未处理信号
+    reject,
+    overwrite
 };
 
-// 被信号打断的阻塞系统调用处理策略 (POSIX sigaction SA_RESTART 语义)
 enum class sig_interrupt_policy
 {
-    restart, // 自动重启被打断的系统调用 (SA_RESTART)
-    none     // 不自动重启，使阻塞系统调用返回 -1 且 errno = EINTR
+    restart,
+    none
 };
 
 class sighandler
 {
   public:
-    static constexpr size_t RING_BUFFER_SIZE = 128; // 必须是 2 的幂
+    static constexpr size_t   MAX_SIGNALS            = 64;
+    static constexpr uint32_t MAX_PENDING_PER_SIGNAL = 100;
 
     sighandler()
-        : _head(0)
-        , _tail(0)
-        , _overflow_policy(sig_overflow_policy::reject)
+        : _overflow_policy(sig_overflow_policy::overwrite)
         , _dropped_count(0)
     {
-        clear_queue();
+        _clear_queue_internal();
     }
 
-    ~sighandler() { _g_inst.store(nullptr, std::memory_order_release); }
+    ~sighandler() = default;
 
     sighandler(const sighandler &)            = delete;
     sighandler &operator=(const sighandler &) = delete;
@@ -73,36 +73,18 @@ class sighandler
 
     static sighandler &instance() noexcept
     {
-        static sighandler inst;
-        _g_inst.store(&inst, std::memory_order_release);
-        return inst;
+        static sighandler *inst = new sighandler();
+        return *inst;
     }
 
-    // 清空内部环形队列与丢包统计（用于测试隔离和系统重置）
-    void clear_queue() noexcept
-    {
-        std::lock_guard<std::mutex> lock(_mu);
-        _head.store(0, std::memory_order_relaxed);
-        _tail.store(0, std::memory_order_relaxed);
-        _dropped_count.store(0, std::memory_order_relaxed);
-
-        for(size_t i = 0; i < RING_BUFFER_SIZE; ++i)
-        {
-            _ring_buffer[i].sig.store(0, std::memory_order_relaxed);
-            _ring_buffer[i].sequence.store(i, std::memory_order_relaxed);
-        }
-    }
-
-    // 设置与获取队列溢出策略
     void set_overflow_policy(sig_overflow_policy policy) noexcept
     {
-        std::lock_guard<std::mutex> lock(_mu);
-        _overflow_policy = policy;
+        _overflow_policy.store(policy, std::memory_order_relaxed);
     }
 
     sig_overflow_policy overflow_policy() const noexcept
     {
-        return _overflow_policy;
+        return _overflow_policy.load(std::memory_order_relaxed);
     }
 
     uint64_t dropped_count() const noexcept
@@ -134,7 +116,6 @@ class sighandler
         return is_one_shot(sig);
     }
 
-    // 注册信号捕获，可指定是否为 one_shot 及 interrupt_policy (SA_RESTART)
     void
     sigcatch(sig_t                      sig,
              std::function<void(sig_t)> cb,
@@ -160,11 +141,32 @@ class sighandler
         }
     }
 
+
     void sigunregister(sig_t sig)
     {
         std::lock_guard<std::mutex> lock(_mu);
         _callbacks.erase(sig);
         _one_shot.erase(sig);
+        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
+            _pending_counts[sig].store(0, std::memory_order_relaxed);
+
+        _restore_sys_handler(sig);
+    }
+
+    void sigunregister(const std::vector<sig_t> &sigs)
+    {
+        for(auto sig : sigs)
+            sigunregister(sig);
+    }
+
+    void sigignore(sig_t sig)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _callbacks.erase(sig);
+        _one_shot.erase(sig);
+
+        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
+            _pending_counts[sig].store(0, std::memory_order_relaxed);
 
 #if defined(_WIN32) || defined(_WIN64)
         ::signal(sig, SIG_IGN);
@@ -175,27 +177,34 @@ class sighandler
 #endif
     }
 
-    void sigunregister(const std::vector<sig_t> &sigs)
-    {
-        for(auto sig : sigs)
-            sigunregister(sig);
-    }
-
     void sigignore(const std::vector<sig_t> &sigs)
     {
-        std::lock_guard<std::mutex> lock(_mu);
         for(auto sig : sigs)
-        {
-            _callbacks.erase(sig);
-            _one_shot.erase(sig);
+            sigignore(sig);
+    }
+
+    void sigrestore_default(sig_t sig)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _callbacks.erase(sig);
+        _one_shot.erase(sig);
+
+        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
+            _pending_counts[sig].store(0, std::memory_order_relaxed);
+
 #if defined(_WIN32) || defined(_WIN64)
-            ::signal(sig, SIG_IGN);
+        ::signal(sig, SIG_DFL);
 #else
-            struct sigaction sa{};
-            sa.sa_handler = SIG_IGN;
-            ::sigaction(sig, &sa, nullptr);
+        struct sigaction sa{};
+        sa.sa_handler = SIG_DFL;
+        ::sigaction(sig, &sa, nullptr);
 #endif
-        }
+    }
+
+    void sigrestore_default(const std::vector<sig_t> &sigs)
+    {
+        for(auto sig : sigs)
+            sigrestore_default(sig);
     }
 
     template <typename... Args>
@@ -204,94 +213,167 @@ class sighandler
         static_assert((std::is_same_v<Args, sig_t> && ...),
                       "All arguments to sigraise must be of type sig_t");
 
-#if defined(_WIN32) || defined(_WIN64)
-        (_handle(args), ...);
-        return true;
-#else
         return ((::raise(args) == 0) && ...);
-#endif
     }
 
-    void poll()
+    template <typename... Args>
+    void signotify(Args... args) noexcept
     {
-        while(true)
+        static_assert((std::is_same_v<Args, sig_t> && ...),
+                      "All arguments to signotify must be of type sig_t");
+
+        (_handle(args), ...);
+    }
+
+    template <typename... Args>
+    void sigdispatch(Args... args) noexcept
+    {
+        signotify(args...);
+    }
+
+    size_t poll(size_t max_events = std::numeric_limits<size_t>::max())
+    {
+        size_t total_processed = 0;
+
+        for(size_t sig = 1; sig < MAX_SIGNALS; ++sig)
         {
-            sig_t sig = _pop_signal();
-            if(sig == 0)
+            if(total_processed >= max_events)
                 break;
+
+            uint32_t count =
+                _pending_counts[sig].exchange(0, std::memory_order_acq_rel);
+            if(count == 0)
+                continue;
 
             std::function<void(sig_t)> cb;
             bool                       is_one_shot_sig = false;
 
             {
                 std::lock_guard<std::mutex> lock(_mu);
-                auto                        it = _callbacks.find(sig);
+                auto it = _callbacks.find(static_cast<sig_t>(sig));
                 if(it != _callbacks.end())
                 {
                     cb              = it->second;
-                    is_one_shot_sig = _one_shot[sig];
+                    is_one_shot_sig = _one_shot[static_cast<sig_t>(sig)];
                     if(is_one_shot_sig)
                     {
                         _callbacks.erase(it);
-                        _one_shot.erase(sig);
-
-#if defined(_WIN32) || defined(_WIN64)
-                        ::signal(sig, SIG_IGN);
-#else
-                        struct sigaction sa{};
-                        sa.sa_handler = SIG_IGN;
-                        ::sigaction(sig, &sa, nullptr);
-#endif
+                        _one_shot.erase(static_cast<sig_t>(sig));
+                        _restore_sys_handler(static_cast<sig_t>(sig));
                     }
                 }
             }
 
             if(cb)
             {
-                try
+                uint32_t exec_times = is_one_shot_sig ? 1 : count;
+
+                size_t budget = max_events - total_processed;
+                if(exec_times > budget)
                 {
-                    cb(sig);
+                    uint32_t remaining =
+                        exec_times - static_cast<uint32_t>(budget);
+                    _pending_counts[sig].fetch_add(remaining,
+                                                   std::memory_order_relaxed);
+                    exec_times = static_cast<uint32_t>(budget);
                 }
-                catch(const std::exception &e)
+
+                for(uint32_t i = 0; i < exec_times; ++i)
                 {
-                    std::cerr << "Signal callback exception for sig " << sig
-                              << ": " << e.what() << std::endl;
-                }
-                catch(...)
-                {
-                    std::cerr << "Unknown exception in signal callback for sig "
-                              << sig << std::endl;
+                    try
+                    {
+                        cb(static_cast<sig_t>(sig));
+                        total_processed++;
+                    }
+                    catch(const std::exception &e)
+                    {
+                        std::cerr << "Signal callback exception for sig " << sig
+                                  << ": " << e.what() << std::endl;
+                    }
+                    catch(...)
+                    {
+                        std::cerr
+                            << "Unknown exception in signal callback for sig "
+                            << sig << std::endl;
+                    }
                 }
             }
         }
+
+        return total_processed;
     }
 
   private:
-    struct alignas(64) Slot
-    {
-        std::atomic<sig_t>  sig{0};
-        std::atomic<size_t> sequence{0};
-    };
+    friend class ::SignalTest;
 
-    static void _install_sys_handler(sig_t sig, sig_interrupt_policy int_policy)
+    void _clear_queue_internal() noexcept
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        _dropped_count.store(0, std::memory_order_relaxed);
+        for(size_t i = 0; i < MAX_SIGNALS; ++i)
+            _pending_counts[i].store(0, std::memory_order_relaxed);
+    }
+
+    static_assert(std::atomic<uint32_t>::is_always_lock_free,
+                  "std::atomic<uint32_t> MUST be hardware lock-free!");
+    static_assert(std::atomic<uint64_t>::is_always_lock_free,
+                  "std::atomic<uint64_t> MUST be hardware lock-free!");
+
+    void _install_sys_handler(sig_t sig, sig_interrupt_policy int_policy)
     {
 #if defined(_WIN32) || defined(_WIN64)
         (void) int_policy;
-        ::signal(sig, &sighandler::_handle);
+        auto prev = ::signal(sig, &sighandler::_handle);
+        if(_has_saved_action.find(sig) == _has_saved_action.end())
+        {
+            _saved_win_handlers[sig] = prev;
+            _has_saved_action[sig]   = true;
+        }
 #else
         struct sigaction sa{};
         sa.sa_handler = &sighandler::_handle;
         sigemptyset(&sa.sa_mask);
 
         if(int_policy == sig_interrupt_policy::restart)
-        {
             sa.sa_flags = SA_RESTART;
-        } else
+        else
+            sa.sa_flags = 0;
+
+        struct sigaction old_sa{};
+        if(::sigaction(sig, &sa, &old_sa) == 0)
         {
-            sa.sa_flags = 0; // 不带 SA_RESTART，慢速系统调用被打断时返回 EINTR
+            if(_has_saved_action.find(sig) == _has_saved_action.end())
+            {
+                _saved_posix_actions[sig] = old_sa;
+                _has_saved_action[sig]    = true;
+            }
         }
-        ::sigaction(sig, &sa, nullptr);
 #endif
+    }
+
+    void _restore_sys_handler(sig_t sig)
+    {
+        auto it = _has_saved_action.find(sig);
+        if(it == _has_saved_action.end())
+        {
+#if defined(_WIN32) || defined(_WIN64)
+            ::signal(sig, SIG_DFL);
+#else
+            struct sigaction sa{};
+            sa.sa_handler = SIG_DFL;
+            ::sigaction(sig, &sa, nullptr);
+#endif
+            return;
+        }
+
+#if defined(_WIN32) || defined(_WIN64)
+        ::signal(sig, _saved_win_handlers[sig]);
+        _saved_win_handlers.erase(sig);
+#else
+        ::sigaction(sig, &_saved_posix_actions[sig], nullptr);
+        _saved_posix_actions.erase(sig);
+#endif
+        _has_saved_action.erase(it);
     }
 
     static void _handle(int sig) noexcept
@@ -300,90 +382,44 @@ class sighandler
         ::signal(sig, &sighandler::_handle);
 #endif
 
-        sighandler *inst = _g_inst.load(std::memory_order_acquire);
-        if(inst)
-            inst->_push_signal(sig);
-    }
-
-    void _push_signal(sig_t sig) noexcept
-    {
-        size_t pos = _tail.load(std::memory_order_relaxed);
-
-        while(true)
+        sighandler &inst = instance();
+        if(sig >= 0 && static_cast<size_t>(sig) < MAX_SIGNALS)
         {
-            Slot    &slot = _ring_buffer[pos % RING_BUFFER_SIZE];
-            size_t   seq  = slot.sequence.load(std::memory_order_acquire);
-            intptr_t diff =
-                static_cast<intptr_t>(seq) - static_cast<intptr_t>(pos);
+            sig_overflow_policy policy =
+                inst._overflow_policy.load(std::memory_order_relaxed);
+            uint32_t current =
+                inst._pending_counts[sig].load(std::memory_order_relaxed);
 
-            if(diff == 0)
+            if(current >= MAX_PENDING_PER_SIGNAL)
             {
-                if(_tail.compare_exchange_weak(pos,
-                                               pos + 1,
-                                               std::memory_order_relaxed))
-                {
-                    slot.sig.store(sig, std::memory_order_relaxed);
-                    slot.sequence.store(pos + 1, std::memory_order_release);
+                inst._dropped_count.fetch_add(1, std::memory_order_relaxed);
+                if(policy == sig_overflow_policy::reject)
                     return;
-                }
-            } else if(diff < 0)
-            {
-                _dropped_count.fetch_add(1, std::memory_order_relaxed);
-                return;
+
             } else
             {
-                pos = _tail.load(std::memory_order_relaxed);
+                inst._pending_counts[sig].fetch_add(1,
+                                                    std::memory_order_relaxed);
             }
         }
     }
-
-    sig_t _pop_signal() noexcept
-    {
-        size_t pos = _head.load(std::memory_order_relaxed);
-
-        while(true)
-        {
-            size_t tail = _tail.load(std::memory_order_acquire);
-            if(pos == tail)
-            {
-                return 0;
-            }
-
-            Slot    &slot = _ring_buffer[pos % RING_BUFFER_SIZE];
-            size_t   seq  = slot.sequence.load(std::memory_order_acquire);
-            intptr_t diff =
-                static_cast<intptr_t>(seq) - static_cast<intptr_t>(pos + 1);
-
-            if(diff == 0)
-            {
-                if(_head.compare_exchange_weak(pos,
-                                               pos + 1,
-                                               std::memory_order_relaxed))
-                {
-                    sig_t sig = slot.sig.load(std::memory_order_relaxed);
-                    slot.sequence.store(pos + RING_BUFFER_SIZE,
-                                        std::memory_order_release);
-                    return sig;
-                }
-            } else
-            {
-                std::this_thread::yield();
-            }
-        }
-    }
-
-    inline static std::atomic<sighandler *> _g_inst{nullptr};
 
     std::mutex                                            _mu;
     std::unordered_map<sig_t, std::function<void(sig_t)>> _callbacks;
     std::unordered_map<sig_t, bool>                       _one_shot;
 
-    sig_overflow_policy   _overflow_policy;
-    std::atomic<uint64_t> _dropped_count;
+#if defined(_WIN32) || defined(_WIN64)
+    using win_handler_t = void (*)(int);
+    std::unordered_map<sig_t, win_handler_t> _saved_win_handlers;
+#else
+    std::unordered_map<sig_t, struct sigaction> _saved_posix_actions;
+#endif
+    std::unordered_map<sig_t, bool> _has_saved_action;
 
-    std::array<Slot, RING_BUFFER_SIZE> _ring_buffer;
-    std::atomic<size_t>                _head;
-    std::atomic<size_t>                _tail;
+    std::atomic<sig_overflow_policy> _overflow_policy;
+    std::atomic<uint64_t>            _dropped_count;
+
+    std::array<std::atomic<uint32_t>, MAX_SIGNALS> _pending_counts;
 };
 
 } // namespace hj

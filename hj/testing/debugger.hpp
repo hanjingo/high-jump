@@ -28,11 +28,48 @@
 #include <type_traits>
 
 #include <fmt/format.h>
-#include <boost/asio.hpp>
 
 namespace hj
 {
 
+class debugger;
+
+/**
+ * @brief RAII Guard for temporarily redirecting the process-wide debugger output stream.
+ *
+ * ### Concurrency & Scope Contract:
+ * - **Process-Wide Impact**: This guard alters the global output sink of `debugger::instance()`.
+ *   It is **NOT thread-local**. Redirects affect all threads calling `print()` concurrently.
+ * - **LIFO Nesting Requirement**: In multi-threaded environments, interleaved instantiation and 
+ *   destruction of `ostream_guard` across different threads will corrupt the stream restoration 
+ *   stack, leading to dangling `std::ostream` pointers or incorrect sink destinations.
+ * - **Recommended Usage**: Strictly intended for **single-threaded test fixtures**, 
+ *   **sequential test execution**, or **process startup/initialization phases**.
+ */
+class ostream_guard
+{
+  public:
+    explicit ostream_guard(std::ostream &new_os);
+    ~ostream_guard();
+
+    ostream_guard(const ostream_guard &)            = delete;
+    ostream_guard &operator=(const ostream_guard &) = delete;
+    ostream_guard(ostream_guard &&other) noexcept;
+    ostream_guard &operator=(ostream_guard &&other) noexcept;
+
+  private:
+    std::ostream *_prev_os{nullptr};
+    bool          _active{true};
+};
+
+/**
+ * @brief Non-owning view of a contiguous sequence of bytes.
+ *
+ * Semantic contracts:
+ * - data == nullptr && size == 0 : Empty view (valid, represents 0 bytes).
+ * - data != nullptr && size == 0 : Empty view (valid, represents 0 bytes).
+ * - data == nullptr && size != 0 : Invalid view (dangling or uninitialized pointer).
+ */
 class bytes_view
 {
   public:
@@ -48,9 +85,9 @@ class bytes_view
     {
     }
 
-    template <size_t N>
-    constexpr bytes_view(const unsigned char (&arr)[N]) noexcept
-        : _data{arr}
+    template <typename T, size_t N, typename = std::enable_if_t<sizeof(T) == 1>>
+    constexpr bytes_view(T (&arr)[N]) noexcept
+        : _data{reinterpret_cast<const unsigned char *>(arr)}
         , _size{N}
     {
     }
@@ -59,13 +96,39 @@ class bytes_view
 
     constexpr size_t size() const noexcept { return _size; }
 
+    /// Returns true if the byte sequence is logically empty (size == 0).
+    constexpr bool empty() const noexcept { return _size == 0; }
+
+    /// Returns true if this view holds an invalid dangling pointer (data == nullptr && size != 0).
+    constexpr bool is_invalid() const noexcept
+    {
+        return _data == nullptr && _size != 0;
+    }
+
   private:
     const unsigned char *_data;
     size_t               _size;
 };
 
+/**
+ * @brief Thread-safe logging and hex-formatting utility.
+ *
+ * ### Concurrency & Lifetime Safety Contract:
+ * - **Data Access Synchronization**: Member methods (`print`, `set_ostream`, `reset_ostream`, `flush`) 
+ *   are synchronized via internal `std::mutex`. Simultaneous calls from multiple threads 
+ *   will not cause data races on internal state or output interleaving per line.
+ * - **Sink Lifetime Responsibility**: The `debugger` instance holds a **NON-OWNING** 
+ *   pointer to `std::ostream`. It is the **CALLER'S RESPONSIBILITY** to guarantee that 
+ *   the target `std::ostream` outlives all concurrent or subsequent `print()` operations.
+ * - **Dangling Sink Hazard**: Dynamically replacing the output stream (e.g., via `set_ostream` 
+ *   or `ostream_guard`) with a local/temporary stream while other worker threads are 
+ *   actively logging can lead to USE-AFTER-FREE (dangling stream access). Ensure stream 
+ *   redirects are properly scoped or synchronized at application boundaries.
+ */
 class debugger
 {
+    friend class ostream_guard;
+
   public:
     static constexpr size_t buf_sz = 4096;
 
@@ -103,17 +166,28 @@ class debugger
     {
         std::string formatted = fmt(style, std::forward<Args>(args)...);
         std::lock_guard<std::mutex> lock(_mu);
-        *_os << formatted << std::endl;
+        *_os << formatted << '\n';
     }
 
-    inline std::ostream *set_ostream(std::ostream &os)
+    inline void flush()
     {
         std::lock_guard<std::mutex> lock(_mu);
-        std::ostream               *prev = _os;
-        _os                              = &os;
-        return prev;
+        if(_os)
+            _os->flush();
     }
 
+    /**
+     * @brief Factory method: Redirects output stream and returns an RAII Guard.
+     * @details The stream redirection is held until the returned `ostream_guard` goes out of scope.
+     * @param os Target output stream.
+     * @return `ostream_guard` object managing the scope of this redirection.
+     */
+    [[nodiscard]] inline ostream_guard set_ostream(std::ostream &os)
+    {
+        return ostream_guard(os);
+    }
+
+    /// Resets stream destination back to standard std::cout.
     inline void reset_ostream()
     {
         std::lock_guard<std::mutex> lock(_mu);
@@ -121,6 +195,39 @@ class debugger
     }
 
   private:
+    inline std::ostream *_set_ostream_impl(std::ostream &os)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        std::ostream               *prev = _os;
+        _os                              = &os;
+        return prev;
+    }
+
+    inline void _restore_ostream_impl(std::ostream *prev)
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+        if(prev)
+        {
+            _os = prev;
+        } else
+        {
+            _os = &std::cout;
+        }
+    }
+
+    template <typename T, typename = void>
+    struct is_asio_streambuf : std::false_type
+    {
+    };
+
+    template <typename T>
+    struct is_asio_streambuf<
+        T,
+        std::void_t<decltype(std::declval<const T &>().data())>>
+        : std::true_type
+    {
+    };
+
     template <typename T>
     struct is_custom_buffer : std::false_type
     {
@@ -136,23 +243,23 @@ class debugger
     {
     };
 
-    template <>
-    struct is_custom_buffer<boost::asio::streambuf> : std::true_type
-    {
-    };
-
     static std::string _fmt_bytes(bytes_view view, bool truncated = false)
     {
-        const size_t len  = view.size();
-        const auto  *data = view.data();
-        if(len == 0)
+        if(view.empty())
+        {
             return "";
+        }
 
-        if(data == nullptr)
+        if(view.is_invalid())
+        {
             return "<null>";
+        }
 
         fmt::memory_buffer out;
+        const size_t       len       = view.size();
+        const auto        *data      = view.data();
         const size_t       print_len = std::min(len, buf_sz);
+
         for(size_t i = 0; i < print_len; ++i)
         {
             if(i > 0)
@@ -182,8 +289,9 @@ class debugger
     {
         (void) style;
         if(data == nullptr)
+        {
             return "<null>";
-
+        }
         return _fmt_bytes(bytes_view(data, std::strlen(data)));
     }
 
@@ -194,8 +302,9 @@ class debugger
         return _fmt_bytes(bytes_view(buf.data(), buf.size()));
     }
 
-    static std::string _fmt_impl(const char                   *style,
-                                 const boost::asio::streambuf &buf)
+    template <typename Streambuf>
+    static std::string _fmt_impl_streambuf(const char      *style,
+                                           const Streambuf &buf)
     {
         (void) style;
         auto   buffers   = buf.data();
@@ -223,24 +332,20 @@ class debugger
     template <typename Arg1>
     static std::string _dispatch(const char *style, Arg1 &&arg1)
     {
-        using RawArg1 = std::decay_t<Arg1>;
+        using RawArg1 = std::remove_cv_t<std::remove_reference_t<Arg1>>;
 
-        if constexpr(is_custom_buffer<RawArg1>::value)
-        {
+        if constexpr(std::is_array_v<RawArg1>
+                     && sizeof(std::remove_extent_t<RawArg1>) == 1)
+            return _fmt_bytes(bytes_view(arg1, std::extent_v<RawArg1>));
+        else if constexpr(is_custom_buffer<RawArg1>::value)
             return _fmt_impl(style, std::forward<Arg1>(arg1));
-        } else if constexpr(std::is_same_v<RawArg1, const char *>
-                            || std::is_same_v<RawArg1, char *>)
-        {
+        else if constexpr(is_asio_streambuf<RawArg1>::value)
+            return _fmt_impl_streambuf(style, std::forward<Arg1>(arg1));
+        else if constexpr(std::is_same_v<RawArg1, const char *>
+                          || std::is_same_v<RawArg1, char *>)
             return _fmt_impl(style, arg1);
-        } else if constexpr(std::is_array_v<RawArg1>
-                            && std::is_same_v<std::remove_extent_t<RawArg1>,
-                                              char>)
-        {
-            return _fmt_impl(style, static_cast<const char *>(arg1));
-        } else
-        {
+        else
             return fmt::format(fmt::runtime(style), std::forward<Arg1>(arg1));
-        }
     }
 
     template <typename Arg1, typename Arg2, typename... Rest>
@@ -257,39 +362,45 @@ class debugger
     mutable std::mutex _mu;
 };
 
-class ostream_guard
+inline ostream_guard::ostream_guard(std::ostream &new_os)
+    : _prev_os(debugger::instance()._set_ostream_impl(new_os))
+    , _active(true)
 {
-  public:
-    explicit ostream_guard(std::ostream &new_os)
-        : _prev_os(debugger::instance().set_ostream(new_os))
+}
+
+inline ostream_guard::~ostream_guard()
+{
+    if(_active)
+        debugger::instance()._restore_ostream_impl(_prev_os);
+}
+
+inline ostream_guard::ostream_guard(ostream_guard &&other) noexcept
+    : _prev_os(other._prev_os)
+    , _active(other._active)
+{
+    other._active = false;
+}
+
+inline ostream_guard &ostream_guard::operator=(ostream_guard &&other) noexcept
+{
+    if(this != &other)
     {
+        if(_active)
+            debugger::instance()._restore_ostream_impl(_prev_os);
+
+        _prev_os      = other._prev_os;
+        _active       = other._active;
+        other._active = false;
     }
-
-    ~ostream_guard()
-    {
-        if(_prev_os)
-        {
-            debugger::instance().set_ostream(*_prev_os);
-        } else
-        {
-            debugger::instance().reset_ostream();
-        }
-    }
-
-    ostream_guard(const ostream_guard &)            = delete;
-    ostream_guard &operator=(const ostream_guard &) = delete;
-
-  private:
-    std::ostream *_prev_os;
-};
+    return *this;
+}
 
 } // namespace hj
 
 #ifdef DEBUG
-#define HJ_PRINT(style, ...)                                                   \
-    hj::debugger::instance().print(style, ##__VA_ARGS__)
+#define PRINT(style, ...) hj::debugger::instance().print(style, ##__VA_ARGS__)
 #else
-#define HJ_PRINT(style, ...) ((void) 0)
+#define PRINT(style, ...) ((void) 0)
 #endif
 
 #endif // DEBUGGER_HPP

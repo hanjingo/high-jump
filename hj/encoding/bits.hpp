@@ -19,138 +19,254 @@
 #ifndef BITS_HPP
 #define BITS_HPP
 
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
 #include <string>
-#include <bitset>
 #include <type_traits>
-#include <cstring>
 
-namespace hj
+#if __cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)
+#if __has_include(<bit>)
+#include <bit>
+#define HJ_BITS_HAS_STD_BIT 1
+#endif
+#endif
+
+#if !defined(HJ_BITS_HAS_STD_BIT) && defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
+namespace hj::bits
 {
 
-class bits
+namespace detail
 {
-  public:
-    template <typename T>
-    static bool get(const T src, const unsigned int pos)
+template <typename T>
+inline constexpr bool is_valid_bit_type_v =
+    std::is_unsigned_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>;
+} // namespace detail
+
+
+template <typename T>
+constexpr bool try_get(const T src, const std::size_t pos, bool &val) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    constexpr std::size_t total_bits = sizeof(T) * 8;
+
+    if(pos >= total_bits)
+        return false;
+
+    val = static_cast<bool>((src >> pos) & T(1));
+    return true;
+}
+
+template <typename T>
+[[nodiscard]] constexpr bool get(const T src, const std::size_t pos)
+{
+    bool val = false;
+    if(!try_get(src, pos, val))
+        throw std::out_of_range("bit position out of bounds");
+
+    return val;
+}
+
+template <typename T>
+constexpr bool
+try_put(T &src, const std::size_t pos, const bool bit = true) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    constexpr std::size_t total_bits = sizeof(T) * 8;
+
+    if(pos >= total_bits)
+        return false;
+
+    const T mask = T(1) << pos;
+    if(bit)
+        src |= mask;
+    else
+        src &= ~mask;
+
+    return true;
+}
+
+template <typename T>
+constexpr T &put(T &src, const std::size_t pos, const bool bit = true)
+{
+    if(!try_put(src, pos, bit))
+        throw std::out_of_range("bit position out of bounds");
+
+    return src;
+}
+
+template <typename T>
+constexpr bool try_flip(T &src, const std::size_t pos) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    constexpr std::size_t total_bits = sizeof(T) * 8;
+    if(pos >= total_bits)
+        return false;
+
+    const T mask = T(1) << pos;
+    src ^= mask;
+    return true;
+}
+
+template <typename T>
+constexpr T &flip(T &src, const std::size_t pos)
+{
+    if(!try_flip(src, pos))
+        throw std::out_of_range("bit position out of bounds");
+
+    return src;
+}
+
+template <typename T>
+constexpr T &flip(T &src) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    src = static_cast<T>(~src);
+    return src;
+}
+
+template <typename T>
+constexpr bool try_extract(const T           src,
+                           const std::size_t offset,
+                           const std::size_t width,
+                           T                &val) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    constexpr std::size_t total_bits = sizeof(T) * 8;
+    if(width == 0 || offset >= total_bits || offset + width > total_bits)
+        return false;
+
+    const T mask = (width == total_bits) ? ~T(0) : ((T(1) << width) - T(1));
+    val          = (src >> offset) & mask;
+    return true;
+}
+
+template <typename T>
+[[nodiscard]] constexpr T
+extract(const T src, const std::size_t offset, const std::size_t width)
+{
+    T val = T(0);
+    if(!try_extract(src, offset, width, val))
+        throw std::out_of_range("bitfield offset or width out of bounds");
+
+    return val;
+}
+
+template <typename T>
+constexpr bool try_insert(T                &src,
+                          const std::size_t offset,
+                          const std::size_t width,
+                          const T           value) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    constexpr std::size_t total_bits = sizeof(T) * 8;
+    if(width == 0 || offset >= total_bits || offset + width > total_bits)
+        return false;
+
+    const T mask = (width == total_bits) ? ~T(0) : ((T(1) << width) - T(1));
+    src          = (src & ~(mask << offset)) | ((value & mask) << offset);
+    return true;
+}
+
+template <typename T>
+constexpr T &
+insert(T &src, const std::size_t offset, const std::size_t width, const T value)
+{
+    if(!try_insert(src, offset, width, value))
+        throw std::out_of_range("bitfield offset or width out of bounds");
+
+    return src;
+}
+
+template <typename T>
+constexpr T &clear(T &src) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    src = T(0);
+    return src;
+}
+
+template <typename T>
+constexpr T &set_all(T &src) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    src = static_cast<T>(~T(0));
+    return src;
+}
+
+template <typename T>
+constexpr bool
+to_string(const T &src, char *buf, const std::size_t buf_size) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    constexpr std::size_t sz = sizeof(T) * 8;
+    if(buf == nullptr || buf_size <= sz)
+        return false;
+
+    for(std::size_t i = 0; i < sz; ++i)
     {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        return (src >> (pos - 1)) & 1;
+        std::size_t shift = sz - 1 - i;
+        buf[i]            = ((src >> shift) & T(1)) ? '1' : '0';
     }
 
-    template <typename T>
-    static T &put(T &src, const unsigned int pos)
-    {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        return src |= (1 << (pos - 1));
-    }
+    buf[sz] = '\0';
+    return true;
+}
 
-    template <typename T>
-    static T &put(T &src, const unsigned int pos, const bool bit)
-    {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        return bit ? src |= (1 << (pos - 1)) : src &= (~(1 << (pos - 1)));
-    }
+template <typename T>
+std::string to_string(const T &src)
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
+    constexpr std::size_t sz = sizeof(T) * 8;
+    std::string           res(sz, '0');
+    to_string(src, res.data(), sz + 1);
+    return res;
+}
 
-    template <typename T>
-    static T &reset(T &src, const bool bit)
-    {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        src = bit ? (~T(0)) : (0);
-        return src;
-    }
+template <typename T>
+constexpr int countl_zero(const T &src) noexcept
+{
+    static_assert(detail::is_valid_bit_type_v<T>,
+                  "T must be an unsigned integral type (excluding bool)");
 
-    template <typename T>
-    static T &flip(T &src)
-    {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        src = ~(src);
-        return src;
-    }
+#if defined(HJ_BITS_HAS_STD_BIT)
+    return std::countl_zero(src);
+#else
+    constexpr int total_bits = static_cast<int>(sizeof(T) * 8);
 
-    template <typename T>
-    static void to_string(const T &src, char *buf)
-    {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        unsigned int sz = sizeof(src) * 8;
-        memset(buf, '0', sz);
-        for(int pos = sz - 1; pos >= 0; pos--)
-        {
-            buf[sz - pos - 1] += ((src >> pos) & 1);
-        }
-
-        buf[sz] = '\0';
-    }
-
-    template <typename T>
-    static std::string to_string(const T &src)
-    {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        constexpr size_t N = sizeof(T) * 8;
-        std::bitset<N>   bits(
-            static_cast<typename std::make_unsigned<T>::type>(src));
-        return bits.to_string();
-    }
-
-    template <typename T>
-    static int count_leading_zeros(const T &src)
-    {
-        static_assert(std::is_integral<T>::value, "T must be integral");
-        using UT           = typename std::make_unsigned<T>::type;
-        constexpr int bits = sizeof(T) * 8;
-        if(src == 0)
-            return bits;
+    if(src == 0)
+        return total_bits;
 
 #if defined(__GNUC__) || defined(__clang__)
-        if constexpr(sizeof(T) == 8)
-            return __builtin_clzll(static_cast<uint64_t>(src));
-        else if constexpr(sizeof(T) == 4)
-            return __builtin_clz(static_cast<uint32_t>(src));
-        else if constexpr(sizeof(T) == 2)
-            return __builtin_clz(static_cast<uint32_t>(static_cast<UT>(src)))
-                   - 16;
-        else if constexpr(sizeof(T) == 1)
-            return __builtin_clz(static_cast<uint32_t>(static_cast<UT>(src)))
-                   - 24;
-        else
-        {
-            // fallback
-            int count = 0;
-            for(int i = bits - 1; i >= 0; --i)
-            {
-                if((src >> i) & 1)
-                    break;
-
-                ++count;
-            }
-            return count;
-        }
-#elif defined(_MSC_VER)
-        unsigned long index;
-        if constexpr(sizeof(T) == 8)
-        {
-            unsigned long index64;
-            _BitScanReverse64(&index64, static_cast<uint64_t>(src));
-            return 63 - index64;
-        } else if constexpr(sizeof(T) == 4)
-        {
-            _BitScanReverse(&index, static_cast<uint32_t>(src));
-            return 31 - index;
-        } else
-        {
-            // fallback for 8/16 bit
-            int count = 0;
-            for(int i = bits - 1; i >= 0; --i)
-            {
-                if((src >> i) & 1)
-                    break;
-
-                ++count;
-            }
-            return count;
-        }
-#else
+    if constexpr(sizeof(T) == 8)
+    {
+        return __builtin_clzll(static_cast<uint64_t>(src));
+    } else if constexpr(sizeof(T) == 4)
+    {
+        return __builtin_clz(static_cast<uint32_t>(src));
+    } else if constexpr(sizeof(T) == 2)
+    {
+        return __builtin_clz(static_cast<uint32_t>(src)) - 16;
+    } else if constexpr(sizeof(T) == 1)
+    {
+        return __builtin_clz(static_cast<uint32_t>(src)) - 24;
+    } else
+    {
         int count = 0;
-        for(int i = bits - 1; i >= 0; --i)
+        for(int i = total_bits - 1; i >= 0; --i)
         {
             if((src >> i) & 1)
                 break;
@@ -158,10 +274,45 @@ class bits
             ++count;
         }
         return count;
-#endif
     }
-};
+#elif defined(_MSC_VER)
+    if constexpr(sizeof(T) == 8)
+    {
+        unsigned long index = 0;
+        _BitScanReverse64(&index, static_cast<uint64_t>(src));
+        return 63 - static_cast<int>(index);
+    } else if constexpr(sizeof(T) <= 4)
+    {
+        unsigned long index = 0;
+        _BitScanReverse(&index, static_cast<uint32_t>(src));
+        return (total_bits - 1) - static_cast<int>(index);
+    } else
+    {
+        int count = 0;
+        for(int i = total_bits - 1; i >= 0; --i)
+        {
+            if((src >> i) & 1)
+                break;
 
+            ++count;
+        }
+        return count;
+    }
+#else
+    int count = 0;
+    for(int i = total_bits - 1; i >= 0; --i)
+    {
+        if((src >> i) & 1)
+            break;
+
+        ++count;
+    }
+    return count;
+#endif
+
+#endif // HJ_BITS_HAS_STD_BIT
 }
 
-#endif
+} // namespace hj::bits
+
+#endif // BITS_HPP

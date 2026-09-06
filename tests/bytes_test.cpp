@@ -484,3 +484,27 @@ TEST(bytes, ieee754_special_floats_and_nan_payload)
         EXPECT_EQ(decoded_bits_le, custom_nan_bits);
     }
 }
+
+TEST(bytes, modern_explicit_api_test)
+{
+    std::array<uint8_t, 8> buf{};
+
+    // 1. BE Write & Read
+    EXPECT_TRUE(hj::bytes::write_be_i32(buf, 0x12345678));
+    EXPECT_EQ(*hj::bytes::read_be_i32(buf), 0x12345678);
+    EXPECT_EQ(buf[0], 0x12);
+    EXPECT_EQ(buf[3], 0x78);
+
+    // 2. LE Write & Read
+    EXPECT_TRUE(hj::bytes::write_le_u64(buf, 0x1122334455667788ULL));
+    EXPECT_EQ(*hj::bytes::read_le_u64(buf), 0x1122334455667788ULL);
+    EXPECT_EQ(buf[0], 0x88);
+    EXPECT_EQ(buf[7], 0x11);
+
+    // 3. Float & Double
+    EXPECT_TRUE(hj::bytes::write_be_f32(buf, 3.14159f));
+    EXPECT_FLOAT_EQ(*hj::bytes::read_be_f32(buf), 3.14159f);
+
+    EXPECT_TRUE(hj::bytes::write_le_f64(buf, 2.718281828459));
+    EXPECT_DOUBLE_EQ(*hj::bytes::read_le_f64(buf), 2.718281828459);
+}

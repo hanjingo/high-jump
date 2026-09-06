@@ -78,8 +78,6 @@ inline constexpr bool is_byte_like_v = is_byte_like<std::remove_cv_t<T>>::value;
 // ============================================================================
 // C++17 Byte Buffer Views
 // ============================================================================
-
-/// 只读字节内存视图 (类似 C++20 std::span<const uint8_t>)
 class byte_view
 {
   public:
@@ -172,7 +170,6 @@ class byte_view
     std::size_t    _size;
 };
 
-/// 可写字节内存视图 (类似 C++20 std::span<uint8_t>)
 class mutable_byte_view
 {
   public:
@@ -265,11 +262,8 @@ class mutable_byte_view
 };
 
 // ============================================================================
-// Safe API (以 std::optional / bool 为返回值)
+// Safe API
 // ============================================================================
-
-// --- Primitive Uint32 / Uint64 接口 ---
-
 inline std::optional<uint32_t>
 try_bytes_to_uint32(byte_view bytes, bool big_endian = true) noexcept
 {
@@ -354,8 +348,7 @@ inline bool try_uint64_to_bytes(mutable_byte_view bytes,
     return true;
 }
 
-// --- Bool 转换 ---
-
+// --- Bool Conversion ---
 inline std::optional<bool> try_bytes_to_bool(byte_view bytes) noexcept
 {
     if(bytes.size() < 1)
@@ -381,8 +374,7 @@ inline bool try_bool_to_bytes(mutable_byte_view bytes, bool b) noexcept
     return true;
 }
 
-// --- Int32 / Int64 转换 ---
-
+// --- Int32 / Int64 Conversion ---
 inline std::optional<int32_t>
 try_bytes_to_int32(byte_view bytes, bool big_endian = true) noexcept
 {
@@ -425,8 +417,7 @@ inline bool try_int64_to_bytes(mutable_byte_view bytes,
     return try_uint64_to_bytes(bytes, u, big_endian);
 }
 
-// --- Float / Double 转换 ---
-
+// --- Float / Double Conversion ---
 inline std::optional<float> try_bytes_to_float(byte_view bytes,
                                                bool big_endian = true) noexcept
 {
@@ -469,9 +460,7 @@ inline bool try_double_to_bytes(mutable_byte_view bytes,
     return try_uint64_to_bytes(bytes, u, big_endian);
 }
 
-// --- String 转换 ---
-
-/// 严格非截断模式：必须全量写入，容量不足直接返回 false
+// --- String Conversion ---
 inline bool try_string_to_bytes(mutable_byte_view bytes,
                                 std::string_view  str) noexcept
 {
@@ -485,7 +474,6 @@ inline bool try_string_to_bytes(mutable_byte_view bytes,
     return true;
 }
 
-/// 尽可能写入模式：发生溢出时进行截断，返回实际复制的字节数
 inline std::size_t string_to_bytes(mutable_byte_view bytes,
                                    std::string_view  str) noexcept
 {
@@ -504,7 +492,7 @@ inline std::string bytes_to_string(byte_view bytes, std::size_t sz)
 }
 
 // ============================================================================
-// Contract API / 便捷重载
+// Contract API
 // ============================================================================
 
 inline bool bytes_to_bool(byte_view bytes)
@@ -879,6 +867,119 @@ string_to_bytes(char *bytes, std::size_t &sz, const std::string &str)
     sz = string_to_bytes(mutable_byte_view(bytes, sz), std::string_view(str));
     return bytes;
 }
+
+// ============================================================================
+// Modern Explicit Network Read / Write API Sub-namespace
+// ============================================================================
+
+namespace bytes
+{
+
+// --- Big-Endian Read ---
+inline std::optional<uint32_t> read_be_u32(byte_view v) noexcept
+{
+    return try_bytes_to_uint32(v, true);
+}
+inline std::optional<int32_t> read_be_i32(byte_view v) noexcept
+{
+    return try_bytes_to_int32(v, true);
+}
+inline std::optional<uint64_t> read_be_u64(byte_view v) noexcept
+{
+    return try_bytes_to_uint64(v, true);
+}
+inline std::optional<int64_t> read_be_i64(byte_view v) noexcept
+{
+    return try_bytes_to_int64(v, true);
+}
+inline std::optional<float> read_be_f32(byte_view v) noexcept
+{
+    return try_bytes_to_float(v, true);
+}
+inline std::optional<double> read_be_f64(byte_view v) noexcept
+{
+    return try_bytes_to_double(v, true);
+}
+
+// --- Little-Endian Read ---
+inline std::optional<uint32_t> read_le_u32(byte_view v) noexcept
+{
+    return try_bytes_to_uint32(v, false);
+}
+inline std::optional<int32_t> read_le_i32(byte_view v) noexcept
+{
+    return try_bytes_to_int32(v, false);
+}
+inline std::optional<uint64_t> read_le_u64(byte_view v) noexcept
+{
+    return try_bytes_to_uint64(v, false);
+}
+inline std::optional<int64_t> read_le_i64(byte_view v) noexcept
+{
+    return try_bytes_to_int64(v, false);
+}
+inline std::optional<float> read_le_f32(byte_view v) noexcept
+{
+    return try_bytes_to_float(v, false);
+}
+inline std::optional<double> read_le_f64(byte_view v) noexcept
+{
+    return try_bytes_to_double(v, false);
+}
+
+// --- Big-Endian Write ---
+inline bool write_be_u32(mutable_byte_view v, uint32_t val) noexcept
+{
+    return try_uint32_to_bytes(v, val, true);
+}
+inline bool write_be_i32(mutable_byte_view v, int32_t val) noexcept
+{
+    return try_int32_to_bytes(v, val, true);
+}
+inline bool write_be_u64(mutable_byte_view v, uint64_t val) noexcept
+{
+    return try_uint64_to_bytes(v, val, true);
+}
+inline bool write_be_i64(mutable_byte_view v, int64_t val) noexcept
+{
+    return try_int64_to_bytes(v, val, true);
+}
+inline bool write_be_f32(mutable_byte_view v, float val) noexcept
+{
+    return try_float_to_bytes(v, val, true);
+}
+inline bool write_be_f64(mutable_byte_view v, double val) noexcept
+{
+    return try_double_to_bytes(v, val, true);
+}
+
+// --- Little-Endian Write ---
+inline bool write_le_u32(mutable_byte_view v, uint32_t val) noexcept
+{
+    return try_uint32_to_bytes(v, val, false);
+}
+inline bool write_le_i32(mutable_byte_view v, int32_t val) noexcept
+{
+    return try_int32_to_bytes(v, val, false);
+}
+inline bool write_le_u64(mutable_byte_view v, uint64_t val) noexcept
+{
+    return try_uint64_to_bytes(v, val, false);
+}
+inline bool write_le_i64(mutable_byte_view v, int64_t val) noexcept
+{
+    return try_int64_to_bytes(v, val, false);
+}
+inline bool write_le_f32(mutable_byte_view v, float val) noexcept
+{
+    return try_float_to_bytes(v, val, false);
+}
+inline bool write_le_f64(mutable_byte_view v, double val) noexcept
+{
+    return try_double_to_bytes(v, val, false);
+}
+
+} // namespace bytes
 
 } // namespace hj
 

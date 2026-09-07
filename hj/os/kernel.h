@@ -19,6 +19,55 @@
 #ifndef KERNEL_H
 #define KERNEL_H
 
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef HJ_KERNEL_API
+#if defined(HJ_KERNEL_STATIC)
+#define HJ_KERNEL_API static inline
+#else
+#define HJ_KERNEL_API extern
+#endif
+#endif
+
+#ifndef HJ_KERNEL_MAX_STRING_LEN
+#define HJ_KERNEL_MAX_STRING_LEN 256
+#endif
+
+typedef struct
+{
+    char     name[64];
+    char     version[128];
+    uint64_t uptime_seconds;
+} kernel_info_t;
+
+// ------------------------ Kernel API Declarations ------------------------
+HJ_KERNEL_API const char *hj_kernel_name(void);
+HJ_KERNEL_API const char *hj_kernel_version(char *buffer, size_t buffer_size);
+HJ_KERNEL_API uint64_t    hj_kernel_uptime(void);
+HJ_KERNEL_API const char *
+hj_kernel_uptime_str(char *buffer, size_t buffer_size, const char *fmt);
+HJ_KERNEL_API bool hj_kernel_info(kernel_info_t *info);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // KERNEL_H
+
+
+// --------------------- Implementation -------------------------
+// To include implementation, define HJ_KERNEL_IMPL before including
+// this header in ONE C/C++ source file.
+#if (defined(HJ_KERNEL_IMPL) || defined(HJ_KERNEL_STATIC))                     \
+    && !defined(HJ_KERNEL_IMPL_DONE)
+#define HJ_KERNEL_IMPL_DONE
+
 #if defined(_WIN32) || defined(_WIN64)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -39,7 +88,6 @@
 
 #endif
 
-#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,17 +96,8 @@
 extern "C" {
 #endif
 
-#define KERNEL_MAX_STRING_LEN 256
-
-typedef struct
-{
-    char     name[64];
-    char     version[128];
-    uint64_t uptime_seconds;
-} kernel_info_t;
-
 // Get kernel name (e.g., "Linux", "Darwin", "Windows")
-inline const char *kernel_name(void)
+HJ_KERNEL_API const char *hj_kernel_name(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     return "Windows";
@@ -76,50 +115,56 @@ inline const char *kernel_name(void)
 }
 
 // Get kernel version string
-inline const char *kernel_version(char *buffer, size_t buffer_size)
+HJ_KERNEL_API const char *hj_kernel_version(char *buffer, size_t buffer_size)
 {
     if(!buffer || buffer_size == 0)
         return NULL;
 
 #if defined(_WIN32) || defined(_WIN64)
-    OSVERSIONINFOEX info;
-    memset(&info, 0, sizeof(info));
-    info.dwOSVersionInfoSize = sizeof(info);
-    if(GetVersionEx((OSVERSIONINFO *) &info))
+    typedef LONG(WINAPI * RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+    HMODULE hMod = GetModuleHandleA("ntdll.dll");
+    if(hMod)
     {
-        snprintf(buffer,
-                 buffer_size,
-                 "%lu.%lu.%lu",
-                 info.dwMajorVersion,
-                 info.dwMinorVersion,
-                 info.dwBuildNumber);
-        return buffer;
+        RtlGetVersionPtr fxRtlGetVersion =
+            (RtlGetVersionPtr) GetProcAddress(hMod, "RtlGetVersion");
+        if(fxRtlGetVersion)
+        {
+            RTL_OSVERSIONINFOW rovi;
+            memset(&rovi, 0, sizeof(rovi));
+            rovi.dwOSVersionInfoSize = sizeof(rovi);
+            if(fxRtlGetVersion(&rovi) == 0) // STATUS_SUCCESS
+            {
+                snprintf(buffer,
+                         buffer_size,
+                         "%lu.%lu.%lu",
+                         rovi.dwMajorVersion,
+                         rovi.dwMinorVersion,
+                         rovi.dwBuildNumber);
+                return buffer;
+            }
+        }
     }
-    strncpy(buffer, "Unknown", buffer_size - 1);
-    buffer[buffer_size - 1] = '\0';
+    snprintf(buffer, buffer_size, "Unknown");
     return buffer;
 
 #elif defined(__APPLE__) || defined(__linux__)
     struct utsname buf;
     if(uname(&buf) == 0)
     {
-        strncpy(buffer, buf.release, buffer_size - 1);
-        buffer[buffer_size - 1] = '\0';
+        snprintf(buffer, buffer_size, "%s", buf.release);
         return buffer;
     }
-    strncpy(buffer, "Unknown", buffer_size - 1);
-    buffer[buffer_size - 1] = '\0';
+    snprintf(buffer, buffer_size, "Unknown");
     return buffer;
 
 #else
-    strncpy(buffer, "Unknown", buffer_size - 1);
-    buffer[buffer_size - 1] = '\0';
+    snprintf(buffer, buffer_size, "Unknown");
     return buffer;
 
 #endif
 }
 
-inline uint64_t kernel_uptime(void)
+HJ_KERNEL_API uint64_t hj_kernel_uptime(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
     return GetTickCount64() / 1000;
@@ -147,31 +192,33 @@ inline uint64_t kernel_uptime(void)
 #endif
 }
 
-inline const char *
-kernel_uptime_str(char *buffer, size_t buffer_size, const char *fmt)
+HJ_KERNEL_API const char *
+hj_kernel_uptime_str(char *buffer, size_t buffer_size, const char *fmt)
 {
-    if(!buffer || buffer_size == 0)
+    if(!buffer || buffer_size == 0 || !fmt)
         return NULL;
 
-    uint64_t uptime_sec = kernel_uptime();
-    uint64_t days       = uptime_sec / (24 * 3600);
-    uint64_t hours      = (uptime_sec % (24 * 3600)) / 3600;
-    uint64_t minutes    = (uptime_sec % 3600) / 60;
-    uint64_t seconds    = uptime_sec % 60;
+    uint64_t           uptime_sec = hj_kernel_uptime();
+    unsigned long long days = (unsigned long long) (uptime_sec / (24 * 3600));
+    unsigned long long hours =
+        (unsigned long long) ((uptime_sec % (24 * 3600)) / 3600);
+    unsigned long long minutes =
+        (unsigned long long) ((uptime_sec % 3600) / 60);
+    unsigned long long seconds = (unsigned long long) (uptime_sec % 60);
+
     snprintf(buffer, buffer_size, fmt, days, hours, minutes, seconds);
     return buffer;
 }
 
-inline bool kernel_info(kernel_info_t *info)
+HJ_KERNEL_API bool hj_kernel_info(kernel_info_t *info)
 {
     if(!info)
         return false;
 
     memset(info, 0, sizeof(kernel_info_t));
-    const char *name = kernel_name();
-    strncpy(info->name, name, sizeof(info->name) - 1);
-    kernel_version(info->version, sizeof(info->version));
-    info->uptime_seconds = kernel_uptime();
+    snprintf(info->name, sizeof(info->name), "%s", hj_kernel_name());
+    hj_kernel_version(info->version, sizeof(info->version));
+    info->uptime_seconds = hj_kernel_uptime();
     return true;
 }
 
@@ -179,4 +226,4 @@ inline bool kernel_info(kernel_info_t *info)
 }
 #endif
 
-#endif // KERNEL_H
+#endif // HJ_KERNEL_IMPL && !HJ_KERNEL_IMPL_DONE

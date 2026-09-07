@@ -479,7 +479,7 @@ TEST(object_pool_industrial, double_release)
 
     pool.release(obj);
 
-    EXPECT_DEATH({ pool.release(obj); }, "Assertion failed: exchanged");
+    EXPECT_DEATH({ pool.release(obj); }, "exchanged");
 #endif
 }
 
@@ -498,9 +498,7 @@ TEST(object_pool_industrial, cross_pool_release)
         pool1.acquire_or_create("crosspool", 25, 200.0f, "cross@abc.com");
     ASSERT_NE(obj1, nullptr);
 
-    EXPECT_DEATH(
-        { pool2.release(obj1); },
-        "Assertion failed: wrapper->owner_pool == this");
+    EXPECT_DEATH({ pool2.release(obj1); }, "owner_pool.*this");
 
     pool1.release(obj1);
 #endif

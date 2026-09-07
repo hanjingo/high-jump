@@ -19,10 +19,12 @@
 #ifndef MATRIX_HPP
 #define MATRIX_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <functional>
 #include <stdexcept>
+#include <utility>
+#include <algorithm>
 
 #include <hj/math/matrix_iterator.hpp>
 #include <hj/math/matrix_vertical_iterator.hpp>
@@ -34,233 +36,270 @@ template <typename T>
 class matrix
 {
   public:
-    matrix()
-        : _row_n{0}
-        , _col_n{0}
+    using value_type      = T;
+    using size_type       = std::size_t;
+    using difference_type = std::ptrdiff_t;
+    using reference       = T &;
+    using const_reference = const T &;
+    using pointer         = T *;
+    using const_pointer   = const T *;
+
+    matrix() noexcept
+        : _row_n(0)
+        , _col_n(0)
     {
-        _buf = _create();
     }
 
-    matrix(const int row_n, const int col_n)
-        : _row_n{row_n}
-        , _col_n{col_n}
+    matrix(size_type row_n, size_type col_n)
+        : _row_n(row_n)
+        , _col_n(col_n)
+        , _data(row_n * col_n)
     {
-        _buf = _create();
     }
 
-    matrix(const int row_n, const int col_n, T value)
-        : _row_n{row_n}
-        , _col_n{col_n}
+    matrix(size_type row_n, size_type col_n, const T &value)
+        : _row_n(row_n)
+        , _col_n(col_n)
+        , _data(row_n * col_n, value)
     {
-        _buf = _create();
-
-        _copy_n(value);
     }
 
     matrix(const std::vector<std::vector<T>> &buf)
-        : _row_n{int(buf.size())}
-        , _col_n{_row_n > 0 ? int(buf[0].size()) : 0}
     {
-        _buf = _create();
-
-        _copy_from(buf);
+        _row_n = buf.size();
+        _col_n = _row_n > 0 ? buf[0].size() : 0;
+        _data.reserve(_row_n * _col_n);
+        for(const auto &row : buf)
+        {
+            if(row.size() != _col_n)
+            {
+                throw std::invalid_argument(
+                    "Inconsistent row sizes in input vector.");
+            }
+            _data.insert(_data.end(), row.begin(), row.end());
+        }
     }
 
-    matrix(const matrix &rhs)
-        : _row_n{rhs._row_n}
-        , _col_n{rhs._col_n}
+    matrix(const matrix &)                = default;
+    matrix(matrix &&) noexcept            = default;
+    matrix &operator=(const matrix &)     = default;
+    matrix &operator=(matrix &&) noexcept = default;
+    ~matrix()                             = default;
+
+    class row_proxy
     {
-        _buf = _create(_row_n, _col_n);
-        _copy_from(rhs);
+      public:
+        row_proxy(pointer ptr) noexcept
+            : _ptr(ptr)
+        {
+        }
+        reference operator[](size_type col) noexcept { return _ptr[col]; }
+
+      private:
+        pointer _ptr;
+    };
+
+    class const_row_proxy
+    {
+      public:
+        const_row_proxy(const_pointer ptr) noexcept
+            : _ptr(ptr)
+        {
+        }
+        const_reference operator[](size_type col) const noexcept
+        {
+            return _ptr[col];
+        }
+
+      private:
+        const_pointer _ptr;
+    };
+
+    row_proxy operator[](size_type row) noexcept
+    {
+        return row_proxy(_data.data() + row * _col_n);
     }
 
-    ~matrix() { _clean(_buf); }
-
-    matrix &operator=(const matrix &rhs)
+    const_row_proxy operator[](size_type row) const noexcept
     {
-        if(this == &rhs)
-            return *this;
-
-        _clean(_buf);
-        _row_n = rhs._row_n;
-        _col_n = rhs._col_n;
-        _buf   = _create(_row_n, _col_n);
-        _copy_from(rhs);
-        return *this;
+        return const_row_proxy(_data.data() + row * _col_n);
     }
 
-    inline T *operator[](const int row) { return _buf[row]; }
-
-    inline const T *operator[](const int row) const { return _buf[row]; }
-
-    inline T &operator()(const int row, const int col)
+    reference operator()(size_type row, size_type col) noexcept
     {
-        return _buf[row][col];
+        return _data[row * _col_n + col];
     }
 
-    inline const T &operator()(const int row, const int col) const
+    const_reference operator()(size_type row, size_type col) const noexcept
     {
-        return _buf[row][col];
+        return _data[row * _col_n + col];
     }
 
-    inline friend bool operator==(const matrix &a, const matrix &b)
+    reference at(size_type row, size_type col)
     {
-        if(a._row_n != b._row_n || a._col_n != b._col_n)
-            return false;
-
-        for(int row = 0; row < a._row_n; ++row)
-            for(int col = 0; col < a._col_n; ++col)
-                if(a._buf[row][col] != b._buf[row][col])
-                    return false;
-
-        return true;
+        if(row >= _row_n || col >= _col_n)
+            throw std::out_of_range("Matrix index out of range.");
+        return _data[row * _col_n + col];
     }
 
-    inline friend bool operator!=(const matrix &a, const matrix &b)
+    const_reference at(size_type row, size_type col) const
+    {
+        if(row >= _row_n || col >= _col_n)
+            throw std::out_of_range("Matrix index out of range.");
+        return _data[row * _col_n + col];
+    }
+
+    size_type size() const noexcept { return _data.size(); }
+    size_type row_n() const noexcept { return _row_n; }
+    size_type col_n() const noexcept { return _col_n; }
+    bool      empty() const noexcept { return _data.empty(); }
+
+    pointer       data() noexcept { return _data.data(); }
+    const_pointer data() const noexcept { return _data.data(); }
+
+    std::pair<size_type, size_type>
+    resize(size_type new_row, size_type new_col, const T &value = T())
+    {
+        std::vector<T> new_data(new_row * new_col, value);
+        size_type      min_row = std::min(_row_n, new_row);
+        size_type      min_col = std::min(_col_n, new_col);
+
+        for(size_type r = 0; r < min_row; ++r)
+        {
+            for(size_type c = 0; c < min_col; ++c)
+            {
+                new_data[r * new_col + c] = std::move((*this)(r, c));
+            }
+        }
+
+        _data  = std::move(new_data);
+        _row_n = new_row;
+        _col_n = new_col;
+        return {new_row, new_col};
+    }
+
+    friend bool operator==(const matrix &a, const matrix &b) noexcept
+    {
+        return a._row_n == b._row_n && a._col_n == b._col_n
+               && a._data == b._data;
+    }
+
+    friend bool operator!=(const matrix &a, const matrix &b) noexcept
     {
         return !(a == b);
     }
 
-    inline T &at(const int row, const int col)
-    {
-        if(row < 0 || row >= _row_n || col < 0 || col >= _col_n)
-            throw std::out_of_range("Index out of range");
+    using iterator       = matrix_iterator<matrix<T>, T>;
+    using const_iterator = matrix_iterator<const matrix<T>, const T>;
 
-        return _buf[row][col];
+    iterator begin() noexcept
+    {
+        return iterator(this,
+                        static_cast<int>(_row_n),
+                        static_cast<int>(_col_n),
+                        0);
+    }
+    iterator end() noexcept
+    {
+        return iterator(this,
+                        static_cast<int>(_row_n),
+                        static_cast<int>(_col_n),
+                        static_cast<int>(size()));
     }
 
-    inline std::pair<int, int> resize(int row_n, int col_n)
-    {
-        auto old = _buf;
-        _buf     = _create(row_n, col_n);
-        _copy_from(old, row_n, col_n);
-        _clean(old);
+    const_iterator begin() const noexcept { return cbegin(); }
+    const_iterator end() const noexcept { return cend(); }
 
-        _row_n = row_n;
-        _col_n = col_n;
-        return std::make_pair(std::move(row_n), std::move(col_n));
+    const_iterator cbegin() const noexcept
+    {
+        return const_iterator(this,
+                              static_cast<int>(_row_n),
+                              static_cast<int>(_col_n),
+                              0);
+    }
+    const_iterator cend() const noexcept
+    {
+        return const_iterator(this,
+                              static_cast<int>(_row_n),
+                              static_cast<int>(_col_n),
+                              static_cast<int>(size()));
     }
 
-    inline int64_t size() { return _row_n * _col_n; }
+    using vertical_iterator = matrix_vertical_iterator<matrix<T>, T>;
+    using const_vertical_iterator =
+        matrix_vertical_iterator<const matrix<T>, const T>;
 
-    inline int row_n() { return _row_n; }
-
-    inline int col_n() { return _col_n; }
-
-    inline T **date() { return _buf; }
-
-    matrix_iterator<matrix<T>, T> begin()
+    vertical_iterator vbegin() noexcept
     {
-        return matrix_iterator<matrix<T>, T>(this, row_n(), col_n(), 0);
+        return vertical_iterator(this,
+                                 static_cast<int>(_row_n),
+                                 static_cast<int>(_col_n),
+                                 0);
     }
-    matrix_iterator<matrix<T>, T> end()
+    vertical_iterator vend() noexcept
     {
-        return matrix_iterator<matrix<T>, T>(this,
-                                             row_n(),
-                                             col_n(),
-                                             row_n() * col_n());
-    }
-
-    matrix_vertical_iterator<matrix<T>, T> vbegin()
-    {
-        return matrix_vertical_iterator<matrix<T>, T>(this,
-                                                      row_n(),
-                                                      col_n(),
-                                                      0);
-    }
-    matrix_vertical_iterator<matrix<T>, T> vend()
-    {
-        return matrix_vertical_iterator<matrix<T>, T>(this,
-                                                      row_n(),
-                                                      col_n(),
-                                                      col_n() * row_n());
+        return vertical_iterator(this,
+                                 static_cast<int>(_row_n),
+                                 static_cast<int>(_col_n),
+                                 static_cast<int>(size()));
     }
 
-    matrix_iterator<matrix<T>, T> find(const int row, const int col)
+    const_vertical_iterator vbegin() const noexcept { return vcbegin(); }
+    const_vertical_iterator vend() const noexcept { return vcend(); }
+
+    const_vertical_iterator vcbegin() const noexcept
     {
-        return matrix_iterator<matrix<T>, T>(this,
-                                             row_n(),
-                                             col_n(),
-                                             row * col_n() + col);
+        return const_vertical_iterator(this,
+                                       static_cast<int>(_row_n),
+                                       static_cast<int>(_col_n),
+                                       0);
+    }
+    const_vertical_iterator vcend() const noexcept
+    {
+        return const_vertical_iterator(this,
+                                       static_cast<int>(_row_n),
+                                       static_cast<int>(_col_n),
+                                       static_cast<int>(size()));
     }
 
-    matrix_vertical_iterator<matrix<T>, T> vfind(const int row, const int col)
+    iterator find(size_type row, size_type col) noexcept
     {
-        return matrix_vertical_iterator<matrix<T>, T>(this,
-                                                      row_n(),
-                                                      col_n(),
-                                                      col * row_n() + row);
+        return iterator(this,
+                        static_cast<int>(_row_n),
+                        static_cast<int>(_col_n),
+                        static_cast<int>(row * _col_n + col));
     }
 
-  private:
-    void _clean(T **buf)
+    const_iterator find(size_type row, size_type col) const noexcept
     {
-        for(auto row = 0; row < _row_n; ++row)
-        {
-            delete[] buf[row];
-        }
-
-        delete[] buf;
+        return const_iterator(this,
+                              static_cast<int>(_row_n),
+                              static_cast<int>(_col_n),
+                              static_cast<int>(row * _col_n + col));
     }
 
-    T **_create() { return _create(_row_n, _col_n); }
-
-    T **_create(const int row_n, const int col_n)
+    vertical_iterator vfind(size_type row, size_type col) noexcept
     {
-        T **bak = new T *[col_n];
-        for(auto row = 0; row < row_n; ++row)
-            bak[row] = new T[col_n];
-
-        return bak;
+        return vertical_iterator(this,
+                                 static_cast<int>(_row_n),
+                                 static_cast<int>(_col_n),
+                                 static_cast<int>(col * _row_n + row));
     }
 
-    template <typename Container>
-    void _copy_from(const Container &rhs)
+    const_vertical_iterator vfind(size_type row, size_type col) const noexcept
     {
-        _copy_from(rhs, _row_n, _col_n);
-    }
-
-    template <typename Container>
-    void _copy_from(const Container &rhs, int row_n, int col_n)
-    {
-        row_n = _row_n < row_n ? _row_n : row_n;
-        col_n = _col_n < col_n ? _col_n : col_n;
-        for(int row = 0; row < row_n; ++row)
-        {
-            for(int col = 0; col < col_n; ++col)
-                _buf[row][col] = rhs[row][col];
-        }
-    }
-
-    void _copy_from(const matrix &rhs)
-    {
-        for(int row = 0; row < _row_n; ++row)
-            for(int col = 0; col < _col_n; ++col)
-                _buf[row][col] = rhs._buf[row][col];
-    }
-
-    void _copy_n(const T value, int n = -1)
-    {
-        n = n > -1 && n <= size() ? n : size();
-        for(int row = 0; row < _row_n; ++row)
-        {
-            for(int col = 0; col < _col_n; ++col)
-            {
-                if(n == 0)
-                    return;
-
-                _buf[row][col] = value;
-                n--;
-            }
-        }
+        return const_vertical_iterator(this,
+                                       static_cast<int>(_row_n),
+                                       static_cast<int>(_col_n),
+                                       static_cast<int>(col * _row_n + row));
     }
 
   private:
-    T **_buf;
-    int _row_n;
-    int _col_n;
+    size_type      _row_n{0};
+    size_type      _col_n{0};
+    std::vector<T> _data;
 };
 
-}
+} // namespace hj
 
 #endif

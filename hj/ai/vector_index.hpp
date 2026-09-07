@@ -920,8 +920,8 @@ class vector_index
 
             if(!detail::atomic_rename(temp_file, filename))
             {
-                if(std::filesystem::exists(temp_file))
-                    std::filesystem::remove(temp_file);
+                std::error_code remove_ec;
+                std::filesystem::remove(temp_file, remove_ec);
                 return vector_index_errc::io_error;
             }
 
@@ -929,8 +929,8 @@ class vector_index
         }
         catch(...)
         {
-            if(std::filesystem::exists(temp_file))
-                std::filesystem::remove(temp_file);
+            std::error_code remove_ec;
+            std::filesystem::remove(temp_file, remove_ec);
             return vector_index_errc::io_error;
         }
     }
@@ -970,15 +970,15 @@ class vector_index
 
             if(!detail::sync_file(temp_file))
             {
-                if(std::filesystem::exists(temp_file))
-                    std::filesystem::remove(temp_file);
+                std::error_code remove_ec;
+                std::filesystem::remove(temp_file, remove_ec);
                 return vector_index_errc::io_error;
             }
 
             if(!detail::atomic_rename(temp_file, filename))
             {
-                if(std::filesystem::exists(temp_file))
-                    std::filesystem::remove(temp_file);
+                std::error_code remove_ec;
+                std::filesystem::remove(temp_file, remove_ec);
                 return vector_index_errc::io_error;
             }
 
@@ -987,10 +987,8 @@ class vector_index
         }
         catch(...)
         {
-            if(std::filesystem::exists(temp_file))
-            {
-                std::filesystem::remove(temp_file);
-            }
+            std::error_code remove_ec;
+            std::filesystem::remove(temp_file, remove_ec);
             return vector_index_errc::io_error;
         }
     }

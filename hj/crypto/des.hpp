@@ -19,10 +19,10 @@
 #ifndef DES_HPP
 #define DES_HPP
 
-#include <array>
-#include <cstddef>
-#include <climits>
 #include <algorithm>
+#include <array>
+#include <climits>
+#include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <istream>
@@ -805,6 +805,78 @@ class des
     using evp_cipher_ptr =
         std::unique_ptr<EVP_CIPHER, decltype(&EVP_CIPHER_free)>;
 
+    /*
+     * CTR context helper to manage state and keystream generation consistently.
+     */
+    struct ctr_context
+    {
+        evp_ctx_ptr                           ctx{nullptr, EVP_CIPHER_CTX_free};
+        std::array<unsigned char, block_size> counter{};
+
+        ctr_context() = default;
+
+        static bool create(ctr_context &out_ctr, const options &opt)
+        {
+            evp_ctx_ptr ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
+            if(!ctx)
+                return false;
+
+            auto cipher = select_cipher(opt);
+            if(!cipher)
+                return false;
+
+            if(EVP_EncryptInit_ex(ctx.get(),
+                                  cipher.get(),
+                                  nullptr,
+                                  opt.key,
+                                  nullptr)
+                   != 1
+               || EVP_CIPHER_CTX_set_padding(ctx.get(), 0) != 1)
+            {
+                return false;
+            }
+
+            out_ctr.ctx = std::move(ctx);
+            std::memcpy(out_ctr.counter.data(), opt.iv, block_size);
+            return true;
+        }
+
+        bool
+        update(unsigned char *dst, const unsigned char *src, std::size_t len)
+        {
+            std::array<unsigned char, block_size> stream{};
+            std::size_t                           offset = 0;
+
+            while(offset < len)
+            {
+                int generated = 0;
+
+                if(EVP_EncryptUpdate(ctx.get(),
+                                     stream.data(),
+                                     &generated,
+                                     counter.data(),
+                                     static_cast<int>(block_size))
+                       != 1
+                   || generated != static_cast<int>(block_size))
+                {
+                    return false;
+                }
+
+                const std::size_t n = (std::min) (block_size, len - offset);
+
+                for(std::size_t i = 0; i < n; ++i)
+                {
+                    dst[offset + i] = src[offset + i] ^ stream[i];
+                }
+
+                increment_counter(counter);
+                offset += n;
+            }
+
+            return true;
+        }
+    };
+
     static int checked_int(std::size_t n)
     {
         return n > static_cast<std::size_t>(INT_MAX) ? -1 : static_cast<int>(n);
@@ -1177,10 +1249,6 @@ class des
         return out ? error_code::ok : error_code::file_io_failed;
     }
 
-    /*
-     * CTR implementation.
-     * Pure keystream generation + XOR, no padding handling.
-     */
     static error_code crypt_ctr(unsigned char       *dst,
                                 std::size_t          dst_capacity,
                                 std::size_t         &dst_len,
@@ -1189,123 +1257,50 @@ class des
                                 const options       &opt,
                                 bool                 decrypting)
     {
-        (void) decrypting;
-
         if(dst_capacity < src_len)
             return error_code::buffer_too_small;
 
         if(src_len != 0 && (!dst || !src))
             return error_code::invalid_input;
 
-        evp_ctx_ptr ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
+        ctr_context ctr;
 
-        if(!ctx)
+        if(!ctr_context::create(ctr, opt))
         {
             return decrypting ? error_code::decrypt_failed
                               : error_code::encrypt_failed;
         }
 
-        auto cipher = select_cipher(opt);
-
-        if(!cipher)
-            return error_code::unsupported_algorithm;
-
-        if(EVP_EncryptInit_ex(ctx.get(),
-                              cipher.get(),
-                              nullptr,
-                              opt.key,
-                              nullptr)
-               != 1
-           || EVP_CIPHER_CTX_set_padding(ctx.get(), 0) != 1)
+        if(!ctr.update(dst, src, src_len))
         {
             return decrypting ? error_code::decrypt_failed
                               : error_code::encrypt_failed;
-        }
-
-        std::array<unsigned char, block_size> counter{};
-
-        std::memcpy(counter.data(), opt.iv, block_size);
-
-        std::array<unsigned char, block_size> stream{};
-
-        std::size_t offset = 0;
-
-        while(offset < src_len)
-        {
-            int generated = 0;
-
-            if(EVP_EncryptUpdate(ctx.get(),
-                                 stream.data(),
-                                 &generated,
-                                 counter.data(),
-                                 block_size)
-                   != 1
-               || generated != static_cast<int>(block_size))
-            {
-                return decrypting ? error_code::decrypt_failed
-                                  : error_code::encrypt_failed;
-            }
-
-            const std::size_t n = (std::min) (block_size, src_len - offset);
-
-            for(std::size_t i = 0; i < n; ++i)
-            {
-                dst[offset + i] = src[offset + i] ^ stream[i];
-            }
-
-            increment_counter(counter);
-
-            offset += n;
         }
 
         dst_len = src_len;
         return error_code::ok;
     }
 
-    /*
-     * CTR stream implementation.
-     * Cleaned up stream processing without block-delay padding logic.
-     */
     static error_code crypt_ctr_stream(std::ostream  &out,
                                        std::istream  &in,
                                        const options &opt,
                                        bool           decrypting)
     {
-        evp_ctx_ptr ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
+        ctr_context ctr;
 
-        if(!ctx)
+        if(!ctr_context::create(ctr, opt))
         {
             return decrypting ? error_code::decrypt_failed
                               : error_code::encrypt_failed;
         }
 
-        auto cipher = select_cipher(opt);
-
-        if(!cipher)
-            return error_code::unsupported_algorithm;
-
-        if(EVP_EncryptInit_ex(ctx.get(),
-                              cipher.get(),
-                              nullptr,
-                              opt.key,
-                              nullptr)
-               != 1
-           || EVP_CIPHER_CTX_set_padding(ctx.get(), 0) != 1)
-        {
-            return decrypting ? error_code::decrypt_failed
-                              : error_code::encrypt_failed;
-        }
-
-        std::array<unsigned char, block_size> counter{};
-        std::array<unsigned char, block_size> input{};
-        std::array<unsigned char, block_size> stream{};
-
-        std::memcpy(counter.data(), opt.iv, block_size);
+        std::array<unsigned char, 4096> in_buf{};
+        std::array<unsigned char, 4096> out_buf{};
 
         while(true)
         {
-            in.read(reinterpret_cast<char *>(input.data()),
-                    static_cast<std::streamsize>(block_size));
+            in.read(reinterpret_cast<char *>(in_buf.data()),
+                    static_cast<std::streamsize>(in_buf.size()));
 
             const std::streamsize n = in.gcount();
 
@@ -1319,32 +1314,17 @@ class des
 
             const std::size_t nbytes = static_cast<std::size_t>(n);
 
-            int generated = 0;
-
-            if(EVP_EncryptUpdate(ctx.get(),
-                                 stream.data(),
-                                 &generated,
-                                 counter.data(),
-                                 block_size)
-                   != 1
-               || generated != static_cast<int>(block_size))
+            if(!ctr.update(out_buf.data(), in_buf.data(), nbytes))
             {
                 return decrypting ? error_code::decrypt_failed
                                   : error_code::encrypt_failed;
             }
 
-            for(std::size_t i = 0; i < nbytes; ++i)
-            {
-                stream[i] ^= input[i];
-            }
-
-            out.write(reinterpret_cast<const char *>(stream.data()),
+            out.write(reinterpret_cast<const char *>(out_buf.data()),
                       static_cast<std::streamsize>(nbytes));
 
             if(!out)
                 return error_code::file_io_failed;
-
-            increment_counter(counter);
         }
 
         return error_code::ok;

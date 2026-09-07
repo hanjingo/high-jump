@@ -18,17 +18,12 @@ void cleanup_test_files(const std::vector<std::string> &files)
 {
     for(const auto &file : files)
     {
-        if(std::filesystem::exists(file))
+        std::error_code ec;
+        std::filesystem::remove(file, ec);
+        if(ec && ec != std::errc::no_such_file_or_directory)
         {
-            std::filesystem::remove(file);
-        }
-    }
-
-    for(const auto &entry : std::filesystem::directory_iterator("."))
-    {
-        if(entry.path().extension() == ".tmp")
-        {
-            std::filesystem::remove(entry.path());
+            ADD_FAILURE() << "Failed to remove temporary file '" << file
+                          << "': " << ec.message();
         }
     }
 }
@@ -664,11 +659,16 @@ TEST(vector_index, save_s_disk_full_simulation)
     cleanup_test_files({filename});
 
     std::vector<std::string> many_files;
+    const auto               temp_prefix =
+        std::string("temp_dummy_")
+        + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count())
+        + "_";
     try
     {
         for(int i = 0; i < 1000; i++)
         {
-            std::string fname = "temp_dummy_" + std::to_string(i) + ".tmp";
+            std::string fname = temp_prefix + std::to_string(i) + ".tmp";
             std::ofstream(fname) << "dummy";
             many_files.push_back(fname);
         }
@@ -679,17 +679,16 @@ TEST(vector_index, save_s_disk_full_simulation)
         EXPECT_TRUE(result);
         for(const auto &f : many_files)
         {
-            std::filesystem::remove(f);
+            std::error_code ec;
+            std::filesystem::remove(f, ec);
         }
     }
     catch(...)
     {
         for(const auto &f : many_files)
         {
-            if(std::filesystem::exists(f))
-            {
-                std::filesystem::remove(f);
-            }
+            std::error_code ec;
+            std::filesystem::remove(f, ec);
         }
     }
 

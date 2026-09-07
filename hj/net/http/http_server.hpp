@@ -243,6 +243,12 @@ class http_server
         return route(http_method::options, pattern, std::move(handler));
     }
 
+    int bind_to_any_port(const std::string &host         = "127.0.0.1",
+                         int                socket_flags = 0)
+    {
+        return _server ? _server->bind_to_any_port(host, socket_flags) : -1;
+    }
+
     bool listen(const std::string &host, int port)
     {
         return _server ? _server->listen(host, port) : false;
@@ -257,6 +263,29 @@ class http_server
 
         _worker_thread = std::thread([this, host, port, promise]() {
             bool ret = _server ? _server->listen(host, port) : false;
+
+            try
+            {
+                promise->set_value(ret);
+            }
+            catch(const std::future_error &)
+            {
+                // ignore
+            }
+        });
+
+        return fut;
+    }
+
+    std::future<bool> listen_after_bind_async()
+    {
+        stop();
+
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto fut     = promise->get_future();
+
+        _worker_thread = std::thread([this, promise]() {
+            bool ret = _server ? _server->listen_after_bind() : false;
 
             try
             {
@@ -378,7 +407,8 @@ class http_server
         };
     }
 
-    httplib::Server::Handler _make_adapter(http_method expected_method, http_handler handler)
+    httplib::Server::Handler _make_adapter(http_method  expected_method,
+                                           http_handler handler)
     {
         return [this, expected_method, handler = std::move(handler)](
                    const httplib::Request &raw_req,
@@ -675,6 +705,12 @@ class http_ssl_server
         return route(http_method::options, pattern, std::move(handler));
     }
 
+    int bind_to_any_port(const std::string &host         = "127.0.0.1",
+                         int                socket_flags = 0)
+    {
+        return _server ? _server->bind_to_any_port(host, socket_flags) : -1;
+    }
+
     bool listen(const std::string &host, int port)
     {
         return _server ? _server->listen(host, port) : false;
@@ -696,6 +732,29 @@ class http_ssl_server
             }
             catch(const std::future_error &)
             {
+            }
+        });
+
+        return fut;
+    }
+
+    std::future<bool> listen_after_bind_async()
+    {
+        stop();
+
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto fut     = promise->get_future();
+
+        _worker_thread = std::thread([this, promise]() {
+            bool ret = _server ? _server->listen_after_bind() : false;
+
+            try
+            {
+                promise->set_value(ret);
+            }
+            catch(const std::future_error &)
+            {
+                // ignore
             }
         });
 

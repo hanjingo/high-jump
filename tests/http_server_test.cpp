@@ -24,26 +24,30 @@ void wait_for_server(const hj::http::http_server &server)
 int start_server_on_ephemeral_port(hj::http::http_server &server,
                                    const std::string     &host = "127.0.0.1")
 {
-    for(int retry = 0; retry < 10; ++retry)
+    // 1. 让 OS 分配并绑定空闲端口[cite: 25]
+    int port = server.bind_to_any_port(host);
+    if(port <= 0)
     {
-        int port = 10000 + (rand() % 40000);
-        server.listen_async(host, port);
-
-        int retries = 0;
-        while(!server.is_running() && retries++ < 20)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        if(server.is_running())
-        {
-            return port;
-        }
-
-        server.stop();
+        throw std::runtime_error("Failed to bind server to ephemeral port");
     }
 
-    throw std::runtime_error("Server failed to start on any port");
+    // 2. 启动后台线程并调用 listen_after_bind() 进入事件监听状态[cite: 25]
+    server.listen_after_bind_async();
+
+    // 3. 等待服务器状态就绪
+    int retries = 0;
+    while(!server.is_running() && retries++ < 100)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    if(!server.is_running())
+    {
+        server.stop();
+        throw std::runtime_error("Server failed to reach running state");
+    }
+
+    return port;
 }
 } // namespace
 

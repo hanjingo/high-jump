@@ -79,16 +79,26 @@ find_package(clickhouse-cpp QUIET) # depend: lz4, zstd, cityhash
 find_package(hiredis CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(hffix REQUIRED)
+find_package(OpenCL QUIET)
+find_package(CUDA QUIET)
+find_package(hwy REQUIRED)
+
+# Boost
+if(WIN32)
+    set(BOOST_STACKTRACE_COMPONENT stacktrace_windbg)
+elseif(APPLE)
+    set(BOOST_STACKTRACE_COMPONENT stacktrace_basic)
+else()
+    set(BOOST_STACKTRACE_COMPONENT stacktrace_backtrace)
+endif()
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
     program_options
     context
     thread
+    ${BOOST_STACKTRACE_COMPONENT}
 )
-find_package(OpenCL QUIET)
-find_package(CUDA QUIET)
-find_package(hwy REQUIRED)
 
 # Faiss
 # Find OpenMP (Faiss depends on it for parallel search)
@@ -134,6 +144,7 @@ elseif(ENABLE_DPDK AND WIN32)
     message(WARNING "DPDK is not supported on Windows, disabling DPDK support")
 endif()
 
+# OpenCL support
 if(OpenCL_FOUND)
     add_definitions(-DOPENCL_ENABLE)
     message(STATUS "OpenCL found, enabling OPENCL_ENABLE")
@@ -230,6 +241,8 @@ if (WIN32)
         bcrypt # for Windows cryptography
         hidapi::winapi
 
+        dbghelp # Windows Stacktrace
+
         gRPC::grpc++_reflection # for windows grpc
     )
 elseif(APPLE)
@@ -243,6 +256,7 @@ else() # Linux
     target_link_libraries(${PROJECT_NAME} 
         rt
         pthread
+        dl # Linux Stacktrace
         hidapi::hidapi
     )
 endif()

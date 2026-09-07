@@ -706,3 +706,59 @@ TEST(des, provider_policy)
     EXPECT_EQ(hj::des::encrypt(encrypted, "hello", opt),
               error_code::unsupported_algorithm);
 }
+
+TEST(des, ctr_file_and_memory_consistency)
+{
+    const std::string key = k3des_key;
+    auto              opt = make_options(key,
+                                         hj::des::mode::ctr,
+                                         hj::des::padding::no_padding,
+                                         k_iv);
+
+    const auto base =
+        std::filesystem::temp_directory_path() / "hj_des_ctr_compare";
+    const auto plain_path  = base.string() + "_plain.bin";
+    const auto cipher_path = base.string() + "_cipher.bin";
+    const auto output_path = base.string() + "_output.bin";
+
+    const std::string plain_content =
+        "Stream CTR content that is not aligned to 8-byte block bounds! 12345";
+
+    {
+        std::ofstream out(plain_path, std::ios::binary);
+        out.write(plain_content.data(),
+                  static_cast<std::streamsize>(plain_content.size()));
+    }
+
+    ASSERT_EQ(hj::des::encrypt_file(cipher_path, plain_path, opt),
+              error_code::ok);
+    ASSERT_EQ(hj::des::decrypt_file(output_path, cipher_path, opt),
+              error_code::ok);
+
+    {
+        std::ifstream p(plain_path, std::ios::binary);
+        std::ifstream o(output_path, std::ios::binary);
+
+        std::string plain_data((std::istreambuf_iterator<char>(p)),
+                               std::istreambuf_iterator<char>());
+        std::string output_data((std::istreambuf_iterator<char>(o)),
+                                std::istreambuf_iterator<char>());
+
+        EXPECT_EQ(output_data, plain_data);
+    }
+
+    std::string mem_cipher;
+    ASSERT_EQ(hj::des::encrypt(mem_cipher, plain_content, opt), error_code::ok);
+
+    {
+        std::ifstream c(cipher_path, std::ios::binary);
+        std::string   file_cipher((std::istreambuf_iterator<char>(c)),
+                                  std::istreambuf_iterator<char>());
+
+        EXPECT_EQ(mem_cipher, file_cipher);
+    }
+
+    std::filesystem::remove(plain_path);
+    std::filesystem::remove(cipher_path);
+    std::filesystem::remove(output_path);
+}

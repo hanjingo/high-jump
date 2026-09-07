@@ -136,6 +136,27 @@ inline pid_t getppid() noexcept;
 inline bool  terminate(pid_t pid) noexcept;
 inline bool  kill(pid_t pid) noexcept;
 
+inline bool is_alive(pid_t pid) noexcept
+{
+    if(pid <= 0)
+        return false;
+
+#if defined(_WIN32)
+    HANDLE h = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if(!h)
+        return false;
+
+    DWORD exit_code = 0;
+    BOOL  ok = ::GetExitCodeProcess(h, &exit_code);
+    ::CloseHandle(h);
+    return ok != FALSE && exit_code == STILL_ACTIVE;
+#else
+    if(::kill(pid, 0) == 0)
+        return true;
+    return errno == EPERM;
+#endif
+}
+
 namespace detail
 {
 #if !defined(_WIN32)

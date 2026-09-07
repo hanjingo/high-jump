@@ -21,8 +21,6 @@
 #include <hj/encoding/protobuf.hpp>
 #endif
 
-#include <hj/encoding/unicode.hpp>
-
 #include <hj/encoding/utf8.hpp>
 
 #ifdef HJ_ENABLE_XML

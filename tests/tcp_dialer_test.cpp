@@ -157,39 +157,51 @@ TEST(tcp_dialer, async_dial_max_size)
 
 TEST(tcp_dialer, async_dial_close_race)
 {
-    std::thread t([]() {
-        hj::tcp_socket::io_t io;
-        auto                 li = hj::tcp_listener::make_shared(io);
-        ASSERT_FALSE(li->listen(11011));
-        hj::tcp_dialer::err_t err;
-        auto                  sock = li->accept(err);
-        if(sock)
-            sock->close();
-        li->close();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
     hj::tcp_dialer::io_t io;
-    auto                 dialer = std::make_unique<hj::tcp_dialer>(io);
-    bool                 cb_run = false;
+
+    auto listener = hj::tcp_listener::make_shared(io);
+    ASSERT_FALSE(listener->listen(11011));
+
+    bool accept_called = false;
+
+    listener->async_accept(
+        [&](const hj::tcp_listener::err_t &err,
+            std::shared_ptr<hj::tcp_socket> sock) {
+            accept_called = true;
+
+            if(!err.failed() && sock)
+                sock->close();
+        });
+
+    auto dialer = std::make_unique<hj::tcp_dialer>(io);
+    bool cb_run = false;
 
     dialer->async_dial(
         "127.0.0.1",
         11011,
-        [&](const hj::tcp_dialer::err_t &err, hj::tcp_dialer::sock_ptr_t sock) {
+        [&](const hj::tcp_dialer::err_t &err,
+            hj::tcp_dialer::sock_ptr_t sock) {
             cb_run = true;
+
             if(sock)
-            {
                 EXPECT_FALSE(dialer->is_exist(sock));
-            }
         });
 
+    // Close immediately after async_dial().
+    // The pending connect operation must not resurrect the dialer.
     dialer->close();
 
+    // Cancel the pending accept as well, so io.run() can always return.
+    listener->close();
+
     io.run();
+
     EXPECT_TRUE(cb_run);
     EXPECT_EQ(dialer->size(), 0);
-    t.join();
+
+    // The connection may or may not reach the listener depending on
+    // scheduling of the close/connect race.
+    (void)accept_called;
 }
 
 TEST(tcp_dialer, async_dial_lifetime)

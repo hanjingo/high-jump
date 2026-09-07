@@ -10,10 +10,10 @@ if (WIN32)
     )
 endif()
 
-# set binary output path
-if (NOT LIBRARY_OUTPUT_PATH)
-    set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
-endif()
+# # set binary output path
+# if (NOT LIBRARY_OUTPUT_PATH)
+#     set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
+# endif()
 
 # Symbol Visibility Control
 set(CMAKE_C_VISIBILITY_PRESET hidden)

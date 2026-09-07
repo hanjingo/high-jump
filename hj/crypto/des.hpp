@@ -143,6 +143,23 @@ class des
         if(!is_plain_valid(src, src_len, opt.mod, opt.pad_style))
             return error_code::invalid_plain;
 
+        /*
+         * CTR only supports no_padding and works on arbitrary byte streams.
+         */
+        if(opt.mod == mode::ctr)
+        {
+            if(opt.pad_style != padding::no_padding)
+                return error_code::invalid_padding;
+
+            return crypt_ctr(dst,
+                             dst_capacity,
+                             dst_len,
+                             src,
+                             src_len,
+                             opt,
+                             false);
+        }
+
         std::vector<unsigned char> input;
 
         if(!build_padded_input(input, src, src_len, opt.pad_style))
@@ -156,22 +173,6 @@ class des
         if(required != 0 && !dst)
             return error_code::buffer_too_small;
 
-        /*
-         * CTR is implemented explicitly using ECB as the block primitive.
-         * OpenSSL does not provide a generic DES-EDE-CTR cipher name.
- * CTR is therefore constructed from the EVP ECB primitive.
-         */
-        if(opt.mod == mode::ctr)
-        {
-            return crypt_ctr(dst,
-                             dst_capacity,
-                             dst_len,
-                             input.data(),
-                             input.size(),
-                             opt,
-                             false);
-        }
-
         evp_ctx_ptr ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
 
         if(!ctx)
@@ -179,10 +180,6 @@ class des
 
         auto cipher = select_cipher(opt);
 
-        /*
-         * 8-byte DES intentionally returns nullptr here.
-         * We do NOT load the OpenSSL legacy provider.
-         */
         if(!cipher)
             return error_code::unsupported_algorithm;
 
@@ -196,10 +193,6 @@ class des
             return error_code::encrypt_failed;
         }
 
-        /*
-         * Padding is handled by this wrapper because it supports
-         * several padding schemes that EVP does not expose uniformly.
-         */
         if(EVP_CIPHER_CTX_set_padding(ctx.get(), 0) != 1)
             return error_code::encrypt_failed;
 
@@ -233,11 +226,6 @@ class des
         return error_code::ok;
     }
 
-    /*
-     * Backward-compatible raw-buffer overload.
-     *
-     * Caller must reserve encrypt_len_reserve(src_len) bytes.
-     */
     static error_code encrypt(unsigned char       *dst,
                               std::size_t         &dst_len,
                               const unsigned char *src,
@@ -274,13 +262,6 @@ class des
         return error_code::ok;
     }
 
-    /*
-     * Stream encryption.
-     *
-     * Important:
-     * no_padding always requires the total input length to be
-     * a multiple of block_size, regardless of cipher mode.
-     */
     static error_code
     encrypt(std::ostream &out, std::istream &in, const options &opt)
     {
@@ -297,7 +278,12 @@ class des
             return error_code::invalid_iv;
 
         if(opt.mod == mode::ctr)
+        {
+            if(opt.pad_style != padding::no_padding)
+                return error_code::invalid_padding;
+
             return crypt_ctr_stream(out, in, opt, false);
+        }
 
         evp_ctx_ptr ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
 
@@ -344,10 +330,6 @@ class des
 
             const std::size_t nbytes = static_cast<std::size_t>(n);
 
-            /*
-             * Delay one block so that we know whether it is the
-             * final block and therefore whether padding is required.
-             */
             if(have_pending)
             {
                 if(auto ec = evp_update_write(ctx.get(),
@@ -374,10 +356,6 @@ class des
         {
             if(opt.pad_style == padding::no_padding)
             {
-                /*
-                 * Empty input is not accepted by the stream API
-                 * for no-padding mode.
-                 */
                 return error_code::invalid_plain;
             }
 
@@ -396,9 +374,6 @@ class des
             }
         } else if(opt.pad_style == padding::no_padding)
         {
-            /*
-             * This applies to ALL modes, including CFB/OFB/CTR.
-             */
             if(pending_len != block_size)
                 return error_code::invalid_padding;
 
@@ -413,10 +388,6 @@ class des
             }
         } else if(pending_len == block_size)
         {
-            /*
-             * Input length is exactly aligned.
-             * PKCS-style padding requires a complete padding block.
-             */
             if(auto ec = evp_update_write(ctx.get(),
                                           out,
                                           outbuf,
@@ -530,6 +501,9 @@ class des
 
         if(opt.mod == mode::ctr)
         {
+            if(opt.pad_style != padding::no_padding)
+                return error_code::invalid_padding;
+
             return crypt_ctr(dst,
                              dst_capacity,
                              dst_len,
@@ -604,9 +578,6 @@ class des
         return error_code::ok;
     }
 
-    /*
-     * Backward-compatible raw-buffer overload.
-     */
     static error_code decrypt(unsigned char       *dst,
                               std::size_t         &dst_len,
                               const unsigned char *src,
@@ -649,11 +620,6 @@ class des
         return error_code::ok;
     }
 
-    /*
-     * Stream decryption.
-     *
-     * Ciphertext must always be block aligned.
-     */
     static error_code
     decrypt(std::ostream &out, std::istream &in, const options &opt)
     {
@@ -670,7 +636,12 @@ class des
             return error_code::invalid_iv;
 
         if(opt.mod == mode::ctr)
+        {
+            if(opt.pad_style != padding::no_padding)
+                return error_code::invalid_padding;
+
             return crypt_ctr_stream(out, in, opt, true);
+        }
 
         evp_ctx_ptr ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
 
@@ -716,9 +687,6 @@ class des
                 break;
             }
 
-            /*
-             * Ciphertext is always required to be block aligned.
-             */
             if(n != static_cast<std::streamsize>(block_size))
                 return error_code::invalid_padding;
 
@@ -844,13 +812,6 @@ class des
 
     static bool is_key_valid(const unsigned char *key, std::size_t key_len)
     {
-        /*
-         * 8 bytes is retained as a valid key size so that
-         * callers receive unsupported_algorithm rather than
-         * invalid_key.
-         *
-         * OpenSSL 3 legacy DES is intentionally NOT loaded.
-         */
         return key != nullptr
                && (key_len == 8 || key_len == 16 || key_len == 24);
     }
@@ -871,19 +832,18 @@ class des
 
     static bool is_plain_valid(const unsigned char *src,
                                std::size_t          src_len,
-                               mode,
-                               padding pad)
+                               mode                 mod,
+                               padding              pad)
     {
         if(src_len != 0 && !src)
             return false;
 
         /*
-         * Library contract:
-         *
-         * no_padding always requires block alignment,
-         * regardless of ECB/CBC/CFB/OFB/CTR.
+         * CTR is stream mode and allows arbitrary length.
+         * For block modes with no_padding, block alignment is required.
          */
-        if(pad == padding::no_padding && (src_len % block_size) != 0)
+        if(mod != mode::ctr && pad == padding::no_padding
+           && (src_len % block_size) != 0)
         {
             return false;
         }
@@ -891,15 +851,17 @@ class des
         return true;
     }
 
-    static bool is_ciphertext_valid(std::size_t src_len, mode, padding pad)
+    static bool is_ciphertext_valid(std::size_t src_len, mode mod, padding pad)
     {
         if(src_len == 0)
             return false;
 
         /*
-         * All modes in this wrapper operate on complete
-         * DES blocks at the public API boundary.
+         * CTR mode allows arbitrary length ciphertexts.
          */
+        if(mod == mode::ctr)
+            return true;
+
         if(src_len % block_size != 0)
             return false;
 
@@ -923,19 +885,9 @@ class des
         switch(opt.key_len)
         {
             case 8:
-                /*
-                 * Single DES is only available through
-                 * OpenSSL's legacy provider.
-                 *
-                 * This implementation intentionally does
-                 * NOT load or depend on that provider.
-                 */
                 return evp_cipher_ptr(nullptr, EVP_CIPHER_free);
 
             case 16:
-                /*
-                 * 2-key Triple-DES / TDEA.
-                 */
                 switch(opt.mod)
                 {
                     case mode::ecb:
@@ -958,9 +910,6 @@ class des
                 break;
 
             case 24:
-                /*
-                 * 3-key Triple-DES / TDEA.
-                 */
                 switch(opt.mod)
                 {
                     case mode::ecb:
@@ -1230,9 +1179,7 @@ class des
 
     /*
      * CTR implementation.
-     *
-     * DES-EDE-ECB / DES-EDE3-ECB is used strictly as the
-     * block primitive to generate the CTR keystream.
+     * Pure keystream generation + XOR, no padding handling.
      */
     static error_code crypt_ctr(unsigned char       *dst,
                                 std::size_t          dst_capacity,
@@ -1312,22 +1259,13 @@ class des
         }
 
         dst_len = src_len;
-
-        if(decrypting && opt.pad_style != padding::no_padding)
-        {
-            if(!remove_padding(dst, dst_len, opt.pad_style))
-            {
-                secure_clear(dst, src_len);
-
-                dst_len = 0;
-
-                return error_code::invalid_padding;
-            }
-        }
-
         return error_code::ok;
     }
 
+    /*
+     * CTR stream implementation.
+     * Cleaned up stream processing without block-delay padding logic.
+     */
     static error_code crypt_ctr_stream(std::ostream  &out,
                                        std::istream  &in,
                                        const options &opt,
@@ -1359,53 +1297,10 @@ class des
         }
 
         std::array<unsigned char, block_size> counter{};
-
         std::array<unsigned char, block_size> input{};
-
-        std::array<unsigned char, block_size> pending{};
-
         std::array<unsigned char, block_size> stream{};
 
         std::memcpy(counter.data(), opt.iv, block_size);
-
-        const bool padded = opt.pad_style != padding::no_padding;
-
-        bool have_pending  = false;
-        bool processed_any = false;
-
-        std::size_t pending_len = 0;
-
-        auto transform = [&](const unsigned char *src,
-                             std::size_t          len) -> error_code {
-            int generated = 0;
-
-            if(EVP_EncryptUpdate(ctx.get(),
-                                 stream.data(),
-                                 &generated,
-                                 counter.data(),
-                                 block_size)
-                   != 1
-               || generated != static_cast<int>(block_size))
-            {
-                return decrypting ? error_code::decrypt_failed
-                                  : error_code::encrypt_failed;
-            }
-
-            for(std::size_t i = 0; i < len; ++i)
-                stream[i] ^= src[i];
-
-            out.write(reinterpret_cast<const char *>(stream.data()),
-                      static_cast<std::streamsize>(len));
-
-            if(!out)
-                return error_code::file_io_failed;
-
-            increment_counter(counter);
-
-            processed_any = true;
-
-            return error_code::ok;
-        };
 
         while(true)
         {
@@ -1424,107 +1319,40 @@ class des
 
             const std::size_t nbytes = static_cast<std::size_t>(n);
 
-            if(have_pending)
+            int generated = 0;
+
+            if(EVP_EncryptUpdate(ctx.get(),
+                                 stream.data(),
+                                 &generated,
+                                 counter.data(),
+                                 block_size)
+                   != 1
+               || generated != static_cast<int>(block_size))
             {
-                if(auto ec = transform(pending.data(), block_size);
-                   ec != error_code::ok)
-                {
-                    return ec;
-                }
+                return decrypting ? error_code::decrypt_failed
+                                  : error_code::encrypt_failed;
             }
 
-            std::memcpy(pending.data(), input.data(), nbytes);
-
-            pending_len  = nbytes;
-            have_pending = true;
-
-            if(nbytes < block_size)
-                break;
-        }
-
-        if(!have_pending)
-        {
-            if(!padded)
+            for(std::size_t i = 0; i < nbytes; ++i)
             {
-                return processed_any ? error_code::ok
-                                     : error_code::invalid_input;
+                stream[i] ^= input[i];
             }
 
-            if(decrypting)
-                return error_code::invalid_input;
+            out.write(reinterpret_cast<const char *>(stream.data()),
+                      static_cast<std::streamsize>(nbytes));
 
-            unsigned char pad_block[block_size]{};
+            if(!out)
+                return error_code::file_io_failed;
 
-            make_padding_block(pad_block, 0, nullptr, opt.pad_style);
-
-            return transform(pad_block, block_size);
+            increment_counter(counter);
         }
 
-        if(!padded)
-        {
-            /*
-             * CTR also obeys the public no-padding contract:
-             * input must be block aligned.
-             */
-            if(pending_len != block_size)
-                return error_code::invalid_padding;
-
-            return transform(pending.data(), block_size);
-        }
-
-        if(!decrypting)
-        {
-            unsigned char pad_block[block_size]{};
-
-            make_padding_block(pad_block,
-                               pending_len,
-                               pending.data(),
-                               opt.pad_style);
-
-            return transform(pad_block, block_size);
-        }
-
-        /*
-         * For padded CTR decryption, the final block is transformed
-         * locally so that padding can be validated before writing it.
-         */
-        int generated = 0;
-
-        if(EVP_EncryptUpdate(ctx.get(),
-                             stream.data(),
-                             &generated,
-                             counter.data(),
-                             block_size)
-               != 1
-           || generated != static_cast<int>(block_size))
-        {
-            return error_code::decrypt_failed;
-        }
-
-        for(std::size_t i = 0; i < block_size; ++i)
-        {
-            stream[i] ^= pending[i];
-        }
-
-        std::size_t final_len = block_size;
-
-        if(!remove_padding(stream.data(), final_len, opt.pad_style))
-        {
-            return error_code::invalid_padding;
-        }
-
-        out.write(reinterpret_cast<const char *>(stream.data()),
-                  static_cast<std::streamsize>(final_len));
-
-        return out ? error_code::ok : error_code::file_io_failed;
+        return error_code::ok;
     }
 
     static void
     increment_counter(std::array<unsigned char, block_size> &counter)
     {
-        /*
-         * Big-endian counter increment.
-         */
         for(std::size_t i = block_size; i-- > 0;)
         {
             if(++counter[i] != 0)

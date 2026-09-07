@@ -9,10 +9,22 @@ if (MSVC)
     add_compile_options(/utf-8)
 endif()
 
-# set binary output path
-if (NOT EXECUTABLE_OUTPUT_PATH)
-    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
-endif()
+# # set binary output path
+# if (NOT EXECUTABLE_OUTPUT_PATH)
+#     set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
+# endif()
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
+# 针对 Visual Studio / Multi-Config 生成器，防止其自动追加 Debug/Release 子目录
+foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${OUTPUTCONFIG} CONFIG)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_BINARY_DIR}/bin")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_BINARY_DIR}/bin")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_BINARY_DIR}/lib")
+endforeach()
 
 # windows specific settings
 if (WIN32)
@@ -142,9 +154,12 @@ list(APPEND SRC ${CMAKE_CURRENT_SOURCE_DIR}/grpc/grpc_test.grpc.pb.cc)
 add_executable(${PROJECT_NAME} ${SRC} ${CMAKE_CURRENT_SOURCE_DIR}/person.pb.cc)
 
 # For Github CI detection
-include(GoogleTest)
+# include(GoogleTest)
+# gtest_discover_tests(${PROJECT_NAME}
+#     WORKING_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}
+# )
 gtest_discover_tests(${PROJECT_NAME}
-    WORKING_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}
+    WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 )
 
 # Add DPDK include directories if found

@@ -350,19 +350,18 @@ TEST(des, encrypt_n)
         std::string encrypted;
 
         ASSERT_EQ(hj::des::encrypt(encrypted, "1", opt), error_code::ok);
-
-        // EXPECT_EQ(to_hex(encrypted), "E60BC2FCA8AB2AEC");
     }
 
     /*
-     * no_padding contract:
-     * the public API requires complete DES blocks.
+     * no_padding contract for BLOCK modes (ECB, CBC, CFB, OFB):
+     * require complete DES blocks (multiples of 8 bytes).
+     *
+     * Note: CTR mode is excluded here as it supports arbitrary byte lengths.
      */
     for(auto mode : {hj::des::mode::ecb,
                      hj::des::mode::cbc,
                      hj::des::mode::cfb,
-                     hj::des::mode::ofb,
-                     hj::des::mode::ctr})
+                     hj::des::mode::ofb})
     {
         auto opt = make_options(key, mode, hj::des::padding::no_padding, iv);
 
@@ -444,13 +443,13 @@ TEST(des, decrypt)
     }
 
     /*
-     * Every mode must round-trip.
+     * Every block mode with padding must round-trip.
+     * Note: CTR mode requires no_padding and is thoroughly tested in ctr_arbitrary_lengths.
      */
     for(auto mode : {hj::des::mode::ecb,
                      hj::des::mode::cbc,
                      hj::des::mode::cfb,
-                     hj::des::mode::ofb,
-                     hj::des::mode::ctr})
+                     hj::des::mode::ofb})
     {
         auto opt = make_options(key, mode, hj::des::padding::pkcs7, iv);
 
@@ -584,8 +583,10 @@ TEST(des, decrypt_file)
     }
 
     const std::string key = k3des_key;
-    auto              opt =
-        make_options(key, hj::des::mode::ctr, hj::des::padding::pkcs7, k_iv);
+    auto              opt = make_options(key,
+                                         hj::des::mode::ctr,
+                                         hj::des::padding::no_padding,
+                                         k_iv);
 
     ASSERT_EQ(hj::des::encrypt_file(cipher_path, plain_path, opt),
               error_code::ok);
@@ -598,6 +599,53 @@ TEST(des, decrypt_file)
     std::filesystem::remove(plain_path);
     std::filesystem::remove(cipher_path);
     std::filesystem::remove(output_path);
+}
+
+TEST(des, ctr_arbitrary_lengths)
+{
+    const std::string key = k3des_key;
+    auto              opt = make_options(key,
+                                         hj::des::mode::ctr,
+                                         hj::des::padding::no_padding,
+                                         k_iv);
+
+    const std::vector<std::size_t> test_sizes = {1, 7, 8, 9, 51};
+
+    for(std::size_t sz : test_sizes)
+    {
+        std::string plain(sz, '\0');
+        for(std::size_t i = 0; i < sz; ++i)
+        {
+            plain[i] = static_cast<char>((i * 37 + 13) % 256);
+        }
+
+        std::string cipher, decrypted;
+        ASSERT_EQ(hj::des::encrypt(cipher, plain, opt), error_code::ok);
+        EXPECT_EQ(cipher.size(), sz);
+
+        ASSERT_EQ(hj::des::decrypt(decrypted, cipher, opt), error_code::ok);
+        EXPECT_EQ(decrypted, plain);
+
+        const auto base   = std::filesystem::temp_directory_path()
+                            / ("hj_des_ctr_" + std::to_string(sz));
+        const auto p_path = base.string() + "_p.bin";
+        const auto c_path = base.string() + "_c.bin";
+        const auto o_path = base.string() + "_o.bin";
+
+        {
+            std::ofstream out(p_path, std::ios::binary);
+            out.write(plain.data(), static_cast<std::streamsize>(plain.size()));
+        }
+
+        ASSERT_EQ(hj::des::encrypt_file(c_path, p_path, opt), error_code::ok);
+        ASSERT_EQ(hj::des::decrypt_file(o_path, c_path, opt), error_code::ok);
+
+        EXPECT_EQ(calc_file_md5(p_path), calc_file_md5(o_path));
+
+        std::filesystem::remove(p_path);
+        std::filesystem::remove(c_path);
+        std::filesystem::remove(o_path);
+    }
 }
 
 TEST(des, invalid_options)

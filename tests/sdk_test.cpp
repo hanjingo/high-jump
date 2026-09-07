@@ -7,6 +7,10 @@
 #include <cstddef>
 #include <stddef.h>
 #include <assert.h>
+#include <filesystem>
+#include <fstream>
+
+namespace fs = std::filesystem;
 
 void test_c_compatibility_compile_time(void)
 {
@@ -15,6 +19,28 @@ void test_c_compatibility_compile_time(void)
     ctx.callback  = NULL;
 
     (void) ctx;
+}
+
+std::string sdk_v1_dll()
+{
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    GetCurrentDirectoryA(MAX_PATH, buf);
+    return std::string(buf) + "\\sdk_v1.dll";
+#else
+    return fs::absolute(std::string("./libsdk_v1") + DLL_EXT).string();
+#endif
+}
+
+std::string sdk_v2_dll()
+{
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    GetCurrentDirectoryA(MAX_PATH, buf);
+    return std::string(buf) + "\\sdk_v2.dll";
+#else
+    return fs::absolute(std::string("./libsdk_v2") + DLL_EXT).string();
+#endif
 }
 
 void world_cb_v1(void *user_data)
@@ -96,7 +122,7 @@ TEST(sdk, call_sdk_v1)
         uint32_t out_len;
     } world_param;
 
-    std::string dll_file = std::string("./sdk_v1") + DLL_EXT;
+    std::string dll_file = sdk_v1_dll();
     auto        handle   = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
     if(!handle)
     {
@@ -155,11 +181,11 @@ TEST(sdk, call_sdk_v2)
         uint32_t out_len;
     } world_param;
 
-    std::string dll_file = std::string("./sdk_v2") + DLL_EXT;
+    std::string dll_file = sdk_v2_dll();
     auto        handle   = dll_open(dll_file.c_str(), DLL_MODE_DEFAULT);
     if(!handle)
     {
-        GTEST_SKIP() << "Failed to open sdk_v1 DLL: " << dll_file;
+        GTEST_SKIP() << "Failed to open sdk_v2 DLL: " << dll_file;
         return;
     }
 
@@ -229,7 +255,7 @@ TEST(sdk, legacy_v1_client_calling_v2_sdk)
     ctx.user_data = &legacy_param;
 
     // load sdk_v2!!!
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
 
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
@@ -252,7 +278,7 @@ TEST(sdk, uninitialized_header_protection)
     SDK_CONTEXT(ctx);
     ctx.user_data = &bad_param;
 
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
 
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
@@ -263,7 +289,7 @@ TEST(sdk, uninitialized_header_protection)
 
 TEST(sdk, null_pointer_handling)
 {
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
     ASSERT_TRUE(hello_func);
@@ -276,7 +302,7 @@ TEST(sdk, corrupted_magic)
     SDK_CONTEXT(ctx);
     ctx.abi_magic = 0xDEADBEEF;
 
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
     ASSERT_TRUE(hello_func);
@@ -298,7 +324,7 @@ TEST(sdk, malformed_zero_size)
     SDK_CONTEXT(ctx);
     ctx.user_data = &param;
 
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
 
@@ -324,7 +350,7 @@ TEST(sdk, truncated_size_boundary)
     SDK_CONTEXT(ctx);
     ctx.user_data = &param;
 
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
 
@@ -345,7 +371,7 @@ TEST(sdk, wrong_future_version_handling)
     SDK_CONTEXT(ctx);
     ctx.user_data = &param;
 
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
 
@@ -367,7 +393,7 @@ TEST(sdk, misaligned_pointer_handling)
     misaligned_ctx->abi_version = SDK_CONTEXT_ABI_VERSION_1;
     misaligned_ctx->user_data   = NULL;
 
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
 
@@ -390,7 +416,7 @@ TEST(sdk, oversized_abi_size_attack_protection)
     SDK_CONTEXT(ctx);
     ctx.user_data = &param;
 
-    auto handle = dll_open("./sdk_v2" DLL_EXT, DLL_MODE_DEFAULT);
+    auto handle = dll_open(sdk_v2_dll().c_str(), DLL_MODE_DEFAULT);
     ASSERT_TRUE(handle);
     auto hello_func = (sdk_api_t) dll_get(handle, "hello");
 

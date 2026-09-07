@@ -28,16 +28,27 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace hj
 {
 
+enum class convert_error
+{
+    not_defined,
+    bad_conversion
+};
+
 class yaml
 {
   public:
+    struct arrow_proxy;
+
     template <bool IsConst>
     class iterator_wrapper
     {
@@ -45,52 +56,61 @@ class yaml
         using iterator_category = std::forward_iterator_tag;
         using value_type        = yaml;
         using difference_type   = std::ptrdiff_t;
-        using pointer           = std::unique_ptr<yaml>;
+        using pointer           = arrow_proxy;
         using reference         = yaml;
 
         using BaseIter =
             std::conditional_t<IsConst, YAML::const_iterator, YAML::iterator>;
 
         iterator_wrapper() = default;
+
         explicit iterator_wrapper(BaseIter iter)
-            : iter_(std::move(iter))
+            : _iter(std::move(iter))
         {
         }
 
-        reference operator*() const { return yaml(*iter_); }
-
-        pointer operator->() const
+        template <bool OtherIsConst,
+                  typename = std::enable_if_t<IsConst && !OtherIsConst>>
+        iterator_wrapper(const iterator_wrapper<OtherIsConst> &other) noexcept
+            : _iter(other.base())
         {
-            return std::unique_ptr<yaml>(new yaml(*iter_));
         }
+
+        reference operator*() const;
+        pointer   operator->() const;
 
         iterator_wrapper &operator++()
         {
-            ++iter_;
+            ++_iter;
             return *this;
         }
 
         iterator_wrapper operator++(int)
         {
             iterator_wrapper tmp = *this;
-            ++iter_;
+            ++_iter;
             return tmp;
         }
 
-        bool operator==(const iterator_wrapper &rhs) const
+        template <bool OtherIsConst>
+        bool operator==(const iterator_wrapper<OtherIsConst> &rhs) const
         {
-            return iter_ == rhs.iter_;
-        }
-        bool operator!=(const iterator_wrapper &rhs) const
-        {
-            return iter_ != rhs.iter_;
+            return _iter == rhs.base();
         }
 
-        yaml key() const { return yaml(iter_->first); }
-        yaml value() const { return yaml(iter_->second); }
+        template <bool OtherIsConst>
+        bool operator!=(const iterator_wrapper<OtherIsConst> &rhs) const
+        {
+            return _iter != rhs.base();
+        }
+
+        yaml key() const;
+        yaml value() const;
+
+        const BaseIter &base() const noexcept { return _iter; }
 
       private:
-        BaseIter iter_;
+        BaseIter _iter;
     };
 
     using iterator       = iterator_wrapper<false>;
@@ -98,7 +118,7 @@ class yaml
 
   public:
     yaml()
-        : node_(YAML::NodeType::Undefined)
+        : _node(YAML::NodeType::Undefined)
     {
     }
 
@@ -109,99 +129,57 @@ class yaml
 
     ~yaml() = default;
 
-    yaml clone() const { return yaml(YAML::Clone(node_)); }
+    yaml clone() const { return yaml(YAML::Clone(_node)); }
 
     template <typename T>
     yaml &operator=(const T &rhs)
     {
-        node_ = rhs;
+        _node = rhs;
         return *this;
     }
 
-    static yaml load_from_string(std::string_view text) noexcept
+    static yaml load_from_string(std::string_view text)
+    {
+        return yaml(YAML::Load(std::string(text.data(), text.size())));
+    }
+
+    static yaml load(const char *text)
+    {
+        if(!text)
+        {
+            throw std::invalid_argument("hj::yaml::load: null pointer passed");
+        }
+        return load_from_string(text);
+    }
+
+    static yaml load_from_file(const std::filesystem::path &file_path)
+    {
+        if(!std::filesystem::exists(file_path))
+        {
+            throw std::filesystem::filesystem_error(
+                "File does not exist",
+                file_path,
+                std::make_error_code(std::errc::no_such_file_or_directory));
+        }
+        return yaml(YAML::LoadFile(file_path.string()));
+    }
+
+    static yaml load_from_stream(std::istream &in)
+    {
+        if(!in.good())
+        {
+            throw std::runtime_error(
+                "hj::yaml::load_from_stream: stream is in bad/failed state");
+        }
+        return yaml(YAML::Load(in));
+    }
+
+    static std::optional<yaml>
+    try_load_from_string(std::string_view text) noexcept
     {
         try
         {
-            return yaml(YAML::Load(text.data()));
-        }
-        catch(...)
-        {
-            return yaml();
-        }
-    }
-
-    static yaml load_from_file(const std::filesystem::path &file_path) noexcept
-    {
-        std::error_code ec;
-        if(!std::filesystem::exists(file_path, ec)
-           || !std::filesystem::is_regular_file(file_path, ec))
-            return yaml();
-
-        try
-        {
-            return yaml(YAML::LoadFile(file_path.string()));
-        }
-        catch(...)
-        {
-            return yaml();
-        }
-    }
-
-    static yaml load_from_stream(std::istream &in) noexcept
-    {
-        try
-        {
-            return yaml(YAML::Load(in));
-        }
-        catch(...)
-        {
-            return yaml();
-        }
-    }
-
-    static yaml load(const char *text) noexcept
-    {
-        return load_from_string(text ? text : "");
-    }
-
-    explicit operator bool() const
-    {
-        return node_.IsDefined() && !node_.IsNull();
-    }
-    bool operator!() const { return !node_.IsDefined() || node_.IsNull(); }
-
-    bool is_null() const { return node_.IsNull(); }
-    bool is_defined() const { return node_.IsDefined(); }
-    bool is_scalar() const { return node_.IsScalar(); }
-    bool is_sequence() const { return node_.IsSequence(); }
-    bool is_map() const { return node_.IsMap(); }
-
-    template <typename Key>
-    yaml operator[](Key &&key) const
-    {
-        return yaml(node_[std::forward<Key>(key)]);
-    }
-
-    template <typename Key>
-    yaml operator[](Key &&key)
-    {
-        return yaml(node_[std::forward<Key>(key)]);
-    }
-
-    std::string tag() const { return node_.Tag(); }
-    void set_tag(std::string_view tag) { node_.SetTag(std::string(tag)); }
-
-    std::string scalar() const { return node_.Scalar(); }
-    std::string str() const { return YAML::Dump(node_); }
-
-    template <typename T>
-    std::optional<T> as_optional() const noexcept
-    {
-        try
-        {
-            if(!node_.IsDefined())
-                return std::nullopt;
-            return node_.as<T>();
+            return yaml(YAML::Load(std::string(text.data(), text.size())));
         }
         catch(...)
         {
@@ -209,36 +187,174 @@ class yaml
         }
     }
 
+    static std::optional<yaml> try_load(const char *text) noexcept
+    {
+        if(!text)
+        {
+            return std::nullopt;
+        }
+        return try_load_from_string(text);
+    }
+
+    static std::optional<yaml>
+    try_load_from_file(const std::filesystem::path &file_path) noexcept
+    {
+        try
+        {
+            std::error_code ec;
+            if(!std::filesystem::exists(file_path, ec)
+               || !std::filesystem::is_regular_file(file_path, ec))
+            {
+                return std::nullopt;
+            }
+            return yaml(YAML::LoadFile(file_path.string()));
+        }
+        catch(...)
+        {
+            return std::nullopt;
+        }
+    }
+
+    static std::optional<yaml> try_load_from_stream(std::istream &in) noexcept
+    {
+        if(!in.good())
+        {
+            return std::nullopt;
+        }
+        try
+        {
+            return yaml(YAML::Load(in));
+        }
+        catch(...)
+        {
+            return std::nullopt;
+        }
+    }
+
+    explicit operator bool() const
+    {
+        return _node.IsDefined() && !_node.IsNull();
+    }
+    bool operator!() const { return !_node.IsDefined() || _node.IsNull(); }
+
+    bool is_null() const { return _node.IsNull(); }
+    bool is_defined() const { return _node.IsDefined(); }
+    bool is_scalar() const { return _node.IsScalar(); }
+    bool is_sequence() const { return _node.IsSequence(); }
+    bool is_map() const { return _node.IsMap(); }
+
+    template <typename Key>
+    yaml operator[](Key &&key) const
+    {
+        return yaml(_node[std::forward<Key>(key)]);
+    }
+
+    template <typename Key>
+    yaml operator[](Key &&key)
+    {
+        return yaml(_node[std::forward<Key>(key)]);
+    }
+
+    std::string tag() const { return _node.Tag(); }
+    void set_tag(std::string_view tag) { _node.SetTag(std::string(tag)); }
+
+    std::optional<std::string> scalar_optional() const noexcept
+    {
+        if(!_node.IsDefined() || !_node.IsScalar())
+        {
+            return std::nullopt;
+        }
+        return _node.Scalar();
+    }
+
+    std::string scalar() const
+    {
+        if(!_node.IsDefined() || !_node.IsScalar())
+        {
+            throw YAML::BadConversion(_node.Mark());
+        }
+        return _node.Scalar();
+    }
+
+    std::string str() const { return YAML::Dump(_node); }
+
     template <typename T>
     T as() const
     {
-        return node_.as<T>();
+        return _node.as<T>();
     }
 
     template <typename T>
-    T value_or(T &&default_val) const noexcept
+    std::optional<T> as_optional() const
     {
-        auto opt = as_optional<std::decay_t<T>>();
-        return opt.has_value() ? *opt : std::forward<T>(default_val);
+        if(!_node.IsDefined() || _node.IsNull())
+        {
+            return std::nullopt;
+        }
+        return _node.as<T>();
     }
 
-    const_iterator begin() const { return const_iterator(node_.begin()); }
-    iterator       begin() { return iterator(node_.begin()); }
-    const_iterator end() const { return const_iterator(node_.end()); }
-    iterator       end() { return iterator(node_.end()); }
+    template <typename T>
+    T value_or(T &&default_val) const
+    {
+        if(!_node.IsDefined() || _node.IsNull())
+        {
+            return std::forward<T>(default_val);
+        }
+        return _node.as<T>();
+    }
 
-    void push_back(const yaml &rhs) { node_.push_back(rhs.node_); }
+    template <typename T>
+    std::variant<T, convert_error> try_as() const noexcept
+    {
+        if(!_node.IsDefined())
+        {
+            return convert_error::not_defined;
+        }
+        try
+        {
+            return _node.as<T>();
+        }
+        catch(...)
+        {
+            return convert_error::bad_conversion;
+        }
+    }
+
+    const_iterator begin() const { return const_iterator(_node.begin()); }
+    iterator       begin() { return iterator(_node.begin()); }
+    const_iterator end() const { return const_iterator(_node.end()); }
+    iterator       end() { return iterator(_node.end()); }
+
+    const_iterator cbegin() const { return const_iterator(_node.begin()); }
+    const_iterator cend() const { return const_iterator(_node.end()); }
+
+    void push_back(const yaml &rhs) { _node.push_back(rhs._node); }
 
     template <typename T>
     void push_back(const T &rhs)
     {
-        node_.push_back(rhs);
+        _node.push_back(rhs);
     }
 
     template <typename Key, typename Value>
+    void insert_or_assign(Key &&key, Value &&value)
+    {
+        _node[std::forward<Key>(key)] = std::forward<Value>(value);
+    }
+
+    template <typename Key, typename Value>
+    void insert(Key &&key, Value &&value)
+    {
+        _node.force_insert(std::forward<Key>(key), std::forward<Value>(value));
+    }
+
+    template <typename Key, typename Value>
+    [[deprecated(
+        "Use insert_or_assign() instead to avoid leaky backend abstraction.")]]
     void force_insert(const Key &key, const Value &value)
     {
-        node_.force_insert(key, value);
+        _node.force_insert(key, value);
     }
 
     bool dump(std::ostream &os) const
@@ -246,34 +362,68 @@ class yaml
         if(!os.good())
             return false;
 
-        os << node_;
+        os << _node;
         return os.good();
     }
 
     bool dump(char *buf, size_t &size) const
     {
-        if(!buf || size == 0)
-            return false;
-
         std::string yaml_str = str();
-        if(yaml_str.size() + 1 > size)
-            return false;
+        size_t      needed   = yaml_str.size();
 
-        std::memcpy(buf, yaml_str.c_str(), yaml_str.size());
-        buf[yaml_str.size()] = '\0';
-        size                 = yaml_str.size();
+        if(!buf || size <= needed)
+        {
+            size = needed;
+            return false;
+        }
+
+        std::memcpy(buf, yaml_str.c_str(), needed);
+        buf[needed] = '\0';
+        size        = needed;
         return true;
     }
 
   private:
     explicit yaml(YAML::Node node)
-        : node_(std::move(node))
+        : _node(std::move(node))
     {
     }
 
   private:
-    YAML::Node node_;
+    YAML::Node _node;
 };
+
+struct yaml::arrow_proxy
+{
+    yaml        node;
+    const yaml *operator->() const noexcept { return &node; }
+};
+
+template <bool IsConst>
+inline typename yaml::iterator_wrapper<IsConst>::reference
+yaml::iterator_wrapper<IsConst>::operator*() const
+{
+    return yaml(*_iter);
+}
+
+template <bool IsConst>
+inline typename yaml::iterator_wrapper<IsConst>::pointer
+yaml::iterator_wrapper<IsConst>::operator->() const
+{
+    return arrow_proxy{yaml(*_iter)};
+}
+
+template <bool IsConst>
+inline yaml yaml::iterator_wrapper<IsConst>::key() const
+{
+    return yaml(_iter->first);
+}
+
+template <bool IsConst>
+inline yaml yaml::iterator_wrapper<IsConst>::value() const
+{
+    return yaml(_iter->second);
+}
 
 } // namespace hj
 

@@ -25,19 +25,13 @@ inline std::string get_child_helper_path()
     GetCurrentDirectoryA(MAX_PATH, buf);
     return std::string(buf) + "\\child_helpers.exe";
 #else
-    return "./child_helpers";
+    return fs::absolute("./child_helpers").string();
 #endif
 }
 
 inline bool is_process_alive(hj::os::pid_t pid)
 {
-    if(pid <= 0)
-        return false;
-    std::vector<hj::os::process_info> vec;
-    hj::os::list(vec, [pid](const hj::os::process_info &info) {
-        return info.pid == pid;
-    });
-    return !vec.empty();
+    return hj::os::is_alive(pid);
 }
 
 TEST(process, getpid)
@@ -224,7 +218,7 @@ TEST(process, daemon_options_pid_file)
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        ::_exit(EXIT_SUCCESS);
+        std::exit(EXIT_SUCCESS);
     }
 
     int status = 0;
@@ -485,11 +479,12 @@ TEST(process, win_utf8_invalid_handling)
 
 TEST(process, win_daemonize_not_supported)
 {
+#if defined(_WIN32)
     hj::os::daemon_options opts;
     std::error_code        ec;
-    bool                   res = hj::os::daemonize(opts, ec);
 
-#if defined(_WIN32)
+    bool res = hj::os::daemonize(opts, ec);
+
     EXPECT_FALSE(res);
     EXPECT_EQ(ec, std::make_error_code(std::errc::not_supported));
 #else
@@ -500,18 +495,16 @@ TEST(process, win_daemonize_not_supported)
 #if !defined(_WIN32)
 TEST(process, daemon_options_pid_file_normal_exit)
 {
-    std::string pid_path =
-        (fs::temp_directory_path() / "test_daemon_normal.pid").string();
-    std::remove(pid_path.c_str());
-
+    const fs::path pid_path =
+        fs::temp_directory_path() / "test_daemon_normal.pid";
+    std::error_code fs_ec;
+    fs::remove(pid_path, fs_ec);
     hj::os::daemon_options dopts;
-    dopts.pid_file       = pid_path;
+    dopts.pid_file       = pid_path.string();
     dopts.redirect_stdio = true;
     dopts.auto_close_fds = true;
-
-    pid_t pid = ::fork();
+    pid_t pid            = ::fork();
     ASSERT_GE(pid, 0);
-
     if(pid == 0)
     {
         std::error_code ec;
@@ -519,17 +512,29 @@ TEST(process, daemon_options_pid_file_normal_exit)
         {
             ::_exit(EXIT_FAILURE);
         }
-
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         std::exit(EXIT_SUCCESS);
     }
-
     int status = 0;
-    ::waitpid(pid, &status, 0);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-    EXPECT_FALSE(fs::exists(pid_path));
+    ASSERT_EQ(::waitpid(pid, &status, 0), pid);
+    ASSERT_TRUE(WIFEXITED(status));
+    ASSERT_EQ(
+        WEXITSTATUS(status),
+        EXIT_SUCCESS); // The first child has exited, but the daemon (grandchild) may
+    // still be running. Poll for PID-file cleanup for at most 1 second.
+    constexpr auto poll_interval = std::chrono::milliseconds(10);
+    constexpr auto timeout       = std::chrono::seconds(1);
+    const auto     deadline      = std::chrono::steady_clock::now() + timeout;
+    while(fs::exists(pid_path))
+    {
+        if(std::chrono::steady_clock::now() >= deadline)
+            break;
+        std::this_thread::sleep_for(poll_interval);
+    }
+    EXPECT_FALSE(fs::exists(pid_path))
+        << "PID file was not removed within 1 second: " << pid_path;
+    // Best-effort cleanup so a failed test does not affect subsequent runs.
+    fs::remove(pid_path, fs_ec);
 }
 
 TEST(process, daemon_options_pid_file_sigterm_cleanup)

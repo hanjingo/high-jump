@@ -326,3 +326,5 @@ add_subdirectory(sdk_v2)
 
 add_subdirectory(shm_consumer)
 add_subdirectory(shm_producer)
+
+add_dependencies(${PROJECT_NAME} child_helpers)

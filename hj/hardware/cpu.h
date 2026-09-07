@@ -126,6 +126,9 @@ HJ_CPU_API uint64_t     hj_cpu_tscp_read(uint32_t *aux);
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#if defined(__i386__) || defined(__x86_64__)
+#include <cpuid.h>
+#endif
 #ifdef __GLIBC__
 #include <sched.h>
 #endif
@@ -138,6 +141,32 @@ HJ_CPU_API uint64_t     hj_cpu_tscp_read(uint32_t *aux);
 extern "C" {
 #endif
 
+#if defined(_M_IX86) || defined(_M_X64)
+
+static inline void _hj_cpuid(int cpuInfo[4], int leaf)
+{
+    __cpuid(cpuInfo, leaf);
+}
+
+#elif defined(__i386__) || defined(__x86_64__)
+
+static inline void _hj_cpuid(int cpuInfo[4], unsigned int leaf)
+{
+    unsigned int eax = 0;
+    unsigned int ebx = 0;
+    unsigned int ecx = 0;
+    unsigned int edx = 0;
+
+    __cpuid(leaf, eax, ebx, ecx, edx);
+
+    cpuInfo[0] = (int)eax;
+    cpuInfo[1] = (int)ebx;
+    cpuInfo[2] = (int)ecx;
+    cpuInfo[3] = (int)edx;
+}
+
+#endif
+
 HJ_CPU_API bool hj_cpu_has_feature(hj_cpu_feature_t feature)
 {
 #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__)                   \
@@ -146,18 +175,18 @@ HJ_CPU_API bool hj_cpu_has_feature(hj_cpu_feature_t feature)
     switch(feature)
     {
         case HJ_CPU_FEATURE_TSC:
-            __cpuid(cpuInfo, 1);
+            _hj_cpuid(cpuInfo, 1);
             return (cpuInfo[3] & (1 << 4)) != 0; // EDX bit 4
         case HJ_CPU_FEATURE_RDTSCP:
-            __cpuid(cpuInfo, 0x80000000);
+            _hj_cpuid(cpuInfo, 0x80000000);
             if((unsigned int) cpuInfo[0] >= 0x80000001)
             {
-                __cpuid(cpuInfo, 0x80000001);
+                _hj_cpuid(cpuInfo, 0x80000001);
                 return (cpuInfo[3] & (1 << 27)) != 0; // EDX bit 27
             }
             return false;
         case HJ_CPU_FEATURE_CLFLUSH:
-            __cpuid(cpuInfo, 1);
+            _hj_cpuid(cpuInfo, 1);
             return (cpuInfo[3] & (1 << 19)) != 0; // EDX bit 19
         case HJ_CPU_FEATURE_PREFETCH:
             return true;
@@ -231,15 +260,15 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_brand(char *buf, size_t size)
 #if defined(_WIN32) || defined(_WIN64)
     int  cpuInfo[4] = {0};
     char brand[65]  = {0};
-    __cpuid(cpuInfo, 0x80000000);
+    _hj_cpuid(cpuInfo, 0x80000000);
     unsigned int nExIds = (unsigned int) cpuInfo[0];
     if(nExIds >= 0x80000004)
     {
-        __cpuid((int *) cpuInfo, 0x80000002);
+        _hj_cpuid((int *) cpuInfo, 0x80000002);
         memcpy(brand, cpuInfo, 16);
-        __cpuid((int *) cpuInfo, 0x80000003);
+        _hj_cpuid((int *) cpuInfo, 0x80000003);
         memcpy(brand + 16, cpuInfo, 16);
-        __cpuid((int *) cpuInfo, 0x80000004);
+        _hj_cpuid((int *) cpuInfo, 0x80000004);
         memcpy(brand + 32, cpuInfo, 16);
 
         size_t len = strlen(brand);
@@ -330,7 +359,7 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
 #if defined(_WIN32) || defined(_WIN64)
     int  cpuInfo[4] = {0};
     char vendor[13] = {0};
-    __cpuid(cpuInfo, 0);
+    _hj_cpuid(cpuInfo, 0);
     memcpy(vendor, &cpuInfo[1], 4);
     memcpy(vendor + 4, &cpuInfo[3], 4);
     memcpy(vendor + 8, &cpuInfo[2], 4);

@@ -123,6 +123,31 @@ class bytes_view
     size_t               _size;
 };
 
+namespace detail 
+{
+    template <typename T>
+    struct is_custom_buffer : std::false_type
+    {
+    };
+
+    template <>
+    struct is_custom_buffer<bytes_view> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_custom_buffer<std::vector<uint8_t>> : std::true_type
+    {
+    };
+
+#if defined(HJ_DEBUGGER_HAS_BOOST_ASIO)
+    template <>
+    struct is_custom_buffer<boost::asio::streambuf> : std::true_type
+    {
+    };
+#endif
+}
+
 /**
  * @brief Thread-safe logging and hex-formatting utility.
  *
@@ -228,28 +253,6 @@ class debugger
         }
     }
 
-    template <typename T>
-    struct is_custom_buffer : std::false_type
-    {
-    };
-
-    template <>
-    struct is_custom_buffer<bytes_view> : std::true_type
-    {
-    };
-
-    template <>
-    struct is_custom_buffer<std::vector<uint8_t>> : std::true_type
-    {
-    };
-
-#if defined(HJ_DEBUGGER_HAS_BOOST_ASIO)
-    template <>
-    struct is_custom_buffer<boost::asio::streambuf> : std::true_type
-    {
-    };
-#endif
-
     static std::string _fmt_bytes(bytes_view view, bool truncated = false)
     {
         if(view.empty())
@@ -346,7 +349,7 @@ class debugger
                      && sizeof(std::remove_extent_t<RawArg1>) == 1)
         {
             return _fmt_bytes(bytes_view(arg1, std::extent_v<RawArg1>));
-        } else if constexpr(is_custom_buffer<RawArg1>::value)
+        } else if constexpr(detail::is_custom_buffer<RawArg1>::value)
         {
             return _fmt_impl(style, std::forward<Arg1>(arg1));
         } else if constexpr(std::is_same_v<RawArg1, const char *>

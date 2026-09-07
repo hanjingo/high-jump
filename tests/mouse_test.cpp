@@ -86,7 +86,7 @@ TEST(mouse, set_mouse_param)
 TEST(mouse_logic, parse_motion_event)
 {
     struct input_event raw_ev = {0};
-    hj_mouse_event_t   out_ev = {0};
+    hj_mouse_event_t   out_ev = {};
 
     raw_ev.time.tv_sec  = 12345;
     raw_ev.time.tv_usec = 6789;
@@ -104,7 +104,7 @@ TEST(mouse_logic, parse_motion_event)
 TEST(mouse_logic, parse_button_event)
 {
     struct input_event raw_ev = {0};
-    hj_mouse_event_t   out_ev = {0};
+    hj_mouse_event_t   out_ev = {};
 
     raw_ev.type  = EV_KEY;
     raw_ev.code  = BTN_RIGHT;
@@ -120,7 +120,7 @@ TEST(mouse_logic, parse_button_event)
 TEST(mouse_logic, parse_wheel_event)
 {
     struct input_event raw_ev = {0};
-    hj_mouse_event_t   out_ev = {0};
+    hj_mouse_event_t   out_ev = {};
 
     raw_ev.type  = EV_REL;
     raw_ev.code  = REL_WHEEL;
@@ -135,7 +135,7 @@ TEST(mouse_logic, parse_wheel_event)
 TEST(mouse_logic, ignore_unknown_event)
 {
     struct input_event raw_ev = {0};
-    hj_mouse_event_t   out_ev = {0};
+    hj_mouse_event_t   out_ev = {};
 
     raw_ev.type = EV_MSC;
     raw_ev.code = MSC_SCAN;

@@ -20,7 +20,8 @@
 #define RANDOM_HPP
 
 #include <random>
-#include <mutex>
+#include <vector>
+#include <type_traits>
 
 namespace hj
 {
@@ -30,28 +31,37 @@ namespace random
 class engine
 {
   public:
+    using base_engine_type = std::mt19937_64;
+
     engine()
         : _engine{std::random_device{}()}
     {
     }
 
-    explicit engine(unsigned int seed)
+    explicit engine(unsigned long seed)
         : _engine{seed}
     {
     }
 
     ~engine() = default;
 
+    engine(const engine &)            = delete;
+    engine &operator=(const engine &) = delete;
+    engine(engine &&)                 = delete;
+    engine &operator=(engine &&)      = delete;
+
     static engine &instance()
     {
-        static engine _inst;
+        thread_local engine _inst;
         return _inst;
     }
 
     template <typename T>
     T range(T min, T max)
     {
-        std::lock_guard<std::mutex>      lock(_mu);
+        static_assert(std::is_integral_v<T>,
+                      "hj::random::range requires an integral type (e.g., int, "
+                      "long, size_t)");
         std::uniform_int_distribution<T> dist(min, max);
         return dist(_engine);
     }
@@ -59,7 +69,9 @@ class engine
     template <typename T>
     T range_real(T min, T max)
     {
-        std::lock_guard<std::mutex>       lock(_mu);
+        static_assert(std::is_floating_point_v<T>,
+                      "hj::random::range_real requires a floating-point type "
+                      "(e.g., float, double)");
         std::uniform_real_distribution<T> dist(min, max);
         return dist(_engine);
     }
@@ -67,12 +79,15 @@ class engine
     template <typename T>
     std::vector<T> range_bulk(T min, T max, size_t n)
     {
-        std::lock_guard<std::mutex> lock(_mu);
-        std::vector<T>              out;
+        static_assert(std::is_integral_v<T>,
+                      "hj::random::range_bulk requires an integral type");
+        std::vector<T> out;
         out.reserve(n);
         std::uniform_int_distribution<T> dist(min, max);
         for(size_t i = 0; i < n; ++i)
+        {
             out.push_back(dist(_engine));
+        }
 
         return out;
     }
@@ -80,14 +95,14 @@ class engine
     template <typename T>
     T normal(T mean, T stddev)
     {
-        std::lock_guard<std::mutex> lock(_mu);
+        static_assert(std::is_floating_point_v<T>,
+                      "hj::random::normal requires a floating-point type");
         std::normal_distribution<T> dist(mean, stddev);
         return dist(_engine);
     }
 
   private:
-    std::default_random_engine _engine;
-    std::mutex                 _mu;
+    base_engine_type _engine;
 };
 
 template <typename T>
@@ -99,6 +114,7 @@ T range(T min, T max)
 template <int Min, int Max>
 int range()
 {
+    static_assert(Min <= Max, "Min must be less than or equal to Max");
     return engine::instance().range<int>(Min, Max);
 }
 
@@ -123,4 +139,4 @@ T normal(T mean, T stddev)
 } // namespace random
 } // namespace hj
 
-#endif
+#endif // RANDOM_HPP

@@ -415,22 +415,38 @@ HJ_CPU_API hj_cpu_err_t hj_cpu_vendor(char *buf, size_t size)
     return HJ_CPU_ERR_READ_INFO_FAILED;
 
 #elif defined(__APPLE__)
+
+#if defined(__aarch64__) || defined(__arm__)
+    /*
+     * Apple Silicon does not expose machdep.cpu.vendor through
+     * sysctl. This is a platform limitation, not a sysctl
+     * runtime failure.
+     */
+    buf[0] = '\0';
+    return HJ_CPU_ERR_NOT_SUPPORTED;
+#else
     char   temp_buf[64] = {0};
     size_t temp_len     = sizeof(temp_buf);
-
-    if(sysctlbyname("machdep.cpu.vendor", temp_buf, &temp_len, NULL, 0) == 0)
+    if(sysctlbyname("machdep.cpu.vendor",
+                    temp_buf,
+                    &temp_len,
+                    NULL,
+                    0) == 0)
     {
         size_t len = strlen(temp_buf);
+
         if(len >= size)
             len = size - 1;
 
         memcpy(buf, temp_buf, len);
         buf[len] = '\0';
+
         return HJ_CPU_OK;
     }
 
     buf[0] = '\0';
     return HJ_CPU_ERR_SYSCTL_FAILED;
+#endif
 
 #else
     buf[0] = '\0';

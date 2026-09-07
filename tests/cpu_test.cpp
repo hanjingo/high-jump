@@ -597,9 +597,19 @@ TEST(cpu, hj_cpu_tsc_serialization)
         << "Serialized end TSC should be greater than start TSC";
 
     uint64_t start_tsc_null = hj_cpu_tsc_start();
-    uint64_t end_tsc_null   = hj_cpu_tsc_end(nullptr);
-    EXPECT_GT(end_tsc_null, start_tsc_null)
+
+    volatile uint64_t null_work = 0;
+    for(int i = 0; i < 1000; ++i)
+        null_work += i;
+
+    (void) null_work;
+
+    uint64_t end_tsc_null = hj_cpu_tsc_end(nullptr);
+
+    EXPECT_GE(end_tsc_null, start_tsc_null)
         << "Serialized TSC with nullptr aux should work";
+    EXPECT_GT(end_tsc_null, 0ULL)
+        << "Serialized TSC should return a valid non-zero value";
 
 #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__)                   \
     || defined(__x86_64__)

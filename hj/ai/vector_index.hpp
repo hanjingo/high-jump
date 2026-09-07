@@ -58,16 +58,6 @@
 
 namespace hj
 {
-using vindex_flat_t    = faiss::IndexFlat;
-using vindex_flat_ip_t = faiss::IndexFlatIP;
-using vindex_flat_l2_t = faiss::IndexFlatL2;
-using vindex_idmap_t   = faiss::IndexIDMap;
-
-using vindex_dimension_t           = typename faiss::idx_t;
-using vindex_idx_t                 = typename faiss::idx_t;
-using vindex_count_t               = typename faiss::idx_t;
-using vindex_range_search_result_t = typename faiss::RangeSearchResult;
-
 enum class vector_index_errc
 {
     success = 0,
@@ -90,6 +80,88 @@ enum class vector_index_errc
 
     faiss_exception
 };
+
+namespace detail
+{
+class vector_index_category final : public std::error_category
+{
+  public:
+    const char *name() const noexcept override { return "hj::vector_index"; }
+
+    std::string message(int ev) const override
+    {
+        switch(static_cast<vector_index_errc>(ev))
+        {
+            case vector_index_errc::success:
+                return "Success";
+            case vector_index_errc::invalid_argument:
+                return "Invalid argument (nullptr or illegal parameter)";
+            case vector_index_errc::null_index:
+                return "Underlying index pointer is nullptr";
+            case vector_index_errc::out_of_range:
+                return "Index or ID out of range";
+            case vector_index_errc::type_mismatch:
+                return "Index C++ type downcast failed (type mismatch)";
+            case vector_index_errc::unsupported_operation:
+                return "Operation not supported by the current underlying "
+                       "index type";
+            case vector_index_errc::not_trained:
+                return "Underlying index is not trained yet";
+            case vector_index_errc::dimension_mismatch:
+                return "Input vector dimension mismatch";
+            case vector_index_errc::capacity_exceeded:
+                return "Buffer or storage capacity exceeded";
+            case vector_index_errc::serialization_error:
+                return "Serialization or deserialization failed";
+            case vector_index_errc::file_not_found:
+                return "File does not exist";
+            case vector_index_errc::file_empty:
+                return "File is empty or corrupted";
+            case vector_index_errc::io_error:
+                return "I/O operation failed (read/write/sync/rename error)";
+            case vector_index_errc::permission_denied:
+                return "Permission denied for file or directory operation";
+            case vector_index_errc::faiss_exception:
+                return "Internal Faiss exception caught";
+            default:
+                return "Unknown index error";
+        }
+    }
+};
+
+inline const std::error_category &index_category() noexcept
+{
+    static vector_index_category category;
+    return category;
+}
+} // namespace detail
+
+inline std::error_code make_error_code(vector_index_errc e) noexcept
+{
+    return std::error_code(static_cast<int>(e), detail::index_category());
+}
+} // namespace hj
+
+namespace std
+{
+template <>
+struct is_error_code_enum<hj::vector_index_errc> : true_type
+{
+};
+} // namespace std
+
+
+namespace hj
+{
+using vindex_flat_t    = faiss::IndexFlat;
+using vindex_flat_ip_t = faiss::IndexFlatIP;
+using vindex_flat_l2_t = faiss::IndexFlatL2;
+using vindex_idmap_t   = faiss::IndexIDMap;
+
+using vindex_dimension_t           = typename faiss::idx_t;
+using vindex_idx_t                 = typename faiss::idx_t;
+using vindex_count_t               = typename faiss::idx_t;
+using vindex_range_search_result_t = typename faiss::RangeSearchResult;
 
 namespace detail
 {
@@ -162,64 +234,7 @@ inline bool atomic_rename(const std::string &temp_path,
 #endif
 }
 
-class vector_index_category final : public std::error_category
-{
-  public:
-    const char *name() const noexcept override { return "hj::vector_index"; }
-
-    std::string message(int ev) const override
-    {
-        switch(static_cast<vector_index_errc>(ev))
-        {
-            case vector_index_errc::success:
-                return "Success";
-            case vector_index_errc::invalid_argument:
-                return "Invalid argument (nullptr or illegal parameter)";
-            case vector_index_errc::null_index:
-                return "Underlying index pointer is nullptr";
-            case vector_index_errc::out_of_range:
-                return "Index or ID out of range";
-            case vector_index_errc::type_mismatch:
-                return "Index C++ type downcast failed (type mismatch)";
-            case vector_index_errc::unsupported_operation:
-                return "Operation not supported by the current underlying "
-                       "index type";
-            case vector_index_errc::not_trained:
-                return "Underlying index is not trained yet";
-            case vector_index_errc::dimension_mismatch:
-                return "Input vector dimension mismatch";
-            case vector_index_errc::capacity_exceeded:
-                return "Buffer or storage capacity exceeded";
-            case vector_index_errc::serialization_error:
-                return "Serialization or deserialization failed";
-            case vector_index_errc::file_not_found:
-                return "File does not exist";
-            case vector_index_errc::file_empty:
-                return "File is empty or corrupted";
-            case vector_index_errc::io_error:
-                return "I/O operation failed (read/write/sync/rename error)";
-            case vector_index_errc::permission_denied:
-                return "Permission denied for file or directory operation";
-            case vector_index_errc::faiss_exception:
-                return "Internal Faiss exception caught";
-            default:
-                return "Unknown index error";
-        }
-    }
-};
-
-inline const std::error_category &index_category() noexcept
-{
-    static vector_index_category category;
-    return category;
-}
-
 } // namespace hj::detail
-
-inline std::error_code make_error_code(vector_index_errc e) noexcept
-{
-    return std::error_code(static_cast<int>(e), detail::index_category());
-}
 
 template <typename T = faiss::Index>
 class vector_index
@@ -1364,13 +1379,5 @@ class vector_index
 };
 
 } // namespace hj
-
-namespace std
-{
-template <>
-struct is_error_code_enum<hj::vector_index_errc> : true_type
-{
-};
-} // namespace std
 
 #endif // VECTOR_INDEX_HPP

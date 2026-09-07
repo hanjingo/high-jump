@@ -220,11 +220,10 @@ typedef void (*sdk_api_t)(sdk_context_t *);
          >= sizeof(sdk_abi_header_t)))
 
 #define SDK_HAS_FIELD(ptr, type, field)                                        \
-    (SDK_ASSERT_NOT_SIZE_T(type, field),                                       \
-     SDK_HAS_ABI_HEADER(ptr)                                                   \
-         && (((const type *) (ptr))->abi_size <= sizeof(type))                 \
-         && (((const type *) (ptr))->abi_size                                  \
-             >= (offsetof(type, field) + sizeof(((type *) 0)->field))))
+    (SDK_HAS_ABI_HEADER(ptr)                                                   \
+     && (((const type *) (ptr))->abi_size <= sizeof(type))                     \
+     && (((const type *) (ptr))->abi_size                                     \
+         >= (offsetof(type, field) + sizeof(((type *) 0)->field))))
 
 #define SDK_VALIDATE_ABI(ptr, type, max_ver)                                   \
     (SDK_HAS_ABI_HEADER(ptr)                                                   \

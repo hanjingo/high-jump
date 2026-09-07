@@ -1080,9 +1080,9 @@ HJ_CPU_API uint64_t hj_cpu_tsc_frequency()
 {
 #if defined(__APPLE__)
     mach_timebase_info_data_t tb;
-    if(mach_timebase_info(&tb) == KERN_SUCCESS && tb.num != 0)
+    if(mach_timebase_info(&tb) == KERN_SUCCESS && tb.numer != 0)
     {
-        return 1000000000ULL * tb.denom / tb.num;
+        return 1000000000ULL * tb.denom / tb.numer;
     }
     return 0;
 #elif defined(_WIN32) || defined(_WIN64)

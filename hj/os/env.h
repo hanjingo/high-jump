@@ -736,6 +736,10 @@ HJ_ENV_API int64_t hj_env_fetch_uncached(hj_conf_t conf)
             return -1;
 #endif
         }
+
+        case HJ_CONF_MAX_COUNT: {
+            return -1;
+        }
     }
 
     return -1; // Invalid conf value

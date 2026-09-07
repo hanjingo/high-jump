@@ -20,6 +20,7 @@
 #define XML_HPP
 
 #include <charconv>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -27,6 +28,7 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -101,11 +103,18 @@ struct value_converter<float>
     {
         if(sv.empty())
             return std::nullopt;
-        float val{};
-        auto  res = std::from_chars(sv.data(), sv.data() + sv.size(), val);
-        if(res.ec == std::errc{} && res.ptr == sv.data() + sv.size())
-            return val;
-        return std::nullopt;
+
+        std::string str(sv);
+
+        char *end = nullptr;
+        errno    = 0;
+
+        float val = std::strtof(str.c_str(), &end);
+
+        if(errno == ERANGE || end != str.c_str() + str.size())
+            return std::nullopt;
+
+        return val;
     }
 };
 
@@ -116,11 +125,18 @@ struct value_converter<double>
     {
         if(sv.empty())
             return std::nullopt;
-        double val{};
-        auto   res = std::from_chars(sv.data(), sv.data() + sv.size(), val);
-        if(res.ec == std::errc{} && res.ptr == sv.data() + sv.size())
-            return val;
-        return std::nullopt;
+
+        std::string str(sv);
+
+        char *end = nullptr;
+        errno    = 0;
+
+        double val = std::strtod(str.c_str(), &end);
+
+        if(errno == ERANGE || end != str.c_str() + str.size())
+            return std::nullopt;
+
+        return val;
     }
 };
 

@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <thread>
 
 #define HJ_ENV_IMPL
 #include <hj/os/env.h>

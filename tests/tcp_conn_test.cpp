@@ -140,7 +140,8 @@ TEST(tcp_conn, async_connect_success_and_read)
             server_sock->write(boost::asio::buffer(resp), err);
 
             char buf[128] = {0};
-            server_sock->read(boost::asio::buffer(buf, sizeof(buf)), err);
+            auto read_buf = boost::asio::buffer(buf, sizeof(buf));
+            server_sock->read(read_buf, err);
         }
         server_done_promise.set_value();
     });
@@ -269,9 +270,9 @@ TEST(tcp_conn, async_send_and_receive_multi_packets)
             while(total_received.size() < expected_total_len && !err.failed())
             {
                 char        buf[128] = {0};
+                auto read_buf = boost::asio::buffer(buf, sizeof(buf));
                 std::size_t sz =
-                    server_sock->read(boost::asio::buffer(buf, sizeof(buf)),
-                                      err);
+                    server_sock->read(read_buf, err);
                 if(!err.failed() && sz > 0)
                 {
                     total_received.append(buf, sz);
@@ -402,9 +403,10 @@ TEST(tcp_conn, concurrent_send_and_close_thread_safety)
         if(server_sock)
         {
             char buf[512];
+            auto read_buf = boost::asio::buffer(buf);
             while(!err.failed())
             {
-                server_sock->read(boost::asio::buffer(buf), err);
+                server_sock->read(read_buf, err);
             }
         }
     });
@@ -609,7 +611,8 @@ TEST(tcp_conn, concurrent_send_close_reset_race)
             char buf[128];
             while(!err.failed())
             {
-                server_sock->read(boost::asio::buffer(buf), err);
+                auto read_buf = boost::asio::buffer(buf, sizeof(buf));
+                server_sock->read(read_buf, err);
             }
         }
     });

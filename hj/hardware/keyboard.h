@@ -140,6 +140,49 @@ DEFINE_GUID(GUID_DEVINTERFACE_KEYBOARD,
 #include <IOKit/hid/IOHIDManager.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <ApplicationServices/ApplicationServices.h>
+#include <IOKit/hid/IOHIDUsageTables.h>
+
+typedef struct
+{
+    IOHIDDeviceRef device;
+    int            has_event;
+    hj_key_event_t last_event;
+} hj_mac_keyboard_t;
+
+static void mac_keyboard_callback(void *context,
+                                  IOReturn result,
+                                  void *sender,
+                                  IOHIDValueRef value)
+{
+    (void) sender;
+
+    if(result != kIOReturnSuccess || !context || !value)
+        return;
+
+    hj_mac_keyboard_t *dev_ctx =
+        (hj_mac_keyboard_t *) context;
+
+    IOHIDElementRef element = IOHIDValueGetElement(value);
+    if(!element)
+        return;
+
+    uint32_t usage_page = IOHIDElementGetUsagePage(element);
+    uint32_t usage      = IOHIDElementGetUsage(element);
+
+    if(usage_page != kHIDPage_KeyboardOrKeypad)
+        return;
+
+    CFIndex integer_value = IOHIDValueGetIntegerValue(value);
+
+    dev_ctx->last_event.keycode = (int) usage;
+
+    if(integer_value != 0)
+        dev_ctx->last_event.state = HJ_KEY_STATE_PRESSED;
+    else
+        dev_ctx->last_event.state = HJ_KEY_STATE_RELEASED;
+
+    dev_ctx->has_event = 1;
+}
 
 #endif
 

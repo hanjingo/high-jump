@@ -54,7 +54,7 @@ TEST(mouse, read_mouse_event)
         GTEST_SKIP() << "Unable to open device handle, skipping read test.";
     }
 
-    hj_mouse_event_t event = {0};
+    hj_mouse_event_t event = {};
     hj_mouse_err_t   ret   = hj_mouse_read_event(handle, &event);
     EXPECT_TRUE(ret == HJ_MOUSE_SUCCESS || ret == HJ_MOUSE_ERROR_NO_DATA);
     hj_mouse_close(handle);

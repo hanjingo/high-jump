@@ -240,8 +240,8 @@ inline void inject(Carrier &carrier)
 
 template <typename Carrier>
 inline opentelemetry::context::Context
-extract(const Carrier                   &carrier,
-        opentelemetry::context::Context &context =
+extract(const Carrier &carrier,
+        opentelemetry::context::Context context =
             opentelemetry::context::RuntimeContext::GetCurrent())
 {
     auto propagator = opentelemetry::trace::propagation::HttpTraceContext();

@@ -383,6 +383,7 @@ HJ_NIC_API hj_nic_err_t hj_nic_enumerate_interfaces(hj_nic_info_t *interfaces,
     if(count_err != HJ_NIC_SUCCESS)
         return count_err;
 
+    bool truncated = false;
     if(max_interfaces < total_count)
     {
         *actual_count = total_count;
@@ -689,6 +690,7 @@ HJ_NIC_API hj_nic_err_t hj_nic_get_interface_info(const char    *interface_name,
     if(count_err != HJ_NIC_SUCCESS)
         return count_err;
 
+    bool truncated = false;
     if(total_count == 0)
         return HJ_NIC_ERR_NOT_FOUND;
 

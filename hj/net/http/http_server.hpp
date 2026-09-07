@@ -347,7 +347,7 @@ class http_server
         }
     }
 
-    auto _make_get_head_adapter(const route_ptr &entry)
+    httplib::Server::Handler _make_get_head_adapter(const route_ptr &entry)
     {
         return [this, entry](const httplib::Request &raw_req,
                              httplib::Response      &raw_resp) {
@@ -378,7 +378,7 @@ class http_server
         };
     }
 
-    auto _make_adapter(http_method expected_method, http_handler handler)
+    httplib::Server::Handler _make_adapter(http_method expected_method, http_handler handler)
     {
         return [this, expected_method, handler = std::move(handler)](
                    const httplib::Request &raw_req,
@@ -771,7 +771,7 @@ class http_ssl_server
             _server->Get(pattern, _make_get_head_adapter(entry));
     }
 
-    auto _make_get_head_adapter(const route_ptr &entry)
+    httplib::SSLServer::Handler _make_get_head_adapter(const route_ptr &entry)
     {
         return [this, entry](const httplib::Request &raw_req,
                              httplib::Response      &raw_resp) {

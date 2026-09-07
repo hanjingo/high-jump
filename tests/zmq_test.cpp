@@ -528,7 +528,7 @@ TEST(zmq, eintr_signal_interruption_robust)
 
     char   addr[100];
     size_t addr_len = sizeof(addr);
-    ASSERT_EQ(sock.getsockopt(ZMQ_LAST_ENDPOINT, addr, &addr_len), 0);
+    ASSERT_EQ(sock.get_opt(ZMQ_LAST_ENDPOINT, addr, &addr_len), 0);
 
     std::promise<void> killer_ready_promise;
     auto               killer_ready_future = killer_ready_promise.get_future();

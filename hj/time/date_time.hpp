@@ -450,7 +450,14 @@ class date_time
 
         std::tm     tm = boost::posix_time::to_tm(dt._tm);
         std::string f(fmt);
-        return std::strftime(buffer, size, f.c_str(), &tm);
+        const auto written = std::strftime(buffer, size, f.c_str(), &tm);
+        if(written == 0)
+        {
+            buffer[0] = '\0';
+            return 0;
+        }
+
+        return written;
     }
 
   public:

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-TEST(xml_options, parse_options_fluent_bitwise)
+TEST(xml, parse_options_fluent_bitwise)
 {
     const char *xml_with_comments_and_cdata = R"(
         <?xml version="1.0"?>
@@ -29,7 +29,7 @@ TEST(xml_options, parse_options_fluent_bitwise)
     EXPECT_EQ(root.first_child().value(), "raw cdata content");
 }
 
-TEST(xml_mutation, set_api_returns_bool_and_propagates_failure)
+TEST(xml, set_api_returns_bool_and_propagates_failure)
 {
     hj::xml::document doc;
     doc.load("<root><item id=\"1\">old_value</item></root>");
@@ -84,7 +84,7 @@ TEST(xml, load_save_file)
     std::remove(filename);
 }
 
-TEST(xml_boundary, attribute_boundaries)
+TEST(xml, attribute_boundaries)
 {
     hj::xml::document doc;
     doc.load("<root><child id=\"1\"/></root>");
@@ -127,7 +127,7 @@ TEST(xml, empty_document)
     EXPECT_EQ(doc.root().type(), hj::xml::node_type::null);
 }
 
-TEST(xml_lifecycle, string_view_dangling_and_move_semantics)
+TEST(xml, string_view_lifetime_after_move)
 {
     std::string_view val_view;
     std::string_view attr_view;
@@ -154,7 +154,7 @@ TEST(xml_lifecycle, string_view_dangling_and_move_semantics)
     EXPECT_EQ(doc2.root().attr("attr"), "hello");
 }
 
-TEST(xml_flags, format_flags_behavior)
+TEST(xml, format_flags_behavior)
 {
     using hj::xml::format_flags;
 
@@ -193,7 +193,7 @@ TEST(xml_flags, format_flags_behavior)
     }
 }
 
-TEST(xml_encoding, multi_encoding_support)
+TEST(xml, multi_encoding_support)
 {
     {
         const char *utf8_text =
@@ -286,7 +286,7 @@ TEST(xml, parse_failure_paths)
     }
 }
 
-TEST(xml_conversion, attr_as_and_value_as)
+TEST(xml, attr_as_and_value_as)
 {
     const char *xml = R"(
         <server host="127.0.0.1" port="8080" timeout="1.5" enabled="true">

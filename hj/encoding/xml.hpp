@@ -40,6 +40,10 @@ constexpr std::underlying_type_t<Enum> to_underlying(Enum e) noexcept
     return static_cast<std::underlying_type_t<Enum>>(e);
 }
 
+struct node_impl;
+struct attribute_impl;
+struct text_impl;
+
 namespace detail
 {
 template <typename T>
@@ -145,11 +149,12 @@ struct value_converter<std::string_view>
 template <>
 struct value_converter<std::string>
 {
-    static std::optional<std::string> convert(std::string_view sv) noexcept
+    static std::optional<std::string> convert(std::string_view sv)
     {
         return std::string(sv);
     }
 };
+
 } // namespace detail
 
 enum class format_flags : unsigned int
@@ -200,9 +205,16 @@ enum class parse_options : unsigned int
     embed_pcdata     = 0x2000,
     merge_pcdata     = 0x4000,
 
-    by_default = escapes | wnorm_attribute | declaration | doctype | pi
-                 | comments | cdata,
-    full       = by_default | ws_pcdata
+    by_default = static_cast<unsigned int>(escapes)
+                 | static_cast<unsigned int>(wnorm_attribute)
+                 | static_cast<unsigned int>(declaration)
+                 | static_cast<unsigned int>(doctype)
+                 | static_cast<unsigned int>(pi)
+                 | static_cast<unsigned int>(comments)
+                 | static_cast<unsigned int>(cdata),
+
+    full = static_cast<unsigned int>(by_default)
+           | static_cast<unsigned int>(ws_pcdata)
 };
 
 enum class node_type
@@ -302,8 +314,8 @@ class text
 {
   public:
     text() noexcept = default;
-    explicit text(void *opaque_handle) noexcept
-        : _handle(opaque_handle)
+    explicit text(text_impl *impl) noexcept
+        : _impl(impl)
     {
     }
 
@@ -314,7 +326,7 @@ class text
     bool                           set(const char *val);
 
     template <typename T>
-    [[nodiscard]] std::optional<T> as() const noexcept
+    [[nodiscard]] std::optional<T> as() const
     {
         if(empty())
             return std::nullopt;
@@ -328,18 +340,18 @@ class text
     [[nodiscard]] float  as_float(float default_val = 0.0f) const noexcept;
     [[nodiscard]] bool   as_bool(bool default_val = false) const noexcept;
 
-    void *internal_handle() const noexcept { return _handle; }
+    text_impl *internal_handle() const noexcept { return _impl; }
 
   private:
-    void *_handle{nullptr};
+    text_impl *_impl{nullptr};
 };
 
 class attribute
 {
   public:
     attribute() noexcept = default;
-    explicit attribute(void *opaque_handle) noexcept
-        : _handle(opaque_handle)
+    explicit attribute(attribute_impl *impl) noexcept
+        : _impl(impl)
     {
     }
 
@@ -350,7 +362,7 @@ class attribute
     [[nodiscard]] std::string_view value() const noexcept;
 
     template <typename T>
-    [[nodiscard]] std::optional<T> as() const noexcept
+    [[nodiscard]] std::optional<T> as() const
     {
         if(empty())
             return std::nullopt;
@@ -369,10 +381,10 @@ class attribute
     [[nodiscard]] attribute next_attribute() const noexcept;
     [[nodiscard]] attribute previous_attribute() const noexcept;
 
-    void *internal_handle() const noexcept { return _handle; }
+    attribute_impl *internal_handle() const noexcept { return _impl; }
 
   private:
-    void *_handle{nullptr};
+    attribute_impl *_impl{nullptr};
 };
 
 class attribute_iterator
@@ -385,12 +397,12 @@ class attribute_iterator
     using reference         = attribute;
 
     attribute_iterator() noexcept = default;
-    explicit attribute_iterator(void *handle) noexcept
-        : _handle(handle)
+    explicit attribute_iterator(attribute_impl *impl) noexcept
+        : _impl(impl)
     {
     }
 
-    reference operator*() const noexcept { return attribute(_handle); }
+    reference           operator*() const noexcept { return attribute(_impl); }
     attribute_iterator &operator++() noexcept;
     attribute_iterator  operator++(int) noexcept
     {
@@ -399,17 +411,14 @@ class attribute_iterator
         return tmp;
     }
 
-    bool operator==(const attribute_iterator &rhs) const noexcept
-    {
-        return _handle == rhs._handle;
-    }
+    bool operator==(const attribute_iterator &rhs) const noexcept;
     bool operator!=(const attribute_iterator &rhs) const noexcept
     {
-        return _handle != rhs._handle;
+        return !(*this == rhs);
     }
 
   private:
-    void *_handle{nullptr};
+    attribute_impl *_impl{nullptr};
 };
 
 struct attribute_range
@@ -433,8 +442,8 @@ class node_iterator
     using reference         = node;
 
     node_iterator() noexcept = default;
-    node_iterator(void *handle, const char *filter_name = nullptr) noexcept
-        : _handle(handle)
+    node_iterator(node_impl *impl, const char *filter_name = nullptr) noexcept
+        : _impl(impl)
         , _filter_name(filter_name)
     {
     }
@@ -448,17 +457,14 @@ class node_iterator
         return tmp;
     }
 
-    bool operator==(const node_iterator &rhs) const noexcept
-    {
-        return _handle == rhs._handle;
-    }
+    bool operator==(const node_iterator &rhs) const noexcept;
     bool operator!=(const node_iterator &rhs) const noexcept
     {
-        return _handle != rhs._handle;
+        return !(*this == rhs);
     }
 
   private:
-    void       *_handle{nullptr};
+    node_impl  *_impl{nullptr};
     const char *_filter_name{nullptr};
 };
 
@@ -475,8 +481,8 @@ class node
 {
   public:
     node() noexcept = default;
-    explicit node(void *opaque_handle) noexcept
-        : _handle(opaque_handle)
+    explicit node(node_impl *impl) noexcept
+        : _impl(impl)
     {
     }
 
@@ -492,7 +498,7 @@ class node
     bool                           set_value(const char *val);
 
     template <typename T>
-    [[nodiscard]] std::optional<T> value_as() const noexcept
+    [[nodiscard]] std::optional<T> value_as() const
     {
         return text().as<T>();
     }
@@ -524,7 +530,7 @@ class node
     [[nodiscard]] std::string_view attr(const char *name) const noexcept;
 
     template <typename T>
-    [[nodiscard]] std::optional<T> attr_as(const char *name) const noexcept
+    [[nodiscard]] std::optional<T> attr_as(const char *name) const
     {
         auto a = attribute_node(name);
         if(!a)
@@ -540,15 +546,15 @@ class node
     [[nodiscard]] node_range children(const char *filter_name) const noexcept;
     [[nodiscard]] attribute_range attributes() const noexcept;
 
-    void *internal_handle() const noexcept { return _handle; }
+    node_impl *internal_handle() const noexcept { return _impl; }
 
   private:
-    void *_handle{nullptr};
+    node_impl *_impl{nullptr};
 };
 
 inline node node_iterator::operator*() const noexcept
 {
-    return node(_handle);
+    return node(_impl);
 }
 
 class document
@@ -713,263 +719,275 @@ make_parse_result(const pugi::xml_parse_result &res) noexcept
                         static_cast<std::size_t>(res.offset)};
 }
 
-inline pugi::xml_node unwrap(void *h) noexcept
+inline pugi::xml_node unwrap_node(node_impl *p) noexcept
 {
     pugi::xml_node n;
-    std::memcpy(&n, &h, sizeof(void *));
+    *reinterpret_cast<pugi::xml_node *>(&n) =
+        *reinterpret_cast<pugi::xml_node *>(&p);
     return n;
 }
 
-inline void *wrap(pugi::xml_node n) noexcept
+inline node_impl *wrap_node(const pugi::xml_node &n) noexcept
 {
-    void *h = nullptr;
-    std::memcpy(&h, &n, sizeof(pugi::xml_node));
-    return h;
+    node_impl *p                            = nullptr;
+    *reinterpret_cast<pugi::xml_node *>(&p) = n;
+    return p;
 }
 
-inline pugi::xml_attribute unwrap_attr(void *h) noexcept
+inline pugi::xml_attribute unwrap_attr(attribute_impl *p) noexcept
 {
     pugi::xml_attribute a;
-    std::memcpy(&a, &h, sizeof(void *));
+    *reinterpret_cast<pugi::xml_attribute *>(&a) =
+        *reinterpret_cast<pugi::xml_attribute *>(&p);
     return a;
 }
 
-inline void *wrap_attr(pugi::xml_attribute a) noexcept
+inline attribute_impl *wrap_attr(const pugi::xml_attribute &a) noexcept
 {
-    void *h = nullptr;
-    std::memcpy(&h, &a, sizeof(pugi::xml_attribute));
-    return h;
+    attribute_impl *p                            = nullptr;
+    *reinterpret_cast<pugi::xml_attribute *>(&p) = a;
+    return p;
+}
+
+inline pugi::xml_text unwrap_text(text_impl *p) noexcept
+{
+    pugi::xml_text t;
+    *reinterpret_cast<pugi::xml_text *>(&t) =
+        *reinterpret_cast<pugi::xml_text *>(&p);
+    return t;
+}
+
+inline text_impl *wrap_text(const pugi::xml_text &t) noexcept
+{
+    text_impl *p                            = nullptr;
+    *reinterpret_cast<pugi::xml_text *>(&p) = t;
+    return p;
 }
 
 } // namespace detail
 
 inline text::operator bool() const noexcept
 {
-    return !detail::unwrap_attr(_handle).empty();
+    return !detail::unwrap_text(_impl).empty();
 }
 inline bool text::empty() const noexcept
 {
-    return detail::unwrap_attr(_handle).empty();
+    return detail::unwrap_text(_impl).empty();
 }
 inline std::string_view text::get() const noexcept
 {
-    pugi::xml_text t;
-    std::memcpy(&t, &_handle, sizeof(void *));
-    return t.get();
+    return detail::unwrap_text(_impl).get();
 }
 inline bool text::set(const char *val)
 {
-    pugi::xml_text t;
-    std::memcpy(&t, &_handle, sizeof(void *));
+    pugi::xml_text t = detail::unwrap_text(_impl);
     return t.set(val);
 }
 inline int text::as_int(int default_val) const noexcept
 {
-    pugi::xml_text t;
-    std::memcpy(&t, &_handle, sizeof(void *));
-    return t.as_int(default_val);
+    return detail::unwrap_text(_impl).as_int(default_val);
 }
 inline unsigned int text::as_uint(unsigned int default_val) const noexcept
 {
-    pugi::xml_text t;
-    std::memcpy(&t, &_handle, sizeof(void *));
-    return t.as_uint(default_val);
+    return detail::unwrap_text(_impl).as_uint(default_val);
 }
 inline double text::as_double(double default_val) const noexcept
 {
-    pugi::xml_text t;
-    std::memcpy(&t, &_handle, sizeof(void *));
-    return t.as_double(default_val);
+    return detail::unwrap_text(_impl).as_double(default_val);
 }
 inline float text::as_float(float default_val) const noexcept
 {
-    pugi::xml_text t;
-    std::memcpy(&t, &_handle, sizeof(void *));
-    return t.as_float(default_val);
+    return detail::unwrap_text(_impl).as_float(default_val);
 }
 inline bool text::as_bool(bool default_val) const noexcept
 {
-    pugi::xml_text t;
-    std::memcpy(&t, &_handle, sizeof(void *));
-    return t.as_bool(default_val);
+    return detail::unwrap_text(_impl).as_bool(default_val);
 }
 
 inline attribute::operator bool() const noexcept
 {
-    return !detail::unwrap_attr(_handle).empty();
+    return !detail::unwrap_attr(_impl).empty();
 }
 inline bool attribute::empty() const noexcept
 {
-    return detail::unwrap_attr(_handle).empty();
+    return detail::unwrap_attr(_impl).empty();
 }
 inline std::string_view attribute::name() const noexcept
 {
-    return detail::unwrap_attr(_handle).name();
+    return detail::unwrap_attr(_impl).name();
 }
 inline std::string_view attribute::value() const noexcept
 {
-    return detail::unwrap_attr(_handle).value();
+    return detail::unwrap_attr(_impl).value();
 }
 inline int attribute::as_int(int default_val) const noexcept
 {
-    return detail::unwrap_attr(_handle).as_int(default_val);
+    return detail::unwrap_attr(_impl).as_int(default_val);
 }
 inline unsigned int attribute::as_uint(unsigned int default_val) const noexcept
 {
-    return detail::unwrap_attr(_handle).as_uint(default_val);
+    return detail::unwrap_attr(_impl).as_uint(default_val);
 }
 inline double attribute::as_double(double default_val) const noexcept
 {
-    return detail::unwrap_attr(_handle).as_double(default_val);
+    return detail::unwrap_attr(_impl).as_double(default_val);
 }
 inline bool attribute::as_bool(bool default_val) const noexcept
 {
-    return detail::unwrap_attr(_handle).as_bool(default_val);
+    return detail::unwrap_attr(_impl).as_bool(default_val);
 }
 inline bool attribute::set_name(const char *name)
 {
-    auto a = detail::unwrap_attr(_handle);
+    pugi::xml_attribute a = detail::unwrap_attr(_impl);
     return a.set_name(name);
 }
 inline bool attribute::set_value(const char *val)
 {
-    auto a = detail::unwrap_attr(_handle);
+    pugi::xml_attribute a = detail::unwrap_attr(_impl);
     return a.set_value(val);
 }
 inline attribute attribute::next_attribute() const noexcept
 {
     return attribute(
-        detail::wrap_attr(detail::unwrap_attr(_handle).next_attribute()));
+        detail::wrap_attr(detail::unwrap_attr(_impl).next_attribute()));
 }
 inline attribute attribute::previous_attribute() const noexcept
 {
     return attribute(
-        detail::wrap_attr(detail::unwrap_attr(_handle).previous_attribute()));
+        detail::wrap_attr(detail::unwrap_attr(_impl).previous_attribute()));
 }
 
 inline attribute_iterator &attribute_iterator::operator++() noexcept
 {
-    _handle = detail::wrap_attr(detail::unwrap_attr(_handle).next_attribute());
+    _impl = detail::wrap_attr(detail::unwrap_attr(_impl).next_attribute());
     return *this;
+}
+
+inline bool
+attribute_iterator::operator==(const attribute_iterator &rhs) const noexcept
+{
+    return detail::unwrap_attr(_impl) == detail::unwrap_attr(rhs._impl);
 }
 
 inline node::operator bool() const noexcept
 {
-    return !detail::unwrap(_handle).empty();
+    return !detail::unwrap_node(_impl).empty();
 }
 inline bool node::empty() const noexcept
 {
-    return detail::unwrap(_handle).empty();
+    return detail::unwrap_node(_impl).empty();
 }
 inline node_type node::type() const noexcept
 {
-    return static_cast<node_type>(detail::unwrap(_handle).type());
+    return static_cast<node_type>(detail::unwrap_node(_impl).type());
 }
 inline std::string_view node::name() const noexcept
 {
-    return detail::unwrap(_handle).name();
+    return detail::unwrap_node(_impl).name();
 }
 inline bool node::set_name(const char *name)
 {
-    auto n = detail::unwrap(_handle);
+    pugi::xml_node n = detail::unwrap_node(_impl);
     return n.set_name(name);
 }
 inline std::string_view node::value() const noexcept
 {
-    return detail::unwrap(_handle).text().get();
+    return detail::unwrap_node(_impl).text().get();
 }
 inline bool node::set_value(const char *val)
 {
-    auto n = detail::unwrap(_handle);
+    pugi::xml_node n = detail::unwrap_node(_impl);
     return n.text().set(val);
 }
 
 inline hj::xml::text node::text() const noexcept
 {
-    auto  t = detail::unwrap(_handle).text();
-    void *h = nullptr;
-    std::memcpy(&h, &t, sizeof(pugi::xml_text));
-    return hj::xml::text(h);
+    return hj::xml::text(detail::wrap_text(detail::unwrap_node(_impl).text()));
 }
 
 inline bool node::set_text(const char *val)
 {
-    auto n = detail::unwrap(_handle);
+    pugi::xml_node n = detail::unwrap_node(_impl);
     return n.text().set(val);
 }
 inline node node::parent() const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).parent()));
+    return node(detail::wrap_node(detail::unwrap_node(_impl).parent()));
 }
 inline node node::first_child() const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).first_child()));
+    return node(detail::wrap_node(detail::unwrap_node(_impl).first_child()));
 }
 inline node node::last_child() const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).last_child()));
+    return node(detail::wrap_node(detail::unwrap_node(_impl).last_child()));
 }
 inline node node::next_sibling() const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).next_sibling()));
+    return node(detail::wrap_node(detail::unwrap_node(_impl).next_sibling()));
 }
 inline node node::next_sibling(const char *name) const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).next_sibling(name)));
+    return node(
+        detail::wrap_node(detail::unwrap_node(_impl).next_sibling(name)));
 }
 inline node node::previous_sibling() const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).previous_sibling()));
+    return node(
+        detail::wrap_node(detail::unwrap_node(_impl).previous_sibling()));
 }
 inline node node::previous_sibling(const char *name) const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).previous_sibling(name)));
+    return node(
+        detail::wrap_node(detail::unwrap_node(_impl).previous_sibling(name)));
 }
 inline node node::child(const char *name) const noexcept
 {
-    return node(detail::wrap(detail::unwrap(_handle).child(name)));
+    return node(detail::wrap_node(detail::unwrap_node(_impl).child(name)));
 }
 inline node node::append_child(const char *name)
 {
-    return node(detail::wrap(detail::unwrap(_handle).append_child(name)));
+    return node(
+        detail::wrap_node(detail::unwrap_node(_impl).append_child(name)));
 }
 inline bool node::remove_child(const char *name)
 {
-    return detail::unwrap(_handle).remove_child(name);
+    pugi::xml_node n = detail::unwrap_node(_impl);
+    return n.remove_child(name);
 }
 inline bool node::remove_child(const node &child_node)
 {
-    return detail::unwrap(_handle).remove_child(
-        detail::unwrap(child_node._handle));
+    pugi::xml_node n = detail::unwrap_node(_impl);
+    return n.remove_child(detail::unwrap_node(child_node._impl));
 }
 inline std::string_view node::child_value(const char *name) const noexcept
 {
-    return detail::unwrap(_handle).child_value(name);
+    return detail::unwrap_node(_impl).child_value(name);
 }
 inline attribute node::first_attribute() const noexcept
 {
     return attribute(
-        detail::wrap_attr(detail::unwrap(_handle).first_attribute()));
+        detail::wrap_attr(detail::unwrap_node(_impl).first_attribute()));
 }
 inline attribute node::last_attribute() const noexcept
 {
     return attribute(
-        detail::wrap_attr(detail::unwrap(_handle).last_attribute()));
+        detail::wrap_attr(detail::unwrap_node(_impl).last_attribute()));
 }
 inline attribute node::attribute_node(const char *name) const noexcept
 {
     return attribute(
-        detail::wrap_attr(detail::unwrap(_handle).attribute(name)));
+        detail::wrap_attr(detail::unwrap_node(_impl).attribute(name)));
 }
 inline std::string_view node::attr(const char *name) const noexcept
 {
-    return detail::unwrap(_handle).attribute(name).value();
+    return detail::unwrap_node(_impl).attribute(name).value();
 }
 
 inline bool node::set_attr(const char *name, const char *val)
 {
-    auto n = detail::unwrap(_handle);
-    auto a = n.attribute(name);
+    pugi::xml_node n = detail::unwrap_node(_impl);
+    auto           a = n.attribute(name);
     if(a)
         return a.set_value(val);
     auto new_attr = n.append_attribute(name);
@@ -980,32 +998,33 @@ inline bool node::set_attr(const char *name, const char *val)
 
 inline bool node::remove_attribute(const char *name)
 {
-    return detail::unwrap(_handle).remove_attribute(name);
+    pugi::xml_node n = detail::unwrap_node(_impl);
+    return n.remove_attribute(name);
 }
 inline bool node::remove_attribute(const attribute &attr)
 {
-    return detail::unwrap(_handle).remove_attribute(
-        detail::unwrap_attr(attr.internal_handle()));
+    pugi::xml_node n = detail::unwrap_node(_impl);
+    return n.remove_attribute(detail::unwrap_attr(attr.internal_handle()));
 }
 
 inline node_range node::children() const noexcept
 {
-    auto n = detail::unwrap(_handle);
-    return node_range{node_iterator(detail::wrap(n.first_child())),
+    pugi::xml_node n = detail::unwrap_node(_impl);
+    return node_range{node_iterator(detail::wrap_node(n.first_child())),
                       node_iterator()};
 }
 
 inline node_range node::children(const char *filter_name) const noexcept
 {
-    auto           n     = detail::unwrap(_handle);
+    pugi::xml_node n     = detail::unwrap_node(_impl);
     pugi::xml_node start = filter_name ? n.child(filter_name) : n.first_child();
-    return node_range{node_iterator(detail::wrap(start), filter_name),
+    return node_range{node_iterator(detail::wrap_node(start), filter_name),
                       node_iterator()};
 }
 
 inline attribute_range node::attributes() const noexcept
 {
-    auto n = detail::unwrap(_handle);
+    pugi::xml_node n = detail::unwrap_node(_impl);
     return attribute_range{
         attribute_iterator(detail::wrap_attr(n.first_attribute())),
         attribute_iterator()};
@@ -1013,15 +1032,20 @@ inline attribute_range node::attributes() const noexcept
 
 inline node_iterator &node_iterator::operator++() noexcept
 {
-    auto n = detail::unwrap(_handle);
+    pugi::xml_node n = detail::unwrap_node(_impl);
     if(_filter_name)
     {
-        _handle = detail::wrap(n.next_sibling(_filter_name));
+        _impl = detail::wrap_node(n.next_sibling(_filter_name));
     } else
     {
-        _handle = detail::wrap(n.next_sibling());
+        _impl = detail::wrap_node(n.next_sibling());
     }
     return *this;
+}
+
+inline bool node_iterator::operator==(const node_iterator &rhs) const noexcept
+{
+    return detail::unwrap_node(_impl) == detail::unwrap_node(rhs._impl);
 }
 
 struct document::impl
@@ -1051,7 +1075,7 @@ inline node document::root() const noexcept
 {
     if(!_pimpl)
         return node();
-    return node(detail::wrap(_pimpl->doc.document_element()));
+    return node(detail::wrap_node(_pimpl->doc.document_element()));
 }
 
 inline parse_result document::load_string(const char         *text,

@@ -195,12 +195,6 @@ inline bool check_is_null(const std::optional<T> &target)
 
 } // namespace detail
 
-[[nodiscard]]
-inline boost::stacktrace::stacktrace current_stacktrace()
-{
-    return boost::stacktrace::stacktrace();
-}
-
 inline void throw_if_false(bool target, std::string_view memo = "false")
 {
     if(!target)
@@ -340,14 +334,14 @@ inline auto recover(Func &&func, Handler &&handler)
     {
         if constexpr(detail::is_valid_handler_v<Handler>)
         {
-            handler(std::current_exception(), current_stacktrace());
+            handler(std::current_exception(), boost::stacktrace::stacktrace());
         }
     }
     catch(...)
     {
         if constexpr(detail::is_valid_handler_v<Handler>)
         {
-            handler(std::current_exception(), current_stacktrace());
+            handler(std::current_exception(), boost::stacktrace::stacktrace());
         }
     }
 
@@ -376,7 +370,7 @@ inline decltype(auto) recover_or_rethrow(Func &&func, Handler &&handler)
     {
         if constexpr(detail::is_valid_handler_v<Handler>)
         {
-            handler(std::current_exception(), current_stacktrace());
+            handler(std::current_exception(), boost::stacktrace::stacktrace());
         }
         throw;
     }
@@ -384,7 +378,7 @@ inline decltype(auto) recover_or_rethrow(Func &&func, Handler &&handler)
     {
         if constexpr(detail::is_valid_handler_v<Handler>)
         {
-            handler(std::current_exception(), current_stacktrace());
+            handler(std::current_exception(), boost::stacktrace::stacktrace());
         }
         throw;
     }

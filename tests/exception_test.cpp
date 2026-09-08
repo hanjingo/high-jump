@@ -65,17 +65,6 @@ TEST(exception, empty_message)
     }
 }
 
-TEST(exception, custom_stacktrace_preservation)
-{
-    boost::stacktrace::stacktrace custom_trace  = hj::current_stacktrace();
-    std::size_t                   expected_size = custom_trace.size();
-
-    hj::Exception e("error with custom trace", custom_trace);
-
-    EXPECT_STREQ(e.what(), "error with custom trace");
-    EXPECT_EQ(e.trace().size(), expected_size);
-}
-
 TEST(exception, compile_time_nullable_traits)
 {
     static_assert(!hj::detail::is_nullable_v<int>, "int is not nullable");

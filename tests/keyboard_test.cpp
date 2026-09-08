@@ -81,17 +81,70 @@ TEST(keyboard, read_key_event)
 
 TEST(keyboard, set_repeat)
 {
-    hj_keyboard_handle_t handle = HJ_INVALID_HANDLE;
-    hj_keyboard_open(NULL, &handle);
+    hj_keyboard_info_t infos[4] = {};
+    int count = 0;
 
-    hj_keyboard_err_t ret = hj_keyboard_set_repeat(handle, 500, 30);
+    hj_keyboard_err_t err =
+        hj_keyboard_enumerate(infos, 4, &count);
+
 #if defined(__APPLE__)
-    EXPECT_EQ(ret, HJ_KEYBOARD_ERR_NOT_SUPPORTED);
-#else
-    EXPECT_TRUE(ret == HJ_KEYBOARD_OK || ret <= 0
-                || ret == HJ_KEYBOARD_ERR_INVALID_ARG);
-#endif
 
-    if(handle != HJ_INVALID_HANDLE)
-        hj_keyboard_close(handle);
+    if(err != HJ_KEYBOARD_OK || count == 0)
+    {
+        GTEST_SKIP() << "No keyboard device available";
+    }
+
+    hj_keyboard_handle_t handle = HJ_INVALID_HANDLE;
+
+    err = hj_keyboard_open(infos[0].device_path, &handle);
+
+    if(err != HJ_KEYBOARD_OK)
+    {
+        GTEST_SKIP() << "Keyboard cannot be opened, possibly due to macOS permission restrictions";
+    }
+
+    ASSERT_NE(handle, HJ_INVALID_HANDLE);
+
+    EXPECT_EQ(
+        hj_keyboard_set_repeat(handle, 500, 30),
+        HJ_KEYBOARD_ERR_NOT_SUPPORTED);
+
+    EXPECT_EQ(hj_keyboard_close(handle), HJ_KEYBOARD_OK);
+
+#else
+
+    hj_keyboard_handle_t handle = HJ_INVALID_HANDLE;
+
+    if(count == 0)
+    {
+        GTEST_SKIP() << "No keyboard device available";
+    }
+
+    err = hj_keyboard_open(infos[0].device_path, &handle);
+
+    if(err != HJ_KEYBOARD_OK)
+    {
+        GTEST_SKIP() << "Keyboard cannot be opened";
+    }
+
+    ASSERT_NE(handle, HJ_INVALID_HANDLE);
+
+    hj_keyboard_err_t ret =
+        hj_keyboard_set_repeat(handle, 500, 30);
+
+    EXPECT_TRUE(
+        ret == HJ_KEYBOARD_OK ||
+        ret == HJ_KEYBOARD_ERR_INTERNAL ||
+        ret == HJ_KEYBOARD_ERR_NOT_SUPPORTED);
+
+    hj_keyboard_close(handle);
+
+#endif
+}
+
+TEST(keyboard, set_repeat_invalid_handle)
+{
+    EXPECT_EQ(
+        hj_keyboard_set_repeat(HJ_INVALID_HANDLE, 500, 30),
+        HJ_KEYBOARD_ERR_INVALID_ARG);
 }

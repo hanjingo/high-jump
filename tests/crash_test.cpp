@@ -7,6 +7,7 @@
 #include <vector>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -130,36 +131,70 @@ bool validate_minidump_file(const std::string &dump_dir)
 {
     if(!fs::exists(dump_dir) || !fs::is_directory(dump_dir))
     {
+        std::cerr << "[validate] dump directory missing: "
+                  << dump_dir << std::endl;
         return false;
     }
 
+    std::cerr << "[validate] dump directory: "
+              << fs::absolute(dump_dir) << std::endl;
+
     fs::path callback_log = fs::path(dump_dir) / "callback.log";
+
     if(!fs::exists(callback_log))
     {
+        std::cerr << "[validate] callback.log missing: "
+                  << callback_log << std::endl;
+
+        for(const auto &entry : fs::directory_iterator(dump_dir))
+        {
+            std::cerr << "[validate] found: "
+                      << entry.path() << std::endl;
+        }
+
         return false;
     }
 
     std::ifstream log_file(callback_log);
-    std::string   log_content((std::istreambuf_iterator<char>(log_file)),
-                              std::istreambuf_iterator<char>());
-    if(log_content.find("[crasher] Breakpad callback triggered successfully")
+
+    if(!log_file.is_open())
+    {
+        std::cerr << "[validate] failed to open callback.log"
+                  << std::endl;
+        return false;
+    }
+
+    std::string log_content(
+        (std::istreambuf_iterator<char>(log_file)),
+        std::istreambuf_iterator<char>());
+
+    std::cerr << "[validate] callback.log content:\n"
+              << log_content << std::endl;
+
+    if(log_content.find(
+           "[crasher] Breakpad callback triggered successfully")
        == std::string::npos)
     {
+        std::cerr << "[validate] Breakpad callback success message missing"
+                  << std::endl;
         return false;
     }
 
     fs::path dump_file_path;
     uint64_t file_size = 0;
+
     for(const auto &entry : fs::directory_iterator(dump_dir))
     {
-        if(entry.is_regular_file() && entry.path().extension() == ".dmp")
+        if(entry.is_regular_file()
+           && entry.path().extension() == ".dmp")
         {
             std::error_code ec;
-            uint64_t        sz = entry.file_size(ec);
+            uint64_t sz = entry.file_size(ec);
+
             if(!ec && sz > sizeof(MDRawHeader))
             {
                 dump_file_path = entry.path();
-                file_size      = sz;
+                file_size = sz;
                 break;
             }
         }
@@ -167,81 +202,174 @@ bool validate_minidump_file(const std::string &dump_dir)
 
     if(dump_file_path.empty())
     {
+        std::cerr << "[validate] no valid .dmp file found"
+                  << std::endl;
+
+        for(const auto &entry : fs::directory_iterator(dump_dir))
+        {
+            std::error_code ec;
+            auto size = entry.is_regular_file()
+                            ? entry.file_size(ec)
+                            : 0;
+
+            std::cerr << "[validate] file: "
+                      << entry.path()
+                      << " size=" << size
+                      << std::endl;
+        }
+
         return false;
     }
 
+    std::cerr << "[validate] minidump: "
+              << dump_file_path
+              << " size=" << file_size
+              << std::endl;
+
     std::ifstream file(dump_file_path, std::ios::binary);
+
     if(!file.is_open())
     {
+        std::cerr << "[validate] failed to open minidump"
+                  << std::endl;
         return false;
     }
 
     MDRawHeader header{};
-    file.read(reinterpret_cast<char *>(&header), sizeof(header));
-    if(!file || header.signature != MD_MINIDUMP_SIGNATURE)
+
+    file.read(
+        reinterpret_cast<char *>(&header),
+        sizeof(header));
+
+    if(!file)
     {
+        std::cerr << "[validate] failed to read minidump header"
+                  << std::endl;
         return false;
     }
 
-    if(header.stream_count == 0 || header.stream_directory_rva == 0)
+    std::cerr << "[validate] signature=0x"
+              << std::hex
+              << header.signature
+              << std::dec
+              << " streams="
+              << header.stream_count
+              << " directory_rva="
+              << header.stream_directory_rva
+              << std::endl;
+
+    if(header.signature != MD_MINIDUMP_SIGNATURE)
     {
+        std::cerr << "[validate] invalid minidump signature"
+                  << std::endl;
         return false;
     }
 
-    uint64_t dir_rva = static_cast<uint64_t>(header.stream_directory_rva);
+    if(header.stream_count == 0
+       || header.stream_directory_rva == 0)
+    {
+        std::cerr << "[validate] invalid stream directory"
+                  << std::endl;
+        return false;
+    }
+
+    uint64_t dir_rva =
+        static_cast<uint64_t>(header.stream_directory_rva);
+
     if(dir_rva >= file_size)
     {
+        std::cerr << "[validate] stream directory outside file"
+                  << std::endl;
         return false;
     }
 
-    uint64_t stream_count = static_cast<uint64_t>(header.stream_count);
-    uint64_t entry_size   = static_cast<uint64_t>(sizeof(MDRawDirectory));
+    uint64_t stream_count =
+        static_cast<uint64_t>(header.stream_count);
 
-    if(stream_count > ((std::numeric_limits<uint64_t>::max)() / entry_size))
+    uint64_t entry_size =
+        static_cast<uint64_t>(sizeof(MDRawDirectory));
+
+    if(stream_count >
+       ((std::numeric_limits<uint64_t>::max)() / entry_size))
     {
+        std::cerr << "[validate] stream count overflow"
+                  << std::endl;
         return false;
     }
 
-    uint64_t total_dir_bytes = stream_count * entry_size;
+    uint64_t total_dir_bytes =
+        stream_count * entry_size;
 
     if(dir_rva + total_dir_bytes > file_size
        || (dir_rva + total_dir_bytes) < dir_rva)
     {
+        std::cerr << "[validate] stream directory exceeds file"
+                  << std::endl;
         return false;
     }
 
-    file.seekg(header.stream_directory_rva, std::ios::beg);
+    file.seekg(
+        static_cast<std::streamoff>(
+            header.stream_directory_rva),
+        std::ios::beg);
+
     if(!file)
     {
+        std::cerr << "[validate] failed to seek directory"
+                  << std::endl;
         return false;
     }
 
-    bool has_exception_stream   = false;
+    bool has_exception_stream = false;
     bool has_thread_list_stream = false;
     bool has_module_list_stream = false;
 
     for(uint32_t i = 0; i < header.stream_count; ++i)
     {
         MDRawDirectory dir{};
-        file.read(reinterpret_cast<char *>(&dir), sizeof(dir));
+
+        file.read(
+            reinterpret_cast<char *>(&dir),
+            sizeof(dir));
+
         if(!file)
         {
+            std::cerr << "[validate] failed to read stream "
+                      << i << std::endl;
             return false;
         }
+
+        std::cerr << "[validate] stream["
+                  << i
+                  << "] type="
+                  << dir.stream_type
+                  << std::endl;
 
         if(dir.stream_type == MD_EXCEPTION_STREAM)
         {
             has_exception_stream = true;
-        } else if(dir.stream_type == MD_THREAD_LIST_STREAM)
+        }
+        else if(dir.stream_type == MD_THREAD_LIST_STREAM)
         {
             has_thread_list_stream = true;
-        } else if(dir.stream_type == MD_MODULE_LIST_STREAM)
+        }
+        else if(dir.stream_type == MD_MODULE_LIST_STREAM)
         {
             has_module_list_stream = true;
         }
     }
 
-    return has_exception_stream && has_thread_list_stream
+    if(!has_exception_stream)
+        std::cerr << "[validate] missing exception stream\n";
+
+    if(!has_thread_list_stream)
+        std::cerr << "[validate] missing thread list stream\n";
+
+    if(!has_module_list_stream)
+        std::cerr << "[validate] missing module list stream\n";
+
+    return has_exception_stream
+           && has_thread_list_stream
            && has_module_list_stream;
 }
 
@@ -315,11 +443,27 @@ TEST(crash, segfault_capture)
 
 TEST(crash, div_by_zero_capture)
 {
+#if defined(__APPLE__)
+
+    GTEST_SKIP()
+        << "Integer division by zero is not a reliable SIGFPE trigger "
+           "on macOS; use segfault_capture for synchronous fault capture.";
+
+#else
+
     std::string dump_dir = "./test_dumps_div";
     int         ret      = run_crasher_subprocess("divbyzero", dump_dir);
+
+#if defined(_WIN32)
     EXPECT_NE(ret, 0);
+#else
+    EXPECT_EQ(ret, -SIGFPE);
+#endif
+
     EXPECT_TRUE(validate_minidump_file(dump_dir))
         << "Minidump file is missing, empty, or corrupted for divbyzero!";
+
+#endif
 }
 
 TEST(crash, abort_capture)

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <csignal>
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
@@ -90,10 +91,13 @@ void trigger_crash(const std::string &type)
         (void) val;
     } else if(type == "divbyzero")
     {
-        volatile int a = 1;
-        volatile int b = 0;
-        volatile int c = a / b;
-        (void) c;
+        // EXCEPTION_INT_DIVIDE_BY_ZERO.
+        volatile int zero  = 0;
+        volatile int value = 1;
+
+        value /= zero;
+
+        (void)value;
     } else if(type == "abort")
     {
         std::abort();

@@ -67,7 +67,7 @@ std::string from_hex(const std::string &hex)
 hj::des::options make_options(const std::string &key,
                               hj::des::mode      mode,
                               hj::des::padding   pad,
-                              const std::string &iv = k_iv)
+                              const std::string &iv)
 {
     hj::des::options opt;
     opt.key       = reinterpret_cast<const unsigned char *>(key.data());
@@ -82,6 +82,13 @@ hj::des::options make_options(const std::string &key,
     }
 
     return opt;
+}
+
+hj::des::options make_options(const std::string &key,
+                              hj::des::mode      mode,
+                              hj::des::padding   pad)
+{
+    return make_options(key, mode, pad, {});
 }
 
 std::string openssl_encrypt(const std::string &key,
@@ -583,10 +590,12 @@ TEST(des, decrypt_file)
     }
 
     const std::string key = k3des_key;
-    auto              opt = make_options(key,
-                                         hj::des::mode::ctr,
-                                         hj::des::padding::no_padding,
-                                         k_iv);
+    const std::string iv  = k_iv;
+
+    auto opt = make_options(key,
+                            hj::des::mode::ctr,
+                            hj::des::padding::no_padding,
+                            iv);
 
     ASSERT_EQ(hj::des::encrypt_file(cipher_path, plain_path, opt),
               error_code::ok);
@@ -604,10 +613,12 @@ TEST(des, decrypt_file)
 TEST(des, ctr_arbitrary_lengths)
 {
     const std::string key = k3des_key;
-    auto              opt = make_options(key,
-                                         hj::des::mode::ctr,
-                                         hj::des::padding::no_padding,
-                                         k_iv);
+    const std::string iv  = k_iv;
+
+    auto opt = make_options(key,
+                            hj::des::mode::ctr,
+                            hj::des::padding::no_padding,
+                            iv);
 
     const std::vector<std::size_t> test_sizes = {1, 7, 8, 9, 51};
 
@@ -710,10 +721,12 @@ TEST(des, provider_policy)
 TEST(des, ctr_file_and_memory_consistency)
 {
     const std::string key = k3des_key;
-    auto              opt = make_options(key,
-                                         hj::des::mode::ctr,
-                                         hj::des::padding::no_padding,
-                                         k_iv);
+    const std::string iv  = k_iv;
+
+    auto opt = make_options(key,
+                            hj::des::mode::ctr,
+                            hj::des::padding::no_padding,
+                            iv);
 
     const auto base =
         std::filesystem::temp_directory_path() / "hj_des_ctr_compare";

@@ -173,6 +173,17 @@ gtest_discover_tests(${PROJECT_NAME}
     WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 )
 
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Release>:/Od>
+        $<$<CONFIG:Release>:/Zi>
+    )
+
+    target_link_options(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Release>:/DEBUG>
+    )
+endif()
+
 # Add DPDK include directories if found
 if(DPDK_FOUND)
     target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})

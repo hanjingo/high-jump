@@ -378,7 +378,19 @@ TEST(process, policy_matrix_detach_on_destroy)
     EXPECT_TRUE(is_process_alive(pid));
 
     hj::os::terminate(pid);
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    constexpr auto poll_interval = std::chrono::milliseconds(10);
+    constexpr auto timeout       = std::chrono::seconds(1);
+    const auto     deadline      = std::chrono::steady_clock::now() + timeout;
+
+    while(is_process_alive(pid))
+    {
+        if(std::chrono::steady_clock::now() >= deadline)
+            break;
+
+        std::this_thread::sleep_for(poll_interval);
+    }
+
     EXPECT_FALSE(is_process_alive(pid));
 }
 
@@ -789,8 +801,7 @@ TEST(process, daemonize_pid_file_contention_ebusy)
     constexpr auto poll_interval = std::chrono::milliseconds(10);
     constexpr auto timeout       = std::chrono::seconds(1);
 
-    const auto deadline =
-        std::chrono::steady_clock::now() + timeout;
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
 
     while(!fs::exists(pid_path))
     {
@@ -801,8 +812,7 @@ TEST(process, daemonize_pid_file_contention_ebusy)
     }
 
     ASSERT_TRUE(fs::exists(pid_path))
-        << "Daemon A did not create PID file within 1 second: "
-        << pid_path;
+        << "Daemon A did not create PID file within 1 second: " << pid_path;
 
     std::error_code ecB;
 

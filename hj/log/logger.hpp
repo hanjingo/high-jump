@@ -338,16 +338,18 @@ class logger
         _base->set_level(spdlog::level::level_enum(level::trace));
     }
 
-    ~logger() noexcept
-    {
-        try
-        {
-            flush();
-        }
-        catch(...)
-        {
-        }
-    }
+    // ~logger() noexcept
+    // {
+    //     try
+    //     {
+    //         flush();
+    //     }
+    //     catch(...)
+    //     {
+    //     }
+    // }
+
+    ~logger() noexcept = default;
 
     static hj::log::logger *instance()
     {

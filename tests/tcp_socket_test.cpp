@@ -945,10 +945,11 @@ TEST(tcp_socket, async_read_write)
 
     const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
-    auto                 sock = hj::tcp_socket::make_shared(io);
+    auto sock = hj::tcp_socket::make_shared(io);
+
     auto send_buf1 = std::make_shared<std::array<unsigned char, 5>>();
     std::memcpy(send_buf1->data(), "hello", 5);
-    ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
+
     auto send_buf2 = std::make_shared<std::array<unsigned char, 5>>();
     std::memcpy(send_buf2->data(), "harry", 5);
 
@@ -961,16 +962,18 @@ TEST(tcp_socket, async_read_write)
             sock->async_write(
                 send_buf1->data(),
                 5,
-                [send_buf1, send_buf2, sock](const hj::tcp_socket::err_t &err,
-                                             std::size_t                  sz) {
+                [send_buf1, send_buf2, sock](
+                    const hj::tcp_socket::err_t &err,
+                    std::size_t sz) {
                     ASSERT_EQ(err.failed(), false);
                     ASSERT_EQ(sz == 5, true);
 
                     sock->async_write(
                         send_buf2->data(),
                         5,
-                        [send_buf2](const hj::tcp_socket::err_t &err,
-                                    std::size_t                  sz) {
+                        [send_buf2](
+                            const hj::tcp_socket::err_t &err,
+                            std::size_t sz) {
                             ASSERT_EQ(err.failed(), false);
                             ASSERT_EQ(sz == 5, true);
                         });

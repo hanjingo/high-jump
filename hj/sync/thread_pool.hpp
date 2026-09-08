@@ -326,10 +326,16 @@ class thread_pool
 
     std::size_t cancel_pending()
     {
-        std::unique_lock<std::mutex> lock(_mu);
-        std::size_t                  count = _tasks.size();
-        std::queue<move_task>        empty;
-        std::swap(_tasks, empty);
+        std::queue<move_task> pending;
+        std::size_t            count = 0;
+
+        {
+            std::lock_guard<std::mutex> lock(_mu);
+            count = _tasks.size();
+            std::swap(_tasks, pending);
+        }
+
+        // Destroy canceled tasks outside _mu.
         return count;
     }
 
@@ -521,7 +527,7 @@ class thread_pool
 
 #else
         (void) global_core;
-        return true;
+        return false;
 #endif
     }
 

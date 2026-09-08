@@ -400,13 +400,18 @@ TEST(tcp_socket, robustness_peer_reset)
     std::promise<std::uint16_t> ready_promise;
     auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([&ready_promise]() {
+    std::promise<void> reset_promise;
+    auto              reset_future = reset_promise.get_future();
+
+    std::thread t([&ready_promise, &reset_future]() {
         hj::tcp_socket::io_t io;
         tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
         ready_promise.set_value(acceptor.local_endpoint().port());
 
         tcp::socket socket(io);
         acceptor.accept(socket);
+
+        reset_future.wait();
 
         boost::asio::socket_base::linger option(true, 0);
         socket.set_option(option);
@@ -416,9 +421,22 @@ TEST(tcp_socket, robustness_peer_reset)
 
     ready_future.wait();
     const auto port = ready_future.get();
+
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
+
+    auto connect_err = sock->connect("127.0.0.1", port);
+
+    if(connect_err.failed())
+    {
+        reset_promise.set_value();
+        t.join();
+
+        FAIL() << "connect failed: " << connect_err.value()
+               << " (" << connect_err.message() << ")";
+    }
+
+    reset_promise.set_value();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -434,13 +452,16 @@ TEST(tcp_socket, robustness_peer_reset)
         || (err == boost::system::errc::connection_reset)
         || (err == boost::system::errc::connection_aborted)
 #ifdef _WIN32
-        || (err.value() == WSAECONNRESET) || (err.value() == WSAECONNABORTED);
+        || (err.value() == WSAECONNRESET)
+        || (err.value() == WSAECONNABORTED);
 #else
-        || (err.value() == ECONNRESET) || (err.value() == ECONNABORTED);
+        || (err.value() == ECONNRESET)
+        || (err.value() == ECONNABORTED);
 #endif
 
-    ASSERT_TRUE(is_reset_or_aborted) << "Unexpected error code: " << err.value()
-                                     << " (" << err.message() << ")";
+    ASSERT_TRUE(is_reset_or_aborted)
+        << "Unexpected error code: " << err.value()
+        << " (" << err.message() << ")";
 
     t.join();
 }

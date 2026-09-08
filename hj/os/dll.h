@@ -459,12 +459,15 @@ HJ_DLL_API void *dll_open(const char *filename, dll_mode_t mode)
 #endif
 
     void *handle = dlopen(filename, posix_flags);
-    if(!handle && (mode & DLL_MODE_RTLD_NOLOAD))
+    if(!handle)
     {
         const char *err = dlerror();
-        if(!err || err[0] == '\0')
+        if(err && err[0] != '\0')
+            _dll_set_err_buf(err);
+        else if(mode & DLL_MODE_RTLD_NOLOAD)
             _dll_set_err_buf("Module not currently loaded (RTLD_NOLOAD)");
     }
+
     return handle;
 #endif
 }
@@ -493,8 +496,12 @@ HJ_DLL_API void *dll_get(void *handler, const char *symbol)
 #else
     void       *sym = dlsym(handler, symbol);
     const char *err = dlerror();
+
     if(err != NULL)
+    {
+        _dll_set_err_buf(err);
         return NULL;
+    }
 
     return sym;
 #endif

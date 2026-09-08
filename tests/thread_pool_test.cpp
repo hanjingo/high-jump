@@ -267,12 +267,15 @@ TEST(thread_pool, clear_pending_and_broken_promise)
     std::promise<void> worker_started_p;
     auto               worker_started_f = worker_started_p.get_future();
 
-    std::promise<void> block_p;
-    auto               block_f = block_p.get_future();
+    std::mutex              block_mu;
+    std::condition_variable block_cv;
+    bool                    block = true;
 
-    tp.enqueue([&block_f, &worker_started_p]() {
+    tp.enqueue([&block, &block_mu, &block_cv, &worker_started_p]() {
         worker_started_p.set_value();
-        block_f.wait();
+
+        std::unique_lock<std::mutex> lock(block_mu);
+        block_cv.wait(lock, [&block] { return !block; });
     });
 
     worker_started_f.wait();
@@ -282,7 +285,11 @@ TEST(thread_pool, clear_pending_and_broken_promise)
     std::size_t canceled = tp.cancel_pending();
     EXPECT_EQ(canceled, 1);
 
-    block_p.set_value();
+    {
+        std::lock_guard<std::mutex> lock(block_mu);
+        block = false;
+    }
+    block_cv.notify_one();
 
     EXPECT_THROW(pending_fut.get(), std::future_error);
 }

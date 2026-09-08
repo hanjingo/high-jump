@@ -763,7 +763,7 @@ class broker
         : _ctx(std::move(ctx))
         , _back(std::move(back))
         , _front(std::move(front))
-        , _ctrl_server(_ctx, ZMQ_PAIR)
+        , _ctrl_server(_ctx, ZMQ_REP)
         , _running(false)
     {
         static std::atomic<uint64_t> broker_counter{0};
@@ -845,13 +845,21 @@ class broker
         if(!is_running())
             return;
 
-        socket ctrl_client(_ctx, ZMQ_PAIR);
+        socket ctrl_client(_ctx, ZMQ_REQ);
         ctrl_client.connect(_ctrl_addr);
+
         message msg("TERMINATE");
 
         io_status st = ctrl_client.send(std::move(msg));
         if(st != io_status::ok)
             throw zmq_error("broker::stop() failed to send TERMINATE command");
+
+        message ack;
+        st = ctrl_client.recv(ack);
+
+        if(st != io_status::ok)
+            throw zmq_error(
+                "broker::stop() failed to receive TERMINATE acknowledgement");
     }
 
   private:

@@ -347,6 +347,16 @@ TEST(zmq, broker_steerable_graceful_shutdown)
 
     hj::zmq::broker *bk = broker_ready.get();
 
+    for(int i = 0; i < 100; ++i)
+    {
+        if(bk->is_running())
+            break;
+
+        std::this_thread::yield();
+    }
+
+    ASSERT_TRUE(bk->is_running());
+
     EXPECT_NO_THROW(bk->stop());
 
     if(broker_thread.joinable())

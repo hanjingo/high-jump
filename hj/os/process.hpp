@@ -1359,6 +1359,7 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec)
     return false;
 #else
     int err_pipe[2];
+    int pid_fd = -1;
 #if defined(__linux__) && defined(O_CLOEXEC)
     if(::pipe2(err_pipe, O_CLOEXEC) < 0)
     {
@@ -1518,7 +1519,7 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec)
 
     if(!opts.pid_file.empty())
     {
-        int pid_fd = ::open(opts.pid_file.c_str(), O_RDWR | O_CREAT, 0644);
+        pid_fd = ::open(opts.pid_file.c_str(), O_RDWR | O_CREAT, 0644);
         if(pid_fd < 0)
         {
             int                   err = errno;
@@ -1579,7 +1580,7 @@ inline bool daemonize(const daemon_options &opts, std::error_code &ec)
     }
 
     if(opts.auto_close_fds)
-        detail::close_all_fds_above(3, err_pipe[1]);
+        detail::close_all_fds_above(3, pid_fd);
 
     if(opts.redirect_stdio)
     {

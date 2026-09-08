@@ -782,10 +782,27 @@ TEST(process, daemonize_pid_file_contention_ebusy)
     }
 
     int status = 0;
-    ::waitpid(pidA, &status, 0);
+    ASSERT_EQ(::waitpid(pidA, &status, 0), pidA);
+    ASSERT_TRUE(WIFEXITED(status));
+    ASSERT_EQ(WEXITSTATUS(status), EXIT_SUCCESS);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    ASSERT_TRUE(fs::exists(pid_path));
+    constexpr auto poll_interval = std::chrono::milliseconds(10);
+    constexpr auto timeout       = std::chrono::seconds(1);
+
+    const auto deadline =
+        std::chrono::steady_clock::now() + timeout;
+
+    while(!fs::exists(pid_path))
+    {
+        if(std::chrono::steady_clock::now() >= deadline)
+            break;
+
+        std::this_thread::sleep_for(poll_interval);
+    }
+
+    ASSERT_TRUE(fs::exists(pid_path))
+        << "Daemon A did not create PID file within 1 second: "
+        << pid_path;
 
     std::error_code ecB;
 
@@ -813,29 +830,30 @@ TEST(process, daemonize_pid_file_contention_ebusy)
 }
 #endif // !defined(_WIN32)
 
+#if defined(_WIN32)
+
 TEST(process, win_exit_code_259_is_running)
 {
-    std::string              exe = get_child_helper_path();
     hj::os::process::options opts;
-    opts.command = exe;
-#if defined(_WIN32)
     opts.command = "cmd.exe";
     opts.args    = {"/c", "exit 259"};
-#else
-    opts.command = exe;
-    opts.args    = {"--sleep"};
-#endif
-    opts.policy = hj::os::process_policy::manual;
+    opts.policy  = hj::os::process_policy::manual;
 
     std::error_code ec;
     auto            proc = hj::os::spawn(opts, ec);
+
     ASSERT_TRUE(proc.is_valid());
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    EXPECT_FALSE(proc.is_running());
+    ASSERT_FALSE(ec);
 
     auto st = proc.wait(ec);
+
+    ASSERT_FALSE(ec);
     ASSERT_TRUE(st.has_value());
+
+    EXPECT_TRUE(st->exited_normally);
+    EXPECT_EQ(st->exit_code, 259);
     EXPECT_EQ(st->code(), 259);
+    EXPECT_FALSE(proc.is_running());
 }
+
+#endif // defined(_WIN32)

@@ -25,7 +25,7 @@ TEST(tcp_listener, state_transition)
     ASSERT_FALSE(li->open().failed());
     ASSERT_EQ(li->status(), hj::tcp_listener::state::opened);
 
-    ASSERT_FALSE(li->listen(11999).failed());
+    ASSERT_FALSE(li->listen(0).failed());
     ASSERT_EQ(li->status(), hj::tcp_listener::state::listening);
     ASSERT_TRUE(li->is_listening());
 
@@ -37,8 +37,9 @@ TEST(tcp_listener, state_transition)
 TEST(tcp_listener, set_option)
 {
     std::atomic<bool> listening{false};
+    std::atomic<std::uint16_t> port{0};
 
-    std::thread t([&listening]() {
+    std::thread t([&listening, &port]() {
         hj::tcp_listener::io_t io;
         auto                   li = hj::tcp_listener::make_shared(io);
 
@@ -49,7 +50,9 @@ TEST(tcp_listener, set_option)
         ASSERT_FALSE(
             li->set_option(hj::tcp_listener::opt_reuse_addr(true)).failed());
 
-        ASSERT_FALSE(li->listen(12000).failed());
+        ASSERT_FALSE(li->listen(0).failed());
+        port.store(li->local_endpoint().port());
+        ASSERT_NE(port.load(), 0);
         li->async_accept([](const hj::tcp_listener::err_t  &err,
                             std::shared_ptr<hj::tcp_socket> sock) {
             ASSERT_FALSE(err.failed());
@@ -70,7 +73,7 @@ TEST(tcp_listener, set_option)
 
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock->connect("127.0.0.1", 12000).failed());
+    ASSERT_FALSE(sock->connect("127.0.0.1", port.load()).failed());
 
     t.join();
 }
@@ -78,8 +81,9 @@ TEST(tcp_listener, set_option)
 TEST(tcp_listener, accept)
 {
     std::atomic<bool> listening{false};
+    std::atomic<std::uint16_t> port{0};
 
-    std::thread t([&listening]() {
+    std::thread t([&listening, &port]() {
         hj::tcp_socket::io_t io;
         auto                 li = hj::tcp_listener::make_shared(io);
 
@@ -87,7 +91,9 @@ TEST(tcp_listener, accept)
         ASSERT_EQ(li->accept(unlisten_err), nullptr);
         ASSERT_TRUE(unlisten_err.failed());
 
-        ASSERT_FALSE(li->listen(12001).failed());
+        ASSERT_FALSE(li->listen(0).failed());
+        port.store(li->local_endpoint().port());
+        ASSERT_NE(port.load(), 0);
         listening.store(true);
 
         for(int i = 0; i < 2; i++)
@@ -110,11 +116,11 @@ TEST(tcp_listener, accept)
 
     //hj::tcp_socket sock0{io};
     auto sock0 = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock0->connect("127.0.0.1", 12001).failed());
+    ASSERT_FALSE(sock0->connect("127.0.0.1", port.load()).failed());
 
     //hj::tcp_socket sock1{io};
     auto sock1 = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock1->connect("127.0.0.1", 12001).failed());
+    ASSERT_FALSE(sock1->connect("127.0.0.1", port.load()).failed());
 
     t.join();
 }
@@ -124,14 +130,16 @@ TEST(tcp_listener, accept_endpoint_error_semantics_threaded)
     hj::tcp_listener::io_t io;
 
     auto l1 = hj::tcp_listener::make_shared(io);
-    ASSERT_FALSE(l1->listen(12005).failed());
+    ASSERT_FALSE(l1->listen(0).failed());
 
     auto l2 = hj::tcp_listener::make_shared(io);
 
     hj::tcp_listener::err_t err = boost::system::errc::make_error_code(
         boost::system::errc::permission_denied);
 
-    auto sock = l2->accept(12005, err);
+    const auto port = l1->local_endpoint().port();
+    ASSERT_NE(port, 0);
+    auto sock = l2->accept(port, err);
 
     ASSERT_EQ(sock, nullptr);
     ASSERT_TRUE(err.failed());
@@ -143,18 +151,25 @@ TEST(tcp_listener, accept_endpoint_error_semantics_threaded)
 
 TEST(tcp_listener, async_accept)
 {
-    static std::atomic<int> async_accept_times1{0};
-    static std::atomic<int> async_accept_times2{0};
+    std::atomic<std::uint16_t> port1{0};
+    std::atomic<std::uint16_t> port2{0};
+    std::atomic<int>  async_accept_times1{0};
+    std::atomic<int>  async_accept_times2{0};
+    std::atomic<bool> listening1{false};
+    std::atomic<bool> listening2{false};
 
-    std::thread t1([]() {
+    std::thread t1([&]() {
         hj::tcp_socket::io_t io;
         auto                 li = hj::tcp_listener::make_shared(io);
 
-        ASSERT_FALSE(li->listen(12002).failed());
+        ASSERT_FALSE(li->listen(0).failed());
+        port1.store(li->local_endpoint().port());
+        ASSERT_NE(port1.load(), 0);
+        listening1.store(true);
 
         for(int i = 0; i < 2; i++)
         {
-            li->async_accept([](const hj::tcp_listener::err_t  &err,
+            li->async_accept([&async_accept_times1](const hj::tcp_listener::err_t  &err,
                                 std::shared_ptr<hj::tcp_socket> sock) {
                 ASSERT_FALSE(err.failed());
                 ASSERT_EQ(sock->status(), hj::tcp_socket::state::connected);
@@ -165,15 +180,18 @@ TEST(tcp_listener, async_accept)
         io.run();
     });
 
-    std::thread t2([]() {
+    std::thread t2([&]() {
         hj::tcp_socket::io_t io;
         auto                 li = hj::tcp_listener::make_shared(io);
 
-        ASSERT_FALSE(li->listen(12003).failed());
+        ASSERT_FALSE(li->listen(0).failed());
+        port2.store(li->local_endpoint().port());
+        ASSERT_NE(port2.load(), 0);
+        listening2.store(true);
 
         for(int i = 0; i < 2; i++)
         {
-            li->async_accept([](const hj::tcp_listener::err_t  &err,
+            li->async_accept([&async_accept_times2](const hj::tcp_listener::err_t  &err,
                                 std::shared_ptr<hj::tcp_socket> sock) {
                 ASSERT_FALSE(err.failed());
                 ASSERT_EQ(sock->status(), hj::tcp_socket::state::connected);
@@ -184,24 +202,37 @@ TEST(tcp_listener, async_accept)
         io.run();
     });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    while(!listening1.load() || !listening2.load())
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const auto actual_port1 =
+    port1.load(std::memory_order_acquire);
+
+    const auto actual_port2 =
+        port2.load(std::memory_order_acquire);
+
+    ASSERT_NE(actual_port1, 0);
+    ASSERT_NE(actual_port2, 0);
+    ASSERT_NE(actual_port1, actual_port2);
 
     hj::tcp_socket::io_t io;
     //hj::tcp_socket       sock{io};
     auto sock = hj::tcp_socket::make_shared(io);
-    sock->connect("127.0.0.1", 12002);
+    ASSERT_FALSE(sock->connect("127.0.0.1", actual_port1).failed());
 
     //hj::tcp_socket sock1{io};
     auto sock1 = hj::tcp_socket::make_shared(io);
-    sock1->connect("127.0.0.1", 12002);
+    ASSERT_FALSE(sock1->connect("127.0.0.1", actual_port1).failed());
 
     //hj::tcp_socket sock2{io};
     auto sock2 = hj::tcp_socket::make_shared(io);
-    sock2->connect("127.0.0.1", 12003);
+    ASSERT_FALSE(sock2->connect("127.0.0.1", actual_port2).failed());
 
     //hj::tcp_socket sock3{io};
     auto sock3 = hj::tcp_socket::make_shared(io);
-    sock3->connect("127.0.0.1", 12003);
+    ASSERT_FALSE(sock3->connect("127.0.0.1", actual_port2).failed());
 
     t1.join();
     t2.join();
@@ -224,7 +255,7 @@ TEST(tcp_listener, concurrent_close_safety)
 {
     hj::tcp_socket::io_t io;
     auto                 li = hj::tcp_listener::make_shared(io);
-    ASSERT_FALSE(li->listen(12006).failed());
+    ASSERT_FALSE(li->listen(0).failed());
 
     std::atomic<bool> stop{false};
 
@@ -251,14 +282,20 @@ TEST(tcp_listener, concurrent_close_safety)
 TEST(tcp_listener, port_conflict)
 {
     hj::tcp_listener::io_t io;
-    auto                   l1 = hj::tcp_listener::make_shared(io);
-    ASSERT_FALSE(l1->listen(12000).failed());
 
-    auto                    l2  = hj::tcp_listener::make_shared(io);
-    hj::tcp_listener::err_t err = l2->listen(12000);
+    auto l1 = hj::tcp_listener::make_shared(io);
+    ASSERT_FALSE(l1->listen(0).failed());
+    const auto port = l1->local_endpoint().port();
+    ASSERT_NE(port, 0);
+
+    auto l2 = hj::tcp_listener::make_shared(io);
+    hj::tcp_listener::err_t err = l2->listen(port);
 
     ASSERT_TRUE(err.failed());
     ASSERT_EQ(err, boost::asio::error::address_in_use);
+
+    l2->close();
+    l1->close();
 }
 
 TEST(tcp_listener, invalid_ip_parse)
@@ -287,7 +324,7 @@ TEST(tcp_listener, close_pending_accept)
 {
     hj::tcp_listener::io_t io;
     auto                   li = hj::tcp_listener::make_shared(io);
-    ASSERT_FALSE(li->listen(12010).failed());
+    ASSERT_FALSE(li->listen(0).failed());
 
     std::atomic<bool> callback_executed{false};
 
@@ -312,7 +349,7 @@ TEST(tcp_listener, destructor_with_pending_accept)
 
     {
         auto li = hj::tcp_listener::make_shared(io);
-        ASSERT_FALSE(li->listen(12011).failed());
+        ASSERT_FALSE(li->listen(0).failed());
 
         li->async_accept([&](const hj::tcp_listener::err_t  &err,
                              std::shared_ptr<hj::tcp_socket> sock) {
@@ -334,7 +371,7 @@ TEST(tcp_listener, stack_object_lifecycle)
 
     {
         hj::tcp_listener li{io};
-        ASSERT_FALSE(li.listen(12012).failed());
+        ASSERT_FALSE(li.listen(0).failed());
 
         ASSERT_NO_THROW(
             li.async_accept([&](const hj::tcp_listener::err_t  &err,
@@ -358,7 +395,7 @@ TEST(tcp_listener, concurrent_close_while_running)
     std::thread io_thread([&io]() { io.run(); });
 
     auto li = hj::tcp_listener::make_shared(io);
-    ASSERT_FALSE(li->listen(12020).failed());
+    ASSERT_FALSE(li->listen(0).failed());
 
     std::atomic<bool> stop{false};
     std::atomic<int>  executed_count{0};
@@ -401,10 +438,14 @@ TEST(tcp_listener, multithread_mixed_stress)
     auto              li = hj::tcp_listener::make_shared(io);
     std::atomic<bool> stop{false};
 
+    ASSERT_FALSE(li->listen(0).failed());
+    const auto port = li->local_endpoint().port();
+    ASSERT_NE(port, 0);
+
     std::thread t_accept([&]() {
         while(!stop.load())
         {
-            li->async_accept(12021,
+            li->async_accept(port,
                              [](const hj::tcp_listener::err_t &, auto) {});
             std::this_thread::yield();
         }
@@ -421,7 +462,7 @@ TEST(tcp_listener, multithread_mixed_stress)
     std::thread t_listen([&]() {
         while(!stop.load())
         {
-            li->listen(12021);
+            li->listen(port);
             std::this_thread::yield();
         }
     });

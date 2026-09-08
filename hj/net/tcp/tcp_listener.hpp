@@ -98,6 +98,16 @@ class tcp_listener : public std::enable_shared_from_this<tcp_listener>
         return _state.load(std::memory_order_relaxed) == state::listening;
     }
 
+    [[nodiscard]] endpoint_t local_endpoint() const
+    {
+        std::lock_guard<std::mutex> lock(_mu);
+
+        if(!_acceptor || !_acceptor->is_open())
+            return {};
+
+        return _acceptor->local_endpoint();
+    }
+
     [[nodiscard]] state status() const noexcept
     {
         return _state.load(std::memory_order_relaxed);

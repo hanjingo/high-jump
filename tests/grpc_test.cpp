@@ -177,12 +177,27 @@ TEST_F(GrpcTestFixture, bind_conflict)
 {
     hj::grpc_server server1;
     hj::grpc_server server2;
-    std::string     address = "127.0.0.1:50066";
+
+    const std::string address = "127.0.0.1:50066";
 
     ASSERT_FALSE(server1.start(address, &service));
 
-    auto err = server2.start(address, &service);
-    EXPECT_EQ(err, hj::make_error_code(hj::grpc_errc::bind_failed));
+    hj::grpc_server_options options;
+    options.add_argument("grpc.so_reuseport", 0);
+
+    const auto err = server2.start(
+        address,
+        &service,
+        grpc::InsecureServerCredentials(),
+        options);
+
+    EXPECT_EQ(err, hj::make_error_code(hj::grpc_errc::bind_failed))
+        << server2.last_diagnostic();
+
+    EXPECT_FALSE(server2.is_running());
+    EXPECT_EQ(
+        server2.get_state(),
+        hj::grpc_server::state::stopped);
 
     server1.stop();
 }

@@ -11,6 +11,22 @@
 
 using boost::asio::ip::tcp;
 
+struct test_listener
+{
+    hj::tcp_socket::io_t io;
+    tcp::acceptor acceptor;
+
+    test_listener()
+        : acceptor(io, tcp::endpoint(tcp::v4(), 0))
+    {
+    }
+
+    std::uint16_t port() const
+    {
+        return acceptor.local_endpoint().port();
+    }
+};
+
 TEST(tcp_socket, set_option)
 {
     hj::tcp_socket::io_t        io;
@@ -33,13 +49,14 @@ TEST(tcp_socket, set_option)
 
 TEST(tcp_socket, is_connected)
 {
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
     std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 13000));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        const auto port = acceptor.local_endpoint().port();
+        ready_promise.set_value(port);
         for(int i = 0; i < 1; i++)
         {
             tcp::socket socket(io);
@@ -52,7 +69,7 @@ TEST(tcp_socket, is_connected)
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::closed);
-    ASSERT_FALSE(sock->connect("127.0.0.1", 13000).failed());
+    ASSERT_FALSE(sock->connect("127.0.0.1", ready_future.get()).failed());
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::connected);
 
     t.join();
@@ -60,13 +77,13 @@ TEST(tcp_socket, is_connected)
 
 TEST(tcp_socket, check_connected)
 {
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
     std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 13001));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
         for(int i = 0; i < 1; i++)
         {
             tcp::socket socket(io);
@@ -79,7 +96,7 @@ TEST(tcp_socket, check_connected)
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::closed);
-    ASSERT_FALSE(sock->connect("127.0.0.1", 13001).failed());
+    ASSERT_FALSE(sock->connect("127.0.0.1", ready_future.get()).failed());
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::connected);
 
     t.join();
@@ -88,13 +105,13 @@ TEST(tcp_socket, check_connected)
 TEST(tcp_socket, connect)
 {
     int                accept_times = 0;
-    std::promise<void> ready_promise;
+    std::promise<std::uint16_t> ready_promise;
     auto               ready_future = ready_promise.get_future();
 
     std::thread t([&accept_times, &ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 13002));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
         for(int i = 0; i < 3; i++)
         {
             tcp::socket socket(io);
@@ -105,18 +122,19 @@ TEST(tcp_socket, connect)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock->connect("127.0.0.1", 13002).failed());
+    ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
 
     auto sock1 = hj::tcp_socket::make_shared(io);
     ASSERT_FALSE(
-        sock1->connect("127.0.0.1", 13002, std::chrono::milliseconds(500))
+        sock1->connect("127.0.0.1", port, std::chrono::milliseconds(500))
             .failed());
 
     auto sock2 = hj::tcp_socket::make_shared(io);
     ASSERT_FALSE(
-        sock2->connect("127.0.0.1", 13002, std::chrono::milliseconds(500), 5)
+        sock2->connect("127.0.0.1", port, std::chrono::milliseconds(500), 5)
             .failed());
 
     t.join();
@@ -125,13 +143,13 @@ TEST(tcp_socket, connect)
 
 TEST(tcp_socket, close)
 {
-    std::promise<void> ready_promise;
+    std::promise<std::uint16_t> ready_promise;
     auto               ready_future = ready_promise.get_future();
 
     std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 13004));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
         for(int i = 0; i < 1; i++)
         {
             tcp::socket socket(io);
@@ -140,13 +158,14 @@ TEST(tcp_socket, close)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
 
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::closed);
     sock->close();
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::closed);
-    ASSERT_FALSE(sock->connect("127.0.0.1", 13004).failed());
+    ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::connected);
     sock->close();
     ASSERT_EQ(sock->status(), hj::tcp_socket::state::closed);
@@ -158,13 +177,13 @@ TEST(tcp_socket, close)
 
 TEST(tcp_socket, write)
 {
-    std::promise<void> ready_promise;
+    std::promise<std::uint16_t> ready_promise;
     auto               ready_future = ready_promise.get_future();
 
     std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 13005));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
         for(int i = 0; i < 2; i++)
         {
             auto raw_sock = std::make_unique<tcp::socket>(io);
@@ -190,9 +209,10 @@ TEST(tcp_socket, write)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock->connect("127.0.0.1", 13005).failed());
+    ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
     hj::tcp_socket::err_t err;
     ASSERT_EQ(
         sock->write(reinterpret_cast<const unsigned char *>("hello"), 6, err),
@@ -200,7 +220,7 @@ TEST(tcp_socket, write)
     ASSERT_FALSE(err.failed());
 
     auto sock1 = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock1->connect("127.0.0.1", 13005).failed());
+    ASSERT_FALSE(sock1->connect("127.0.0.1", port).failed());
     ASSERT_EQ(
         sock1->write(reinterpret_cast<const unsigned char *>("harry"), 6, err),
         6);
@@ -211,13 +231,13 @@ TEST(tcp_socket, write)
 
 TEST(tcp_socket, read)
 {
-    std::promise<void> ready_promise;
+    std::promise<std::uint16_t> ready_promise;
     auto               ready_future = ready_promise.get_future();
 
     std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 13007));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
         for(int i = 0; i < 2; i++)
         {
             auto raw_sock = std::make_unique<tcp::socket>(io);
@@ -243,11 +263,12 @@ TEST(tcp_socket, read)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t  io;
     auto                  sock = hj::tcp_socket::make_shared(io);
     unsigned char         buf[1024];
     hj::tcp_socket::err_t err;
-    ASSERT_FALSE(sock->connect("127.0.0.1", 13007).failed());
+    ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
 
     ASSERT_EQ(sock->read(buf, 6, err), 6);
     ASSERT_FALSE(err.failed());
@@ -260,7 +281,7 @@ TEST(tcp_socket, read)
     sock->close();
 
     auto sock1 = hj::tcp_socket::make_shared(io);
-    ASSERT_FALSE(sock1->connect("127.0.0.1", 13007).failed());
+    ASSERT_FALSE(sock1->connect("127.0.0.1", port).failed());
 
     ASSERT_EQ(sock1->read(buf, 6, err), 6);
     ASSERT_FALSE(err.failed());
@@ -277,14 +298,13 @@ TEST(tcp_socket, read)
 
 TEST(tcp_socket, read_at_least)
 {
-    const uint16_t     port = 13008;
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([port, &ready_promise]() {
+    std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
 
         hj::tcp_socket::err_t err;
         for(int i = 0; i < 1; i++)
@@ -313,6 +333,7 @@ TEST(tcp_socket, read_at_least)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t        io;
     auto                        sock = hj::tcp_socket::make_shared(io);
     hj::tcp_socket::streambuf_t buf;
@@ -376,14 +397,13 @@ TEST(tcp_socket, robustness_connect_timeout)
 
 TEST(tcp_socket, robustness_peer_reset)
 {
-    const uint16_t     port = 13101;
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([port, &ready_promise]() {
+    std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
 
         tcp::socket socket(io);
         acceptor.accept(socket);
@@ -395,6 +415,7 @@ TEST(tcp_socket, robustness_peer_reset)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
     ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
@@ -426,14 +447,13 @@ TEST(tcp_socket, robustness_peer_reset)
 
 TEST(tcp_socket, robustness_eof_handling)
 {
-    const uint16_t     port = 13102;
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([port, &ready_promise]() {
+    std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
 
         tcp::socket socket(io);
         acceptor.accept(socket);
@@ -441,6 +461,7 @@ TEST(tcp_socket, robustness_eof_handling)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
     ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
@@ -456,14 +477,13 @@ TEST(tcp_socket, robustness_eof_handling)
 
 TEST(tcp_socket, robustness_partial_read)
 {
-    const uint16_t     port = 13104;
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([port, &ready_promise]() {
+    std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
 
         auto raw_sock = std::make_unique<tcp::socket>(io);
         acceptor.accept(*raw_sock);
@@ -478,6 +498,7 @@ TEST(tcp_socket, robustness_partial_read)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
     ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
@@ -499,14 +520,13 @@ TEST(tcp_socket, robustness_partial_read)
 
 TEST(tcp_socket, robustness_partial_write)
 {
-    const uint16_t     port = 13105;
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([port, &ready_promise]() {
+    std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
 
         auto raw_sock = std::make_unique<tcp::socket>(io);
         acceptor.accept(*raw_sock);
@@ -518,6 +538,7 @@ TEST(tcp_socket, robustness_partial_write)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
     ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
@@ -568,14 +589,13 @@ TEST(tcp_socket, robustness_move_semantics_disabled)
 
 TEST(tcp_socket, read_exactly)
 {
-    const uint16_t     port = 13009;
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([port, &ready_promise]() {
+    std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
 
         {
             auto raw_sock = std::make_unique<tcp::socket>(io);
@@ -609,6 +629,7 @@ TEST(tcp_socket, read_exactly)
     });
 
     ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
 
     {
@@ -745,20 +766,19 @@ TEST(tcp_socket, async_close_cancels_connect)
 
 TEST(tcp_socket, async_connect_success)
 {
-    const uint16_t     port = 13201;
-    std::promise<void> ready_promise;
-    auto               ready_future = ready_promise.get_future();
+    std::promise<std::uint16_t> ready_promise;
+    auto                        ready_future = ready_promise.get_future();
 
-    std::thread t([port, &ready_promise]() {
+    std::thread t([&ready_promise]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
         tcp::socket socket(io);
         acceptor.accept(socket);
     });
 
     ready_future.wait();
-
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
 
@@ -881,7 +901,7 @@ TEST(tcp_socket, async_connect_followed_by_sync_connect)
 
 TEST(tcp_socket, async_read_write)
 {
-    std::promise<void> ready_promise;
+    std::promise<std::uint16_t> ready_promise;
     auto               ready_future = ready_promise.get_future();
 
     std::thread t([&ready_promise]() {
@@ -891,7 +911,7 @@ TEST(tcp_socket, async_read_write)
         std::size_t nrecved = 0;
 
         li.async_accept(
-            13200,
+            0,
             [buf_ptr, &nrecved](const hj::tcp_listener::err_t  &err,
                                 std::shared_ptr<hj::tcp_socket> sock) {
                 ASSERT_EQ(err.failed(), false);
@@ -918,22 +938,23 @@ TEST(tcp_socket, async_read_write)
                     });
             });
 
-        ready_promise.set_value();
+        ready_promise.set_value(li.local_endpoint().port());
         io.run_for(std::chrono::milliseconds(500));
         ASSERT_EQ(nrecved, 10);
     });
 
-    ready_future.wait();
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 sock = hj::tcp_socket::make_shared(io);
     auto send_buf1 = std::make_shared<std::array<unsigned char, 5>>();
     std::memcpy(send_buf1->data(), "hello", 5);
+    ASSERT_FALSE(sock->connect("127.0.0.1", port).failed());
     auto send_buf2 = std::make_shared<std::array<unsigned char, 5>>();
     std::memcpy(send_buf2->data(), "harry", 5);
 
     sock->async_connect(
         "127.0.0.1",
-        13200,
+        port,
         [send_buf1, send_buf2, sock](const hj::tcp_socket::err_t &err) {
             ASSERT_EQ(err.failed(), false);
 
@@ -1000,16 +1021,15 @@ TEST(tcp_socket, async_write_read_not_connected)
 
 TEST(tcp_socket, async_read_eof_handling)
 {
-    const uint16_t     port = 13302;
-    std::promise<void> ready_promise;
+    std::promise<std::uint16_t> ready_promise;
     std::promise<void> close_promise;
     auto               ready_future = ready_promise.get_future();
     auto               close_future = close_promise.get_future();
 
-    std::thread server_thread([port, &ready_promise, &close_future]() {
+    std::thread server_thread([&ready_promise, &close_future]() {
         hj::tcp_socket::io_t io;
-        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), port));
-        ready_promise.set_value();
+        tcp::acceptor        acceptor(io, tcp::endpoint(tcp::v4(), 0));
+        ready_promise.set_value(acceptor.local_endpoint().port());
 
         tcp::socket peer_sock(io);
         acceptor.accept(peer_sock);
@@ -1018,7 +1038,7 @@ TEST(tcp_socket, async_read_eof_handling)
     });
 
     ready_future.wait();
-
+    const auto port = ready_future.get();
     hj::tcp_socket::io_t io;
     auto                 client = hj::tcp_socket::make_shared(io);
 

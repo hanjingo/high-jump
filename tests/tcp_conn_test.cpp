@@ -119,10 +119,12 @@ TEST(tcp_conn, send_boundary_conditions)
 TEST(tcp_conn, async_connect_success_and_read)
 {
     hj::tcp_conn::io_t  io;
-    const std::uint16_t test_port = 10020;
 
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::promise<void> server_done_promise;
     auto               server_done_future = server_done_promise.get_future();
@@ -242,10 +244,10 @@ TEST(tcp_conn, async_send_and_receive_multi_packets)
     hj::tcp_conn::io_t io;
     auto               work_guard = boost::asio::make_work_guard(io);
 
-    const std::uint16_t test_port = 10021;
-
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::string        total_received;
     std::promise<void> server_done_promise;
@@ -322,10 +324,11 @@ TEST(tcp_conn, async_send_and_receive_multi_packets)
 TEST(tcp_conn, server_abrupt_close_triggers_error_cb)
 {
     hj::tcp_conn::io_t  io;
-    const std::uint16_t test_port = 10022;
 
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::thread server_thread([&listener]() {
         hj::tcp_listener::err_t err;
@@ -392,10 +395,10 @@ TEST(tcp_conn, concurrent_send_and_close_thread_safety)
     hj::tcp_conn::io_t io;
     auto               work_guard = boost::asio::make_work_guard(io);
 
-    const std::uint16_t test_port = 10024;
-
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::thread server_thread([&listener]() {
         hj::tcp_listener::err_t err;
@@ -472,10 +475,11 @@ TEST(tcp_conn, concurrent_send_and_close_thread_safety)
 TEST(tcp_conn, concurrent_callback_setting_and_invocation)
 {
     hj::tcp_conn::io_t  io;
-    const std::uint16_t test_port = 10025;
 
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::atomic<bool> server_running{true};
     std::thread       server_thread([&listener, &server_running]() {
@@ -541,10 +545,10 @@ TEST(tcp_conn, concurrent_callback_setting_and_invocation)
 TEST(tcp_conn, duplicate_async_connect)
 {
     hj::tcp_conn::io_t  io;
-    const std::uint16_t test_port = 10026;
-
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::thread server_thread([&listener]() {
         hj::tcp_listener::err_t err;
@@ -598,10 +602,10 @@ TEST(tcp_conn, concurrent_send_close_reset_race)
     hj::tcp_conn::io_t io;
     auto               work_guard = boost::asio::make_work_guard(io);
 
-    const std::uint16_t test_port = 10027;
-
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::thread server_thread([&listener]() {
         hj::tcp_listener::err_t err;
@@ -674,10 +678,11 @@ TEST(tcp_conn, concurrent_send_close_reset_race)
 TEST(tcp_conn, destruction_with_outstanding_async_ops)
 {
     hj::tcp_conn::io_t  io;
-    const std::uint16_t test_port = 10028;
 
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::thread server_thread([&listener]() {
         hj::tcp_listener::err_t err;
@@ -730,10 +735,10 @@ TEST(tcp_conn, packet_coalescing_and_fragmentation)
     hj::tcp_conn::io_t io;
     auto               work_guard = boost::asio::make_work_guard(io);
 
-    const std::uint16_t test_port = 10030;
-
     auto listener = hj::tcp_listener::make_shared(io);
-    listener->listen(test_port);
+    ASSERT_FALSE(listener->listen(0).failed());
+    const auto test_port = listener->local_endpoint().port();
+    ASSERT_NE(test_port, 0);
 
     std::promise<std::shared_ptr<hj::tcp_socket>> server_sock_promise;
     auto server_sock_future = server_sock_promise.get_future();

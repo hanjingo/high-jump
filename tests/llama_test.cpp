@@ -127,8 +127,6 @@ TEST(llama_model, reload)
 
 TEST(llama_model, raw_save)
 {
-    llama_backend_init();
-
     LOAD_FIXTURE_OR_SKIP(m);
 
     const auto tmp =
@@ -139,8 +137,6 @@ TEST(llama_model, raw_save)
     llama_model_save_to_file(m.data(), tmp.string().c_str());
 
     EXPECT_TRUE(std::filesystem::exists(tmp));
-
-    llama_backend_free();
 }
 
 TEST(llama_model, save)

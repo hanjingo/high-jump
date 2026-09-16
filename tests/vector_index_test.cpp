@@ -1524,6 +1524,8 @@ TEST(vector_index, concurrent_search_and_add)
             index.get_vector_by_index(0, vec);
 
             search_ops.fetch_add(1, std::memory_order_relaxed);
+
+            std::this_thread::yield();
         }
     };
 

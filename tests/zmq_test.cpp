@@ -1047,16 +1047,27 @@ TEST(zmq, destruction_under_load_context_shutdown)
     }
     EXPECT_GT(messages_processed.load(), 0u);
 
+    std::cout << "[DEBUG] before ctx shutdown" << std::endl;
+
     ctx->shutdown();
+
+    std::cout << "[DEBUG] after ctx shutdown" << std::endl;
 
     if(recv_thread.joinable())
     {
+        std::cout << "[DEBUG] joining recv thread" << std::endl;
         recv_thread.join();
+        std::cout << "[DEBUG] recv thread joined" << std::endl;
     }
+
     if(send_thread.joinable())
     {
+        std::cout << "[DEBUG] joining send thread" << std::endl;
         send_thread.join();
+        std::cout << "[DEBUG] send thread joined" << std::endl;
     }
+
+    std::cout << "[DEBUG] zmq test finished" << std::endl;
 
     SUCCEED();
 }

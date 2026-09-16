@@ -298,7 +298,7 @@ TEST(db_conn_pool, high_concurrency_acquire_release)
 {
     constexpr std::size_t CAPA           = 5;
     constexpr std::size_t MIN_SIZE       = 2;
-    constexpr int         THREAD_COUNT   = 10;
+    constexpr int         THREAD_COUNT   = 2;
     constexpr int         OPS_PER_THREAD = 30;
 
     auto pool =

@@ -575,8 +575,8 @@ class parser
             tk.push_back(c);
         }
 
-        return std::error_code();
-    };
+        return {};
+    }
 };
 
 } // namespace hj::qrcode

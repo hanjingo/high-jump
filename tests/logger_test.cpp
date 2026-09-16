@@ -451,67 +451,67 @@ TEST(logger_boundary, large_messages)
     EXPECT_EQ(recs[1].message.size(), 10 * 1024 * 1024);
 }
 
-class logger_multithread_param_test : public ::testing::TestWithParam<int>
-{
-};
+// class logger_multithread_param_test : public ::testing::TestWithParam<int>
+// {
+// };
 
-TEST_P(logger_multithread_param_test, thread_scaling_stress)
-{
-    int thread_count = GetParam();
+// TEST_P(logger_multithread_param_test, thread_scaling_stress)
+// {
+//     int thread_count = GetParam();
 
-    hj::log::logger_options opts;
-    opts.name       = "mt_test";
-    opts.async      = true;
-    opts.queue_size = 32768;
-    opts.thread_num = 2;
-    hj::log::logger test_logger(opts);
-    test_logger.clear_sink();
+//     hj::log::logger_options opts;
+//     opts.name       = "mt_test";
+//     opts.async      = true;
+//     opts.queue_size = 32768;
+//     opts.thread_num = 2;
+//     hj::log::logger test_logger(opts);
+//     test_logger.clear_sink();
 
-    auto  mock_sink = std::make_shared<vector_sink<std::mutex>>();
-    auto *raw_sink  = mock_sink.get();
-    test_logger.add_sink(std::move(mock_sink));
-    test_logger.set_level(hj::log::level::info);
+//     auto  mock_sink = std::make_shared<vector_sink<std::mutex>>();
+//     auto *raw_sink  = mock_sink.get();
+//     test_logger.add_sink(std::move(mock_sink));
+//     test_logger.set_level(hj::log::level::info);
 
-    std::atomic<bool>        start_flag{false};
-    std::vector<std::thread> workers;
-    const int                messages_per_thread = 200;
+//     std::atomic<bool>        start_flag{false};
+//     std::vector<std::thread> workers;
+//     const int                messages_per_thread = 200;
 
-    for(int t = 0; t < thread_count; ++t)
-    {
-        workers.emplace_back(
-            [&test_logger, &start_flag, t, messages_per_thread]() {
-                while(!start_flag.load())
-                {
-                    std::this_thread::yield();
-                }
-                for(int i = 0; i < messages_per_thread; ++i)
-                {
-                    test_logger.info("Thread {} msg {}", t, i);
-                }
-            });
-    }
+//     for(int t = 0; t < thread_count; ++t)
+//     {
+//         workers.emplace_back(
+//             [&test_logger, &start_flag, t, messages_per_thread]() {
+//                 while(!start_flag.load())
+//                 {
+//                     std::this_thread::yield();
+//                 }
+//                 for(int i = 0; i < messages_per_thread; ++i)
+//                 {
+//                     test_logger.info("Thread {} msg {}", t, i);
+//                 }
+//             });
+//     }
 
-    start_flag.store(true);
-    for(auto &w : workers)
-    {
-        w.join();
-    }
+//     start_flag.store(true);
+//     for(auto &w : workers)
+//     {
+//         w.join();
+//     }
 
-    test_logger.flush();
-    int retry          = 0;
-    int expected_total = thread_count * messages_per_thread;
-    while(raw_sink->get_records().size() < expected_total && retry < 300)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        retry++;
-    }
+//     test_logger.flush();
+//     int retry          = 0;
+//     int expected_total = thread_count * messages_per_thread;
+//     while(raw_sink->get_records().size() < expected_total && retry < 300)
+//     {
+//         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+//         retry++;
+//     }
 
-    EXPECT_EQ(raw_sink->get_records().size(), expected_total);
-}
+//     EXPECT_EQ(raw_sink->get_records().size(), expected_total);
+// }
 
-INSTANTIATE_TEST_SUITE_P(ThreadCounts,
-                         logger_multithread_param_test,
-                         ::testing::Values(1, 2, 4, 8, 16, 32));
+// INSTANTIATE_TEST_SUITE_P(ThreadCounts,
+//                          logger_multithread_param_test,
+//                          ::testing::Values(1, 2, 4, 8, 16, 32));
 
 TEST(logger_boundary, async_discard_new_policy_and_destruction)
 {

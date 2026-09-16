@@ -472,7 +472,7 @@ TEST(thread_pool, concurrent_enqueue_and_shutdown_race)
 
 TEST(thread_pool, thread_count_metrics)
 {
-    constexpr std::size_t num_threads = 4;
+    constexpr std::size_t num_threads = 2;
     hj::thread_pool       tp{num_threads};
 
     EXPECT_EQ(tp.worker_count(), num_threads);

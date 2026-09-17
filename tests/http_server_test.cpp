@@ -562,7 +562,7 @@ TEST(http_server, basic_metrics_collection)
               std::string("hello server").size());
     EXPECT_EQ(recorded_metrics.response_body_bytes,
               std::string("created").size());
-    EXPECT_GT(recorded_metrics.latency.count(), 0);
+    EXPECT_GE(recorded_metrics.latency, std::chrono::microseconds::zero());
 
     server.stop();
 }

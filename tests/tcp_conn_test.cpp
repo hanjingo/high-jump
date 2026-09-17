@@ -118,7 +118,9 @@ TEST(tcp_conn, send_boundary_conditions)
 
 TEST(tcp_conn, async_connect_success_and_read)
 {
-    hj::tcp_conn::io_t  io;
+    hj::tcp_conn::io_t io;
+
+    auto work_guard = boost::asio::make_work_guard(io);
 
     auto listener = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(listener->listen(0).failed());
@@ -272,9 +274,8 @@ TEST(tcp_conn, async_send_and_receive_multi_packets)
             while(total_received.size() < expected_total_len && !err.failed())
             {
                 char        buf[128] = {0};
-                auto read_buf = boost::asio::buffer(buf, sizeof(buf));
-                std::size_t sz =
-                    server_sock->read(read_buf, err);
+                auto        read_buf = boost::asio::buffer(buf, sizeof(buf));
+                std::size_t sz       = server_sock->read(read_buf, err);
                 if(!err.failed() && sz > 0)
                 {
                     total_received.append(buf, sz);
@@ -323,7 +324,7 @@ TEST(tcp_conn, async_send_and_receive_multi_packets)
 
 TEST(tcp_conn, server_abrupt_close_triggers_error_cb)
 {
-    hj::tcp_conn::io_t  io;
+    hj::tcp_conn::io_t io;
 
     auto listener = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(listener->listen(0).failed());
@@ -474,7 +475,7 @@ TEST(tcp_conn, concurrent_send_and_close_thread_safety)
 
 TEST(tcp_conn, concurrent_callback_setting_and_invocation)
 {
-    hj::tcp_conn::io_t  io;
+    hj::tcp_conn::io_t io;
 
     auto listener = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(listener->listen(0).failed());
@@ -544,8 +545,8 @@ TEST(tcp_conn, concurrent_callback_setting_and_invocation)
 
 TEST(tcp_conn, duplicate_async_connect)
 {
-    hj::tcp_conn::io_t  io;
-    auto listener = hj::tcp_listener::make_shared(io);
+    hj::tcp_conn::io_t io;
+    auto               listener = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(listener->listen(0).failed());
     const auto test_port = listener->local_endpoint().port();
     ASSERT_NE(test_port, 0);
@@ -677,7 +678,7 @@ TEST(tcp_conn, concurrent_send_close_reset_race)
 
 TEST(tcp_conn, destruction_with_outstanding_async_ops)
 {
-    hj::tcp_conn::io_t  io;
+    hj::tcp_conn::io_t io;
 
     auto listener = hj::tcp_listener::make_shared(io);
     ASSERT_FALSE(listener->listen(0).failed());

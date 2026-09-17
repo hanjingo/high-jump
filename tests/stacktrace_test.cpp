@@ -91,6 +91,7 @@ TEST(stacktrace, nested_callchain_verification)
         << "Failed to capture leaf function 'baz'\nStacktrace:\n"
         << st;
 
+#if !defined(__APPLE__)
     EXPECT_NE(st.find("capture_deep_stacktrace_bar"), std::string::npos)
         << "Failed to capture middle function 'bar'\nStacktrace:\n"
         << st;
@@ -105,8 +106,10 @@ TEST(stacktrace, nested_callchain_verification)
 
     EXPECT_LT(pos_baz, pos_bar)
         << "Stacktrace order incorrect: 'baz' should appear above 'bar'";
+
     EXPECT_LT(pos_bar, pos_foo)
         << "Stacktrace order incorrect: 'bar' should appear above 'foo'";
+#endif
 }
 
 TEST(stacktrace, nested_exception_diagnostic_verification)

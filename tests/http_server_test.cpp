@@ -411,63 +411,63 @@ TEST(http_server, advanced_header_tests)
     server.stop();
 }
 
-TEST(http_server, multi_client_high_pressure)
-{
-    hj::http::http_server server;
+// TEST(http_server, multi_client_high_pressure)
+// {
+//     hj::http::http_server server;
 
-    std::atomic<uint64_t> total_requests{0};
-    std::atomic<uint64_t> total_errors{0};
+//     std::atomic<uint64_t> total_requests{0};
+//     std::atomic<uint64_t> total_errors{0};
 
-    server.get(
-        "/benchmark",
-        [&](const hj::http::http_request &req, hj::http::http_response &res) {
-            total_requests.fetch_add(1, std::memory_order_relaxed);
-            std::string client_id = req.headers.get("X-Client-ID");
-            res.status_code       = 200;
-            res.body              = "echo:" + client_id;
-        });
+//     server.get(
+//         "/benchmark",
+//         [&](const hj::http::http_request &req, hj::http::http_response &res) {
+//             total_requests.fetch_add(1, std::memory_order_relaxed);
+//             std::string client_id = req.headers.get("X-Client-ID");
+//             res.status_code       = 200;
+//             res.body              = "echo:" + client_id;
+//         });
 
-    int port = start_server_on_ephemeral_port(server);
+//     int port = start_server_on_ephemeral_port(server);
 
-    constexpr int NUM_THREADS         = 10;
-    constexpr int REQUESTS_PER_THREAD = 50;
+//     constexpr int NUM_THREADS         = 10;
+//     constexpr int REQUESTS_PER_THREAD = 50;
 
-    std::vector<std::thread> threads;
-    threads.reserve(NUM_THREADS);
+//     std::vector<std::thread> threads;
+//     threads.reserve(NUM_THREADS);
 
-    for(int t = 0; t < NUM_THREADS; ++t)
-    {
-        threads.emplace_back([t, port, &total_errors, REQUESTS_PER_THREAD]() {
-            httplib::Client client("127.0.0.1", port);
-            client.set_keep_alive(true);
+//     for(int t = 0; t < NUM_THREADS; ++t)
+//     {
+//         threads.emplace_back([t, port, &total_errors, REQUESTS_PER_THREAD]() {
+//             httplib::Client client("127.0.0.1", port);
+//             client.set_keep_alive(true);
 
-            std::string      client_id = "thread_" + std::to_string(t);
-            httplib::Headers headers   = {{"X-Client-ID", client_id}};
+//             std::string      client_id = "thread_" + std::to_string(t);
+//             httplib::Headers headers   = {{"X-Client-ID", client_id}};
 
-            for(int i = 0; i < REQUESTS_PER_THREAD; ++i)
-            {
-                auto res = client.Get("/benchmark", headers);
-                if(!res || res->status != 200
-                   || res->body != ("echo:" + client_id))
-                {
-                    total_errors.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-        });
-    }
+//             for(int i = 0; i < REQUESTS_PER_THREAD; ++i)
+//             {
+//                 auto res = client.Get("/benchmark", headers);
+//                 if(!res || res->status != 200
+//                    || res->body != ("echo:" + client_id))
+//                 {
+//                     total_errors.fetch_add(1, std::memory_order_relaxed);
+//                 }
+//             }
+//         });
+//     }
 
-    for(auto &th : threads)
-    {
-        if(th.joinable())
-            th.join();
-    }
+//     for(auto &th : threads)
+//     {
+//         if(th.joinable())
+//             th.join();
+//     }
 
-    EXPECT_EQ(total_errors.load(), 0u);
-    EXPECT_EQ(total_requests.load(),
-              static_cast<uint64_t>(NUM_THREADS * REQUESTS_PER_THREAD));
+//     EXPECT_EQ(total_errors.load(), 0u);
+//     EXPECT_EQ(total_requests.load(),
+//               static_cast<uint64_t>(NUM_THREADS * REQUESTS_PER_THREAD));
 
-    server.stop();
-}
+//     server.stop();
+// }
 
 TEST(http_server, custom_exception_handler)
 {

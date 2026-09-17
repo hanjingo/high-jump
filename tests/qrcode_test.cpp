@@ -5,6 +5,14 @@
 #include <cstdio>
 #include <set>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
+#include <atomic>
+
 namespace fs = std::filesystem;
 
 using namespace hj::qrcode;
@@ -354,8 +362,20 @@ TEST(qrcode_file_system_test, strict_eof_trailing_garbage)
 
 static std::error_code parse_pgm_content(const std::string &content)
 {
-    fs::path tmp_path =
-        fs::temp_directory_path() / "hj_qr_parser_error_test.pgm";
+#ifdef _WIN32
+    const auto pid = static_cast<unsigned long>(::_getpid());
+#else
+    const auto pid = static_cast<unsigned long>(::getpid());
+#endif
+
+    static std::atomic_uint64_t seq{0};
+
+    const auto id = seq.fetch_add(1, std::memory_order_relaxed);
+
+    fs::path tmp_path = fs::temp_directory_path()
+                        / ("hj_qr_parser_error_test_" + std::to_string(pid)
+                           + "_" + std::to_string(id) + ".pgm");
+
     {
         std::ofstream ofs(tmp_path, std::ios::binary);
         ofs.write(content.data(), content.size());

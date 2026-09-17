@@ -466,8 +466,8 @@ jobs:
         if [ "$PARALLEL_JOBS" -lt 1 ]; then PARALLEL_JOBS=1; fi
         echo "Running tests with $PARALLEL_JOBS parallel jobs"
               
-        ctest --output-on-failure --parallel $PARALLEL_JOBS -C ${{ matrix.build_type }}
-        # ctest --output-on-failure --parallel 1 -C Release
+        # ctest --output-on-failure --parallel $PARALLEL_JOBS -C ${{ matrix.build_type }}
+        ctest --output-on-failure --parallel 1 -C Release
 
     - name: Upload build artifacts (macOS)
       uses: actions/upload-artifact@v4

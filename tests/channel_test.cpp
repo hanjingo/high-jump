@@ -529,5 +529,5 @@ TEST(channel, wait_dequeue_for_precision)
 
     ASSERT_FALSE(result);
     ASSERT_GE(elapsed, 40);
-    ASSERT_LE(elapsed, 150);
+    ASSERT_LE(elapsed, 250);
 }

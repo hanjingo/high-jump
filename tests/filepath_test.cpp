@@ -33,7 +33,8 @@ class FilePathTest : public ::testing::Test
     {
         if(hj::filepath::exists(test_dir_))
         {
-            hj::filepath::remove_all(test_dir_);
+            std::error_code ec;
+            hj::filepath::remove_all(test_dir_, ec);
         }
     }
 

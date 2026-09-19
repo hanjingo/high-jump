@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include <hj/io/filepath.hpp>
+
+#include <chrono>
 #include <filesystem>
+#include <thread>
 
 class FilePathTest : public ::testing::Test
 {
@@ -13,7 +16,11 @@ class FilePathTest : public ::testing::Test
         std::string unique_name =
             "test_"
             + std::to_string(
-                std::chrono::steady_clock::now().time_since_epoch().count());
+                std::chrono::steady_clock::now().time_since_epoch().count())
+            + "_"
+            + std::to_string(
+                std::hash<std::thread::id>{}(std::this_thread::get_id()));
+
         test_dir_ = (temp_base / unique_name).string();
 
         hj::filepath::mkdir_options opt;

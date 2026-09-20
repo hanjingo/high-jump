@@ -405,9 +405,6 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
                 _strand,
                 [this, self, current_buf](const err_t &ec,
                                           std::size_t  bytes_transferred) {
-                    if(_is_closed())
-                        return;
-
                     if(_outstanding_write_bytes >= current_buf->size())
                         _outstanding_write_bytes -= current_buf->size();
                     else
@@ -422,7 +419,8 @@ class tcp_conn : public std::enable_shared_from_this<tcp_conn>
                             _write();
                     } else
                     {
-                        _handle_error(ec);
+                        if(!_is_closed())
+                            _handle_error(ec);
                     }
                 }));
     }

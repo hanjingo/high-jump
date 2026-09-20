@@ -992,9 +992,11 @@ TEST(zmq, destruction_under_load_context_shutdown)
 
     std::atomic<bool>     consumer_running{false};
     std::atomic<uint64_t> messages_processed{0};
+    std::atomic<bool>     recv_exited{false};
+    std::atomic<bool>     send_exited{false};
 
     std::thread recv_thread(
-        [ctx, addr, &consumer_running, &messages_processed]() {
+        [ctx, addr, &consumer_running, &messages_processed, &recv_exited]() {
             hj::zmq::consumer cons(ctx);
             cons.connect(addr);
             consumer_running.store(true);
@@ -1007,16 +1009,20 @@ TEST(zmq, destruction_under_load_context_shutdown)
                 if(st == hj::zmq::io_status::closed
                    || st == hj::zmq::io_status::interrupted)
                 {
+                    recv_exited.store(true);
                     break;
                 }
+
                 if(st == hj::zmq::io_status::ok)
                 {
                     messages_processed.fetch_add(1);
                 }
             }
+
+            recv_exited.store(true);
         });
 
-    std::thread send_thread([ctx, addr, &consumer_running]() {
+    std::thread send_thread([ctx, addr, &consumer_running, &send_exited]() {
         hj::zmq::producer prod(ctx);
         prod.bind(addr);
 
@@ -1032,38 +1038,56 @@ TEST(zmq, destruction_under_load_context_shutdown)
             std::memcpy(msg.data(), &counter, sizeof(counter));
 
             hj::zmq::io_status st = prod.push(std::move(msg));
+
             if(st == hj::zmq::io_status::closed
                || st == hj::zmq::io_status::interrupted)
             {
                 break;
             }
+
             counter++;
         }
+
+        send_exited.store(true);
     });
 
-    while(messages_processed.load() == 0)
+    constexpr auto startup_timeout = std::chrono::seconds(5);
+    const auto     startup_deadline =
+        std::chrono::steady_clock::now() + startup_timeout;
+
+    while(messages_processed.load(std::memory_order_acquire) == 0
+          && std::chrono::steady_clock::now() < startup_deadline)
     {
         std::this_thread::yield();
     }
-    EXPECT_GT(messages_processed.load(), 0u);
+
+    ASSERT_GT(messages_processed.load(std::memory_order_acquire), 0u);
 
     std::cout << "[DEBUG] before ctx shutdown" << std::endl;
 
     ctx->shutdown();
 
-    std::cout << "[DEBUG] after ctx shutdown" << std::endl;
+    std::cout << "[DEBUG] after ctx shutdown"
+              << ", recv_exited=" << recv_exited.load()
+              << ", send_exited=" << send_exited.load() << std::endl;
 
     if(recv_thread.joinable())
     {
-        std::cout << "[DEBUG] joining recv thread" << std::endl;
+        std::cout << "[DEBUG] joining recv thread"
+                  << ", recv_exited=" << recv_exited.load() << std::endl;
+
         recv_thread.join();
+
         std::cout << "[DEBUG] recv thread joined" << std::endl;
     }
 
     if(send_thread.joinable())
     {
-        std::cout << "[DEBUG] joining send thread" << std::endl;
+        std::cout << "[DEBUG] joining send thread"
+                  << ", send_exited=" << send_exited.load() << std::endl;
+
         send_thread.join();
+
         std::cout << "[DEBUG] send thread joined" << std::endl;
     }
 

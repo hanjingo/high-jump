@@ -185,19 +185,16 @@ TEST_F(GrpcTestFixture, bind_conflict)
     hj::grpc_server_options options;
     options.add_argument("grpc.so_reuseport", 0);
 
-    const auto err = server2.start(
-        address,
-        &service,
-        grpc::InsecureServerCredentials(),
-        options);
+    const auto err = server2.start(address,
+                                   &service,
+                                   grpc::InsecureServerCredentials(),
+                                   options);
 
     EXPECT_EQ(err, hj::make_error_code(hj::grpc_errc::bind_failed))
         << server2.last_diagnostic();
 
     EXPECT_FALSE(server2.is_running());
-    EXPECT_EQ(
-        server2.get_state(),
-        hj::grpc_server::state::stopped);
+    EXPECT_EQ(server2.get_state(), hj::grpc_server::state::stopped);
 
     server1.stop();
 }
@@ -380,18 +377,34 @@ TEST_F(GrpcTestFixture, deterministic_stop_during_starting)
     hj::grpc_server server;
     std::string     address = "127.0.0.1:50071";
 
-    std::thread start_thread([&]() { server.start(address, &service); });
+    std::promise<void> start_reached_barrier;
+    std::promise<void> allow_start_to_proceed;
 
-    while(server.get_state() != hj::grpc_server::state::starting)
-    {
-        std::this_thread::yield();
-    }
+    auto allow_future = allow_start_to_proceed.get_future().share();
 
-    EXPECT_FALSE(server.stop());
+    server.set_before_build_hook([&]() {
+        start_reached_barrier.set_value();
+        allow_future.wait();
+    });
 
-    if(start_thread.joinable())
-        start_thread.join();
+    std::future<std::error_code> start_future =
+        std::async(std::launch::async,
+                   [&]() { return server.start(address, &service); });
 
+    start_reached_barrier.get_future().wait();
+
+    EXPECT_EQ(server.get_state(), hj::grpc_server::state::starting);
+
+    std::future<std::error_code> stop_future =
+        std::async(std::launch::async, [&]() { return server.stop(); });
+
+    allow_start_to_proceed.set_value();
+
+    const auto start_err = start_future.get();
+    const auto stop_err  = stop_future.get();
+
+    EXPECT_FALSE(start_err);
+    EXPECT_FALSE(stop_err);
     EXPECT_EQ(server.get_state(), hj::grpc_server::state::stopped);
     EXPECT_FALSE(server.is_running());
 }

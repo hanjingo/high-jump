@@ -67,34 +67,38 @@ namespace hj::http
  * Lifecycle State Machine:
  *   [ CONFIGURATION ] -> ( listen() / listen_async() ) -> [ RUNNING ]
  */
-class http_server
+class server
 {
   private:
     struct route_entry
     {
-        http_handler get_handler;
-        http_handler head_handler;
+        handler get_handler;
+        handler head_handler;
     };
 
     using route_ptr = std::shared_ptr<route_entry>;
 
   public:
-    http_server()
-        : _server(std::make_unique<httplib::Server>())
+    using raw_server   = httplib::Server;
+    using raw_handler  = httplib::Server::Handler;
+    using raw_response = httplib::Response;
+
+  public:
+    server()
+        : _server(std::make_unique<raw_server>())
         , _exception_handler(_default_exception_handler)
     {
     }
 
-    ~http_server() { stop(); }
+    ~server() { stop(); }
 
-    http_server(const http_server &)            = delete;
-    http_server &operator=(const http_server &) = delete;
+    server(const server &)            = delete;
+    server &operator=(const server &) = delete;
 
-    http_server(http_server &&other)
+    server(server &&other)
     {
         if(other.is_running())
-            throw std::logic_error(
-                "Cannot move http_server while it is running");
+            throw std::logic_error("Cannot move server while it is running");
 
         _server            = std::move(other._server);
         _worker_thread     = std::move(other._worker_thread);
@@ -103,14 +107,14 @@ class http_server
         _routes            = std::move(other._routes);
     }
 
-    http_server &operator=(http_server &&other)
+    server &operator=(server &&other)
     {
         if(this != &other)
         {
             stop();
             if(other.is_running())
                 throw std::logic_error(
-                    "Cannot move http_server while source is running");
+                    "Cannot move server while source is running");
 
             _server            = std::move(other._server);
             _worker_thread     = std::move(other._worker_thread);
@@ -122,7 +126,7 @@ class http_server
         return *this;
     }
 
-    http_server &set_exception_handler(exception_handler handler)
+    server &set_exception_handler(exception_handler handler)
     {
         if(is_running())
         {
@@ -138,7 +142,7 @@ class http_server
         return *this;
     }
 
-    http_server &set_metrics_handler(server_metrics_handler handler)
+    server &set_metrics_handler(server_metrics_handler handler)
     {
         if(handler)
         {
@@ -148,8 +152,7 @@ class http_server
         return *this;
     }
 
-    http_server &
-    route(http_method m, std::string_view pattern, http_handler handler)
+    server &route(method m, std::string_view pattern, handler handler)
     {
         if(is_running())
         {
@@ -166,81 +169,78 @@ class http_server
 
         switch(m)
         {
-            case http_method::get:
+            case method::get:
                 _register_get_handler(pattern_str, std::move(handler));
                 break;
 
-            case http_method::head:
+            case method::head:
                 _register_head_handler(pattern_str, std::move(handler));
                 break;
 
-            case http_method::post:
-                _server->Post(
-                    pattern_str,
-                    _make_adapter(http_method::post, std::move(handler)));
+            case method::post:
+                _server->Post(pattern_str,
+                              _make_adapter(method::post, std::move(handler)));
                 break;
 
-            case http_method::put:
-                _server->Put(
-                    pattern_str,
-                    _make_adapter(http_method::put, std::move(handler)));
+            case method::put:
+                _server->Put(pattern_str,
+                             _make_adapter(method::put, std::move(handler)));
                 break;
 
-            case http_method::patch:
+            case method::patch:
                 _server->Patch(
                     pattern_str,
-                    _make_adapter(http_method::patch, std::move(handler)));
+                    _make_adapter(method::patch, std::move(handler)));
                 break;
 
-            case http_method::del:
-                _server->Delete(
-                    pattern_str,
-                    _make_adapter(http_method::del, std::move(handler)));
+            case method::del:
+                _server->Delete(pattern_str,
+                                _make_adapter(method::del, std::move(handler)));
                 break;
 
-            case http_method::options:
+            case method::options:
                 _server->Options(
                     pattern_str,
-                    _make_adapter(http_method::options, std::move(handler)));
+                    _make_adapter(method::options, std::move(handler)));
                 break;
         }
 
         return *this;
     }
 
-    http_server &get(std::string_view pattern, http_handler handler)
+    server &get(std::string_view pattern, handler handler)
     {
-        return route(http_method::get, pattern, std::move(handler));
+        return route(method::get, pattern, std::move(handler));
     }
 
-    http_server &post(std::string_view pattern, http_handler handler)
+    server &post(std::string_view pattern, handler handler)
     {
-        return route(http_method::post, pattern, std::move(handler));
+        return route(method::post, pattern, std::move(handler));
     }
 
-    http_server &put(std::string_view pattern, http_handler handler)
+    server &put(std::string_view pattern, handler handler)
     {
-        return route(http_method::put, pattern, std::move(handler));
+        return route(method::put, pattern, std::move(handler));
     }
 
-    http_server &patch(std::string_view pattern, http_handler handler)
+    server &patch(std::string_view pattern, handler handler)
     {
-        return route(http_method::patch, pattern, std::move(handler));
+        return route(method::patch, pattern, std::move(handler));
     }
 
-    http_server &del(std::string_view pattern, http_handler handler)
+    server &del(std::string_view pattern, handler handler)
     {
-        return route(http_method::del, pattern, std::move(handler));
+        return route(method::del, pattern, std::move(handler));
     }
 
-    http_server &head(std::string_view pattern, http_handler handler)
+    server &head(std::string_view pattern, handler handler)
     {
-        return route(http_method::head, pattern, std::move(handler));
+        return route(method::head, pattern, std::move(handler));
     }
 
-    http_server &options(std::string_view pattern, http_handler handler)
+    server &options(std::string_view pattern, handler handler)
     {
-        return route(http_method::options, pattern, std::move(handler));
+        return route(method::options, pattern, std::move(handler));
     }
 
     int bind_to_any_port(const std::string &host         = "127.0.0.1",
@@ -256,13 +256,30 @@ class http_server
 
     std::future<bool> listen_async(const std::string &host, int port)
     {
-        stop();
+        if(!_server)
+        {
+            std::promise<bool> promise;
+            promise.set_value(false);
+            return promise.get_future();
+        }
+
+        if(_server->is_running())
+        {
+            throw std::logic_error(
+                "Cannot start server while it is already running");
+        }
+
+        if(_worker_thread.joinable())
+        {
+            throw std::logic_error(
+                "Cannot start server while worker thread is running");
+        }
 
         auto promise = std::make_shared<std::promise<bool>>();
-        auto fut     = promise->get_future();
+        auto future  = promise->get_future();
 
         _worker_thread = std::thread([this, host, port, promise]() {
-            bool ret = _server ? _server->listen(host, port) : false;
+            const bool ret = _server->listen(host, port);
 
             try
             {
@@ -270,22 +287,38 @@ class http_server
             }
             catch(const std::future_error &)
             {
-                // ignore
             }
         });
 
-        return fut;
+        return future;
     }
 
     std::future<bool> listen_after_bind_async()
     {
-        stop();
+        if(!_server)
+        {
+            std::promise<bool> promise;
+            promise.set_value(false);
+            return promise.get_future();
+        }
+
+        if(_server->is_running())
+        {
+            throw std::logic_error(
+                "Cannot start server while it is already running");
+        }
+
+        if(_worker_thread.joinable())
+        {
+            throw std::logic_error(
+                "Cannot start server while worker thread is running");
+        }
 
         auto promise = std::make_shared<std::promise<bool>>();
-        auto fut     = promise->get_future();
+        auto future  = promise->get_future();
 
         _worker_thread = std::thread([this, promise]() {
-            bool ret = _server ? _server->listen_after_bind() : false;
+            const bool ret = _server->listen_after_bind();
 
             try
             {
@@ -293,35 +326,30 @@ class http_server
             }
             catch(const std::future_error &)
             {
-                // ignore
             }
         });
 
-        return fut;
+        return future;
     }
 
     void stop()
     {
         if(_server)
-        {
             _server->stop();
-        }
 
         if(_worker_thread.joinable())
-        {
             _worker_thread.join();
-        }
     }
 
     bool is_running() const { return _server ? _server->is_running() : false; }
 
-    httplib::Server &native_handle() noexcept { return *_server; }
+    raw_server &native_handle() noexcept { return *_server; }
 
-    const httplib::Server &native_handle() const noexcept { return *_server; }
+    const raw_server &native_handle() const noexcept { return *_server; }
 
   private:
-    static void _default_exception_handler(const http_request &,
-                                           http_response     &resp,
+    static void _default_exception_handler(const request &,
+                                           response          &resp,
                                            std::exception_ptr ep)
     {
         resp.status_code = 500;
@@ -345,7 +373,7 @@ class http_server
         return entry;
     }
 
-    void _register_get_handler(const std::string &pattern, http_handler handler)
+    void _register_get_handler(const std::string &pattern, handler handler)
     {
         auto entry = _get_or_create_route(pattern);
 
@@ -360,8 +388,7 @@ class http_server
         }
     }
 
-    void _register_head_handler(const std::string &pattern,
-                                http_handler       handler)
+    void _register_head_handler(const std::string &pattern, handler handler)
     {
         auto entry = _get_or_create_route(pattern);
 
@@ -376,21 +403,21 @@ class http_server
         }
     }
 
-    httplib::Server::Handler _make_get_head_adapter(const route_ptr &entry)
+    raw_handler _make_get_head_adapter(const route_ptr &entry)
     {
         return [this, entry](const httplib::Request &raw_req,
-                             httplib::Response      &raw_resp) {
-            http_request req = detail::parse_httplib_request(raw_req);
+                             raw_response           &raw_resp) {
+            request req = detail::parse_httplib_request(raw_req);
 
-            http_handler *handler = nullptr;
+            handler *handler = nullptr;
 
-            if(req.method == http_method::head)
+            if(req.method == method::head)
             {
                 if(entry->head_handler)
                     handler = &entry->head_handler;
                 else if(entry->get_handler)
                     handler = &entry->get_handler;
-            } else if(req.method == http_method::get)
+            } else if(req.method == method::get)
             {
                 if(entry->get_handler)
                     handler = &entry->get_handler;
@@ -407,13 +434,12 @@ class http_server
         };
     }
 
-    httplib::Server::Handler _make_adapter(http_method  expected_method,
-                                           http_handler handler)
+    raw_handler _make_adapter(method expected_method, handler handler)
     {
         return [this, expected_method, handler = std::move(handler)](
                    const httplib::Request &raw_req,
-                   httplib::Response      &raw_resp) {
-            http_request req = detail::parse_httplib_request(raw_req);
+                   raw_response           &raw_resp) {
+            request req = detail::parse_httplib_request(raw_req);
 
             if(req.method != expected_method)
             {
@@ -428,12 +454,12 @@ class http_server
         };
     }
 
-    void _invoke_handler(const http_request &req,
-                         httplib::Response  &raw_resp,
-                         const http_handler &handler)
+    void _invoke_handler(const request &req,
+                         raw_response  &raw_resp,
+                         const handler &handler)
     {
-        auto          start_time = std::chrono::steady_clock::now();
-        http_response resp;
+        auto     start_time = std::chrono::steady_clock::now();
+        response resp;
         resp.status_code = 200;
         try
         {
@@ -468,7 +494,7 @@ class http_server
 
         if(_metrics_handler)
         {
-            http_server_metrics metrics;
+            server_metrics metrics;
             metrics.method = req.method;
             metrics.path   = req.path;
             metrics.status_code =
@@ -489,7 +515,7 @@ class http_server
     }
 
   private:
-    std::unique_ptr<httplib::Server> _server;
+    std::unique_ptr<raw_server> _server;
 
     std::thread _worker_thread;
 
@@ -522,8 +548,8 @@ class http_ssl_server
   private:
     struct route_entry
     {
-        http_handler get_handler;
-        http_handler head_handler;
+        handler get_handler;
+        handler head_handler;
     };
 
     using route_ptr = std::shared_ptr<route_entry>;
@@ -615,8 +641,7 @@ class http_ssl_server
         return *this;
     }
 
-    http_ssl_server &
-    route(http_method m, std::string_view pattern, http_handler handler)
+    http_ssl_server &route(method m, std::string_view pattern, handler handler)
     {
         if(is_running())
             throw std::logic_error(
@@ -628,81 +653,78 @@ class http_ssl_server
         const std::string pattern_str(pattern);
         switch(m)
         {
-            case http_method::get:
+            case method::get:
                 _register_get_handler(pattern_str, std::move(handler));
                 break;
 
-            case http_method::head:
+            case method::head:
                 _register_head_handler(pattern_str, std::move(handler));
                 break;
 
-            case http_method::post:
-                _server->Post(
-                    pattern_str,
-                    _make_adapter(http_method::post, std::move(handler)));
+            case method::post:
+                _server->Post(pattern_str,
+                              _make_adapter(method::post, std::move(handler)));
                 break;
 
-            case http_method::put:
-                _server->Put(
-                    pattern_str,
-                    _make_adapter(http_method::put, std::move(handler)));
+            case method::put:
+                _server->Put(pattern_str,
+                             _make_adapter(method::put, std::move(handler)));
                 break;
 
-            case http_method::patch:
+            case method::patch:
                 _server->Patch(
                     pattern_str,
-                    _make_adapter(http_method::patch, std::move(handler)));
+                    _make_adapter(method::patch, std::move(handler)));
                 break;
 
-            case http_method::del:
-                _server->Delete(
-                    pattern_str,
-                    _make_adapter(http_method::del, std::move(handler)));
+            case method::del:
+                _server->Delete(pattern_str,
+                                _make_adapter(method::del, std::move(handler)));
                 break;
 
-            case http_method::options:
+            case method::options:
                 _server->Options(
                     pattern_str,
-                    _make_adapter(http_method::options, std::move(handler)));
+                    _make_adapter(method::options, std::move(handler)));
                 break;
         }
 
         return *this;
     }
 
-    http_ssl_server &get(std::string_view pattern, http_handler handler)
+    http_ssl_server &get(std::string_view pattern, handler handler)
     {
-        return route(http_method::get, pattern, std::move(handler));
+        return route(method::get, pattern, std::move(handler));
     }
 
-    http_ssl_server &post(std::string_view pattern, http_handler handler)
+    http_ssl_server &post(std::string_view pattern, handler handler)
     {
-        return route(http_method::post, pattern, std::move(handler));
+        return route(method::post, pattern, std::move(handler));
     }
 
-    http_ssl_server &put(std::string_view pattern, http_handler handler)
+    http_ssl_server &put(std::string_view pattern, handler handler)
     {
-        return route(http_method::put, pattern, std::move(handler));
+        return route(method::put, pattern, std::move(handler));
     }
 
-    http_ssl_server &patch(std::string_view pattern, http_handler handler)
+    http_ssl_server &patch(std::string_view pattern, handler handler)
     {
-        return route(http_method::patch, pattern, std::move(handler));
+        return route(method::patch, pattern, std::move(handler));
     }
 
-    http_ssl_server &del(std::string_view pattern, http_handler handler)
+    http_ssl_server &del(std::string_view pattern, handler handler)
     {
-        return route(http_method::del, pattern, std::move(handler));
+        return route(method::del, pattern, std::move(handler));
     }
 
-    http_ssl_server &head(std::string_view pattern, http_handler handler)
+    http_ssl_server &head(std::string_view pattern, handler handler)
     {
-        return route(http_method::head, pattern, std::move(handler));
+        return route(method::head, pattern, std::move(handler));
     }
 
-    http_ssl_server &options(std::string_view pattern, http_handler handler)
+    http_ssl_server &options(std::string_view pattern, handler handler)
     {
-        return route(http_method::options, pattern, std::move(handler));
+        return route(method::options, pattern, std::move(handler));
     }
 
     int bind_to_any_port(const std::string &host         = "127.0.0.1",
@@ -785,8 +807,8 @@ class http_ssl_server
     }
 
   private:
-    static void _default_exception_handler(const http_request &,
-                                           http_response     &resp,
+    static void _default_exception_handler(const request &,
+                                           response          &resp,
                                            std::exception_ptr ep)
     {
         resp.status_code = 500;
@@ -806,7 +828,7 @@ class http_ssl_server
         return entry;
     }
 
-    void _register_get_handler(const std::string &pattern, http_handler handler)
+    void _register_get_handler(const std::string &pattern, handler handler)
     {
         auto       entry = _get_or_create_route(pattern);
         const bool first_registration =
@@ -816,8 +838,7 @@ class http_ssl_server
             _server->Get(pattern, _make_get_head_adapter(entry));
     }
 
-    void _register_head_handler(const std::string &pattern,
-                                http_handler       handler)
+    void _register_head_handler(const std::string &pattern, handler handler)
     {
         auto entry = _get_or_create_route(pattern);
 
@@ -833,18 +854,18 @@ class http_ssl_server
     httplib::SSLServer::Handler _make_get_head_adapter(const route_ptr &entry)
     {
         return [this, entry](const httplib::Request &raw_req,
-                             httplib::Response      &raw_resp) {
-            http_request req = detail::parse_httplib_request(raw_req);
+                             raw_response           &raw_resp) {
+            request req = detail::parse_httplib_request(raw_req);
 
-            http_handler *handler = nullptr;
+            handler *handler = nullptr;
 
-            if(req.method == http_method::head)
+            if(req.method == method::head)
             {
                 if(entry->head_handler)
                     handler = &entry->head_handler;
                 else if(entry->get_handler)
                     handler = &entry->get_handler;
-            } else if(req.method == http_method::get)
+            } else if(req.method == method::get)
             {
                 if(entry->get_handler)
                     handler = &entry->get_handler;
@@ -861,13 +882,13 @@ class http_ssl_server
         };
     }
 
-    httplib::SSLServer::Handler _make_adapter(http_method  expected_method,
-                                              http_handler handler)
+    httplib::SSLServer::Handler _make_adapter(method  expected_method,
+                                              handler handler)
     {
         return [this, expected_method, handler = std::move(handler)](
                    const httplib::Request &raw_req,
-                   httplib::Response      &raw_resp) {
-            http_request req = detail::parse_httplib_request(raw_req);
+                   raw_response           &raw_resp) {
+            request req = detail::parse_httplib_request(raw_req);
 
             if(req.method != expected_method)
             {
@@ -882,12 +903,12 @@ class http_ssl_server
         };
     }
 
-    void _invoke_handler(const http_request &req,
-                         httplib::Response  &raw_resp,
-                         const http_handler &handler)
+    void _invoke_handler(const request &req,
+                         raw_response  &raw_resp,
+                         const handler &handler)
     {
-        auto          start_time = std::chrono::steady_clock::now();
-        http_response resp;
+        auto     start_time = std::chrono::steady_clock::now();
+        response resp;
         resp.status_code = 200;
         try
         {
@@ -922,7 +943,7 @@ class http_ssl_server
 
         if(_metrics_handler)
         {
-            http_server_metrics metrics;
+            server_metrics metrics;
             metrics.method = req.method;
             metrics.path   = req.path;
             metrics.status_code =

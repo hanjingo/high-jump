@@ -204,7 +204,7 @@
     },
     {
       "name": "cpp-httplib",
-      "version": "0.46.1"
+      "version": "0.54.1"
     },
     {
       "name": "eigen3",

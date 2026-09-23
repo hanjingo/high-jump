@@ -11,7 +11,7 @@
 
 namespace
 {
-void wait_for_server(const hj::http::http_server &server)
+void wait_for_server(const hj::http::server &server)
 {
     int retries = 0;
     while(!server.is_running() && retries++ < 100)
@@ -21,20 +21,17 @@ void wait_for_server(const hj::http::http_server &server)
     ASSERT_TRUE(server.is_running());
 }
 
-int start_server_on_ephemeral_port(hj::http::http_server &server,
-                                   const std::string     &host = "127.0.0.1")
+int start_server_on_ephemeral_port(hj::http::server  &server,
+                                   const std::string &host = "127.0.0.1")
 {
-    // 1. 让 OS 分配并绑定空闲端口[cite: 25]
     int port = server.bind_to_any_port(host);
     if(port <= 0)
     {
         throw std::runtime_error("Failed to bind server to ephemeral port");
     }
 
-    // 2. 启动后台线程并调用 listen_after_bind() 进入事件监听状态[cite: 25]
     server.listen_after_bind_async();
 
-    // 3. 等待服务器状态就绪
     int retries = 0;
     while(!server.is_running() && retries++ < 100)
     {
@@ -53,70 +50,70 @@ int start_server_on_ephemeral_port(hj::http::http_server &server,
 
 TEST(http_server, construct)
 {
-    EXPECT_NO_THROW({ hj::http::http_server server; });
+    EXPECT_NO_THROW({ hj::http::server server; });
 }
 
 TEST(http_server, route_convenience_methods)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
     server
         .get("/get",
-             [](const hj::http::http_request &, hj::http::http_response &res) {
+             [](const hj::http::request &, hj::http::response &res) {
                  res.status_code = 200;
              })
         .post("/post",
-              [](const hj::http::http_request &, hj::http::http_response &res) {
+              [](const hj::http::request &, hj::http::response &res) {
                   res.status_code = 200;
               })
         .put("/put",
-             [](const hj::http::http_request &, hj::http::http_response &res) {
+             [](const hj::http::request &, hj::http::response &res) {
                  res.status_code = 200;
              })
         .patch("/patch",
-               [](const hj::http::http_request &,
-                  hj::http::http_response &res) { res.status_code = 200; })
+               [](const hj::http::request &, hj::http::response &res) {
+                   res.status_code = 200;
+               })
         .del("/del",
-             [](const hj::http::http_request &, hj::http::http_response &res) {
+             [](const hj::http::request &, hj::http::response &res) {
                  res.status_code = 200;
              })
         .head("/head",
-              [](const hj::http::http_request &, hj::http::http_response &res) {
+              [](const hj::http::request &, hj::http::response &res) {
                   res.status_code = 200;
               })
         .options("/options",
-                 [](const hj::http::http_request &,
-                    hj::http::http_response &res) { res.status_code = 200; });
+                 [](const hj::http::request &, hj::http::response &res) {
+                     res.status_code = 200;
+                 });
 
     SUCCEED();
 }
 
 TEST(http_server, generic_route_method)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
-    server.route(
-        hj::http::http_method::patch,
-        "/patch_generic",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::patch);
-            res.status_code = 200;
-            res.body        = "patched";
-        });
+    server.route(hj::http::method::patch,
+                 "/patch_generic",
+                 [](const hj::http::request &req, hj::http::response &res) {
+                     EXPECT_EQ(req.method, hj::http::method::patch);
+                     res.status_code = 200;
+                     res.body        = "patched";
+                 });
 
     SUCCEED();
 }
 
 TEST(http_server, start_and_stop_integration)
 {
-    hj::http::http_server server;
-    server.patch(
-        "/resource",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::patch);
-            res.status_code = 200;
-            res.body        = "patched_ok";
-        });
+    hj::http::server server;
+    server.patch("/resource",
+                 [](const hj::http::request &req, hj::http::response &res) {
+                     EXPECT_EQ(req.method, hj::http::method::patch);
+                     res.status_code = 200;
+                     res.body        = "patched_ok";
+                 });
 
     int             port = start_server_on_ephemeral_port(server);
     httplib::Client client("127.0.0.1", port);
@@ -132,17 +129,16 @@ TEST(http_server, start_and_stop_integration)
 
 TEST(http_server, handler_exception_handling)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
     server.get("/throw_std",
-               [](const hj::http::http_request &, hj::http::http_response &) {
+               [](const hj::http::request &, hj::http::response &) {
                    throw std::runtime_error("db error");
                });
 
-    server.get("/throw_unknown",
-               [](const hj::http::http_request &, hj::http::http_response &) {
-                   throw 42;
-               });
+    server.get(
+        "/throw_unknown",
+        [](const hj::http::request &, hj::http::response &) { throw 42; });
 
     int             port = start_server_on_ephemeral_port(server);
     httplib::Client client("127.0.0.1", port);
@@ -163,10 +159,10 @@ TEST(http_server, handler_exception_handling)
 
 TEST(http_server, start_and_stop_async)
 {
-    hj::http::http_server server;
-    server.get("/ping",
-               [](const hj::http::http_request &,
-                  hj::http::http_response &res) { res.body = "pong"; });
+    hj::http::server server;
+    server.get("/ping", [](const hj::http::request &, hj::http::response &res) {
+        res.body = "pong";
+    });
 
     int             port = start_server_on_ephemeral_port(server);
     httplib::Client client("127.0.0.1", port);
@@ -179,57 +175,51 @@ TEST(http_server, start_and_stop_async)
 
 TEST(http_server, all_http_methods)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
-    server.get(
-        "/test",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::get);
-            res.body = "GET_OK";
-        });
+    server.get("/test",
+               [](const hj::http::request &req, hj::http::response &res) {
+                   EXPECT_EQ(req.method, hj::http::method::get);
+                   res.body = "GET_OK";
+               });
 
-    server.post(
-        "/test",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::post);
-            res.body = "POST_OK";
-        });
+    server.post("/test",
+                [](const hj::http::request &req, hj::http::response &res) {
+                    EXPECT_EQ(req.method, hj::http::method::post);
+                    res.body = "POST_OK";
+                });
 
-    server.put(
-        "/test",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::put);
-            res.body = "PUT_OK";
-        });
+    server.put("/test",
+               [](const hj::http::request &req, hj::http::response &res) {
+                   EXPECT_EQ(req.method, hj::http::method::put);
+                   res.body = "PUT_OK";
+               });
 
-    server.patch(
-        "/test",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::patch);
-            res.body = "PATCH_OK";
-        });
+    server.patch("/test",
+                 [](const hj::http::request &req, hj::http::response &res) {
+                     EXPECT_EQ(req.method, hj::http::method::patch);
+                     res.body = "PATCH_OK";
+                 });
 
-    server.del(
-        "/test",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::del);
-            res.body = "DELETE_OK";
-        });
+    server.del("/test",
+               [](const hj::http::request &req, hj::http::response &res) {
+                   EXPECT_EQ(req.method, hj::http::method::del);
+                   res.body = "DELETE_OK";
+               });
 
-    server.head(
-        "/test",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::head);
-            res.headers.set("X-Head-Status", "Pass");
-        });
+    server.head("/test",
+                [](const hj::http::request &req, hj::http::response &res) {
+                    EXPECT_EQ(req.method, hj::http::method::head);
+                    res.headers.set("X-Head-Status", "Pass");
+                });
 
-    server.options(
-        "/test",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.method, hj::http::http_method::options);
-            res.headers.set("Allow",
-                            "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS");
-        });
+    server.options("/test",
+                   [](const hj::http::request &req, hj::http::response &res) {
+                       EXPECT_EQ(req.method, hj::http::method::options);
+                       res.headers.set(
+                           "Allow",
+                           "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS");
+                   });
 
     int             port = start_server_on_ephemeral_port(server);
     httplib::Client client("127.0.0.1", port);
@@ -283,34 +273,33 @@ TEST(http_server, all_http_methods)
 
 TEST(http_server, full_request_parsing)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
-    server.post(
-        "/users",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.path, "/users");
-            EXPECT_EQ(req.method, hj::http::http_method::post);
+    server.post("/users",
+                [](const hj::http::request &req, hj::http::response &res) {
+                    EXPECT_EQ(req.path, "/users");
+                    EXPECT_EQ(req.method, hj::http::method::post);
 
-            ASSERT_GE(req.query.size(), 2u);
-            bool found_id   = false;
-            bool found_page = false;
-            for(const auto &[k, v] : req.query)
-            {
-                if(k == "id" && v == "100")
-                    found_id = true;
-                if(k == "page" && v == "2")
-                    found_page = true;
-            }
-            EXPECT_TRUE(found_id);
-            EXPECT_TRUE(found_page);
+                    ASSERT_GE(req.query.size(), 2u);
+                    bool found_id   = false;
+                    bool found_page = false;
+                    for(const auto &[k, v] : req.query)
+                    {
+                        if(k == "id" && v == "100")
+                            found_id = true;
+                        if(k == "page" && v == "2")
+                            found_page = true;
+                    }
+                    EXPECT_TRUE(found_id);
+                    EXPECT_TRUE(found_page);
 
-            EXPECT_EQ(req.content_type, "application/json");
-            EXPECT_EQ(req.headers.get("X-Custom-Header"), "TestValue");
-            EXPECT_EQ(req.body, R"({"name":"foo"})");
+                    EXPECT_EQ(req.content_type, "application/json");
+                    EXPECT_EQ(req.headers.get("X-Custom-Header"), "TestValue");
+                    EXPECT_EQ(req.body, R"({"name":"foo"})");
 
-            res.status_code = 201;
-            res.body        = R"({"status":"created"})";
-        });
+                    res.status_code = 201;
+                    res.body        = R"({"status":"created"})";
+                });
 
     int              port = start_server_on_ephemeral_port(server);
     httplib::Client  client("127.0.0.1", port);
@@ -330,7 +319,7 @@ TEST(http_server, full_request_parsing)
 
 TEST(http_server, status_codes)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
     const std::vector<int> status_codes =
         {200, 201, 204, 301, 400, 401, 403, 404, 409, 429, 500, 503};
@@ -339,8 +328,7 @@ TEST(http_server, status_codes)
     {
         std::string path = "/status/" + std::to_string(code);
         server.get(path,
-                   [code](const hj::http::http_request &,
-                          hj::http::http_response &res) {
+                   [code](const hj::http::request &, hj::http::response &res) {
                        res.status_code = code;
                        if(code != 204)
                        {
@@ -369,23 +357,23 @@ TEST(http_server, status_codes)
 
 TEST(http_server, advanced_header_tests)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
-    server.get(
-        "/headers",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            EXPECT_EQ(req.headers.get("x-request-id"), "req-12345");
-            EXPECT_EQ(req.headers.get("X-REQUEST-ID"), "req-12345");
+    server.get("/headers",
+               [](const hj::http::request &req, hj::http::response &res) {
+                   EXPECT_EQ(req.headers.get("x-request-id"), "req-12345");
+                   EXPECT_EQ(req.headers.get("X-REQUEST-ID"), "req-12345");
 
-            auto cookies = req.headers.get_all("Cookie");
-            EXPECT_GE(cookies.size(), 2u);
+                   auto cookies = req.headers.get_all("Cookie");
+                   EXPECT_GE(cookies.size(), 2u);
 
-            res.headers.set("Content-Type", "application/json; charset=utf-8");
-            res.headers.set("X-Request-ID", "resp-98765");
-            res.headers.append("Set-Cookie", "session=abc; Path=/");
-            res.headers.append("Set-Cookie", "theme=dark; Path=/");
-            res.body = R"({"ok":true})";
-        });
+                   res.headers.set("Content-Type",
+                                   "application/json; charset=utf-8");
+                   res.headers.set("X-Request-ID", "resp-98765");
+                   res.headers.append("Set-Cookie", "session=abc; Path=/");
+                   res.headers.append("Set-Cookie", "theme=dark; Path=/");
+                   res.body = R"({"ok":true})";
+               });
 
     int              port = start_server_on_ephemeral_port(server);
     httplib::Client  client("127.0.0.1", port);
@@ -413,14 +401,14 @@ TEST(http_server, advanced_header_tests)
 
 // TEST(http_server, multi_client_high_pressure)
 // {
-//     hj::http::http_server server;
+//     hj::http::server server;
 
 //     std::atomic<uint64_t> total_requests{0};
 //     std::atomic<uint64_t> total_errors{0};
 
 //     server.get(
 //         "/benchmark",
-//         [&](const hj::http::http_request &req, hj::http::http_response &res) {
+//         [&](const hj::http::request &req, hj::http::response &res) {
 //             total_requests.fetch_add(1, std::memory_order_relaxed);
 //             std::string client_id = req.headers.get("X-Client-ID");
 //             res.status_code       = 200;
@@ -471,16 +459,16 @@ TEST(http_server, advanced_header_tests)
 
 TEST(http_server, custom_exception_handler)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
     struct invalid_param_error : public std::runtime_error
     {
         using std::runtime_error::runtime_error;
     };
 
-    server.set_exception_handler([](const hj::http::http_request &req,
-                                    hj::http::http_response      &resp,
-                                    std::exception_ptr            ep) {
+    server.set_exception_handler([](const hj::http::request &req,
+                                    hj::http::response      &resp,
+                                    std::exception_ptr       ep) {
         try
         {
             if(ep)
@@ -502,14 +490,13 @@ TEST(http_server, custom_exception_handler)
     });
 
     server.get("/bad_param",
-               [](const hj::http::http_request &, hj::http::http_response &) {
+               [](const hj::http::request &, hj::http::response &) {
                    throw invalid_param_error("field 'age' is required");
                });
 
-    server.get("/crash",
-               [](const hj::http::http_request &, hj::http::http_response &) {
-                   throw std::runtime_error("db crash");
-               });
+    server.get("/crash", [](const hj::http::request &, hj::http::response &) {
+        throw std::runtime_error("db crash");
+    });
 
     int             port = start_server_on_ephemeral_port(server);
     httplib::Client client("127.0.0.1", port);
@@ -530,22 +517,21 @@ TEST(http_server, custom_exception_handler)
 
 TEST(http_server, basic_metrics_collection)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
-    std::atomic<bool>             metric_collected{false};
-    hj::http::http_server_metrics recorded_metrics;
+    std::atomic<bool>        metric_collected{false};
+    hj::http::server_metrics recorded_metrics;
 
-    server.set_metrics_handler([&](const hj::http::http_server_metrics &m) {
+    server.set_metrics_handler([&](const hj::http::server_metrics &m) {
         recorded_metrics = m;
         metric_collected.store(true);
     });
 
-    server.post(
-        "/data",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            res.status_code = 201;
-            res.body        = "created";
-        });
+    server.post("/data",
+                [](const hj::http::request &req, hj::http::response &res) {
+                    res.status_code = 201;
+                    res.body        = "created";
+                });
 
     int             port = start_server_on_ephemeral_port(server);
     httplib::Client client("127.0.0.1", port);
@@ -555,7 +541,7 @@ TEST(http_server, basic_metrics_collection)
     EXPECT_EQ(res->status, 201);
 
     EXPECT_TRUE(metric_collected.load());
-    EXPECT_EQ(recorded_metrics.method, hj::http::http_method::post);
+    EXPECT_EQ(recorded_metrics.method, hj::http::method::post);
     EXPECT_EQ(recorded_metrics.path, "/data");
     EXPECT_EQ(recorded_metrics.status_code, 201);
     EXPECT_EQ(recorded_metrics.request_body_bytes,
@@ -570,12 +556,13 @@ TEST(http_server, basic_metrics_collection)
 TEST(http_server, move_before_start)
 {
     {
-        hj::http::http_server server_a;
+        hj::http::server server_a;
         server_a.get("/ping",
-                     [](const hj::http::http_request &,
-                        hj::http::http_response &res) { res.body = "pong_a"; });
+                     [](const hj::http::request &, hj::http::response &res) {
+                         res.body = "pong_a";
+                     });
 
-        hj::http::http_server server_b(std::move(server_a));
+        hj::http::server server_b(std::move(server_a));
 
         int             port = start_server_on_ephemeral_port(server_b);
         httplib::Client client("127.0.0.1", port);
@@ -589,14 +576,13 @@ TEST(http_server, move_before_start)
     }
 
     {
-        hj::http::http_server server_src;
-        server_src.get(
-            "/hello",
-            [](const hj::http::http_request &, hj::http::http_response &res) {
-                res.body = "world";
-            });
+        hj::http::server server_src;
+        server_src.get("/hello",
+                       [](const hj::http::request &, hj::http::response &res) {
+                           res.body = "world";
+                       });
 
-        hj::http::http_server server_dst;
+        hj::http::server server_dst;
         server_dst = std::move(server_src);
 
         int             port = start_server_on_ephemeral_port(server_dst);
@@ -614,21 +600,21 @@ TEST(http_server, move_before_start)
 TEST(http_server, move_while_running)
 {
     {
-        hj::http::http_server server_a;
-        int                   port = start_server_on_ephemeral_port(server_a);
+        hj::http::server server_a;
+        int              port = start_server_on_ephemeral_port(server_a);
 
         EXPECT_TRUE(server_a.is_running());
 
         EXPECT_THROW(
-            { hj::http::http_server server_b(std::move(server_a)); },
+            { hj::http::server server_b(std::move(server_a)); },
             std::logic_error);
 
         server_a.stop();
     }
 
     {
-        hj::http::http_server server_src;
-        hj::http::http_server server_dst;
+        hj::http::server server_src;
+        hj::http::server server_dst;
 
         int port = start_server_on_ephemeral_port(server_src);
         EXPECT_TRUE(server_src.is_running());
@@ -643,15 +629,15 @@ TEST(http_server, edge_cases)
 {
     // 1. stop before listen
     {
-        hj::http::http_server server;
+        hj::http::server server;
         EXPECT_NO_THROW(server.stop());
         EXPECT_FALSE(server.is_running());
     }
 
     // 2. stop twice
     {
-        hj::http::http_server server;
-        int                   port = start_server_on_ephemeral_port(server);
+        hj::http::server server;
+        int              port = start_server_on_ephemeral_port(server);
         EXPECT_TRUE(server.is_running());
 
         server.stop();
@@ -661,7 +647,7 @@ TEST(http_server, edge_cases)
 
     // 3. destructor while running
     {
-        auto server = std::make_unique<hj::http::http_server>();
+        auto server = std::make_unique<hj::http::server>();
         int  port   = start_server_on_ephemeral_port(*server);
         EXPECT_TRUE(server->is_running());
         EXPECT_NO_THROW(server.reset());
@@ -669,14 +655,13 @@ TEST(http_server, edge_cases)
 
     // 4. start after stop
     {
-        std::atomic<int>      call_count{0};
-        hj::http::http_server server;
+        std::atomic<int> call_count{0};
+        hj::http::server server;
 
-        server.get(
-            "/ping",
-            [&](const hj::http::http_request &, hj::http::http_response &res) {
-                res.body = (call_count.load() == 0) ? "pong1" : "pong2";
-            });
+        server.get("/ping",
+                   [&](const hj::http::request &, hj::http::response &res) {
+                       res.body = (call_count.load() == 0) ? "pong1" : "pong2";
+                   });
 
         int             port1 = start_server_on_ephemeral_port(server);
         httplib::Client client1("127.0.0.1", port1);
@@ -700,7 +685,7 @@ TEST(http_server, edge_cases)
 
 TEST(http_server, industrial_high_pressure)
 {
-    hj::http::http_server server;
+    hj::http::server server;
 
     server.native_handle().new_task_queue = [] {
         return new httplib::ThreadPool(4);
@@ -709,19 +694,17 @@ TEST(http_server, industrial_high_pressure)
     server.native_handle().set_read_timeout(5, 0);
     server.native_handle().set_write_timeout(5, 0);
 
-    server.get(
-        "/small",
-        [](const hj::http::http_request &, hj::http::http_response &res) {
-            res.status_code = 200;
-            res.body        = "OK";
-        });
+    server.get("/small",
+               [](const hj::http::request &, hj::http::response &res) {
+                   res.status_code = 200;
+                   res.body        = "OK";
+               });
 
-    server.post(
-        "/large",
-        [](const hj::http::http_request &req, hj::http::http_response &res) {
-            res.status_code = 200;
-            res.body        = "echo_size:" + std::to_string(req.body.size());
-        });
+    server.post("/large",
+                [](const hj::http::request &req, hj::http::response &res) {
+                    res.status_code = 200;
+                    res.body = "echo_size:" + std::to_string(req.body.size());
+                });
 
     int port = start_server_on_ephemeral_port(server);
 

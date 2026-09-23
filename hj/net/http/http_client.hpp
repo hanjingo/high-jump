@@ -16,8 +16,8 @@
  * limitations under the License.
  */
 
-#ifndef HJ_NET_HTTP_CLIENT_HPP
-#define HJ_NET_HTTP_CLIENT_HPP
+#ifndef HJ_NET_client_HPP
+#define HJ_NET_client_HPP
 
 #ifdef HJ_ENABLE_HTTPS
 #ifndef CPPHTTPLIB_OPENSSL_SUPPORT
@@ -54,18 +54,17 @@
 namespace hj::http
 {
 
-struct http_client_options
+struct client_options
 {
-    http_timeout    timeout{};
+    timeout         timeout{};
     retry_policy    retry{};
     logger_callback logger{nullptr};
 };
 
-class http_client
+class client
 {
   public:
-    explicit http_client(const std::string  &base_url,
-                         http_client_options options = {})
+    explicit client(const std::string &base_url, client_options options = {})
         : _base_url(base_url)
         , _client(std::make_unique<httplib::Client>(base_url))
         , _options(std::move(options))
@@ -73,21 +72,20 @@ class http_client
         _set_client_timeout(_client.get(), _options.timeout);
     }
 
-    explicit http_client(const std::string &base_url,
-                         http_timeout       timeout,
-                         retry_policy       retry = {})
-        : http_client(base_url,
-                      http_client_options{timeout, std::move(retry), nullptr})
+    explicit client(const std::string &base_url,
+                    timeout            timeout,
+                    retry_policy       retry = {})
+        : client(base_url, client_options{timeout, std::move(retry), nullptr})
     {
     }
 
-    ~http_client() = default;
+    ~client() = default;
 
-    http_client(const http_client &)            = delete;
-    http_client &operator=(const http_client &) = delete;
+    client(const client &)            = delete;
+    client &operator=(const client &) = delete;
 
-    http_client(http_client &&) noexcept            = default;
-    http_client &operator=(http_client &&) noexcept = default;
+    client(client &&) noexcept            = default;
+    client &operator=(client &&) noexcept = default;
 
     bool configure_tls([[maybe_unused]] const tls_config &config)
     {
@@ -121,16 +119,12 @@ class http_client
     void configure_proxy(const proxy_config &proxy)
     {
         if(!proxy.valid())
-        {
             return;
-        }
 
         _client->set_proxy(proxy.host.c_str(), proxy.port);
         if(!proxy.username.empty())
-        {
             _client->set_proxy_basic_auth(proxy.username.c_str(),
                                           proxy.password.c_str());
-        }
     }
 
     void set_retry_policy(retry_policy policy)
@@ -143,17 +137,16 @@ class http_client
         _options.logger = std::move(cb);
     }
 
-    void set_timeout(http_timeout timeout) { _options.timeout = timeout; }
+    void set_timeout(timeout timeout) { _options.timeout = timeout; }
 
-    http_client_response request(const http_request &req)
+    response call(const request &req)
     {
         const auto start_time = std::chrono::steady_clock::now();
         const auto policy     = req.retry.value_or(_options.retry);
 
         std::string full_path = detail::build_full_path(req.path, req.query);
         std::size_t attempt   = 0;
-        http_client_response res;
-
+        response    res;
         while(true)
         {
             attempt++;
@@ -178,16 +171,16 @@ class http_client
                                                                   - start_time);
         if(_options.logger)
         {
-            http_request_metrics metrics;
+            request_metrics metrics;
             metrics.method              = req.method;
             metrics.url                 = _base_url + full_path;
-            metrics.status_code         = res.response.status_code;
+            metrics.status_code         = res.status_code;
             metrics.latency             = latency;
             metrics.retry_count         = attempt - 1;
             metrics.error               = res.error;
             metrics.error_message       = res.error_message;
             metrics.request_body_bytes  = req.body.size();
-            metrics.response_body_bytes = res.response.body.size();
+            metrics.response_body_bytes = res.body.size();
 
             try
             {
@@ -202,121 +195,116 @@ class http_client
         return res;
     }
 
-    http_client_response get(std::string_view    path,
-                             const http_headers &headers = {})
+    response get(std::string_view path, const headers &headers = {})
     {
-        http_request req;
-        req.method  = http_method::get;
+        request req;
+        req.method  = method::get;
         req.path    = std::string(path);
         req.headers = headers;
-        return request(req);
+        return call(req);
     }
 
-    http_client_response post(std::string_view    path,
-                              std::string_view    body,
-                              std::string_view    content_type = "text/plain",
-                              const http_headers &headers      = {})
+    response post(std::string_view path,
+                  std::string_view body,
+                  std::string_view content_type = "text/plain",
+                  const headers   &headers      = {})
     {
-        http_request req;
-        req.method       = http_method::post;
+        request req;
+        req.method       = method::post;
         req.path         = std::string(path);
         req.headers      = headers;
         req.body         = std::string(body);
         req.content_type = std::string(content_type);
-        return request(req);
+        return call(req);
     }
 
-    http_client_response put(std::string_view    path,
-                             std::string_view    body,
-                             std::string_view    content_type = {},
-                             const http_headers &headers      = {})
+    response put(std::string_view path,
+                 std::string_view body,
+                 std::string_view content_type = {},
+                 const headers   &headers      = {})
     {
-        http_request req;
-        req.method       = http_method::put;
+        request req;
+        req.method       = method::put;
         req.path         = std::string(path);
         req.headers      = headers;
         req.body         = std::string(body);
         req.content_type = std::string(content_type);
-        return request(req);
+        return call(req);
     }
 
-    http_client_response patch(std::string_view    path,
-                               std::string_view    body,
-                               std::string_view    content_type = {},
-                               const http_headers &headers      = {})
+    response patch(std::string_view path,
+                   std::string_view body,
+                   std::string_view content_type = {},
+                   const headers   &headers      = {})
     {
-        http_request req;
-        req.method       = http_method::patch;
+        request req;
+        req.method       = method::patch;
         req.path         = std::string(path);
         req.headers      = headers;
         req.body         = std::string(body);
         req.content_type = std::string(content_type);
-        return request(req);
+        return call(req);
     }
 
-    http_client_response del(std::string_view    path,
-                             const http_headers &headers = {})
+    response del(std::string_view path, const headers &headers = {})
     {
-        http_request req;
-        req.method  = http_method::del;
+        request req;
+        req.method  = method::del;
         req.path    = std::string(path);
         req.headers = headers;
-        return request(req);
+        return call(req);
     }
 
-    http_client_response head(std::string_view    path,
-                              const http_headers &headers = {})
+    response head(std::string_view path, const headers &headers = {})
     {
-        http_request req;
-        req.method  = http_method::head;
+        request req;
+        req.method  = method::head;
         req.path    = std::string(path);
         req.headers = headers;
-        return request(req);
+        return call(req);
     }
 
-    http_client_response options(std::string_view    path,
-                                 const http_headers &headers = {})
+    response options(std::string_view path, const headers &headers = {})
     {
-        http_request req;
-        req.method  = http_method::options;
+        request req;
+        req.method  = method::options;
         req.path    = std::string(path);
         req.headers = headers;
-        return request(req);
+        return call(req);
     }
 
-    http_client_response post_json(std::string_view    path,
-                                   std::string_view    json_body,
-                                   const http_headers &headers = {})
+    response post_json(std::string_view path,
+                       std::string_view json_body,
+                       const headers   &headers = {})
     {
         return post(path, json_body, "application/json", headers);
     }
 
-    http_client_response post_text(std::string_view    path,
-                                   std::string_view    text_body,
-                                   const http_headers &headers = {})
+    response post_text(std::string_view path,
+                       std::string_view text_body,
+                       const headers   &headers = {})
     {
         return post(path, text_body, "text/plain", headers);
     }
 
-    http_client_response
-    post_binary(std::string_view    path,
-                std::string_view    binary_body,
-                std::string_view    content_type = "application/octet-stream",
-                const http_headers &headers      = {})
+    response
+    post_binary(std::string_view path,
+                std::string_view binary_body,
+                std::string_view content_type = "application/octet-stream",
+                const headers   &headers      = {})
     {
         return post(path, binary_body, content_type, headers);
     }
 
-    http_client_response put_json(std::string_view    path,
-                                  std::string_view    json_body,
-                                  const http_headers &headers = {})
+    response put_json(std::string_view path,
+                      std::string_view json_body,
+                      const headers   &headers = {})
     {
         return put(path, json_body, "application/json", headers);
     }
 
   private:
-    http_client_response _execute(const http_request &req,
-                                  const std::string  &full_path)
+    response _execute(const request &req, const std::string &full_path)
     {
         auto req_headers = detail::to_httplib_headers(req.headers);
 
@@ -330,31 +318,31 @@ class http_client
         httplib::Result res;
         switch(req.method)
         {
-            case http_method::get:
+            case method::get:
                 res = _client->Get(full_path.c_str(), req_headers);
                 break;
-            case http_method::post:
+            case method::post:
                 res = _client->Post(full_path.c_str(),
                                     req_headers,
                                     req.body.data(),
                                     req.body.size(),
                                     c_type);
                 break;
-            case http_method::put:
+            case method::put:
                 res = _client->Put(full_path.c_str(),
                                    req_headers,
                                    req.body.data(),
                                    req.body.size(),
                                    c_type);
                 break;
-            case http_method::patch:
+            case method::patch:
                 res = _client->Patch(full_path.c_str(),
                                      req_headers,
                                      req.body.data(),
                                      req.body.size(),
                                      c_type);
                 break;
-            case http_method::del:
+            case method::del:
                 if(req.body.empty())
                 {
                     res = _client->Delete(full_path.c_str(), req_headers);
@@ -367,10 +355,10 @@ class http_client
                                           c_type);
                 }
                 break;
-            case http_method::head:
+            case method::head:
                 res = _client->Head(full_path.c_str(), req_headers);
                 break;
-            case http_method::options:
+            case method::options:
                 res = _client->Options(full_path.c_str(), req_headers);
                 break;
             default:
@@ -384,22 +372,18 @@ class http_client
     }
 
     static std::optional<std::chrono::milliseconds>
-    _parse_retry_after(const http_headers &headers)
+    _parse_retry_after(const headers &headers)
     {
         std::string retry_after_str = headers.get("Retry-After");
         if(retry_after_str.empty())
-        {
             return std::nullopt;
-        }
 
         try
         {
             std::size_t pos     = 0;
             long long   seconds = std::stoll(retry_after_str, &pos);
             if(pos == retry_after_str.size() && seconds >= 0)
-            {
                 return std::chrono::milliseconds(seconds * 1000);
-            }
         }
         catch(...)
         {
@@ -408,13 +392,13 @@ class http_client
         return std::nullopt;
     }
 
-    static void _sleep_backoff(std::size_t                 attempt,
-                               const retry_policy         &policy,
-                               const http_client_response &res)
+    static void _sleep_backoff(std::size_t         attempt,
+                               const retry_policy &policy,
+                               const response     &res)
     {
         if(policy.respect_retry_after && res.transport_success)
         {
-            auto retry_after_ms = _parse_retry_after(res.response.headers);
+            auto retry_after_ms = _parse_retry_after(res.headers);
             if(retry_after_ms.has_value())
             {
                 auto delay = std::min(retry_after_ms.value(), policy.max_delay);
@@ -441,8 +425,8 @@ class http_client
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
     }
 
-    static void _set_client_timeout(httplib::Client    *client,
-                                    const http_timeout &timeout)
+    static void _set_client_timeout(httplib::Client *client,
+                                    const timeout   &timeout)
     {
         auto apply_timeout = [](std::chrono::milliseconds           ms,
                                 std::function<void(time_t, time_t)> setter) {
@@ -466,9 +450,9 @@ class http_client
 
     std::string                      _base_url;
     std::unique_ptr<httplib::Client> _client;
-    http_client_options              _options;
+    client_options                   _options;
 };
 
 } // namespace hj::http
 
-#endif // HJ_NET_HTTP_CLIENT_HPP
+#endif // HJ_NET_client_HPP

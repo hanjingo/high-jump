@@ -96,13 +96,13 @@ TEST_F(http_client_test, http_status_codes_and_ok_semantics)
                     res.status = 503;
                 });
 
-    hj::http::http_client client(_base_url);
+    hj::http::client client(_base_url);
 
     for(int code : {200, 201, 204})
     {
         auto res = client.get("/status/" + std::to_string(code));
         EXPECT_TRUE(res.transport_success);
-        EXPECT_EQ(res.response.status_code, code);
+        EXPECT_EQ(res.status_code, code);
         EXPECT_TRUE(res.ok());
         EXPECT_TRUE(static_cast<bool>(res));
     }
@@ -111,7 +111,7 @@ TEST_F(http_client_test, http_status_codes_and_ok_semantics)
     {
         auto res = client.get("/status/" + std::to_string(code));
         EXPECT_TRUE(res.transport_success);
-        EXPECT_EQ(res.response.status_code, code);
+        EXPECT_EQ(res.status_code, code);
         EXPECT_FALSE(res.ok());
         EXPECT_FALSE(static_cast<bool>(res));
     }
@@ -125,13 +125,13 @@ TEST_F(http_client_test, response_headers_parsing)
                     res.set_header("X-Server-Time", "2026-09-01");
                 });
 
-    hj::http::http_client client(_base_url);
-    auto                  res = client.get("/custom-headers");
+    hj::http::client client(_base_url);
+    auto             res = client.get("/custom-headers");
 
     ASSERT_TRUE(res.ok());
-    EXPECT_EQ(res.response.headers.get("X-Test"), "hello");
-    EXPECT_EQ(res.response.headers.get("x-test"), "hello");
-    EXPECT_EQ(res.response.headers.get("X-Server-Time"), "2026-09-01");
+    EXPECT_EQ(res.headers.get("X-Test"), "hello");
+    EXPECT_EQ(res.headers.get("x-test"), "hello");
+    EXPECT_EQ(res.headers.get("X-Server-Time"), "2026-09-01");
 }
 
 TEST_F(http_client_test, request_headers_transmission)
@@ -149,7 +149,7 @@ TEST_F(http_client_test, request_headers_transmission)
                     }
                 });
 
-    hj::http::http_client client(_base_url);
+    hj::http::client client(_base_url);
     auto res = client.get("/ping", {{"Authorization", "Bearer token-abc-123"}});
 
     EXPECT_TRUE(res.ok());
@@ -169,8 +169,8 @@ TEST_F(http_client_test, post_content_type_header_validation)
                      res.status    = 200;
                  });
 
-    hj::http::http_client client(_base_url);
-    auto                  res =
+    hj::http::client client(_base_url);
+    auto             res =
         client.post("/api/data", R"({"key":"value"})", "application/json");
 
     EXPECT_TRUE(res.ok());
@@ -185,12 +185,12 @@ TEST_F(http_client_test, empty_response_body_handling)
                        res.status = 204; // No Content
                    });
 
-    hj::http::http_client client(_base_url);
-    auto                  res = client.del("/resource/1");
+    hj::http::client client(_base_url);
+    auto             res = client.del("/resource/1");
 
     EXPECT_TRUE(res.ok());
-    EXPECT_EQ(res.response.status_code, 204);
-    EXPECT_TRUE(res.response.body.empty());
+    EXPECT_EQ(res.status_code, 204);
+    EXPECT_TRUE(res.body.empty());
 }
 
 TEST_F(http_client_test, read_timeout_behavior)
@@ -201,25 +201,25 @@ TEST_F(http_client_test, read_timeout_behavior)
                     res.status = 200;
                 });
 
-    hj::http::http_timeout timeout{std::chrono::milliseconds(100)};
-    hj::http::http_client  client(_base_url, timeout);
+    hj::http::timeout timeout{std::chrono::milliseconds(100)};
+    hj::http::client  client(_base_url, timeout);
 
     auto res = client.get("/slow-response");
 
     EXPECT_FALSE(res.transport_success);
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.error, hj::http::http_error::protocol);
+    EXPECT_EQ(res.error, hj::http::error::protocol);
 }
 
 TEST_F(http_client_test, dns_failure_handling)
 {
-    hj::http::http_client client("http://domain.invalid.nonexistent.test");
+    hj::http::client client("http://domain.invalid.nonexistent.test");
 
     auto res = client.get("/");
 
     EXPECT_FALSE(res.transport_success);
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.error, hj::http::http_error::connection);
+    EXPECT_EQ(res.error, hj::http::error::connection);
 }
 
 TEST_F(http_client_test, move_semantics_verification)
@@ -230,26 +230,26 @@ TEST_F(http_client_test, move_semantics_verification)
                     res.body   = "moved_ok";
                 });
 
-    hj::http::http_client client1(_base_url);
+    hj::http::client client1(_base_url);
 
-    hj::http::http_client client2(std::move(client1));
+    hj::http::client client2(std::move(client1));
 
     auto res2 = client2.get("/move-test");
     EXPECT_TRUE(res2.ok());
-    EXPECT_EQ(res2.response.body, "moved_ok");
+    EXPECT_EQ(res2.body, "moved_ok");
 
-    hj::http::http_client client3(_base_url);
+    hj::http::client client3(_base_url);
     client3 = std::move(client2);
 
     auto res3 = client3.get("/move-test");
     EXPECT_TRUE(res3.ok());
-    EXPECT_EQ(res3.response.body, "moved_ok");
+    EXPECT_EQ(res3.body, "moved_ok");
 }
 
 #ifdef HJ_ENABLE_HTTPS
 TEST(http_client_ssl_test, https_public_endpoint_connection)
 {
-    hj::http::http_client client("https://badssl.com");
+    hj::http::client client("https://badssl.com");
 
     tls_config tls;
     tls.verify_server_certificate = true;
@@ -270,22 +270,22 @@ TEST_F(http_client_test, metrics_logger_callback_test)
         res.body   = "pong";
     });
 
-    bool                           callback_called = false;
-    hj::http::http_request_metrics captured_metrics;
+    bool                      callback_called = false;
+    hj::http::request_metrics captured_metrics;
 
-    hj::http::http_client_options options;
-    options.logger = [&](const hj::http::http_request_metrics &m) {
+    hj::http::client_options options;
+    options.logger = [&](const hj::http::request_metrics &m) {
         callback_called  = true;
         captured_metrics = m;
     };
 
-    hj::http::http_client client(_base_url, std::move(options));
+    hj::http::client client(_base_url, std::move(options));
 
     auto res = client.get("/ping");
 
     EXPECT_TRUE(res.ok());
     EXPECT_TRUE(callback_called);
-    EXPECT_EQ(captured_metrics.method, hj::http::http_method::get);
+    EXPECT_EQ(captured_metrics.method, hj::http::method::get);
     EXPECT_EQ(captured_metrics.status_code, 200);
     EXPECT_EQ(captured_metrics.retry_count, 0);
     EXPECT_GE(captured_metrics.latency.count(), 20000);
@@ -311,15 +311,15 @@ TEST_F(http_client_test, retry_success_after_failures)
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10);
 
-    hj::http::http_client_options options;
+    hj::http::client_options options;
     options.retry = policy;
 
-    hj::http::http_client client(_base_url, std::move(options));
-    auto                  res = client.get("/retry-success");
+    hj::http::client client(_base_url, std::move(options));
+    auto             res = client.get("/retry-success");
 
     EXPECT_TRUE(res.ok());
-    EXPECT_EQ(res.response.status_code, 200);
-    EXPECT_EQ(res.response.body, "success_on_third");
+    EXPECT_EQ(res.status_code, 200);
+    EXPECT_EQ(res.body, "success_on_third");
     EXPECT_EQ(attempt_count.load(), 3);
 }
 
@@ -336,20 +336,20 @@ TEST_F(http_client_test, retry_exhausted_failure)
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10);
 
-    hj::http::http_client_options options;
+    hj::http::client_options options;
     options.retry = policy;
 
     std::size_t captured_retry_count = 0;
-    options.logger = [&](const hj::http::http_request_metrics &m) {
+    options.logger                   = [&](const hj::http::request_metrics &m) {
         captured_retry_count = m.retry_count;
     };
 
-    hj::http::http_client client(_base_url, std::move(options));
+    hj::http::client client(_base_url, std::move(options));
 
     auto res = client.get("/retry-fail");
 
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.response.status_code, 500);
+    EXPECT_EQ(res.status_code, 500);
     EXPECT_EQ(attempt_count.load(), 3);
 }
 
@@ -367,11 +367,11 @@ TEST_F(http_client_test, post_default_non_idempotent_no_retry)
     policy.initial_delay            = std::chrono::milliseconds(10);
     policy.retry_only_if_idempotent = true;
 
-    hj::http::http_client_options options;
+    hj::http::client_options options;
     options.retry = policy;
 
-    hj::http::http_client client(_base_url, std::move(options));
-    auto                  res = client.post("/post-retry", "data");
+    hj::http::client client(_base_url, std::move(options));
+    auto             res = client.post("/post-retry", "data");
 
     EXPECT_FALSE(res.ok());
     EXPECT_EQ(attempt_count.load(), 1);
@@ -396,18 +396,18 @@ TEST_F(http_client_test, post_forced_idempotent_allows_retry)
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10);
 
-    hj::http::http_client_options options;
+    hj::http::client_options options;
     options.retry = policy;
 
-    hj::http::http_client client(_base_url, std::move(options));
+    hj::http::client client(_base_url, std::move(options));
 
-    hj::http::http_request req;
-    req.method        = hj::http::http_method::post;
+    hj::http::request req;
+    req.method        = hj::http::method::post;
     req.path          = "/post-idempotent-retry";
     req.body          = "data";
     req.is_idempotent = true;
 
-    auto res = client.request(req);
+    auto res = client.call(req);
 
     EXPECT_TRUE(res.ok());
     EXPECT_EQ(attempt_count.load(), 3);
@@ -415,17 +415,17 @@ TEST_F(http_client_test, post_forced_idempotent_allows_retry)
 
 TEST_F(http_client_test, tls_error_no_retry)
 {
-    hj::http::http_timeout fast_timeout{std::chrono::milliseconds(50)};
+    hj::http::timeout fast_timeout{std::chrono::milliseconds(50)};
 
     hj::http::retry_policy policy;
     policy.max_retries   = 2;
     policy.initial_delay = std::chrono::milliseconds(10);
 
-    hj::http::http_client_options options;
+    hj::http::client_options options;
     options.timeout = fast_timeout;
     options.retry   = policy;
 
-    hj::http::http_client client("http://127.0.0.1:1", std::move(options));
+    hj::http::client client("http://127.0.0.1:1", std::move(options));
 
     auto start_time = std::chrono::steady_clock::now();
     auto res        = client.get("/");
@@ -434,7 +434,7 @@ TEST_F(http_client_test, tls_error_no_retry)
                           .count();
 
     EXPECT_FALSE(res.transport_success);
-    EXPECT_EQ(res.error, hj::http::http_error::connection);
+    EXPECT_EQ(res.error, hj::http::error::connection);
 
     EXPECT_LT(duration, 500);
 }
@@ -461,11 +461,11 @@ TEST_F(http_client_test, retry_after_header_respecting)
     policy.max_retries         = 1;
     policy.respect_retry_after = true;
 
-    hj::http::http_client_options options;
+    hj::http::client_options options;
     options.retry = policy;
 
-    hj::http::http_client client(_base_url, std::move(options));
-    auto                  res = client.get("/retry-after");
+    hj::http::client client(_base_url, std::move(options));
+    auto             res = client.get("/retry-after");
 
     auto end_time = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -498,25 +498,25 @@ TEST_F(http_client_test, concurrent_requests_timeout_isolation)
                 });
 
     auto future_a = std::async(std::launch::async, [&]() {
-        hj::http::http_client client_a(
+        hj::http::client client_a(
             _base_url,
-            hj::http::http_timeout{std::chrono::milliseconds(3000)});
-        hj::http::http_request req;
-        req.method  = hj::http::http_method::get;
+            hj::http::timeout{std::chrono::milliseconds(3000)});
+        hj::http::request req;
+        req.method  = hj::http::method::get;
         req.path    = "/sleep-1000ms";
-        req.timeout = hj::http::http_timeout{std::chrono::milliseconds(100)};
-        return client_a.request(req);
+        req.timeout = hj::http::timeout{std::chrono::milliseconds(100)};
+        return client_a.call(req);
     });
 
     auto future_b = std::async(std::launch::async, [&]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        hj::http::http_client client_b(
+        hj::http::client client_b(
             _base_url,
-            hj::http::http_timeout{std::chrono::milliseconds(3000)});
-        hj::http::http_request req;
-        req.method = hj::http::http_method::get;
+            hj::http::timeout{std::chrono::milliseconds(3000)});
+        hj::http::request req;
+        req.method = hj::http::method::get;
         req.path   = "/sleep-100ms";
-        return client_b.request(req);
+        return client_b.call(req);
     });
 
     auto res_a = future_a.get();
@@ -525,8 +525,8 @@ TEST_F(http_client_test, concurrent_requests_timeout_isolation)
     EXPECT_FALSE(res_a.transport_success);
 
     EXPECT_TRUE(res_b.transport_success);
-    EXPECT_EQ(res_b.response.status_code, 200);
-    EXPECT_EQ(res_b.response.body, "fast");
+    EXPECT_EQ(res_b.status_code, 200);
+    EXPECT_EQ(res_b.body, "fast");
 
     while(!slow_handler_done)
     {
@@ -568,16 +568,16 @@ TEST_F(http_client_test, query_parameters_transmission_and_parsing)
                     res.body   = "ok";
                 });
 
-    hj::http::http_client client(_base_url);
+    hj::http::client client(_base_url);
 
-    hj::http::http_request req;
-    req.method = hj::http::http_method::get;
+    hj::http::request req;
+    req.method = hj::http::method::get;
     req.path   = "/echo-query";
     req.query  = {{"name", "Harry Potter"},
                   {"q", "a+b"},
                   {"url", "https://example.com?a=1&b=2"}};
 
-    auto res = client.request(req);
+    auto res = client.call(req);
 
     EXPECT_TRUE(res.ok());
     EXPECT_EQ(received_name, "Harry Potter");

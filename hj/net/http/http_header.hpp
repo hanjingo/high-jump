@@ -49,7 +49,7 @@ enum class tls_version
     tls_1_3
 };
 
-enum class http_method
+enum class method
 {
     get,
     post,
@@ -60,7 +60,7 @@ enum class http_method
     options
 };
 
-enum class http_error
+enum class error
 {
     none = 0,
     connection,
@@ -79,25 +79,29 @@ enum class backoff_strategy
 
 struct case_insensitive_hash;
 struct case_insensitive_equal;
-struct http_timeout;
+struct timeout;
 struct proxy_config;
 struct tls_config;
 struct ssl_config;
-struct http_request_metrics;
-struct http_server_metrics;
-class http_headers;
-struct http_response;
-struct http_client_response;
+struct request_metrics;
+struct server_metrics;
+class headers;
+struct response;
 struct retry_policy;
-struct http_request;
+struct request;
 
-using logger_callback = std::function<void(const http_request_metrics &)>;
+using raw_err      = httplib::Error;
+using raw_result   = httplib::Result;
+using raw_request  = httplib::Request;
+using raw_response = httplib::Response;
+
+using logger_callback = std::function<void(const request_metrics &)>;
 using query_params    = std::vector<std::pair<std::string, std::string>>;
-using http_handler = std::function<void(const http_request &, http_response &)>;
+using handler         = std::function<void(const request &, response &)>;
 
-using exception_handler      = std::function<void(
-    const http_request &, http_response &, std::exception_ptr)>;
-using server_metrics_handler = std::function<void(const http_server_metrics &)>;
+using exception_handler =
+    std::function<void(const request &, response &, std::exception_ptr)>;
+using server_metrics_handler = std::function<void(const server_metrics &)>;
 
 struct case_insensitive_hash
 {
@@ -139,29 +143,29 @@ struct case_insensitive_equal
     }
 };
 
-struct http_timeout
+struct timeout
 {
     std::chrono::milliseconds connect{5000};
     std::chrono::milliseconds read{5000};
     std::chrono::milliseconds write{5000};
 
-    http_timeout(std::chrono::milliseconds timeout)
+    timeout(std::chrono::milliseconds timeout)
         : connect(timeout)
         , read(timeout)
         , write(timeout)
     {
     }
 
-    http_timeout(std::chrono::milliseconds conn_ms,
-                 std::chrono::milliseconds read_ms,
-                 std::chrono::milliseconds write_ms)
+    timeout(std::chrono::milliseconds conn_ms,
+            std::chrono::milliseconds read_ms,
+            std::chrono::milliseconds write_ms)
         : connect(conn_ms)
         , read(read_ms)
         , write(write_ms)
     {
     }
 
-    http_timeout() = default;
+    timeout() = default;
 };
 
 struct proxy_config
@@ -208,22 +212,22 @@ struct ssl_config
     std::function<void(SSL_CTX *)> ssl_ctx_callback;
 };
 
-struct http_request_metrics
+struct request_metrics
 {
-    http_method               method{http_method::get};
+    method                    method{method::get};
     std::string               url;
     int                       status_code{0};
     std::chrono::microseconds latency{0};
     std::size_t               retry_count{0};
-    http_error                error{http_error::none};
+    error                     error{error::none};
     std::string               error_message;
     std::size_t               request_body_bytes{0};
     std::size_t               response_body_bytes{0};
 };
 
-struct http_server_metrics
+struct server_metrics
 {
-    http_method               method{http_method::get};
+    method                    method{method::get};
     std::string               path;
     int                       status_code{200};
     std::chrono::microseconds latency{0};
@@ -232,7 +236,7 @@ struct http_server_metrics
     std::string               client_ip;
 };
 
-class http_headers
+class headers
 {
   public:
     using container_type = std::unordered_multimap<std::string,
@@ -240,10 +244,9 @@ class http_headers
                                                    case_insensitive_hash,
                                                    case_insensitive_equal>;
 
-    http_headers() = default;
+    headers() = default;
 
-    http_headers(
-        std::initializer_list<std::pair<std::string, std::string>> init)
+    headers(std::initializer_list<std::pair<std::string, std::string>> init)
     {
         for(const auto &[k, v] : init)
         {
@@ -301,25 +304,19 @@ class http_headers
     container_type _headers;
 };
 
-struct http_response
+struct response
 {
-    int          status_code{200};
-    std::string  body;
-    http_headers headers;
-};
+    int         status_code{200};
+    std::string body;
+    headers     headers;
 
-struct http_client_response
-{
     bool        transport_success{false};
-    http_error  error{http_error::none};
+    error       error{error::none};
     std::string error_message;
-
-    http_response response;
 
     [[nodiscard]] bool ok() const noexcept
     {
-        return transport_success && response.status_code >= 200
-               && response.status_code < 300;
+        return transport_success && status_code >= 200 && status_code < 300;
     }
 
     [[nodiscard]] explicit operator bool() const noexcept { return ok(); }
@@ -335,33 +332,31 @@ struct retry_policy
     bool retry_only_if_idempotent{true};
     bool respect_retry_after{true};
 
-    std::function<bool(const http_client_response &)> should_retry_fn{
-        [](const http_client_response &res) {
+    std::function<bool(const response &)> should_retry_fn{
+        [](const response &res) {
             if(!res.transport_success)
             {
-                return res.error == http_error::connection
-                       || res.error == http_error::protocol;
+                return res.error == error::connection
+                       || res.error == error::protocol;
             }
 
-            return res.response.status_code == 429
-                   || res.response.status_code == 500
-                   || res.response.status_code == 502
-                   || res.response.status_code == 503
-                   || res.response.status_code == 504;
+            return res.status_code == 429 || res.status_code == 500
+                   || res.status_code == 502 || res.status_code == 503
+                   || res.status_code == 504;
         }};
 };
 
-struct http_request
+struct request
 {
-    http_method  method{http_method::get};
-    std::string  path{"/"};
-    http_headers headers{};
-    std::string  body{};
-    std::string  content_type{};
-    std::string  client_ip{};
+    method      method{method::get};
+    std::string path{"/"};
+    headers     headers{};
+    std::string body{};
+    std::string content_type{};
+    std::string client_ip{};
 
-    query_params                query{};
-    std::optional<http_timeout> timeout{std::nullopt};
+    query_params           query{};
+    std::optional<timeout> timeout{std::nullopt};
 
     std::optional<retry_policy> retry{std::nullopt};
     std::optional<bool>         is_idempotent{std::nullopt};
@@ -379,9 +374,9 @@ struct http_request
             return true;
         }
 
-        return method == http_method::get || method == http_method::put
-               || method == http_method::del || method == http_method::head
-               || method == http_method::options;
+        return method == method::get || method == method::put
+               || method == method::del || method == method::head
+               || method == method::options;
     }
 };
 
@@ -416,9 +411,7 @@ inline std::string build_full_path(std::string_view    path,
                                    bool                sort_query = true)
 {
     if(query.empty())
-    {
         return std::string(path);
-    }
 
     std::string full_path(path);
     full_path += "?";
@@ -426,9 +419,8 @@ inline std::string build_full_path(std::string_view    path,
 
     auto append_param = [&](const std::string &k, const std::string &v) {
         if(!first)
-        {
             full_path += "&";
-        }
+
         full_path += url_encode(k) + "=" + url_encode(v);
         first = false;
     };
@@ -440,69 +432,64 @@ inline std::string build_full_path(std::string_view    path,
                   sorted_query.end(),
                   [](const auto &a, const auto &b) {
                       if(a.first != b.first)
-                      {
                           return a.first < b.first;
-                      }
+
                       return a.second < b.second;
                   });
         for(const auto &[k, v] : sorted_query)
-        {
             append_param(k, v);
-        }
     } else
     {
         for(const auto &[k, v] : query)
-        {
             append_param(k, v);
-        }
     }
 
     return full_path;
 }
 
-[[nodiscard]] inline std::string_view to_string(http_method m) noexcept
+[[nodiscard]] inline std::string_view to_string(method m) noexcept
 {
     switch(m)
     {
-        case http_method::get:
+        case method::get:
             return "GET";
-        case http_method::post:
+        case method::post:
             return "POST";
-        case http_method::put:
+        case method::put:
             return "PUT";
-        case http_method::patch:
+        case method::patch:
             return "PATCH";
-        case http_method::del:
+        case method::del:
             return "DELETE";
-        case http_method::head:
+        case method::head:
             return "HEAD";
-        case http_method::options:
+        case method::options:
             return "OPTIONS";
     }
     return "UNKNOWN";
 }
 
-inline http_request parse_httplib_request(const httplib::Request &raw_req)
+inline request parse_httplib_request(const raw_request &raw_req)
 {
-    http_request req;
+    request req;
     req.path      = raw_req.path;
     req.body      = raw_req.body;
     req.client_ip = raw_req.remote_addr;
 
     if(raw_req.method == "GET")
-        req.method = http_method::get;
+        req.method = method::get;
     else if(raw_req.method == "POST")
-        req.method = http_method::post;
+        req.method = method::post;
     else if(raw_req.method == "PUT")
-        req.method = http_method::put;
+        req.method = method::put;
     else if(raw_req.method == "PATCH")
-        req.method = http_method::patch;
+        req.method = method::patch;
     else if(raw_req.method == "DELETE")
-        req.method = http_method::del;
+        req.method = method::del;
     else if(raw_req.method == "HEAD")
-        req.method = http_method::head;
+        req.method = method::head;
     else if(raw_req.method == "OPTIONS")
-        req.method = http_method::options;
+        req.method = method::options;
 
     for(const auto &[k, v] : raw_req.headers)
     {
@@ -512,19 +499,17 @@ inline http_request parse_httplib_request(const httplib::Request &raw_req)
     }
 
     for(const auto &[k, v] : raw_req.params)
-    {
         req.query.emplace_back(k, v);
-    }
 
     return req;
 }
 
-static http_error to_http_error(httplib::Error err) noexcept
+static error to_error(raw_err err) noexcept
 {
     switch(err)
     {
         case httplib::Error::Success:
-            return http_error::none;
+            return error::none;
 
         case httplib::Error::Connection:
         case httplib::Error::BindIPAddress:
@@ -533,7 +518,7 @@ static http_error to_http_error(httplib::Error err) noexcept
         case httplib::Error::ConnectionClosed:
         case httplib::Error::Timeout:
         case httplib::Error::UnsupportedAddressFamily:
-            return http_error::connection;
+            return error::connection;
 
         case httplib::Error::Read:
         case httplib::Error::Write:
@@ -552,57 +537,52 @@ static http_error to_http_error(httplib::Error err) noexcept
         case httplib::Error::HTTPParsing:
         case httplib::Error::InvalidRangeHeader:
         case httplib::Error::UnsupportedMultipartBoundaryChars:
-            return http_error::protocol;
+            return error::protocol;
 
         case httplib::Error::Canceled:
-            return http_error::canceled;
+            return error::canceled;
 
         case httplib::Error::SSLConnection:
         case httplib::Error::SSLLoadingCerts:
         case httplib::Error::SSLServerVerification:
         case httplib::Error::SSLServerHostnameVerification:
         case httplib::Error::SSLPeerCouldBeClosed_:
-            return http_error::tls;
+            return error::tls;
 
         case httplib::Error::Unknown:
         default:
-            return http_error::unknown;
+            return error::unknown;
     }
 }
 
-static http_client_response parse_response(const httplib::Result &res)
+static response parse_response(const raw_result &res)
 {
-    http_client_response client_resp;
+    response client_resp;
     if(res)
     {
-        client_resp.transport_success    = true;
-        client_resp.response.status_code = res->status;
-        client_resp.response.body        = res->body;
-        client_resp.error                = http_error::none;
+        client_resp.transport_success = true;
+        client_resp.status_code       = res->status;
+        client_resp.body              = res->body;
+        client_resp.error             = error::none;
         for(const auto &header : res->headers)
-        {
-            client_resp.response.headers.append(header.first, header.second);
-        }
+            client_resp.headers.append(header.first, header.second);
     } else
     {
-        client_resp.transport_success    = false;
-        client_resp.response.status_code = 0;
-        client_resp.error                = to_http_error(res.error());
-        client_resp.error_message        = httplib::to_string(res.error());
+        client_resp.transport_success = false;
+        client_resp.status_code       = 0;
+        client_resp.error             = to_error(res.error());
+        client_resp.error_message     = httplib::to_string(res.error());
     }
     return client_resp;
 }
 
-inline void apply_response(const http_response &resp,
-                           httplib::Response   &raw_resp)
+inline void apply_response(const response &resp, raw_response &raw_resp)
 {
     raw_resp.status = resp.status_code != 0 ? resp.status_code : 200;
 
     std::string content_type = resp.headers.get("Content-Type");
     if(content_type.empty())
-    {
         content_type = "text/plain";
-    }
 
     raw_resp.set_content(resp.body, content_type.c_str());
     for(const auto &[k, v] : resp.headers)
@@ -612,13 +592,12 @@ inline void apply_response(const http_response &resp,
     }
 }
 
-static httplib::Headers to_httplib_headers(const http_headers &headers)
+static httplib::Headers to_httplib_headers(const headers &headers)
 {
     httplib::Headers h;
     for(const auto &[k, v] : headers)
-    {
         h.emplace(k, v);
-    }
+
     return h;
 }
 

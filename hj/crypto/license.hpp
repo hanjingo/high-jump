@@ -52,6 +52,7 @@
 #include <IOKit/IOKitLib.h>
 #include <IOKit/storage/IOMedia.h>
 #include <IOKit/storage/IOStorageDeviceCharacteristics.h>
+#include <sys/stat.h>
 
 #elif defined(__linux__)
 
@@ -739,8 +740,7 @@ inline std::optional<disk_identity> get_disk_identity_linux()
 #ifdef __APPLE__
 inline std::optional<disk_identity> get_disk_identity_macos()
 {
-    CFMutableDictionaryRef matching =
-        IOServiceMatching("IOBlockStorageDevice");
+    CFMutableDictionaryRef matching = IOServiceMatching("IOBlockStorageDevice");
 
     if(!matching)
         return std::nullopt;
@@ -748,10 +748,7 @@ inline std::optional<disk_identity> get_disk_identity_macos()
     io_iterator_t iterator = IO_OBJECT_NULL;
 
     const kern_return_t kr =
-        IOServiceGetMatchingServices(
-            kIOMainPortDefault,
-            matching,
-            &iterator);
+        IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator);
 
     if(kr != KERN_SUCCESS)
         return std::nullopt;
@@ -773,11 +770,10 @@ inline std::optional<disk_identity> get_disk_identity_macos()
         {
             char buffer[512] = {};
 
-            if(CFStringGetCString(
-                   static_cast<CFStringRef>(serial),
-                   buffer,
-                   sizeof(buffer),
-                   kCFStringEncodingUTF8))
+            if(CFStringGetCString(static_cast<CFStringRef>(serial),
+                                  buffer,
+                                  sizeof(buffer),
+                                  kCFStringEncodingUTF8))
             {
                 std::string value = trim(buffer);
 
@@ -798,9 +794,7 @@ inline std::optional<disk_identity> get_disk_identity_macos()
         return std::nullopt;
 
     std::sort(serials.begin(), serials.end());
-    serials.erase(
-        std::unique(serials.begin(), serials.end()),
-        serials.end());
+    serials.erase(std::unique(serials.begin(), serials.end()), serials.end());
 
     disk_identity result;
 
@@ -809,8 +803,7 @@ inline std::optional<disk_identity> get_disk_identity_macos()
         result.id     = serials.front();
         result.type   = "serial";
         result.stable = true;
-    }
-    else
+    } else
     {
         std::ostringstream identity;
 

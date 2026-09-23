@@ -143,6 +143,8 @@ class http_client
         _options.logger = std::move(cb);
     }
 
+    void set_timeout(http_timeout timeout) { _options.timeout = timeout; }
+
     http_client_response request(const http_request &req)
     {
         const auto start_time = std::chrono::steady_clock::now();

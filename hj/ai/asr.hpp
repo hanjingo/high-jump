@@ -287,6 +287,21 @@ class context
     context(const context &)      = delete;
     context &operator=(context &) = delete;
 
+    context(const std::string &model_path,
+            ctx_params_t       params = whisper_context_default_params())
+    {
+        if(model_path.empty())
+        {
+            throw std::invalid_argument("Model path is empty.");
+        }
+
+        _ctx = whisper_init_from_file_with_params(model_path.c_str(), params);
+        if(!_ctx)
+        {
+            throw std::runtime_error("Failed to load model.");
+        }
+    }
+
     context(context &&other) noexcept
         : _ctx{std::exchange(other._ctx, nullptr)}
     {

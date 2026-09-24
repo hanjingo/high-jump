@@ -60,31 +60,31 @@ TEST(http_server, route_convenience_methods)
     server
         .get("/get",
              [](const hj::http::request &, hj::http::response &res) {
-                 res.status_code = 200;
+                 res.status = 200;
              })
         .post("/post",
               [](const hj::http::request &, hj::http::response &res) {
-                  res.status_code = 200;
+                  res.status = 200;
               })
         .put("/put",
              [](const hj::http::request &, hj::http::response &res) {
-                 res.status_code = 200;
+                 res.status = 200;
              })
         .patch("/patch",
                [](const hj::http::request &, hj::http::response &res) {
-                   res.status_code = 200;
+                   res.status = 200;
                })
         .del("/del",
              [](const hj::http::request &, hj::http::response &res) {
-                 res.status_code = 200;
+                 res.status = 200;
              })
         .head("/head",
               [](const hj::http::request &, hj::http::response &res) {
-                  res.status_code = 200;
+                  res.status = 200;
               })
         .options("/options",
                  [](const hj::http::request &, hj::http::response &res) {
-                     res.status_code = 200;
+                     res.status = 200;
                  });
 
     SUCCEED();
@@ -98,8 +98,8 @@ TEST(http_server, generic_route_method)
                  "/patch_generic",
                  [](const hj::http::request &req, hj::http::response &res) {
                      EXPECT_EQ(req.method, hj::http::method::patch);
-                     res.status_code = 200;
-                     res.body        = "patched";
+                     res.status = 200;
+                     res.body   = "patched";
                  });
 
     SUCCEED();
@@ -111,8 +111,8 @@ TEST(http_server, start_and_stop_integration)
     server.patch("/resource",
                  [](const hj::http::request &req, hj::http::response &res) {
                      EXPECT_EQ(req.method, hj::http::method::patch);
-                     res.status_code = 200;
-                     res.body        = "patched_ok";
+                     res.status = 200;
+                     res.body   = "patched_ok";
                  });
 
     int             port = start_server_on_ephemeral_port(server);
@@ -297,8 +297,8 @@ TEST(http_server, full_request_parsing)
                     EXPECT_EQ(req.headers.get("X-Custom-Header"), "TestValue");
                     EXPECT_EQ(req.body, R"({"name":"foo"})");
 
-                    res.status_code = 201;
-                    res.body        = R"({"status":"created"})";
+                    res.status = 201;
+                    res.body   = R"({"status":"created"})";
                 });
 
     int              port = start_server_on_ephemeral_port(server);
@@ -317,19 +317,19 @@ TEST(http_server, full_request_parsing)
     server.stop();
 }
 
-TEST(http_server, status_codes)
+TEST(http_server, statuss)
 {
     hj::http::server server;
 
-    const std::vector<int> status_codes =
+    const std::vector<int> statuss =
         {200, 201, 204, 301, 400, 401, 403, 404, 409, 429, 500, 503};
 
-    for(int code : status_codes)
+    for(int code : statuss)
     {
         std::string path = "/status/" + std::to_string(code);
         server.get(path,
                    [code](const hj::http::request &, hj::http::response &res) {
-                       res.status_code = code;
+                       res.status = code;
                        if(code != 204)
                        {
                            res.body = "status_" + std::to_string(code);
@@ -340,7 +340,7 @@ TEST(http_server, status_codes)
     int             port = start_server_on_ephemeral_port(server);
     httplib::Client client("127.0.0.1", port);
 
-    for(int code : status_codes)
+    for(int code : statuss)
     {
         std::string path = "/status/" + std::to_string(code);
         auto        res  = client.Get(path);
@@ -411,7 +411,7 @@ TEST(http_server, advanced_header_tests)
 //         [&](const hj::http::request &req, hj::http::response &res) {
 //             total_requests.fetch_add(1, std::memory_order_relaxed);
 //             std::string client_id = req.headers.get("X-Client-ID");
-//             res.status_code       = 200;
+//             res.status       = 200;
 //             res.body              = "echo:" + client_id;
 //         });
 
@@ -476,14 +476,14 @@ TEST(http_server, custom_exception_handler)
         }
         catch(const invalid_param_error &e)
         {
-            resp.status_code = 400;
+            resp.status = 400;
             resp.headers.set("Content-Type", "application/json");
             resp.body =
                 R"({"code": 40001, "msg": ")" + std::string(e.what()) + R"("})";
         }
         catch(const std::exception &e)
         {
-            resp.status_code = 500;
+            resp.status = 500;
             resp.headers.set("Content-Type", "application/json");
             resp.body = R"({"code": 50000, "msg": "Custom Server Error"})";
         }
@@ -529,8 +529,8 @@ TEST(http_server, basic_metrics_collection)
 
     server.post("/data",
                 [](const hj::http::request &req, hj::http::response &res) {
-                    res.status_code = 201;
-                    res.body        = "created";
+                    res.status = 201;
+                    res.body   = "created";
                 });
 
     int             port = start_server_on_ephemeral_port(server);
@@ -543,7 +543,7 @@ TEST(http_server, basic_metrics_collection)
     EXPECT_TRUE(metric_collected.load());
     EXPECT_EQ(recorded_metrics.method, hj::http::method::post);
     EXPECT_EQ(recorded_metrics.path, "/data");
-    EXPECT_EQ(recorded_metrics.status_code, 201);
+    EXPECT_EQ(recorded_metrics.status, 201);
     EXPECT_EQ(recorded_metrics.request_body_bytes,
               std::string("hello server").size());
     EXPECT_EQ(recorded_metrics.response_body_bytes,
@@ -696,14 +696,14 @@ TEST(http_server, industrial_high_pressure)
 
     server.get("/small",
                [](const hj::http::request &, hj::http::response &res) {
-                   res.status_code = 200;
-                   res.body        = "OK";
+                   res.status = 200;
+                   res.body   = "OK";
                });
 
     server.post("/large",
                 [](const hj::http::request &req, hj::http::response &res) {
-                    res.status_code = 200;
-                    res.body = "echo_size:" + std::to_string(req.body.size());
+                    res.status = 200;
+                    res.body   = "echo_size:" + std::to_string(req.body.size());
                 });
 
     int port = start_server_on_ephemeral_port(server);

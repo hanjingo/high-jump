@@ -263,7 +263,6 @@ static std::error_code validate_file_path(const std::filesystem::path &filename)
 
 } // namespace detail
 
-// 导出 backend_guard 到 hj::llama 命名空间
 using backend_guard = detail::backend_guard;
 
 static inline bool supports_mmap()
@@ -1120,9 +1119,7 @@ class context
             context_params_t             params = default_params())
     {
         if(auto err = init(std::move(m), params); err)
-        {
             throw std::runtime_error("hj::llama::context: " + err.message());
-        }
     }
 
     context(const model &m, context_params_t params = default_params())
@@ -1348,8 +1345,9 @@ struct sampler_options
     float temperature = 0.8f;
 
     // Extended Temperature / XTC
-    float temp_ext_delta    = 0.0f;
-    float temp_ext_exponent = 0.0f;
+    // float temperature_ext          = 0.0f;
+    float temperature_ext_delta    = 0.0f;
+    float temperature_ext_exponent = 0.0f;
 
     // Grammar & Constraints
     const vocab_t *vocab        = nullptr;
@@ -1366,8 +1364,9 @@ struct sampler_options
         if(!std::isfinite(penalty_repeat) || !std::isfinite(penalty_frequency)
            || !std::isfinite(penalty_present) || !std::isfinite(top_p)
            || !std::isfinite(min_p) || !std::isfinite(typical_p)
-           || !std::isfinite(temperature) || !std::isfinite(temp_ext_delta)
-           || !std::isfinite(temp_ext_exponent))
+           || !std::isfinite(temperature)
+           || !std::isfinite(temperature_ext_delta)
+           || !std::isfinite(temperature_ext_exponent))
         {
             return make_error_code(error_code::invalid_argument);
         }
@@ -1384,7 +1383,7 @@ struct sampler_options
         if(temperature < 0.0f)
             return make_error_code(error_code::invalid_argument);
 
-        if(temp_ext_delta < 0.0f)
+        if(temperature_ext_delta < 0.0f)
             return make_error_code(error_code::invalid_argument);
 
         if(top_k < 0)
@@ -1515,11 +1514,11 @@ class sampler
         if(opts.temperature > 0.0f && !opts.force_greedy)
         {
             llama_sampler *tm = nullptr;
-            if(opts.temp_ext_delta > 0.0f)
+            if(opts.temperature_ext_delta > 0.0f)
             {
                 tm = llama_sampler_init_temp_ext(opts.temperature,
-                                                 opts.temp_ext_delta,
-                                                 opts.temp_ext_exponent);
+                                                 opts.temperature_ext_delta,
+                                                 opts.temperature_ext_exponent);
             } else
             {
                 tm = llama_sampler_init_temp(opts.temperature);

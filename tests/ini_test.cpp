@@ -297,3 +297,58 @@ TEST(ini, error_handling)
         ASSERT_EQ(ec, hj::ini_errc::parser_error);
     }
 }
+
+TEST(ini, range_for)
+{
+    hj::ini ini;
+
+    ini.put("model1/name", "model1");
+    ini.put("model1/path", "/tmp/model1");
+
+    ini.put("model2/name", "model2");
+    ini.put("model2/path", "/tmp/model2");
+
+    int count = 0;
+
+    for(const auto &item : ini)
+    {
+        ++count;
+
+        ASSERT_FALSE(item.first.empty());
+        ASSERT_FALSE(item.second.empty());
+    }
+
+    ASSERT_EQ(count, 2);
+}
+
+TEST(ini, const_range_for)
+{
+    hj::ini ini;
+
+    ini.put("model1/name", "model1");
+    ini.put("model2/name", "model2");
+
+    const hj::ini &config = ini;
+
+    int count = 0;
+
+    for(const auto &item : config)
+    {
+        ++count;
+
+        ASSERT_FALSE(item.first.empty());
+    }
+
+    ASSERT_EQ(count, 2);
+}
+
+TEST(ini, iterator)
+{
+    hj::ini ini;
+
+    ini.put("model1/name", "model1");
+    ini.put("model2/name", "model2");
+    ini.put("model3/name", "model3");
+
+    ASSERT_EQ(std::distance(ini.begin(), ini.end()), 3);
+}

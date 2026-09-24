@@ -5,16 +5,30 @@
 #include <filesystem>
 #include <thread>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 class FilePathTest : public ::testing::Test
 {
   protected:
     void SetUp() override
     {
         namespace fs = std::filesystem;
+
         auto temp_base =
             fs::temp_directory_path() / "high_jump" / "filepath_test_sandbox";
+
+#if defined(_WIN32)
+        auto process_id = static_cast<unsigned long long>(::_getpid());
+#else
+        auto process_id = static_cast<unsigned long long>(::getpid());
+#endif
+
         std::string unique_name =
-            "test_"
+            "test_" + std::to_string(process_id) + "_"
             + std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count())
             + "_"

@@ -352,7 +352,7 @@ class server
                                            response          &resp,
                                            std::exception_ptr ep)
     {
-        resp.status_code = 500;
+        resp.status = 500;
         resp.headers.set("Content-Type", "application/json");
 
         resp.body = R"({"error": "Internal Server Error"})";
@@ -460,14 +460,14 @@ class server
     {
         auto     start_time = std::chrono::steady_clock::now();
         response resp;
-        resp.status_code = 200;
+        resp.status = 200;
         try
         {
             handler(req, resp);
         }
         catch(...)
         {
-            resp.status_code = 500;
+            resp.status = 500;
             if(_exception_handler)
             {
                 try
@@ -495,10 +495,9 @@ class server
         if(_metrics_handler)
         {
             server_metrics metrics;
-            metrics.method = req.method;
-            metrics.path   = req.path;
-            metrics.status_code =
-                resp.status_code != 0 ? resp.status_code : 200;
+            metrics.method              = req.method;
+            metrics.path                = req.path;
+            metrics.status              = resp.status != 0 ? resp.status : 200;
             metrics.latency             = duration;
             metrics.request_body_bytes  = req.body.size();
             metrics.response_body_bytes = resp.body.size();
@@ -811,7 +810,7 @@ class http_ssl_server
                                            response          &resp,
                                            std::exception_ptr ep)
     {
-        resp.status_code = 500;
+        resp.status = 500;
         resp.headers.set("Content-Type", "application/json");
         resp.body = R"({"error": "Internal Server Error"})";
     }
@@ -909,14 +908,14 @@ class http_ssl_server
     {
         auto     start_time = std::chrono::steady_clock::now();
         response resp;
-        resp.status_code = 200;
+        resp.status = 200;
         try
         {
             handler(req, resp);
         }
         catch(...)
         {
-            resp.status_code = 500;
+            resp.status = 500;
             if(_exception_handler)
             {
                 try
@@ -944,10 +943,9 @@ class http_ssl_server
         if(_metrics_handler)
         {
             server_metrics metrics;
-            metrics.method = req.method;
-            metrics.path   = req.path;
-            metrics.status_code =
-                resp.status_code != 0 ? resp.status_code : 200;
+            metrics.method              = req.method;
+            metrics.path                = req.path;
+            metrics.status              = resp.status != 0 ? resp.status : 200;
             metrics.latency             = duration;
             metrics.request_body_bytes  = req.body.size();
             metrics.response_body_bytes = resp.body.size();

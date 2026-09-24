@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <thread>
@@ -45,7 +46,7 @@ class http_client_test : public ::testing::Test
     std::thread     _server_thread;
 };
 
-TEST_F(http_client_test, http_status_codes_and_ok_semantics)
+TEST_F(http_client_test, http_statuss_and_ok_semantics)
 {
     _server.Get("/status/200",
                 [](const httplib::Request &, httplib::Response &res) {
@@ -102,7 +103,7 @@ TEST_F(http_client_test, http_status_codes_and_ok_semantics)
     {
         auto res = client.get("/status/" + std::to_string(code));
         EXPECT_TRUE(res.transport_success);
-        EXPECT_EQ(res.status_code, code);
+        EXPECT_EQ(res.status, code);
         EXPECT_TRUE(res.ok());
         EXPECT_TRUE(static_cast<bool>(res));
     }
@@ -111,7 +112,7 @@ TEST_F(http_client_test, http_status_codes_and_ok_semantics)
     {
         auto res = client.get("/status/" + std::to_string(code));
         EXPECT_TRUE(res.transport_success);
-        EXPECT_EQ(res.status_code, code);
+        EXPECT_EQ(res.status, code);
         EXPECT_FALSE(res.ok());
         EXPECT_FALSE(static_cast<bool>(res));
     }
@@ -189,7 +190,7 @@ TEST_F(http_client_test, empty_response_body_handling)
     auto             res = client.del("/resource/1");
 
     EXPECT_TRUE(res.ok());
-    EXPECT_EQ(res.status_code, 204);
+    EXPECT_EQ(res.status, 204);
     EXPECT_TRUE(res.body.empty());
 }
 
@@ -286,7 +287,7 @@ TEST_F(http_client_test, metrics_logger_callback_test)
     EXPECT_TRUE(res.ok());
     EXPECT_TRUE(callback_called);
     EXPECT_EQ(captured_metrics.method, hj::http::method::get);
-    EXPECT_EQ(captured_metrics.status_code, 200);
+    EXPECT_EQ(captured_metrics.status, 200);
     EXPECT_EQ(captured_metrics.retry_count, 0);
     EXPECT_GE(captured_metrics.latency.count(), 20000);
 }
@@ -318,7 +319,7 @@ TEST_F(http_client_test, retry_success_after_failures)
     auto             res = client.get("/retry-success");
 
     EXPECT_TRUE(res.ok());
-    EXPECT_EQ(res.status_code, 200);
+    EXPECT_EQ(res.status, 200);
     EXPECT_EQ(res.body, "success_on_third");
     EXPECT_EQ(attempt_count.load(), 3);
 }
@@ -349,7 +350,7 @@ TEST_F(http_client_test, retry_exhausted_failure)
     auto res = client.get("/retry-fail");
 
     EXPECT_FALSE(res.ok());
-    EXPECT_EQ(res.status_code, 500);
+    EXPECT_EQ(res.status, 500);
     EXPECT_EQ(attempt_count.load(), 3);
 }
 
@@ -407,7 +408,7 @@ TEST_F(http_client_test, post_forced_idempotent_allows_retry)
     req.body          = "data";
     req.is_idempotent = true;
 
-    auto res = client.call(req);
+    auto res = client.send(req);
 
     EXPECT_TRUE(res.ok());
     EXPECT_EQ(attempt_count.load(), 3);
@@ -505,7 +506,7 @@ TEST_F(http_client_test, concurrent_requests_timeout_isolation)
         req.method  = hj::http::method::get;
         req.path    = "/sleep-1000ms";
         req.timeout = hj::http::timeout{std::chrono::milliseconds(100)};
-        return client_a.call(req);
+        return client_a.send(req);
     });
 
     auto future_b = std::async(std::launch::async, [&]() {
@@ -516,7 +517,7 @@ TEST_F(http_client_test, concurrent_requests_timeout_isolation)
         hj::http::request req;
         req.method = hj::http::method::get;
         req.path   = "/sleep-100ms";
-        return client_b.call(req);
+        return client_b.send(req);
     });
 
     auto res_a = future_a.get();
@@ -525,7 +526,7 @@ TEST_F(http_client_test, concurrent_requests_timeout_isolation)
     EXPECT_FALSE(res_a.transport_success);
 
     EXPECT_TRUE(res_b.transport_success);
-    EXPECT_EQ(res_b.status_code, 200);
+    EXPECT_EQ(res_b.status, 200);
     EXPECT_EQ(res_b.body, "fast");
 
     while(!slow_handler_done)
@@ -577,12 +578,323 @@ TEST_F(http_client_test, query_parameters_transmission_and_parsing)
                   {"q", "a+b"},
                   {"url", "https://example.com?a=1&b=2"}};
 
-    auto res = client.call(req);
+    auto res = client.send(req);
 
     EXPECT_TRUE(res.ok());
     EXPECT_EQ(received_name, "Harry Potter");
     EXPECT_EQ(received_q, "a+b");
     EXPECT_EQ(received_url, "https://example.com?a=1&b=2");
+}
+
+TEST_F(http_client_test, stream_get_basic)
+{
+    constexpr std::string_view body = "hello streaming world";
+
+    _server.Get("/stream",
+                [](const httplib::Request &, httplib::Response &res) {
+                    res.status = 200;
+                    res.set_header("Content-Type", "text/plain");
+                    res.body = "hello streaming world";
+                });
+
+    hj::http::client client(_base_url);
+
+    std::string received;
+
+    hj::http::stream_options options;
+    options.on_data = [&](std::string_view data) {
+        received.append(data.data(), data.size());
+        return true;
+    };
+
+    hj::http::request req;
+    req.method = hj::http::method::get;
+    req.path   = "/stream";
+
+    auto res = client.stream(req, options);
+
+    EXPECT_TRUE(res.transport_success);
+    EXPECT_TRUE(res.ok());
+    EXPECT_EQ(res.status, 200);
+    EXPECT_EQ(received, body);
+    EXPECT_EQ(res.body_bytes, body.size());
+}
+
+TEST_F(http_client_test, stream_multiple_chunks_preserves_data)
+{
+    const std::string chunk1 = "chunk-1:";
+    const std::string chunk2 = "chunk-2:";
+    const std::string chunk3 = "chunk-3";
+
+    const std::string expected = chunk1 + chunk2 + chunk3;
+
+    _server.Get("/stream-chunks",
+                [&](const httplib::Request &, httplib::Response &res) {
+                    res.status = 200;
+
+                    res.set_chunked_content_provider(
+                        "text/plain",
+                        [&](std::size_t, httplib::DataSink &sink) {
+                            if(!sink.write(chunk1.data(), chunk1.size()))
+                                return false;
+
+                            if(!sink.write(chunk2.data(), chunk2.size()))
+                                return false;
+
+                            if(!sink.write(chunk3.data(), chunk3.size()))
+                                return false;
+
+                            sink.done();
+                            return true;
+                        });
+                });
+
+    hj::http::client client(_base_url);
+
+    std::string received;
+    std::size_t callback_count = 0;
+
+    hj::http::stream_options options;
+    options.on_data = [&](std::string_view data) {
+        ++callback_count;
+        received.append(data.data(), data.size());
+        return true;
+    };
+
+    hj::http::request req;
+    req.method = hj::http::method::get;
+    req.path   = "/stream-chunks";
+
+    auto res = client.stream(req, options);
+
+    EXPECT_TRUE(res.ok());
+    EXPECT_EQ(res.status, 200);
+
+    EXPECT_EQ(received, expected);
+    EXPECT_EQ(res.body_bytes, expected.size());
+
+    EXPECT_GT(callback_count, 0u);
+}
+
+TEST_F(http_client_test, stream_response_headers)
+{
+    _server.Get("/stream-headers",
+                [](const httplib::Request &, httplib::Response &res) {
+                    res.status = 200;
+                    res.set_header("Content-Type", "text/event-stream");
+                    res.set_header("X-Request-ID", "stream-123");
+
+                    res.body = "data: hello\n\n";
+                });
+
+    hj::http::client client(_base_url);
+
+    std::string received;
+
+    hj::http::stream_options options;
+    options.on_data = [&](std::string_view data) {
+        received.append(data.data(), data.size());
+        return true;
+    };
+
+    hj::http::request req;
+    req.method = hj::http::method::get;
+    req.path   = "/stream-headers";
+
+    auto res = client.stream(req, options);
+
+    ASSERT_TRUE(res.ok());
+
+    EXPECT_EQ(res.status, 200);
+    EXPECT_EQ(res.headers.get("Content-Type"), "text/event-stream");
+    EXPECT_EQ(res.headers.get("content-type"), "text/event-stream");
+    EXPECT_EQ(res.headers.get("X-Request-ID"), "stream-123");
+
+    EXPECT_EQ(received, "data: hello\n\n");
+}
+
+TEST_F(http_client_test, stream_callback_can_cancel)
+{
+    std::atomic<std::size_t> callback_count{0};
+    std::string              received;
+
+    _server.Get("/stream-cancel",
+                [](const httplib::Request &, httplib::Response &res) {
+                    res.status = 200;
+
+                    res.set_chunked_content_provider(
+                        "text/plain",
+                        [](std::size_t, httplib::DataSink &sink) {
+                            for(int i = 0; i < 100; ++i)
+                            {
+                                const std::string chunk =
+                                    "chunk-" + std::to_string(i) + "\n";
+
+                                if(!sink.write(chunk.data(), chunk.size()))
+                                    return false;
+                            }
+
+                            sink.done();
+                            return true;
+                        });
+                });
+
+    hj::http::client client(_base_url);
+
+    hj::http::stream_options options;
+    options.on_data = [&](std::string_view data) {
+        ++callback_count;
+        received.append(data.data(), data.size());
+
+        return false;
+    };
+
+    hj::http::request req;
+    req.method = hj::http::method::get;
+    req.path   = "/stream-cancel";
+
+    auto res = client.stream(req, options);
+
+    EXPECT_FALSE(res.ok());
+    EXPECT_FALSE(res.transport_success);
+
+    EXPECT_EQ(res.error, hj::http::error::canceled);
+
+    EXPECT_GT(callback_count.load(), 0u);
+    EXPECT_FALSE(received.empty());
+}
+
+TEST_F(http_client_test, stream_http_error_status)
+{
+    _server.Get("/stream-500",
+                [](const httplib::Request &, httplib::Response &res) {
+                    res.status = 500;
+                    res.body   = "internal error";
+                });
+
+    hj::http::client client(_base_url);
+
+    std::string received;
+
+    hj::http::stream_options options;
+    options.on_data = [&](std::string_view data) {
+        received.append(data.data(), data.size());
+        return true;
+    };
+
+    hj::http::request req;
+    req.method = hj::http::method::get;
+    req.path   = "/stream-500";
+
+    auto res = client.stream(req, options);
+
+    EXPECT_TRUE(res.transport_success);
+
+    EXPECT_EQ(res.status, 500);
+    EXPECT_FALSE(res.ok());
+
+    EXPECT_EQ(res.error, hj::http::error::none);
+
+    EXPECT_EQ(received, "internal error");
+    EXPECT_EQ(res.body_bytes, std::string("internal error").size());
+}
+
+TEST_F(http_client_test, stream_requires_callback)
+{
+    hj::http::client client(_base_url);
+
+    hj::http::request req;
+    req.method = hj::http::method::get;
+    req.path   = "/stream";
+
+    hj::http::stream_options options;
+
+    auto res = client.stream(req, options);
+
+    EXPECT_FALSE(res.transport_success);
+    EXPECT_FALSE(res.ok());
+
+    EXPECT_EQ(res.error, hj::http::error::unknown);
+    EXPECT_EQ(res.error_message, "stream on_data callback is empty");
+}
+
+TEST_F(http_client_test, stream_post_request)
+{
+    const std::string request_body  = "request-body";
+    const std::string response_body = "stream-response";
+
+    std::string received_body;
+
+    _server.Post("/stream-post",
+                 [&](const httplib::Request &req, httplib::Response &res) {
+                     EXPECT_EQ(req.body, request_body);
+
+                     res.status = 200;
+                     res.body   = response_body;
+                 });
+
+    hj::http::client client(_base_url);
+
+    hj::http::stream_options options;
+    options.on_data = [&](std::string_view data) {
+        received_body.append(data.data(), data.size());
+        return true;
+    };
+
+    hj::http::request req;
+    req.method       = hj::http::method::post;
+    req.path         = "/stream-post";
+    req.body         = request_body;
+    req.content_type = "text/plain";
+
+    auto res = client.stream(req, options);
+
+    EXPECT_TRUE(res.ok());
+    EXPECT_EQ(res.status, 200);
+    EXPECT_EQ(received_body, response_body);
+    EXPECT_EQ(res.body_bytes, response_body.size());
+}
+
+TEST_F(http_client_test, stream_does_not_retry)
+{
+    std::atomic<int> request_count{0};
+
+    _server.Get("/stream-no-retry",
+                [&](const httplib::Request &, httplib::Response &res) {
+                    ++request_count;
+                    res.status = 500;
+                    res.body   = "failure";
+                });
+
+    hj::http::retry_policy policy;
+    policy.max_retries   = 3;
+    policy.initial_delay = std::chrono::milliseconds(1);
+
+    hj::http::client_options client_options;
+    client_options.retry = policy;
+
+    hj::http::client client(_base_url, std::move(client_options));
+
+    hj::http::request req;
+    req.method = hj::http::method::get;
+    req.path   = "/stream-no-retry";
+
+    std::string received;
+
+    hj::http::stream_options options;
+    options.on_data = [&](std::string_view data) {
+        received.append(data.data(), data.size());
+        return true;
+    };
+
+    auto res = client.stream(req, options);
+
+    EXPECT_FALSE(res.ok());
+    EXPECT_TRUE(res.transport_success);
+    EXPECT_EQ(res.status, 500);
+
+    EXPECT_EQ(request_count.load(), 1);
+    EXPECT_EQ(received, "failure");
 }
 
 } // namespace hj::test

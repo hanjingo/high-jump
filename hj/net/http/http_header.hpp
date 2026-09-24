@@ -216,7 +216,7 @@ struct request_metrics
 {
     hj::http::method          method{hj::http::method::get};
     std::string               url;
-    int                       status_code{0};
+    int                       status{0};
     std::chrono::microseconds latency{0};
     std::size_t               retry_count{0};
     hj::http::error           error{hj::http::error::none};
@@ -229,7 +229,7 @@ struct server_metrics
 {
     hj::http::method          method{hj::http::method::get};
     std::string               path;
-    int                       status_code{200};
+    int                       status{200};
     std::chrono::microseconds latency{0};
     std::size_t               request_body_bytes{0};
     std::size_t               response_body_bytes{0};
@@ -306,7 +306,7 @@ class headers
 
 struct response
 {
-    int               status_code{200};
+    int               status{200};
     std::string       body;
     hj::http::headers headers;
 
@@ -316,7 +316,7 @@ struct response
 
     [[nodiscard]] bool ok() const noexcept
     {
-        return transport_success && status_code >= 200 && status_code < 300;
+        return transport_success && status >= 200 && status < 300;
     }
 
     [[nodiscard]] explicit operator bool() const noexcept { return ok(); }
@@ -340,9 +340,8 @@ struct retry_policy
                        || res.error == error::protocol;
             }
 
-            return res.status_code == 429 || res.status_code == 500
-                   || res.status_code == 502 || res.status_code == 503
-                   || res.status_code == 504;
+            return res.status == 429 || res.status == 500 || res.status == 502
+                   || res.status == 503 || res.status == 504;
         }};
 };
 
@@ -378,6 +377,38 @@ struct request
                || method == method::del || method == method::head
                || method == method::options;
     }
+};
+
+struct stream_options
+{
+    /**
+     * @brief Called for each received response body chunk.
+     *
+     * @param data Response body chunk. The view is valid only during
+     *             the callback invocation and must not be retained.
+     *
+     * @return true to continue receiving; false to cancel.
+     */
+    std::function<bool(std::string_view)> on_data;
+};
+
+struct stream_response
+{
+    int     status{0};
+    headers headers;
+
+    bool        transport_success{false};
+    error       error{error::none};
+    std::string error_message;
+
+    std::size_t body_bytes{0};
+
+    [[nodiscard]] bool ok() const noexcept
+    {
+        return transport_success && status >= 200 && status < 300;
+    }
+
+    [[nodiscard]] explicit operator bool() const noexcept { return ok(); }
 };
 
 namespace detail
@@ -561,7 +592,7 @@ static response parse_response(const raw_result &res)
     if(res)
     {
         client_resp.transport_success = true;
-        client_resp.status_code       = res->status;
+        client_resp.status            = res->status;
         client_resp.body              = res->body;
         client_resp.error             = error::none;
         for(const auto &header : res->headers)
@@ -569,7 +600,7 @@ static response parse_response(const raw_result &res)
     } else
     {
         client_resp.transport_success = false;
-        client_resp.status_code       = 0;
+        client_resp.status            = 0;
         client_resp.error             = to_error(res.error());
         client_resp.error_message     = httplib::to_string(res.error());
     }
@@ -578,7 +609,7 @@ static response parse_response(const raw_result &res)
 
 inline void apply_response(const response &resp, raw_response &raw_resp)
 {
-    raw_resp.status = resp.status_code != 0 ? resp.status_code : 200;
+    raw_resp.status = resp.status != 0 ? resp.status : 200;
 
     std::string content_type = resp.headers.get("Content-Type");
     if(content_type.empty())

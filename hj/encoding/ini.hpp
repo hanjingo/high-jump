@@ -246,6 +246,42 @@ class ini
 
     bool empty() const noexcept { return _tree.empty(); }
 
+    using value_type = boost::property_tree::ptree::value_type;
+
+    using iterator       = boost::property_tree::ptree::iterator;
+    using const_iterator = boost::property_tree::ptree::const_iterator;
+
+    using reverse_iterator = boost::property_tree::ptree::reverse_iterator;
+
+    using const_reverse_iterator =
+        boost::property_tree::ptree::const_reverse_iterator;
+
+    size_t size() const noexcept { return _tree.size(); }
+
+    iterator begin() noexcept { return _tree.begin(); }
+
+    iterator end() noexcept { return _tree.end(); }
+
+    const_iterator begin() const noexcept { return _tree.begin(); }
+
+    const_iterator end() const noexcept { return _tree.end(); }
+
+    const_iterator cbegin() const noexcept { return _tree.begin(); }
+
+    const_iterator cend() const noexcept { return _tree.end(); }
+
+    reverse_iterator rbegin() noexcept { return _tree.rbegin(); }
+
+    reverse_iterator rend() noexcept { return _tree.rend(); }
+
+    const_reverse_iterator rbegin() const noexcept { return _tree.rbegin(); }
+
+    const_reverse_iterator rend() const noexcept { return _tree.rend(); }
+
+    const_reverse_iterator crbegin() const noexcept { return _tree.rbegin(); }
+
+    const_reverse_iterator crend() const noexcept { return _tree.rend(); }
+
     static std::optional<ini> parse(std::string_view text,
                                     std::error_code &ec) noexcept
     {

@@ -107,11 +107,18 @@ class client
             _client->set_ca_cert_path(ca_path, ca_dir);
         }
 
-        if(!config.client_cert_path.empty() && !config.client_key_path.empty())
+        if(!config.ca_cert_path.empty() || !config.ca_cert_dir.empty())
         {
-            _client->set_client_cert_path(config.client_cert_path.c_str(),
-                                          config.client_key_path.c_str());
+            const char *ca_path = config.ca_cert_path.empty()
+                                      ? nullptr
+                                      : config.ca_cert_path.c_str();
+            const char *ca_dir  = config.ca_cert_dir.empty()
+                                      ? nullptr
+                                      : config.ca_cert_dir.c_str();
+
+            _client->set_ca_cert_path(ca_path, ca_dir);
         }
+
         return true;
 #else
         return false;
@@ -139,9 +146,7 @@ class client
         _options.logger = std::move(cb);
     }
 
-    void set_timeout(timeout timeout) { _options.timeout = timeout; }
-
-    response call(const request &req)
+    response send(const request &req)
     {
         const auto start_time = std::chrono::steady_clock::now();
         const auto policy     = req.retry.value_or(_options.retry);
@@ -176,7 +181,7 @@ class client
             request_metrics metrics;
             metrics.method              = req.method;
             metrics.url                 = _base_url + full_path;
-            metrics.status_code         = res.status_code;
+            metrics.status              = res.status;
             metrics.latency             = latency;
             metrics.retry_count         = attempt - 1;
             metrics.error               = res.error;
@@ -197,13 +202,47 @@ class client
         return res;
     }
 
+    stream_response stream(const request &req, const stream_options &options)
+    {
+        const auto start_time = std::chrono::steady_clock::now();
+
+        auto result = _execute_stream(req, options);
+
+        if(_options.logger)
+        {
+            request_metrics metrics;
+            metrics.method = req.method;
+            metrics.url =
+                _base_url + detail::build_full_path(req.path, req.query);
+            metrics.status = result.status;
+            metrics.latency =
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - start_time);
+            metrics.retry_count         = 0;
+            metrics.error               = result.error;
+            metrics.error_message       = result.error_message;
+            metrics.request_body_bytes  = req.body.size();
+            metrics.response_body_bytes = result.body_bytes;
+
+            try
+            {
+                _options.logger(metrics);
+            }
+            catch(...)
+            {
+            }
+        }
+
+        return result;
+    }
+
     response get(std::string_view path, const headers &headers = {})
     {
         request req;
         req.method  = method::get;
         req.path    = std::string(path);
         req.headers = headers;
-        return call(req);
+        return send(req);
     }
 
     response post(std::string_view path,
@@ -217,7 +256,7 @@ class client
         req.headers      = headers;
         req.body         = std::string(body);
         req.content_type = std::string(content_type);
-        return call(req);
+        return send(req);
     }
 
     response put(std::string_view path,
@@ -231,7 +270,7 @@ class client
         req.headers      = headers;
         req.body         = std::string(body);
         req.content_type = std::string(content_type);
-        return call(req);
+        return send(req);
     }
 
     response patch(std::string_view path,
@@ -245,7 +284,7 @@ class client
         req.headers      = headers;
         req.body         = std::string(body);
         req.content_type = std::string(content_type);
-        return call(req);
+        return send(req);
     }
 
     response del(std::string_view path, const headers &headers = {})
@@ -254,7 +293,7 @@ class client
         req.method  = method::del;
         req.path    = std::string(path);
         req.headers = headers;
-        return call(req);
+        return send(req);
     }
 
     response head(std::string_view path, const headers &headers = {})
@@ -263,7 +302,7 @@ class client
         req.method  = method::head;
         req.path    = std::string(path);
         req.headers = headers;
-        return call(req);
+        return send(req);
     }
 
     response options(std::string_view path, const headers &headers = {})
@@ -272,7 +311,7 @@ class client
         req.method  = method::options;
         req.path    = std::string(path);
         req.headers = headers;
-        return call(req);
+        return send(req);
     }
 
     response post_json(std::string_view path,
@@ -371,6 +410,91 @@ class client
             _set_client_timeout(_client.get(), _options.timeout);
 
         return detail::parse_response(res);
+    }
+
+    stream_response _execute_stream(const request        &req,
+                                    const stream_options &options)
+    {
+        stream_response result;
+        if(!options.on_data)
+        {
+            result.error         = error::unknown;
+            result.error_message = "stream on_data callback is empty";
+            return result;
+        }
+
+        const std::string full_path =
+            detail::build_full_path(req.path, req.query);
+        const auto req_headers = detail::to_httplib_headers(req.headers);
+        const auto timeout     = req.timeout.value_or(_options.timeout);
+        _set_client_timeout(_client.get(), timeout);
+        std::size_t              body_bytes = 0;
+        httplib::ContentReceiver receiver   = [&](const char *data,
+                                                  std::size_t size) {
+            body_bytes += size;
+            return options.on_data(std::string_view(data, size));
+        };
+
+        httplib::Result res;
+        const char     *content_type =
+            req.content_type.empty() ? "text/plain" : req.content_type.c_str();
+        switch(req.method)
+        {
+            case method::get:
+                res = _client->Get(full_path.c_str(),
+                                   req_headers,
+                                   std::move(receiver));
+                break;
+
+            case method::post:
+                res = _client->Post(full_path.c_str(),
+                                    req_headers,
+                                    req.body,
+                                    content_type,
+                                    std::move(receiver));
+                break;
+
+            case method::put:
+                res = _client->Put(full_path.c_str(),
+                                   req_headers,
+                                   req.body,
+                                   content_type,
+                                   std::move(receiver));
+                break;
+
+            case method::patch:
+                res = _client->Patch(full_path.c_str(),
+                                     req_headers,
+                                     req.body,
+                                     content_type,
+                                     std::move(receiver));
+                break;
+
+            default:
+                result.error         = error::unsupported;
+                result.error_message = "HTTP method does not support streaming";
+                if(req.timeout.has_value())
+                    _set_client_timeout(_client.get(), _options.timeout);
+                return result;
+        }
+
+        if(req.timeout.has_value())
+            _set_client_timeout(_client.get(), _options.timeout);
+
+        result.body_bytes = body_bytes;
+        if(!res)
+        {
+            result.error         = detail::to_error(res.error());
+            result.error_message = httplib::to_string(res.error());
+            return result;
+        }
+
+        result.transport_success = true;
+        result.status            = res->status;
+        for(const auto &[key, value] : res->headers)
+            result.headers.append(key, value);
+
+        return result;
     }
 
     static std::optional<std::chrono::milliseconds>

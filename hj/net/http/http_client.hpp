@@ -56,9 +56,9 @@ namespace hj::http
 
 struct client_options
 {
-    timeout         timeout{};
-    retry_policy    retry{};
-    logger_callback logger{nullptr};
+    hj::http::timeout timeout{};
+    retry_policy      retry{};
+    logger_callback   logger{nullptr};
 };
 
 class client
@@ -73,9 +73,11 @@ class client
     }
 
     explicit client(const std::string &base_url,
-                    timeout            timeout,
+                    hj::http::timeout  timeout,
                     retry_policy       retry = {})
-        : client(base_url, client_options{timeout, std::move(retry), nullptr})
+        : client(base_url,
+                 client_options{
+                     hj::http::timeout{timeout}, std::move(retry), nullptr})
     {
     }
 

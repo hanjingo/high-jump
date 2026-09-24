@@ -214,12 +214,12 @@ struct ssl_config
 
 struct request_metrics
 {
-    method                    method{method::get};
+    hj::http::method          method{hj::http::method::get};
     std::string               url;
     int                       status_code{0};
     std::chrono::microseconds latency{0};
     std::size_t               retry_count{0};
-    error                     error{error::none};
+    hj::http::error           error{hj::http::error::none};
     std::string               error_message;
     std::size_t               request_body_bytes{0};
     std::size_t               response_body_bytes{0};
@@ -227,7 +227,7 @@ struct request_metrics
 
 struct server_metrics
 {
-    method                    method{method::get};
+    hj::http::method          method{hj::http::method::get};
     std::string               path;
     int                       status_code{200};
     std::chrono::microseconds latency{0};
@@ -306,13 +306,13 @@ class headers
 
 struct response
 {
-    int         status_code{200};
-    std::string body;
-    headers     headers;
+    int               status_code{200};
+    std::string       body;
+    hj::http::headers headers;
 
-    bool        transport_success{false};
-    error       error{error::none};
-    std::string error_message;
+    bool            transport_success{false};
+    hj::http::error error{hj::http::error::none};
+    std::string     error_message;
 
     [[nodiscard]] bool ok() const noexcept
     {
@@ -348,15 +348,15 @@ struct retry_policy
 
 struct request
 {
-    method      method{method::get};
-    std::string path{"/"};
-    headers     headers{};
-    std::string body{};
-    std::string content_type{};
-    std::string client_ip{};
+    hj::http::method  method{hj::http::method::get};
+    std::string       path{"/"};
+    hj::http::headers headers{};
+    std::string       body{};
+    std::string       content_type{};
+    std::string       client_ip{};
 
-    query_params           query{};
-    std::optional<timeout> timeout{std::nullopt};
+    query_params                     query{};
+    std::optional<hj::http::timeout> timeout{std::nullopt};
 
     std::optional<retry_policy> retry{std::nullopt};
     std::optional<bool>         is_idempotent{std::nullopt};

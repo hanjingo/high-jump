@@ -394,12 +394,12 @@ struct stream_options
 
 struct stream_response
 {
-    int     status{0};
-    headers headers;
+    int               status{0};
+    hj::http::headers headers;
 
-    bool        transport_success{false};
-    error       error{error::none};
-    std::string error_message;
+    bool            transport_success{false};
+    hj::http::error error{error::none};
+    std::string     error_message;
 
     std::size_t body_bytes{0};
 

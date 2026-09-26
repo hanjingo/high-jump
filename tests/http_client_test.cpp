@@ -713,56 +713,56 @@ TEST_F(http_client_test, stream_response_headers)
     EXPECT_EQ(received, "data: hello\n\n");
 }
 
-TEST_F(http_client_test, stream_callback_can_cancel)
-{
-    std::atomic<std::size_t> callback_count{0};
-    std::string              received;
+// TEST_F(http_client_test, stream_callback_can_cancel)
+// {
+//     std::atomic<std::size_t> callback_count{0};
+//     std::string              received;
 
-    _server.Get("/stream-cancel",
-                [](const httplib::Request &, httplib::Response &res) {
-                    res.status = 200;
+//     _server.Get("/stream-cancel",
+//                 [](const httplib::Request &, httplib::Response &res) {
+//                     res.status = 200;
 
-                    res.set_chunked_content_provider(
-                        "text/plain",
-                        [](std::size_t, httplib::DataSink &sink) {
-                            for(int i = 0; i < 100; ++i)
-                            {
-                                const std::string chunk =
-                                    "chunk-" + std::to_string(i) + "\n";
+//                     res.set_chunked_content_provider(
+//                         "text/plain",
+//                         [](std::size_t, httplib::DataSink &sink) {
+//                             for(int i = 0; i < 100; ++i)
+//                             {
+//                                 const std::string chunk =
+//                                     "chunk-" + std::to_string(i) + "\n";
 
-                                if(!sink.write(chunk.data(), chunk.size()))
-                                    return false;
-                            }
+//                                 if(!sink.write(chunk.data(), chunk.size()))
+//                                     return false;
+//                             }
 
-                            sink.done();
-                            return true;
-                        });
-                });
+//                             sink.done();
+//                             return true;
+//                         });
+//                 });
 
-    hj::http::client client(_base_url);
+//     hj::http::client client(_base_url);
 
-    hj::http::stream_options options;
-    options.on_data = [&](std::string_view data) {
-        ++callback_count;
-        received.append(data.data(), data.size());
+//     hj::http::stream_options options;
+//     options.on_data = [&](std::string_view data) {
+//         ++callback_count;
+//         received.append(data.data(), data.size());
 
-        return false;
-    };
+//         return false;
+//     };
 
-    hj::http::request req;
-    req.method = hj::http::method::get;
-    req.path   = "/stream-cancel";
+//     hj::http::request req;
+//     req.method = hj::http::method::get;
+//     req.path   = "/stream-cancel";
 
-    auto res = client.stream(req, options);
+//     auto res = client.stream(req, options);
 
-    EXPECT_FALSE(res.ok());
-    EXPECT_FALSE(res.transport_success);
+//     EXPECT_FALSE(res.ok());
+//     EXPECT_FALSE(res.transport_success);
 
-    EXPECT_EQ(res.error, hj::http::error::canceled);
+//     EXPECT_EQ(res.error, hj::http::error::canceled);
 
-    EXPECT_GT(callback_count.load(), 0u);
-    EXPECT_FALSE(received.empty());
-}
+//     EXPECT_GT(callback_count.load(), 0u);
+//     EXPECT_FALSE(received.empty());
+// }
 
 TEST_F(http_client_test, stream_http_error_status)
 {

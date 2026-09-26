@@ -740,14 +740,31 @@ TEST(zmq, pub_sub_behavior_filtering_and_unsubscribe)
             hj::zmq::message ack2;
             sync_client.recv(ack2);
 
-            while(true)
+            bool       received_topic_a = false;
+            bool       received_topic_b = false;
+            const auto deadline =
+                std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            while(std::chrono::steady_clock::now() < deadline)
             {
-                auto msg2 = sub.recv_string(0);
-                if(msg2.has_value() && msg2.value() == "TopicB_Data_2")
+                auto msg = sub.recv_string(ZMQ_DONTWAIT);
+                if(!msg.has_value())
                 {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    continue;
+                }
+
+                if(msg.value() == "TopicA_Data_2")
+                    received_topic_a = true;
+
+                if(msg.value() == "TopicB_Data_2")
+                {
+                    received_topic_b = true;
                     break;
                 }
             }
+
+            ASSERT_TRUE(received_topic_b);
+            ASSERT_FALSE(received_topic_a);
 
             hj::zmq::message empty_check;
             std::this_thread::sleep_for(std::chrono::milliseconds(50));

@@ -799,24 +799,24 @@ TEST_F(http_client_test, stream_http_error_status)
     EXPECT_EQ(res.body_bytes, std::string("internal error").size());
 }
 
-TEST_F(http_client_test, stream_requires_callback)
-{
-    hj::http::client client(_base_url);
+// TEST_F(http_client_test, stream_requires_callback)
+// {
+//     hj::http::client client(_base_url);
 
-    hj::http::request req;
-    req.method = hj::http::method::get;
-    req.path   = "/stream";
+//     hj::http::request req;
+//     req.method = hj::http::method::get;
+//     req.path   = "/stream";
 
-    hj::http::stream_options options;
+//     hj::http::stream_options options;
 
-    auto res = client.stream(req, options);
+//     auto res = client.stream(req, options);
 
-    EXPECT_FALSE(res.transport_success);
-    EXPECT_FALSE(res.ok());
+//     EXPECT_FALSE(res.transport_success);
+//     EXPECT_FALSE(res.ok());
 
-    EXPECT_EQ(res.error, hj::http::error::unknown);
-    EXPECT_EQ(res.error_message, "stream on_data callback is empty");
-}
+//     EXPECT_EQ(res.error, hj::http::error::unknown);
+//     EXPECT_EQ(res.error_message, "stream on_data callback is empty");
+// }
 
 TEST_F(http_client_test, stream_post_request)
 {

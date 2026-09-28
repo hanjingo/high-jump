@@ -566,7 +566,7 @@ jobs:
        github.ref == 'refs/heads/v1.x')
     
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -699,33 +699,33 @@ jobs:
         
         echo "=== Package upload completed ==="
 
-    - name: Create GitHub Release (for tags)
-      if: github.ref_type == 'tag'
-      uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        files: |
-          packages/high-jump-source-${{ env.VERSION }}.tar.gz
-          packages/high-jump-source-${{ env.VERSION }}.zip
-          packages/high-jump-source-${{ env.VERSION }}.tar.gz.sha256
-          packages/high-jump-source-${{ env.VERSION }}.zip.sha256
-        body: |
-          ## High Jump ${{ env.VERSION }}
+    # - name: Create GitHub Release (for tags)
+    #   if: github.ref_type == 'tag'
+    #   uses: softprops/action-gh-release@v1
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #   with:
+    #     files: |
+    #       packages/high-jump-source-${{ env.VERSION }}.tar.gz
+    #       packages/high-jump-source-${{ env.VERSION }}.zip
+    #       packages/high-jump-source-${{ env.VERSION }}.tar.gz.sha256
+    #       packages/high-jump-source-${{ env.VERSION }}.zip.sha256
+    #     body: |
+    #       ## High Jump ${{ env.VERSION }}
           
-          ### Source Code Packages
-          - `high-jump-source-${{ env.VERSION }}.tar.gz` - Source code archive (Linux/macOS)
-          - `high-jump-source-${{ env.VERSION }}.zip` - Source code archive (Windows)
-          - SHA256 checksums are provided for verification
+    #       ### Source Code Packages
+    #       - `high-jump-source-${{ env.VERSION }}.tar.gz` - Source code archive (Linux/macOS)
+    #       - `high-jump-source-${{ env.VERSION }}.zip` - Source code archive (Windows)
+    #       - SHA256 checksums are provided for verification
           
-          ### Build Status
-          - ✅ Linux Build: ${{ needs.build-linux.result }}
-          - ✅ macOS Build: ${{ needs.build-macos.result }}  
-          - ✅ Windows Build: ${{ needs.build-windows.result }}
+    #       ### Build Status
+    #       - ✅ Linux Build: ${{ needs.build-linux.result }}
+    #       - ✅ macOS Build: ${{ needs.build-macos.result }}  
+    #       - ✅ Windows Build: ${{ needs.build-windows.result }}
           
-          Generated from commit: ${{ github.sha }}
-        draft: false
-        prerelease: ${{ contains(env.VERSION, 'beta') || contains(env.VERSION, 'alpha') || contains(env.VERSION, 'rc') }}
+    #       Generated from commit: ${{ github.sha }}
+    #     draft: false
+    #     prerelease: ${{ contains(env.VERSION, 'beta') || contains(env.VERSION, 'alpha') || contains(env.VERSION, 'rc') }}
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4

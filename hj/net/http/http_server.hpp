@@ -802,7 +802,8 @@ class http_ssl_server
 
     SSL_CTX *ssl_context() noexcept
     {
-        return _server ? _server->ssl_context() : nullptr;
+        return _server ? static_cast<SSL_CTX *>(_server->tls_context())
+                       : nullptr;
     }
 
   private:
@@ -975,7 +976,7 @@ class http_ssl_server
         if(!_server)
             throw std::runtime_error("SSLServer instance is null");
 
-        SSL_CTX *ctx = _server->ssl_context();
+        SSL_CTX *ctx = static_cast<SSL_CTX *>(_server->tls_context());
         if(!ctx)
             throw std::runtime_error(
                 "Failed to acquire SSL_CTX from SSLServer");

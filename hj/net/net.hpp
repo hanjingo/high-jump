@@ -5,7 +5,7 @@
 #include <hj/net/grpc.hpp>
 #endif
 
-#ifdef HJ_ENABLE_HTTP
+#if defined(HJ_ENABLE_HTTP) || defined(HJ_ENABLE_HTTPS)
 #include <hj/net/http.hpp>
 #endif
 

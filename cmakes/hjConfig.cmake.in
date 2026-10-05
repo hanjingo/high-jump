@@ -20,11 +20,11 @@ endmacro()
 # Core dependencies (always required)
 find_package(Boost REQUIRED COMPONENTS 
     system
-    filesystem 
-    algorithm
-    stacktrace_basic
-    coroutine2
+    filesystem
+    program_options
     context
+    thread
+    ${BOOST_STACKTRACE_COMPONENT}
 )
 list(APPEND hj_LIBRARIES ${Boost_LIBRARIES})
 

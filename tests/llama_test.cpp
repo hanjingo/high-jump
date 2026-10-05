@@ -80,6 +80,11 @@ void make_writable(const std::filesystem::path &p)
 
 TEST(llama_model, load_success_and_failure_preserves_old)
 {
+    auto params = hj::llama::model::default_params();
+}
+
+TEST(llama_model, load_success_and_failure_preserves_old)
+{
     LOAD_FIXTURE_OR_SKIP(m);
     ASSERT_NE(m.data(), nullptr);
 

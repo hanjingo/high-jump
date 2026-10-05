@@ -1468,10 +1468,12 @@ class sampler
            && (opts.penalty_repeat != 1.0f || opts.penalty_frequency != 0.0f
                || opts.penalty_present != 0.0f))
         {
-            auto *p = llama_sampler_init_penalties(opts.penalty_last_n,
-                                                   opts.penalty_repeat,
-                                                   opts.penalty_frequency,
-                                                   opts.penalty_present);
+            auto *p =
+                llama_sampler_init_penalties(llama_vocab_n_tokens(opts.vocab),
+                                             opts.penalty_last_n,
+                                             opts.penalty_repeat,
+                                             opts.penalty_frequency,
+                                             opts.penalty_present);
             if(!p)
                 return make_error_code(error_code::sampler_init_failed);
             llama_sampler_chain_add(chain.get(), p);

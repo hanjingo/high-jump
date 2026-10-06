@@ -78,9 +78,68 @@ void make_writable(const std::filesystem::path &p)
 // 1. Model Tests
 // ============================================================================
 
-TEST(llama_model, load_success_and_failure_preserves_old)
+TEST(llama_model, default_params)
 {
+    // model params
     auto params = hj::llama::model::default_params();
+    EXPECT_EQ(params.devices, nullptr);
+    EXPECT_EQ(params.tensor_buft_overrides, nullptr);
+    EXPECT_EQ(params.n_gpu_layers, -1);
+    EXPECT_EQ(params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+    EXPECT_EQ(params.load_mode, LLAMA_LOAD_MODE_AUTO);
+    EXPECT_EQ(params.lazy_mode, LLAMA_LAZY_MODE_AUTO);
+    EXPECT_EQ(params.main_gpu, 0);
+    EXPECT_EQ(params.tensor_split, nullptr);
+    EXPECT_EQ(params.progress_callback, nullptr);
+    EXPECT_EQ(params.progress_callback_user_data, nullptr);
+    EXPECT_EQ(params.kv_overrides, nullptr);
+    EXPECT_FALSE(params.vocab_only);
+    EXPECT_FALSE(params.check_tensors);
+    EXPECT_TRUE(params.use_extra_bufts);
+    EXPECT_FALSE(params.no_host);
+    EXPECT_FALSE(params.no_alloc);
+    EXPECT_FALSE(params.load_mtp);
+
+    // context params
+    auto ctx_params = hj::llama::context::default_params();
+    EXPECT_EQ(ctx_params.n_ctx, 512);
+    EXPECT_EQ(ctx_params.n_batch, 2048);
+    EXPECT_EQ(ctx_params.n_ubatch, 512);
+    EXPECT_EQ(ctx_params.n_seq_max, 1);
+    EXPECT_EQ(ctx_params.n_rs_seq, 0);
+    EXPECT_EQ(ctx_params.n_outputs_max, 0);
+    EXPECT_EQ(ctx_params.n_outputs_max_per_seq, 1);
+    EXPECT_EQ(ctx_params.n_threads, 4);
+    EXPECT_EQ(ctx_params.n_threads_batch, 4);
+    EXPECT_EQ(ctx_params.ctx_type, LLAMA_CONTEXT_TYPE_DEFAULT);
+    EXPECT_EQ(ctx_params.rope_scaling_type,
+              LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED);
+    EXPECT_EQ(ctx_params.pooling_type, LLAMA_POOLING_TYPE_UNSPECIFIED);
+    EXPECT_EQ(ctx_params.attention_type, LLAMA_ATTENTION_TYPE_UNSPECIFIED);
+    EXPECT_EQ(ctx_params.flash_attn_type, LLAMA_FLASH_ATTN_TYPE_AUTO);
+    EXPECT_EQ(ctx_params.rope_freq_base, 0.0);
+    EXPECT_EQ(ctx_params.rope_freq_scale, 0.0);
+    EXPECT_EQ(ctx_params.yarn_ext_factor, -1);
+    EXPECT_EQ(ctx_params.yarn_attn_factor, -1);
+    EXPECT_EQ(ctx_params.yarn_beta_fast, -1);
+    EXPECT_EQ(ctx_params.yarn_beta_slow, -1);
+    EXPECT_EQ(ctx_params.yarn_orig_ctx, 0);
+    EXPECT_EQ(ctx_params.defrag_thold, -1);
+    EXPECT_EQ(ctx_params.cb_eval, nullptr);
+    EXPECT_EQ(ctx_params.cb_eval_user_data, nullptr);
+    // EXPECT_EQ(ctx_params.type_k, 0);
+    // EXPECT_EQ(ctx_params.type_v, 0);
+    EXPECT_EQ(ctx_params.abort_callback, nullptr);
+    EXPECT_EQ(ctx_params.abort_callback_data, nullptr);
+    EXPECT_FALSE(ctx_params.embeddings);
+    EXPECT_TRUE(ctx_params.offload_kqv);
+    EXPECT_TRUE(ctx_params.no_perf);
+    EXPECT_TRUE(ctx_params.op_offload);
+    EXPECT_TRUE(ctx_params.swa_full);
+    EXPECT_FALSE(ctx_params.kv_unified);
+    EXPECT_EQ(ctx_params.samplers, nullptr);
+    EXPECT_EQ(ctx_params.n_samplers, 0);
+    EXPECT_EQ(ctx_params.ctx_other, nullptr);
 }
 
 TEST(llama_model, load_success_and_failure_preserves_old)
@@ -384,11 +443,11 @@ TEST(llama_context, decode_logits_and_embedding)
     (void) embd;
 }
 
-TEST(llama_sampler, greedy_sampler)
-{
-    hj::llama::sampler smpl = hj::llama::sampler::greedy();
-    EXPECT_NE(smpl.data(), nullptr);
-}
+// TEST(llama_sampler, greedy_sampler)
+// {
+//     hj::llama::sampler smpl = hj::llama::sampler::greedy();
+//     EXPECT_NE(smpl.data(), nullptr);
+// }
 
 TEST(llama_sampler, custom_options_chaining)
 {
@@ -438,8 +497,9 @@ TEST(llama_sampler, sample_accept_reset_workflow)
     hj::llama::sampler smpl = hj::llama::sampler::greedy();
 
     // Sample token
-    hj::llama::token_t sampled = smpl.sample(ctx, b.size() - 1, err);
-    EXPECT_FALSE(err);
+    ASSERT_FALSE(tokens.empty());
+    hj::llama::token_t sampled = smpl.sample(ctx, -1, err);
+    ASSERT_FALSE(err);
     EXPECT_GE(sampled, 0);
 
     // Accept token
@@ -452,16 +512,16 @@ TEST(llama_sampler, sample_accept_reset_workflow)
 
 TEST(llama_sampler, move_semantics)
 {
+    hj::llama::backend_guard backend;
+
     hj::llama::sampler smpl1    = hj::llama::sampler::greedy();
     auto              *raw_smpl = smpl1.data();
     ASSERT_NE(raw_smpl, nullptr);
 
-    // Move constructor
     hj::llama::sampler smpl2(std::move(smpl1));
     EXPECT_EQ(smpl2.data(), raw_smpl);
     EXPECT_EQ(smpl1.data(), nullptr);
 
-    // Move assignment
     hj::llama::sampler smpl3;
     smpl3 = std::move(smpl2);
     EXPECT_EQ(smpl3.data(), raw_smpl);

@@ -1329,7 +1329,8 @@ struct sampler_options
 {
     // Penalties
     int32_t penalty_last_n    = 64;
-    float   penalty_repeat    = 0.0f;
+    // 1.0 disables repetition penalty and is the neutral default.
+    float   penalty_repeat    = 1.0f;
     float   penalty_frequency = 0.0f;
     float   penalty_present   = 0.0f;
 
@@ -1390,6 +1391,12 @@ struct sampler_options
             return make_error_code(error_code::invalid_argument);
 
         if(penalty_last_n < 0)
+            return make_error_code(error_code::invalid_argument);
+
+        const bool penalties_enabled =
+            penalty_repeat != 1.0f || penalty_frequency != 0.0f
+            || penalty_present != 0.0f;
+        if(penalties_enabled && !vocab)
             return make_error_code(error_code::invalid_argument);
 
         return make_error_code(error_code::success);

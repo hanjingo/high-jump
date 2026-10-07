@@ -1,0 +1,67 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+*.user
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# cmake
+build
+build-*
+bin
+bins
+lib
+libs
+install
+
+# vscode
+.vscode
+
+# vs
+*.user
+out
+CMakeSettings.json
+.vs
+
+# vcpkg
+vcpkg
+vcpkg_installed
+tools/vcpkg
+
+# vim
+*.swo
+*.swp
+
+# macos
+.DS_Store
+
+# 3rd
+3rd/*
+!3rd/CMakeLists.txt

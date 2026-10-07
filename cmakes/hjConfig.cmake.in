@@ -7,7 +7,8 @@ check_required_components(hj)
 # Auto find high-jump dependencies and set hj_LIBRARIES
 # ==============================================================================
 
-set(hj_LIBRARIES "")
+# set(hj_LIBRARIES "")
+set(hj_LIBRARIES hj)
 
 # Helper macro to find package and append to hj_LIBRARIES
 macro(hj_find_and_append pkg_name)

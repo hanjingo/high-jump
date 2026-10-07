@@ -78,6 +78,7 @@
       "name": "tbb",
       "default-features": false
     },
+    "tesseract",
     {
       "name": "whisper-cpp",
       "default-features": false

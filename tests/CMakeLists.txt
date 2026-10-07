@@ -82,6 +82,7 @@ find_package(hffix REQUIRED)
 find_package(OpenCL QUIET)
 find_package(CUDA QUIET)
 find_package(hwy REQUIRED)
+find_package(Tesseract CONFIG REQUIRED)
 
 # Boost
 if(WIN32)
@@ -243,6 +244,9 @@ target_link_libraries(${PROJECT_NAME}
 
     # highway
     hwy::hwy
+
+    # Tesseract OCR
+    Tesseract::libtesseract
 )
 
 # for os-specific libraries
@@ -315,6 +319,9 @@ file(GLOB TEST_CONFIG_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/server.crt"
     "${CMAKE_CURRENT_SOURCE_DIR}/server.key"
     "${CMAKE_CURRENT_SOURCE_DIR}/stories260K.gguf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/eng.traineddata"
+    "${CMAKE_CURRENT_SOURCE_DIR}/eng.unicharset"
+    "${CMAKE_CURRENT_SOURCE_DIR}/example.png"
 )
 add_custom_target(copy_test_configs ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>

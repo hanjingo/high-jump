@@ -232,8 +232,10 @@ class parser
         auto instance  = std::make_unique<parser>(parser::parser_key{});
         instance->_api = std::make_unique<tesseract::TessBaseAPI>();
 
-        const char *path_ptr =
-            options.datapath.empty() ? nullptr : options.datapath.c_str();
+        const std::string datapath = options.datapath.empty()
+                                         ? std::string{}
+                                         : options.datapath.string();
+        const char *path_ptr = datapath.empty() ? nullptr : datapath.c_str();
         if(instance->_api->Init(path_ptr, options.language.data()) != 0)
         {
             ec = make_error_code(error_code::init_failed);

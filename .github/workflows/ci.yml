@@ -364,9 +364,12 @@ jobs:
         # Explicitly set ARM64 architecture - required for boost-context assembly file selection
         set(VCPKG_OSX_ARCHITECTURES arm64)
         
-        # Ensure OpenMP is discoverable for AppleClang (e.g. faiss FindOpenMP).
-        set(VCPKG_CXX_FLAGS "-arch arm64 -I${BREW_PREFIX}/opt/libomp/include -Xpreprocessor -fopenmp -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
-        set(VCPKG_C_FLAGS "-arch arm64 -I${BREW_PREFIX}/opt/libomp/include -Xpreprocessor -fopenmp -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
+        # Keep OpenMP flags out of global compiler flags. Packages that enable
+        # OpenMP should discover and link libomp through CMake's FindOpenMP.
+        # Global -fopenmp causes packages such as Tesseract (OPENMP_BUILD=OFF)
+        # to emit OpenMP calls without linking the OpenMP runtime.
+        set(VCPKG_CXX_FLAGS "-arch arm64 -I${BREW_PREFIX}/opt/libomp/include -Wno-deprecated -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-unknown-warning-option")
+        set(VCPKG_C_FLAGS "-arch arm64 -I${BREW_PREFIX}/opt/libomp/include -Wno-deprecated -Wno-deprecated-declarations -Wno-unknown-warning-option")
         set(VCPKG_LINKER_FLAGS "-L${BREW_PREFIX}/opt/libomp/lib -Wl,-rpath,${BREW_PREFIX}/opt/libomp/lib")
 
         list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS

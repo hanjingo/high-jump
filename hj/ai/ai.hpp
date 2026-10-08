@@ -9,6 +9,10 @@
 #include <hj/ai/llama.hpp>
 #endif
 
+#ifdef HJ_ENABLE_OCR
+#include <hj/ai/ocr.hpp>
+#endif
+
 #ifdef HJ_ENABLE_QRCODE
 #include <hj/ai/qrcode.hpp>
 #endif

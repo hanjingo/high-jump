@@ -401,6 +401,16 @@ if(@HJ_ENABLE_ASR@)
     endif()
 endif()
 
+# ocr
+if(@HJ_ENABLE_OCR@)
+    find_package(Tesseract CONFIG QUIET)
+    if(Tesseract_FOUND)
+        list(APPEND hj_LIBRARIES Tesseract::libtesseract)
+
+        target_compile_definitions(hj INTERFACE HJ_ENABLE_OCR)
+    endif()
+endif()
+
 # Remove duplicates
 list(REMOVE_DUPLICATES hj_LIBRARIES)
 
